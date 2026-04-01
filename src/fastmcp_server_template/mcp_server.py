@@ -122,7 +122,7 @@ def _build_oidc_auth() -> Any:
     except ImportError as exc:
         raise RuntimeError(
             "OIDC auth requires httpx. Install with: "
-            "pip install 'fastmcp-server-template[mcp]' httpx"
+            "pip install 'fastmcp-server-template[mcp]'"
         ) from exc
 
     jwt_signing_key = (
@@ -214,7 +214,7 @@ def build_event_store() -> Any:
     """
     from fastmcp.server.event_store import EventStore
 
-    return EventStore()
+    return EventStore()  # type is EventStore; typed as Any to avoid top-level import
 
 
 def create_server(*, transport: str = "stdio") -> FastMCP:

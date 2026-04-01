@@ -52,7 +52,7 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     server = create_server(transport=transport)
     env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
     http_path = _normalise_http_path(args.path or env_http_path)
-    if transport != "http" and (
+    if transport == "stdio" and (
         args.host != "0.0.0.0" or args.port != 8000 or args.path is not None
     ):
         logger.warning("--host, --port and --path are only used with --transport http")

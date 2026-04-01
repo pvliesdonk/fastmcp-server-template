@@ -76,6 +76,11 @@
           "name": "MCP_SERVER_OIDC_CLIENT_SECRET",
           "description": "OIDC client secret",
           "required": false
+        },
+        {
+          "name": "MCP_SERVER_OIDC_JWT_SIGNING_KEY",
+          "description": "JWT signing key — required on Linux/Docker to survive restarts (generate with: openssl rand -hex 32)",
+          "required": false
         }
       ]
     }
