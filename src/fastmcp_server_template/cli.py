@@ -57,7 +57,14 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     ):
         logger.warning("--host, --port and --path are only used with --transport http")
     if transport == "http":
-        import uvicorn
+        try:
+            import uvicorn
+        except ImportError:
+            logger.error(
+                "HTTP transport requires uvicorn. Install with: "
+                "pip install 'fastmcp-server-template[mcp]'"
+            )
+            sys.exit(1)
 
         event_store = build_event_store()
         app = server.http_app(path=http_path, event_store=event_store)
