@@ -24,11 +24,17 @@ from ._server_deps import get_service
 logger = logging.getLogger(__name__)
 
 
-def register_tools(mcp: FastMCP) -> None:
+def register_tools(mcp: FastMCP, *, transport: str = "stdio") -> None:
     """Register all MCP tools on *mcp*.
 
     Args:
         mcp: The :class:`~fastmcp.FastMCP` instance to register tools on.
+        transport: Active transport (``"stdio"``, ``"sse"``, or ``"http"``).
+            Use this to conditionally register HTTP-only tools, e.g.::
+
+                if transport == "http":
+                    @mcp.tool()
+                    def create_download_link(...) -> str: ...
     """
 
     # -----------------------------------------------------------------------
@@ -36,7 +42,7 @@ def register_tools(mcp: FastMCP) -> None:
     # -----------------------------------------------------------------------
 
     @mcp.tool()
-    def ping(ctx: Context = Depends(get_service)) -> str:  # noqa: ARG001
+    def ping(ctx: Context = Depends(get_service)) -> str:
         """Health check.
 
         Returns:
@@ -51,7 +57,7 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool(tags={"write"})
     def example_write(
         message: str,
-        ctx: Any = Depends(get_service),  # noqa: ARG001
+        ctx: Any = Depends(get_service),
     ) -> str:
         """Example write operation — replace with your domain write tools.
 

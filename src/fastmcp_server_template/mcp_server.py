@@ -117,7 +117,13 @@ def _build_oidc_auth() -> Any:
         logger.debug("OIDC auth: disabled — missing env vars: %s", ", ".join(missing))
         return None
 
-    from fastmcp.server.auth.oidc_proxy import OIDCProxy
+    try:
+        from fastmcp.server.auth.oidc_proxy import OIDCProxy
+    except ImportError as exc:
+        raise RuntimeError(
+            "OIDC auth requires httpx. Install with: "
+            "pip install 'fastmcp-server-template[mcp]' httpx"
+        ) from exc
 
     jwt_signing_key = (
         os.environ.get(f"{_ENV_PREFIX}_OIDC_JWT_SIGNING_KEY", "").strip() or None
@@ -191,7 +197,27 @@ def _build_oidc_auth() -> Any:
     )
 
 
-def create_server() -> FastMCP:
+def build_event_store() -> Any:
+    """Build an event store for HTTP transport SSE resumability.
+
+    Returns an :class:`~fastmcp.server.event_store.EventStore` backed by
+    an in-memory store by default.  For production deployments, replace the
+    backing store with a persistent :class:`~key_value.aio.AsyncKeyValue`
+    backend (e.g. Redis) so events survive restarts.
+
+    The event store is only meaningful for the ``http`` transport — pass the
+    return value to :meth:`~fastmcp.FastMCP.http_app` via the ``event_store``
+    kwarg to enable client reconnection / SSE event replay.
+
+    Returns:
+        A configured :class:`~fastmcp.server.event_store.EventStore`.
+    """
+    from fastmcp.server.event_store import EventStore
+
+    return EventStore()
+
+
+def create_server(*, transport: str = "stdio") -> FastMCP:
     """Create and configure the FastMCP server.
 
     Reads configuration from environment variables via :func:`load_config`.
@@ -204,6 +230,11 @@ def create_server() -> FastMCP:
       (default ``"mcp-server"``).
     - ``MCP_SERVER_INSTRUCTIONS``: system-level instructions injected
       into LLM context (default: dynamic description reflecting read-only state).
+
+    Args:
+        transport: Active transport (``"stdio"``, ``"sse"``, or ``"http"``).
+            Passed to :func:`register_tools` so tools can conditionally register
+            HTTP-only endpoints (e.g. artifact download handlers).
 
     Returns:
         A fully configured :class:`~fastmcp.FastMCP` instance ready to run.
@@ -251,7 +282,7 @@ def create_server() -> FastMCP:
         auth=auth,
     )
 
-    register_tools(mcp)
+    register_tools(mcp, transport=transport)
     register_resources(mcp)
     register_prompts(mcp)
 

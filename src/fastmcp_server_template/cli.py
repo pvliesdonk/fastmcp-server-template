@@ -40,7 +40,7 @@ def _normalise_http_path(path: str | None) -> str:
 def _cmd_serve(args: argparse.Namespace) -> None:
     """Run the MCP server."""
     try:
-        from fastmcp_server_template.mcp_server import create_server
+        from fastmcp_server_template.mcp_server import build_event_store, create_server
     except ImportError:
         logger.error(
             "FastMCP is not installed. Install with: "
@@ -48,8 +48,8 @@ def _cmd_serve(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    server = create_server()
     transport = args.transport
+    server = create_server(transport=transport)
     env_http_path = os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
     http_path = _normalise_http_path(args.path or env_http_path)
     if transport != "http" and (
@@ -57,7 +57,17 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     ):
         logger.warning("--host, --port and --path are only used with --transport http")
     if transport == "http":
-        server.run(transport="http", host=args.host, port=args.port, path=http_path)
+        import uvicorn
+
+        event_store = build_event_store()
+        app = server.http_app(path=http_path, event_store=event_store)
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            lifespan="on",
+            timeout_graceful_shutdown=0,
+        )
     else:
         server.run(transport=transport)
 
