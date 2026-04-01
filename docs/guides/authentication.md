@@ -1,6 +1,6 @@
 # Authentication
 
-This guide covers how to protect your markdown-vault-mcp server with authentication. Choose the mode that fits your deployment.
+This guide covers how to protect your MCP server with authentication. Choose the mode that fits your deployment.
 
 !!! warning "Transport requirement"
     Authentication only works with HTTP transport (`--transport http` or `sse`). It has no effect with `--transport stdio`.
@@ -11,12 +11,12 @@ The server supports four authentication modes:
 
 | Mode | When to use | Configuration |
 |------|-------------|---------------|
-| **Multi-auth** | Mixed clients — e.g. Claude web (OIDC) + Claude Code (bearer token) on the same server | Set both `MARKDOWN_VAULT_MCP_BEARER_TOKEN` and all four OIDC variables |
-| **Bearer token** | Simple deployments behind a VPN, Docker compose stacks, development | Set `MARKDOWN_VAULT_MCP_BEARER_TOKEN` only |
+| **Multi-auth** | Mixed clients — e.g. Claude web (OIDC) + Claude Code (bearer token) on the same server | Set both `MCP_SERVER_BEARER_TOKEN` and all four OIDC variables |
+| **Bearer token** | Simple deployments behind a VPN, Docker compose stacks, development | Set `MCP_SERVER_BEARER_TOKEN` only |
 | **OIDC** | Production with user identity, SSO, multi-user access | Set all four OIDC variables only |
 | **No auth** | Local stdio usage, trusted networks | Default (nothing to configure) |
 
-When both bearer token and OIDC are configured, the server accepts **either** credential — a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same vault instance.
+When both bearer token and OIDC are configured, the server accepts **either** credential — a valid bearer token or a valid OIDC session. This is useful when different clients require different authentication flows against the same server instance.
 
 ---
 
@@ -35,13 +35,13 @@ The simplest way to protect your server. A single static token shared between se
 2. Set the environment variable:
 
     ```bash
-    MARKDOWN_VAULT_MCP_BEARER_TOKEN=your-generated-token
+    MCP_SERVER_BEARER_TOKEN=your-generated-token
     ```
 
 3. Start the server with HTTP transport:
 
     ```bash
-    markdown-vault-mcp serve --transport http --port 8000
+    mcp-server serve --transport http --port 8000
     ```
 
 ### Client usage
@@ -59,8 +59,6 @@ Authorization: Bearer your-generated-token
 - Development and testing environments
 - Any scenario where full OIDC is overkill
 
-See also: [`examples/bearer-auth.env`](https://github.com/pvliesdonk/markdown-vault-mcp/blob/main/examples/bearer-auth.env) for a ready-to-use example.
-
 ---
 
 ## OIDC
@@ -72,7 +70,7 @@ Full OAuth 2.1 authentication using an external identity provider. Supports user
 The server uses FastMCP's built-in `OIDCProxy` — no external auth sidecar needed:
 
 ```
-Client → markdown-vault-mcp (OIDCProxy) → OIDC Provider
+Client → mcp-server (OIDCProxy) → OIDC Provider
 ```
 
 1. Client connects to the server
@@ -85,19 +83,19 @@ Client → markdown-vault-mcp (OIDCProxy) → OIDC Provider
 
 | Variable | Description |
 |----------|-------------|
-| `MARKDOWN_VAULT_MCP_BASE_URL` | Public base URL (e.g. `https://mcp.example.com`) |
-| `MARKDOWN_VAULT_MCP_OIDC_CONFIG_URL` | OIDC discovery endpoint |
-| `MARKDOWN_VAULT_MCP_OIDC_CLIENT_ID` | Client ID registered with your provider |
-| `MARKDOWN_VAULT_MCP_OIDC_CLIENT_SECRET` | Client secret |
+| `MCP_SERVER_BASE_URL` | Public base URL (e.g. `https://mcp.example.com`) |
+| `MCP_SERVER_OIDC_CONFIG_URL` | OIDC discovery endpoint |
+| `MCP_SERVER_OIDC_CLIENT_ID` | Client ID registered with your provider |
+| `MCP_SERVER_OIDC_CLIENT_SECRET` | Client secret |
 
 ### Optional variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MARKDOWN_VAULT_MCP_OIDC_JWT_SIGNING_KEY` | ephemeral | JWT signing key — **required on Linux/Docker** |
-| `MARKDOWN_VAULT_MCP_OIDC_AUDIENCE` | — | Expected JWT audience claim; leave unset if your provider does not set one |
-| `MARKDOWN_VAULT_MCP_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
-| `MARKDOWN_VAULT_MCP_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
+| `MCP_SERVER_OIDC_JWT_SIGNING_KEY` | ephemeral | JWT signing key — **required on Linux/Docker** |
+| `MCP_SERVER_OIDC_AUDIENCE` | — | Expected JWT audience claim; leave unset if your provider does not set one |
+| `MCP_SERVER_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
+| `MCP_SERVER_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
 
 !!! danger "JWT signing key on Linux/Docker"
     Without `OIDC_JWT_SIGNING_KEY`, FastMCP generates an ephemeral key that invalidates all tokens on restart. Always set a stable key in production:
@@ -108,15 +106,6 @@ Client → markdown-vault-mcp (OIDCProxy) → OIDC Provider
 
 !!! tip "Long-running sessions"
     Current MCP clients do not reliably refresh tokens — see [Known Limitations](#known-limitations-mcp-oauth-token-refresh). Configure **all** token lifetimes (access, id, refresh) on your identity provider to cover a full workday (8h+). For simpler deployments, bearer token auth is unaffected by these limitations.
-
-### Provider guides
-
-For step-by-step setup with specific providers:
-
-- [Authelia](oidc-providers.md#authelia)
-- [Keycloak](oidc-providers.md#keycloak)
-- [Google](oidc-providers.md#google)
-- [GitHub (via Keycloak broker)](oidc-providers.md#github)
 
 For the full OIDC reference (env vars, Docker Compose, subpath deployments, architecture):
 
@@ -132,7 +121,7 @@ The `client_id` and/or `redirect_uris` in your OIDC provider config don't match 
 
 ### Tokens invalidated after restart
 
-You're missing `MARKDOWN_VAULT_MCP_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP generates an ephemeral key on each startup. Generate and set a stable key:
+You're missing `MCP_SERVER_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP generates an ephemeral key on each startup. Generate and set a stable key:
 
 ```bash
 openssl rand -hex 32
@@ -178,22 +167,20 @@ lifespans:
       refresh_token: '30d'
 ```
 
-See the [Authelia provider guide](oidc-providers.md#authelia) for the full configuration.
-
 ### Opaque access tokens (Authelia)
 
-Authelia issues opaque (non-JWT) access tokens. This is handled automatically — the server verifies the `id_token` instead. No extra configuration needed. See the [Authelia guide](oidc-providers.md#authelia) for details.
+Authelia issues opaque (non-JWT) access tokens. This is handled automatically — the server verifies the `id_token` instead. No extra configuration needed.
 
 ---
 
 ## Known Limitations: MCP OAuth token refresh
 
 !!! warning "Ecosystem-wide issue"
-    The limitations below affect **all** OAuth-protected MCP servers, not just markdown-vault-mcp. They are caused by issues in the MCP client implementations (Claude Code, Claude.ai, Claude Desktop) and the MCP Python SDK. Check the linked tracking issues for current status.
+    The limitations below affect **all** OAuth-protected MCP servers, not just this one. They are caused by issues in the MCP client implementations (Claude Code, Claude.ai, Claude Desktop) and the MCP Python SDK. Check the linked tracking issues for current status.
 
 ### The problem
 
-MCP clients cannot maintain sessions beyond the token lifetime because token refresh does not work. When tokens expire, the session drops and requires manual re-authentication. This affects every provider — Authelia, Keycloak, Google, Slack, Notion, Atlassian, and others.
+MCP clients cannot maintain sessions beyond the token lifetime because token refresh does not work. When tokens expire, the session drops and requires manual re-authentication. This affects every provider — Authelia, Keycloak, Google, and others.
 
 ### Why refresh doesn't work
 
@@ -226,4 +213,4 @@ These upstream issues are actively tracked:
 - [anthropics/claude-code#7744](https://github.com/anthropics/claude-code/issues/7744) — `offline_access` scope never requested
 - [modelcontextprotocol/python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326) — SSE refresh deadlock
 
-When these are resolved, OIDC sessions should persist indefinitely via automatic token refresh with no changes needed to markdown-vault-mcp.
+When these are resolved, OIDC sessions should persist indefinitely via automatic token refresh with no changes needed server-side.

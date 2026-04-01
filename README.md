@@ -29,10 +29,10 @@ All configuration is via environment variables prefixed with `MCP_SERVER_`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MCP_SERVER_READ_ONLY` | `true` | Disable write tools |
-| `MCP_SERVER_BEARER_TOKEN` | — | Enable bearer token auth |
 | `MCP_SERVER_LOG_LEVEL` | `INFO` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `MCP_SERVER_SERVER_NAME` | `mcp-server` | Server name shown to clients |
 | `MCP_SERVER_INSTRUCTIONS` | (dynamic) | System instructions for LLM context |
+| `MCP_SERVER_HTTP_PATH` | `/mcp` | Mount path for HTTP transport |
 
 ## Authentication
 
@@ -45,7 +45,16 @@ The server supports four auth modes:
 
 **Auth requires `--transport http` (or `sse`).** It has no effect with `--transport stdio`.
 
-See [Authentication guide](docs/guides/authentication.md) for setup details.
+| Variable | Description |
+|----------|-------------|
+| `MCP_SERVER_BEARER_TOKEN` | Static bearer token |
+| `MCP_SERVER_BASE_URL` | Public base URL — required for OIDC (e.g. `https://mcp.example.com`) |
+| `MCP_SERVER_OIDC_CONFIG_URL` | OIDC discovery endpoint |
+| `MCP_SERVER_OIDC_CLIENT_ID` | OIDC client ID |
+| `MCP_SERVER_OIDC_CLIENT_SECRET` | OIDC client secret |
+| `MCP_SERVER_OIDC_JWT_SIGNING_KEY` | JWT signing key — **required on Linux/Docker** to survive restarts |
+
+See [Authentication guide](docs/guides/authentication.md) for full setup details.
 
 ## Docker
 
@@ -67,6 +76,10 @@ uv run mypy src/
 ## Using this template
 
 See [TEMPLATE.md](TEMPLATE.md) for the step-by-step customisation guide, including the `rename.sh` bootstrap script.
+
+## Keeping derived repos in sync
+
+See [SYNC.md](SYNC.md) for the infrastructure vs domain boundary definition and the cherry-pick workflow for propagating non-domain changes between this template and derived repositories.
 
 ## License
 
