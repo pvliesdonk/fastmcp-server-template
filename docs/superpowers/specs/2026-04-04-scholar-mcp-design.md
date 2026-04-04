@@ -61,13 +61,19 @@ a separately hosted docling-serve instance.
 | Env var | Required | Default | Description |
 |---------|----------|---------|-------------|
 | `SCHOLAR_MCP_S2_API_KEY` | No | — | Semantic Scholar API key; enables higher rate limits |
-| `SCHOLAR_MCP_DOCLING_URL` | No | — | docling-serve base URL; PDF tools disabled if unset |
+| `SCHOLAR_MCP_DOCLING_URL` | No | — | docling-serve base URL; PDF tools return `docling_not_configured` if unset |
+| `SCHOLAR_MCP_VLM_API_URL` | No | — | OpenAI-compatible endpoint for VLM enrichment (formulas, figures) |
+| `SCHOLAR_MCP_VLM_API_KEY` | No | — | API key for the VLM endpoint |
+| `SCHOLAR_MCP_VLM_MODEL` | No | `gpt-4o` | Model name to pass to the VLM endpoint |
 | `SCHOLAR_MCP_CACHE_DIR` | No | `/data/scholar-mcp` | Directory for SQLite DB and downloaded PDFs |
 | `SCHOLAR_MCP_READ_ONLY` | No | `true` | Hides write-tagged tools (`fetch_paper_pdf`) |
 
 Validated at startup: `SCHOLAR_MCP_CACHE_DIR` must be writable. If
 `SCHOLAR_MCP_DOCLING_URL` is set, the server performs a health check against it
 at startup and logs a warning (not a fatal error) if it is unreachable.
+`use_vlm=True` on conversion tools is silently downgraded to standard mode if
+`SCHOLAR_MCP_VLM_API_URL` or `SCHOLAR_MCP_VLM_API_KEY` are unset, with a
+note in the tool response.
 
 ---
 
@@ -81,7 +87,7 @@ ServiceBundle:
     openalex_client: httpx.AsyncClient # base_url=https://api.openalex.org
     docling_client: httpx.AsyncClient | None  # None if SCHOLAR_MCP_DOCLING_URL unset
     cache: ScholarCache                # wraps aiosqlite connection
-    config: ServerConfig
+    config: ServerConfig               # includes vlm_api_url, vlm_api_key, vlm_model
 ```
 
 Lifespan creates all clients, opens the DB connection, runs schema migrations,
@@ -225,18 +231,25 @@ Download the open-access PDF of a paper.
 Convert a local PDF to Markdown via docling-serve.
 
 - **Inputs**: `file_path: str`,
+  `use_vlm: bool = False`,
   `include_references: bool = True`,
   `include_figures: bool = False`,
   `table_format: Literal["markdown", "html"] = "markdown"`
-- **Output**: `{"markdown": "...", "path": "/data/scholar-mcp/md/<stem>.md"}`
-- **Notes**: disabled if `SCHOLAR_MCP_DOCLING_URL` is unset. Works on any local
-  PDF, including manually placed paywalled papers.
+- **Output**: `{"markdown": "...", "path": "/data/scholar-mcp/md/<stem>.md", "vlm_used": bool}`
+- **Notes**: returns `{"error": "docling_not_configured"}` if `SCHOLAR_MCP_DOCLING_URL` is
+  unset. Works on any local PDF, including manually placed paywalled papers.
+  When `use_vlm=True`, uses the VLM-enhanced docling-serve path
+  (`POST /v1/convert/source/async` with base64 payload) which passes formulas and
+  figures to the configured VLM model (GPT-4o or compatible) for richer extraction.
+  Falls back to standard path with a note in the response if VLM is not configured.
+  Standard path uses `POST /v1/convert/file/async` (multipart).
+  Both paths are async: submit → poll `/v1/status/poll/{task_id}` → fetch `/v1/result/{task_id}`.
 
 #### `fetch_and_convert`
 
 Convenience tool: resolve → download OA PDF → convert to Markdown.
 
-- **Inputs**: `identifier: str`
+- **Inputs**: `identifier: str`, `use_vlm: bool = False`
 - **Output**: `{"metadata": {...}, "markdown": "..."}` on full success;
   `{"metadata": {...}, "error": "no_oa_pdf"}` if PDF unavailable;
   `{"metadata": {...}, "pdf_path": "...", "error": "docling_not_configured"}` if
@@ -394,7 +407,9 @@ Added to `pyproject.toml` beyond the template baseline:
 | `aiosqlite` | core | Async SQLite cache |
 | `respx` | dev | Mock httpx in tests |
 
-No ML dependencies. docling-serve is an external service.
+No ML dependencies. docling-serve and the VLM endpoint are external services.
+The existing `paperless-docling-md` integration (`/mnt/docker-volumes/compose.git/40-documents/paperless-docling-md/convert.py`)
+is the reference implementation for the docling-serve async API and VLM payload structure.
 
 ---
 
