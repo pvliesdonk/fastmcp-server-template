@@ -1,0 +1,11 @@
+"""Golden-path smoke test for the example ``ping`` tool."""
+
+from __future__ import annotations
+
+from fastmcp import Client
+
+
+async def test_ping_returns_pong(client: Client) -> None:
+    """The example ``ping`` tool round-trips cleanly through the MCP client."""
+    result = await client.call_tool("ping", {})
+    assert result.content[0].text == "pong"
