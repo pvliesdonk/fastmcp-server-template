@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.0 (2026-04-20)
+
+- #10 feat!: rewrite as copier template depending on fastmcp-pvl-core (v1.0.0)
+- #5 feat(infra): sync non-domain infrastructure from evolved derived repos
+
+
 All notable changes to this template are documented here.  Template
 consumers see these in their `copier update` PRs.
 
