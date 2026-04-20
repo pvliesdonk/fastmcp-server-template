@@ -1,0 +1,184 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.{{ github_org }}/{{ project_name }}",
+  "title": "{{ human_name }}",
+  "description": "{{ domain_description }}",
+  "version": "0.1.0",
+  "websiteUrl": "https://{{ github_org }}.github.io/{{ project_name }}/",
+  "repository": {
+    "url": "https://github.com/{{ github_org }}/{{ project_name }}",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "{{ project_name }}",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "{{ env_prefix }}_READ_ONLY",
+          "description": "Disable write tools",
+          "format": "boolean",
+          "default": "true"
+        },
+        {
+          "name": "FASTMCP_LOG_LEVEL",
+          "description": "Log level (DEBUG, INFO, WARNING, ERROR)",
+          "default": "INFO",
+          "choices": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR"
+          ]
+        },
+        {
+          "name": "{{ env_prefix }}_SERVER_NAME",
+          "description": "MCP server name shown to clients",
+          "default": "{{ project_name }}"
+        },
+        {
+          "name": "{{ env_prefix }}_BEARER_TOKEN",
+          "description": "Bearer token for authentication",
+          "isSecret": true
+        },
+        {
+          "name": "{{ env_prefix }}_AUTH_MODE",
+          "description": "OIDC auth mode: 'remote' (JWKS validation) or 'oidc-proxy' (OAuth proxy). Auto-detected if not set."
+        },
+        {
+          "name": "{{ env_prefix }}_BASE_URL",
+          "description": "Public base URL of this server (required for OIDC)"
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_CONFIG_URL",
+          "description": "OIDC discovery endpoint URL"
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_CLIENT_ID",
+          "description": "OIDC client ID"
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_CLIENT_SECRET",
+          "description": "OIDC client secret",
+          "isSecret": true
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_JWT_SIGNING_KEY",
+          "description": "Signing key for OIDC session JWTs (critical on Linux/Docker)",
+          "isSecret": true
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_AUDIENCE",
+          "description": "Expected OIDC token audience"
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_REQUIRED_SCOPES",
+          "description": "Space-separated required OIDC scopes",
+          "default": "openid"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "{{ docker_registry }}/{{ project_name }}:v0.1.0",
+      "transport": {
+        "type": "streamable-http",
+        "url": "http://localhost:{--port}/mcp"
+      },
+      "packageArguments": [
+        {
+          "type": "named",
+          "name": "--port",
+          "default": "8000",
+          "description": "Port for the HTTP transport"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "{{ env_prefix }}_READ_ONLY",
+          "description": "Disable write tools",
+          "format": "boolean",
+          "default": "true"
+        },
+        {
+          "name": "FASTMCP_LOG_LEVEL",
+          "description": "Log level (DEBUG, INFO, WARNING, ERROR)",
+          "default": "INFO",
+          "choices": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR"
+          ]
+        },
+        {
+          "name": "{{ env_prefix }}_EVENT_STORE_URL",
+          "description": "Event store backend for HTTP session persistence (file:///path or memory://)",
+          "default": "file:///data/state/events"
+        },
+        {
+          "name": "{{ env_prefix }}_SERVER_NAME",
+          "description": "MCP server name shown to clients",
+          "default": "{{ project_name }}"
+        },
+        {
+          "name": "PUID",
+          "description": "Run as this UID (Docker entrypoint)",
+          "format": "number",
+          "default": "1000"
+        },
+        {
+          "name": "PGID",
+          "description": "Run as this GID (Docker entrypoint)",
+          "format": "number",
+          "default": "1000"
+        },
+        {
+          "name": "{{ env_prefix }}_BEARER_TOKEN",
+          "description": "Bearer token for authentication",
+          "isSecret": true
+        },
+        {
+          "name": "{{ env_prefix }}_AUTH_MODE",
+          "description": "OIDC auth mode: 'remote' (JWKS validation) or 'oidc-proxy' (OAuth proxy). Auto-detected if not set."
+        },
+        {
+          "name": "{{ env_prefix }}_BASE_URL",
+          "description": "Public base URL of this server (required for OIDC)"
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_CONFIG_URL",
+          "description": "OIDC discovery endpoint URL"
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_CLIENT_ID",
+          "description": "OIDC client ID"
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_CLIENT_SECRET",
+          "description": "OIDC client secret",
+          "isSecret": true
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_JWT_SIGNING_KEY",
+          "description": "Signing key for OIDC session JWTs (critical on Linux/Docker)",
+          "isSecret": true
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_AUDIENCE",
+          "description": "Expected OIDC token audience"
+        },
+        {
+          "name": "{{ env_prefix }}_OIDC_REQUIRED_SCOPES",
+          "description": "Space-separated required OIDC scopes",
+          "default": "openid"
+        }
+      ]
+    }
+  ]
+}

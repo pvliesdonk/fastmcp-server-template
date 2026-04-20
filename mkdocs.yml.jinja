@@ -1,8 +1,8 @@
-site_name: FastMCP Server Template
-site_url: https://pvliesdonk.github.io/fastmcp-server-template/
-site_description: Production-ready FastMCP server scaffold
-repo_url: https://github.com/pvliesdonk/fastmcp-server-template
-repo_name: pvliesdonk/fastmcp-server-template
+site_name: {{ project_name }}
+site_url: https://{{ github_org }}.github.io/{{ project_name }}/
+site_description: {{ domain_description }}
+repo_url: https://github.com/{{ github_org }}/{{ project_name }}
+repo_name: {{ github_org }}/{{ project_name }}
 edit_uri: edit/main/docs/
 
 theme:
@@ -41,7 +41,7 @@ plugins:
         python:
           paths: [src]
           options:
-            show_source: true
+            show_source: false
             show_bases: true
             show_root_heading: true
             show_root_full_path: false
@@ -56,7 +56,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.highlight:
-      anchor_linenums: true
+      anchor_linenums: false
   - pymdownx.inlinehilite
   - pymdownx.tabbed:
       alternate_style: true
@@ -69,8 +69,14 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Getting Started:
+      - Installation: installation.md
+      - Configuration: configuration.md
   - Guides:
       - Authentication: guides/authentication.md
+  - MCP Interface:
+      - Tools: tools/index.md
+      - Prompts: prompts.md
   - Deployment:
       - Docker: deployment/docker.md
       - OIDC Authentication: deployment/oidc.md
