@@ -1,0 +1,10 @@
+"""CLI entry point for {{ human_name }}."""
+
+from __future__ import annotations
+
+
+def main() -> None:
+    """CLI entry point."""
+    from {{ python_module }}.server import make_server
+
+    make_server()  # just verifies the module imports cleanly for now

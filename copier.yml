@@ -31,7 +31,8 @@ _exclude:
   - ".github/workflows/template-ci.yml"       # self-test — template-repo only
   - ".github/workflows/template-release.yml"  # template's own release — template-repo only
   - "docs/superpowers"
-  - "README.md"                               # this repo's own README (generated projects get README.md.jinja)
+  # README.md is NOT excluded — README.md.jinja renders to README.md in destination projects.
+  # The template's own README.md is automatically skipped by copier when README.md.jinja exists.
   - "CHANGELOG.md"                            # this repo's own CHANGELOG
   - "LICENSE"                                 # this repo's own LICENSE
 

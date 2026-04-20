@@ -1,0 +1,24 @@
+"""Configuration for {{ human_name }}.
+
+Composes :class:`fastmcp_pvl_core.ServerConfig` via the domain
+:class:`ProjectConfig` dataclass — never inherits.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from fastmcp_pvl_core import ServerConfig
+
+_ENV_PREFIX = "{{ env_prefix }}"
+
+
+@dataclass(frozen=True)
+class ProjectConfig:
+    """Domain config for {{ human_name }}.  Compose — don't inherit."""
+
+    server: ServerConfig = field(default_factory=ServerConfig)
+
+    @classmethod
+    def from_env(cls) -> "ProjectConfig":
+        return cls(server=ServerConfig.from_env(_ENV_PREFIX))
