@@ -7,6 +7,9 @@ _min_copier_version: "9.0"
 _answers_file: .copier-answers.yml
 _templates_suffix: .jinja
 
+# Starter files: written once on first `copier copy`, protected from
+# `copier update`.  Domain-owned — users customise these and keep their
+# edits across template updates.
 _skip_if_exists:
   - "src/{{python_module}}/tools.py"
   - "src/{{python_module}}/resources.py"
@@ -24,20 +27,23 @@ _skip_if_exists:
   - "CHANGELOG.md"
   - "LICENSE"
   - ".env.example"
-  - "CLAUDE.md"
+# Note: CLAUDE.md is deliberately NOT in _skip_if_exists — it's a
+# hybrid file with template-owned and domain-owned sections marked by
+# sentinel blocks, and copier's 3-way merge needs to re-render the
+# template-owned sections on update.
 
+# Files in the template repo that should never land in generated projects.
+# Named README.md/CHANGELOG.md/LICENSE/CLAUDE.md files also exist in this
+# repo as maintainer-facing documentation; copier's `.jinja` precedence
+# means README.md.jinja / CLAUDE.md.jinja / CHANGELOG.md.jinja / LICENSE.jinja
+# render into the destination, and the plain files stay only in the template
+# repo.  They don't need to be listed here for that to work.
 _exclude:
   - "copier.yml"
   - "tests/fixtures"
   - ".github/workflows/template-ci.yml"       # self-test — template-repo only
   - ".github/workflows/template-release.yml"  # template's own release — template-repo only
   - "docs/superpowers"
-  # README.md is NOT excluded — README.md.jinja renders to README.md in destination projects.
-  # The template's own README.md is automatically skipped by copier when README.md.jinja exists.
-  # CLAUDE.md is NOT excluded — CLAUDE.md.jinja renders to CLAUDE.md in destination projects.
-  # The template's own CLAUDE.md is automatically skipped by copier when CLAUDE.md.jinja exists.
-  - "CHANGELOG.md"                            # this repo's own CHANGELOG
-  - "LICENSE"                                 # this repo's own LICENSE
 
 # --- Variables ---
 
