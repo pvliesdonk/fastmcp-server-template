@@ -1,0 +1,23 @@
+services:
+  {{ project_name }}:
+    image: {{ docker_registry }}/{{ project_name }}:latest
+    build: .
+    # Named volume permissions are fixed automatically by the entrypoint.
+    # For bind-mount UID/GID mismatch, set PUID/PGID in your .env file:
+    #   PUID=1001
+    #   PGID=1001
+    env_file: .env
+    volumes:
+      - service-data:/data/service
+      - state-data:/data/state
+    environment:
+      FASTMCP_HOME: /data/state/fastmcp
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ project_name }}.rule=Host(`${ {{- env_prefix -}}_HOST:-{{ project_name }}.local}`)"
+      - "traefik.http.services.{{ project_name }}.loadbalancer.server.port=8000"
+
+volumes:
+  service-data:
+  state-data:

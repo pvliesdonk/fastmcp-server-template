@@ -1,0 +1,100 @@
+"""{{ human_name }} — FastMCP server entry point.
+
+Composes the primitives from ``fastmcp-pvl-core`` into a
+project-specific ``make_server()``.  See
+https://gofastmcp.com/servers for the FastMCP server surface and
+``fastmcp-pvl-core``'s README for the composable helpers used below.
+"""
+
+from __future__ import annotations
+
+import logging
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+
+from fastmcp import FastMCP
+from fastmcp_pvl_core import (
+    ArtifactStore,
+    ServerConfig,  # noqa: F401  — re-exported for downstream projects' convenience
+    build_auth,
+    build_event_store,  # noqa: F401  — re-exported for downstream projects' convenience
+    build_instructions,
+    configure_logging_from_env,
+    resolve_auth_mode,
+    wire_middleware_stack,
+)
+
+from {{ python_module }}._server_apps import register_apps
+from {{ python_module }}._server_deps import server_lifespan
+from {{ python_module }}.config import ProjectConfig
+from {{ python_module }}.prompts import register_prompts
+from {{ python_module }}.resources import register_resources
+from {{ python_module }}.tools import register_tools
+
+logger = logging.getLogger(__name__)
+
+_ENV_PREFIX = "{{ env_prefix }}"
+
+
+def make_server(
+    *,
+    transport: str = "stdio",
+    config: ProjectConfig | None = None,
+) -> FastMCP:
+    """Construct the {{ human_name }} FastMCP server.
+
+    Args:
+        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  HTTP-only
+            features (artifact downloads) are wired only when transport
+            != ``"stdio"``.
+        config: Optional pre-loaded config; default loads from env.
+
+    Returns:
+        A configured :class:`fastmcp.FastMCP` instance.
+    """
+    config = config or ProjectConfig.from_env()
+    configure_logging_from_env()
+
+    auth = build_auth(config.server)
+    auth_mode = resolve_auth_mode(config.server) if auth is not None else "none"
+    if auth_mode == "none":
+        logger.warning(
+            "No auth configured — server accepts unauthenticated connections"
+        )
+    else:
+        logger.info("Auth enabled: mode=%s", auth_mode)
+
+    try:
+        pkg_ver = _pkg_version("{{ pypi_name }}")
+    except PackageNotFoundError:
+        pkg_ver = "unknown"
+
+    logger.info(
+        "Server config: version=%s name={{ project_name }} auth=%s",
+        pkg_ver,
+        auth_mode,
+    )
+
+    mcp = FastMCP(
+        name="{{ project_name }}",
+        instructions=build_instructions(
+            read_only=True,
+            env_prefix=_ENV_PREFIX,
+            domain_line="{{ domain_description }}",
+        ),
+        lifespan=server_lifespan,
+        auth=auth,
+    )
+
+    wire_middleware_stack(mcp)
+
+    register_tools(mcp)
+    register_resources(mcp)
+    register_prompts(mcp)
+    register_apps(mcp)
+
+    if transport != "stdio":
+        artifact_store = ArtifactStore(ttl_seconds=3600)
+        ArtifactStore.register_route(mcp, artifact_store)
+
+    return mcp

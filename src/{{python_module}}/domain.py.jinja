@@ -1,0 +1,32 @@
+"""Domain logic placeholder for {{ human_name }}.
+
+Real projects replace :class:`Service` with their actual business
+logic (database client, API wrapper, file indexer, etc.).  Keep
+FastMCP types out of this module — domain code should be plain
+Python, easy to unit-test without a server.
+"""
+
+from __future__ import annotations
+
+
+class Service:
+    """Placeholder service.  Replace with real domain logic."""
+
+    def __init__(self) -> None:
+        self._ready = False
+
+    async def start(self) -> None:
+        """Start the service (connect to DB, warm caches, etc.)."""
+        self._ready = True
+
+    async def stop(self) -> None:
+        """Stop the service (close connections, flush state, etc.)."""
+        self._ready = False
+
+    async def ping(self) -> str:
+        """Health check."""
+        return "pong" if self._ready else "not ready"
+
+    async def status(self) -> dict[str, object]:
+        """Structured status payload."""
+        return {"ready": self._ready}

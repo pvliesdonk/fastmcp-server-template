@@ -1,0 +1,146 @@
+[project]
+name = "{{ pypi_name }}"
+version = "0.1.0"
+description = "{{ domain_description }}"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "{{ github_org }}" }]
+keywords = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "fastmcp-pvl-core>=1.0,<2",
+    # PROJECT-DEPS-START — add domain dependencies below; kept across copier update
+    # PROJECT-DEPS-END
+]
+
+[project.optional-dependencies]
+# PROJECT-EXTRAS-START — add domain-specific optional-dependency groups below; kept across copier update
+# PROJECT-EXTRAS-END
+
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5",
+    "diff-cover>=9",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3",
+    "pip-audit>=2.7",
+]
+
+[project.scripts]
+{{ project_name }} = "{{ python_module }}.cli:main"
+
+[project.urls]
+Repository = "https://github.com/{{ github_org }}/{{ project_name }}"
+Documentation = "https://{{ github_org }}.github.io/{{ project_name }}/"
+Issues = "https://github.com/{{ github_org }}/{{ project_name }}/issues"
+Changelog = "https://github.com/{{ github_org }}/{{ project_name }}/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ python_module }}"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "TCH", "PTH", "RUF",
+]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Depends() and CurrentContext() calls in argument defaults are the standard
+# FastMCP dependency injection pattern — B008 is a false positive here.
+# Context/FastMCP/Service imports must stay runtime (not TYPE_CHECKING) for
+# DI resolution — TC001/TC002/TC003.
+"src/{{ python_module }}/_server_deps.py" = ["B008", "TC002", "TC003"]
+"src/{{ python_module }}/_server_apps.py" = ["B008", "TC001", "TC002"]
+"src/{{ python_module }}/tools.py" = ["B008", "TC001", "TC002"]
+"src/{{ python_module }}/resources.py" = ["B008", "TC001", "TC002"]
+"src/{{ python_module }}/prompts.py" = ["B008", "TC002"]
+"tests/conftest.py" = ["TC002", "TC003"]
+"tests/test_tools.py" = ["TC002"]
+# Add project-specific overrides below as needed.
+
+[tool.ruff.lint.isort]
+known-first-party = ["{{ python_module }}"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "-ra"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src/{{ python_module }}"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["fastmcp_pvl_core", "fastmcp_pvl_core.*"]
+ignore_missing_imports = true
+
+[tool.pyright]
+# Point Pyright at the uv-managed venv so editor diagnostics resolve
+# imports the same way as our CLI tools (mypy/ruff/pytest run via uv).
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.11"
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+commit_parser = "angular"
+tag_format = "v{version}"
+build_command = ""
+# PSR stages and commits files listed in `assets` together with pyproject.toml
+# and CHANGELOG.md, so the release tag points at a single commit containing
+# all version-coupled files.  Add ".claude-plugin/plugin/.claude-plugin/plugin.json"
+# and ".claude-plugin/plugin/.mcp.json" once your project scaffolds them.
+assets = [
+    "server.json",
+]
+
+[tool.semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+
+[tool.semantic_release.commit_parser_options]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]

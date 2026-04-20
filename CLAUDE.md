@@ -1,33 +1,52 @@
 # fastmcp-server-template
 
-FastMCP server scaffold. See [TEMPLATE.md](TEMPLATE.md) for customisation guide.
+Copier template repository.  This file is for claude-code agents
+working on the **template itself** — NOT the generated projects.
+Generated projects get their own `CLAUDE.md` rendered from
+`CLAUDE.md.jinja`.
 
-## Project Structure
+## Purpose
 
-```
-src/fastmcp_server_template/
-  mcp_server.py        -- FastMCP server factory + auth wiring (don't modify)
-  config.py            -- env var loading; add domain config fields here
-  cli.py               -- CLI entry point (serve command)
-  _server_deps.py      -- lifespan + Depends() DI; replace placeholder service
-  _server_tools.py     -- MCP tools; replace example tools with domain tools
-  _server_resources.py -- MCP resources; add domain resources here
-  _server_prompts.py   -- MCP prompts; add domain prompts here
-```
+This repo is a [copier](https://copier.readthedocs.io/) template that
+scaffolds FastMCP servers on top of `fastmcp-pvl-core`.  Users run
+`copier copy gh:pvliesdonk/fastmcp-server-template my-service` to
+create new projects.
 
-## Conventions
+## Layout
 
-- Python 3.11+
-- `uv` for package management, `ruff` for linting/formatting (line length 88)
-- `hatchling` build backend
-- Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
-- Google-style docstrings on all public functions
-- `logging.getLogger(__name__)` throughout, no `print()`
-- Type hints everywhere
+- `copier.yml` — variables, `_skip_if_exists`, `_exclude`.
+- `tests/fixtures/smoke-answers.yml` — fixed answers for CI self-test.
+- `.github/workflows/template-ci.yml` — renders the template with
+  smoke-answers and runs the generated project's gate.
+- `.github/workflows/template-release.yml` — manual `workflow_dispatch`
+  bump for the template's own git tags; no PSR.
+- `.github/workflows/*.yml.jinja` — generated project's workflows.
+- `src/{{python_module}}/*.jinja` — generated project's Python module.
+- `pyproject.toml.jinja`, `CLAUDE.md.jinja`, `Dockerfile.jinja`, etc.
+  — generated project's other files.
 
-## Key Patterns
+## Making changes
 
-- Library is sync; MCP layer uses `asyncio.to_thread()` for blocking calls
-- Write tools tagged `tags={"write"}`, hidden via `mcp.disable(tags={"write"})` in read-only mode
-- Auth: `_build_bearer_auth()` + `_build_oidc_auth()` called in `create_server()`; MultiAuth when both set
-- `_ENV_PREFIX` in `config.py` controls all env var names — change once, affects everything
+1. Edit the relevant `.jinja` file(s).
+2. Render locally and verify the gate passes:
+   ```bash
+   rm -rf /tmp/smoke
+   uv run --no-project --with copier copier copy --trust --defaults \
+     --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
+   cd /tmp/smoke
+   uv sync --all-extras --dev
+   uv run ruff check . && uv run ruff format --check .
+   uv run mypy src/ && uv run pytest -x -q
+   ```
+3. Commit, push, open a PR.
+4. `template-ci.yml` runs the same gate on Python 3.11–3.14.
+
+## Release
+
+Run `template-release.yml` via `workflow_dispatch` with `bump` input
+(patch/minor/major).  It tags a new `vX.Y.Z`, updates CHANGELOG.md,
+and creates a GitHub release.
+
+## Spec
+
+Full design: [`docs/superpowers/specs/2026-04-20-fastmcp-copier-scaffold-design.md`](https://github.com/pvliesdonk/markdown-vault-mcp/blob/main/docs/superpowers/specs/2026-04-20-fastmcp-copier-scaffold-design.md) (in the markdown-vault-mcp repo).

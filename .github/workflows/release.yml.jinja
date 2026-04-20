@@ -1,0 +1,400 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force version bump (leave empty for auto)'
+        type: choice
+        default: ''
+        options:
+          - ''
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: 'Create a pre-release (rc channel — skips PyPI, catalog, registry, linux packages). Uncheck to cut a real release.'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: {% raw %}${{ github.ref_name }}{% endraw %}
+          token: {% raw %}${{ secrets.RELEASE_TOKEN }}{% endraw %}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.0.0
+        with:
+          version: "0.6"
+
+      - name: Setup Python
+        run: uv python install 3.12
+
+      - name: Semantic Version Release
+        id: release
+        uses: python-semantic-release/python-semantic-release@v10.5.3
+        with:
+          github_token: {% raw %}${{ secrets.RELEASE_TOKEN }}{% endraw %}
+          git_committer_name: "github-actions"
+          git_committer_email: "actions@users.noreply.github.com"
+          force: {% raw %}${{ inputs.force }}{% endraw %}
+          prerelease: {% raw %}${{ inputs.prerelease }}{% endraw %}
+          prerelease_token: rc
+
+      - name: Build package
+        if: steps.release.outputs.released == 'true'
+        run: uv build
+
+      - name: Generate SBOM
+        if: steps.release.outputs.released == 'true'
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Upload SBOM to GitHub Release
+        if: steps.release.outputs.released == 'true'
+        run: gh release upload {% raw %}${{ steps.release.outputs.tag }}{% endraw %} sbom.cdx.json
+        env:
+          GH_TOKEN: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+
+      - name: Upload to GitHub Release Assets
+        uses: python-semantic-release/publish-action@v10.5.3
+        if: steps.release.outputs.released == 'true'
+        with:
+          github_token: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+          tag: {% raw %}${{ steps.release.outputs.tag }}{% endraw %}
+
+      - name: Upload build artifacts
+        if: steps.release.outputs.released == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+    outputs:
+      released: {% raw %}${{ steps.release.outputs.released }}{% endraw %}
+      version: {% raw %}${{ steps.release.outputs.version }}{% endraw %}
+      tag: {% raw %}${{ steps.release.outputs.tag }}{% endraw %}
+
+  publish-pypi:
+    needs: release
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/{{ project_name }}
+
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
+        with:
+          packages-dir: dist/
+          print-hash: true
+          verbose: true
+
+  publish-docker:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: {% raw %}${{ github.repository }}{% endraw %}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: {% raw %}${{ needs.release.outputs.tag }}{% endraw %}
+          fetch-depth: 1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: {% raw %}${{ env.REGISTRY }}{% endraw %}
+          username: {% raw %}${{ github.actor }}{% endraw %}
+          password: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+
+      - name: Extract version components
+        id: version
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+        run: |
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "major=$(echo "$VERSION" | cut -d. -f1)" >> $GITHUB_OUTPUT
+          echo "minor=$(echo "$VERSION" | cut -d. -f1-2)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: {% raw %}${{ env.REGISTRY }}{% endraw %}/{% raw %}${{ env.IMAGE_NAME }}{% endraw %}
+          tags: |
+            type=raw,value=v{% raw %}${{ steps.version.outputs.version }}{% endraw %}
+            type=raw,value=latest,enable={% raw %}${{ !inputs.prerelease }}{% endraw %}
+            type=raw,value=v{% raw %}${{ steps.version.outputs.minor }}{% endraw %},enable={% raw %}${{ !inputs.prerelease }}{% endraw %}
+            type=raw,value=v{% raw %}${{ steps.version.outputs.major }}{% endraw %},enable={% raw %}${{ !inputs.prerelease }}{% endraw %}
+            type=raw,value=unstable,enable={% raw %}${{ inputs.prerelease }}{% endraw %}
+          labels: |
+            org.opencontainers.image.title={{ project_name }}
+            org.opencontainers.image.description={{ domain_description }}
+            org.opencontainers.image.vendor={{ github_org }}
+            io.modelcontextprotocol.server.name=io.github.{{ github_org }}/{{ project_name }}
+
+      - name: Build and push Docker image
+        id: build-push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: {% raw %}${{ steps.meta.outputs.tags }}{% endraw %}
+          labels: {% raw %}${{ steps.meta.outputs.labels }}{% endraw %}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: {% raw %}${{ env.REGISTRY }}{% endraw %}/{% raw %}${{ env.IMAGE_NAME }}{% endraw %}
+          subject-digest: {% raw %}${{ steps.build-push.outputs.digest }}{% endraw %}
+          push-to-registry: true
+
+      - name: Generate SBOM for Docker image
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
+        with:
+          image: {% raw %}${{ env.REGISTRY }}{% endraw %}/{% raw %}${{ env.IMAGE_NAME }}{% endraw %}@{% raw %}${{ steps.build-push.outputs.digest }}{% endraw %}
+          format: cyclonedx-json
+          output-file: sbom-docker.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Attest Docker SBOM
+        uses: actions/attest-sbom@v4
+        with:
+          subject-name: {% raw %}${{ env.REGISTRY }}{% endraw %}/{% raw %}${{ env.IMAGE_NAME }}{% endraw %}
+          subject-digest: {% raw %}${{ steps.build-push.outputs.digest }}{% endraw %}
+          sbom-path: sbom-docker.cdx.json
+          push-to-registry: true
+
+  publish-linux-packages:
+    needs: release
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: {% raw %}${{ needs.release.outputs.tag }}{% endraw %}
+          fetch-depth: 1
+
+      - name: Create output directory
+        run: mkdir -p dist
+
+      - name: Bake package version into postinstall script
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+        run: sed -i "s|\${VERSION:-}|${VERSION}|" packaging/scripts/postinstall.sh
+
+      - name: Build .deb package
+        uses: burningalchemist/action-gh-nfpm@eeac96f42da23d091eec0d0088bf05cac0ceb9f3  # v1
+        id: deb
+        with:
+          nfpm_version: "2.41.1"
+          packager: deb
+          config: packaging/nfpm.yaml
+          target: dist/
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+          ARCH: amd64
+
+      - name: Build .rpm package
+        uses: burningalchemist/action-gh-nfpm@eeac96f42da23d091eec0d0088bf05cac0ceb9f3  # v1
+        id: rpm
+        with:
+          nfpm_version: "2.41.1"
+          packager: rpm
+          config: packaging/nfpm.yaml
+          target: dist/
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+          ARCH: x86_64
+
+      - name: Create versionless copies for stable download URLs
+        run: |
+          cp dist/{{ project_name }}_*.deb dist/{{ project_name }}_latest.deb
+          cp dist/{{ project_name }}-*.rpm dist/{{ project_name }}_latest.rpm
+
+      - name: Upload packages to GitHub Release
+        run: gh release upload {% raw %}${{ needs.release.outputs.tag }}{% endraw %} dist/*.deb dist/*.rpm --clobber
+        env:
+          GH_TOKEN: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+
+  build-mcpb:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: {% raw %}${{ needs.release.outputs.tag }}{% endraw %}
+      - name: Install mcpb CLI
+        run: npm install -g @anthropic-ai/mcpb@2.1.2
+      - name: Render templates
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+        run: |
+          mkdir -p build/mcpb/src
+          # Restrict substitution to ${VERSION} only — other ${...} tokens
+          # (e.g. ${DOCUMENTS}, ${user_config.*}) are runtime placeholders
+          # for the mcpb host and must survive intact.
+          envsubst '${VERSION}' < packaging/mcpb/manifest.json.in  > build/mcpb/manifest.json
+          envsubst '${VERSION}' < packaging/mcpb/pyproject.toml.in > build/mcpb/pyproject.toml
+          cp packaging/mcpb/src/server.py build/mcpb/src/server.py
+      - name: Validate and pack
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+        run: |
+          mcpb validate build/mcpb/manifest.json
+          mkdir -p dist
+          mcpb pack build/mcpb "dist/{{ project_name }}-${VERSION}.mcpb"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mcpb-bundle
+          path: dist/{{ project_name }}-*.mcpb
+          if-no-files-found: error
+
+  publish-mcpb:
+    needs: [release, build-mcpb]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: mcpb-bundle
+          path: dist/
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+        run: |
+          gh release upload \
+            "{% raw %}${{ needs.release.outputs.tag }}{% endraw %}" \
+            dist/{{ project_name }}-*.mcpb \
+            --clobber \
+            --repo "{% raw %}${{ github.repository }}{% endraw %}"
+
+  publish-claude-plugin-pr:
+    needs: release
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout catalog repo
+        uses: actions/checkout@v6
+        with:
+          repository: {{ github_org }}/claude-plugins
+          token: {% raw %}${{ secrets.RELEASE_TOKEN }}{% endraw %}
+          path: catalog
+      - name: Bump marketplace.json entry
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+        run: |
+          cd catalog
+          jq --arg v "$VERSION" --arg ref "v$VERSION" '
+            .plugins |= map(
+              if .name == "{{ project_name }}"
+              then .version = $v | .source.ref = $ref
+              else . end
+            )
+          ' marketplace.json > marketplace.json.tmp
+          mv marketplace.json.tmp marketplace.json
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          path: catalog
+          token: {% raw %}${{ secrets.RELEASE_TOKEN }}{% endraw %}
+          branch: bump/{{ project_name }}-{% raw %}${{ needs.release.outputs.version }}{% endraw %}
+          title: "chore: bump {{ project_name }} to v{% raw %}${{ needs.release.outputs.version }}{% endraw %}"
+          body: |
+            Auto-generated bump from [{{ project_name }} {% raw %}${{ needs.release.outputs.tag }}{% endraw %}](https://github.com/{{ github_org }}/{{ project_name }}/releases/tag/{% raw %}${{ needs.release.outputs.tag }}{% endraw %}).
+          commit-message: "chore: bump {{ project_name }} to v{% raw %}${{ needs.release.outputs.version }}{% endraw %}"
+          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+
+  publish-registry:
+    needs: [release, publish-pypi, publish-docker]
+    if: needs.release.outputs.released == 'true' && !inputs.prerelease
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.5.0
+          MCP_PUBLISHER_SHA256: 79bbb73ba048c5906034f73ef6286d7763bd53cf368ea0b358fc593ed360cbd5
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" -o mcp-publisher.tar.gz
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c
+          tar xz -f mcp-publisher.tar.gz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish
