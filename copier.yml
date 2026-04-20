@@ -24,6 +24,7 @@ _skip_if_exists:
   - "CHANGELOG.md"
   - "LICENSE"
   - ".env.example"
+  - "CLAUDE.md"
 
 _exclude:
   - "copier.yml"
@@ -33,6 +34,8 @@ _exclude:
   - "docs/superpowers"
   # README.md is NOT excluded — README.md.jinja renders to README.md in destination projects.
   # The template's own README.md is automatically skipped by copier when README.md.jinja exists.
+  # CLAUDE.md is NOT excluded — CLAUDE.md.jinja renders to CLAUDE.md in destination projects.
+  # The template's own CLAUDE.md is automatically skipped by copier when CLAUDE.md.jinja exists.
   - "CHANGELOG.md"                            # this repo's own CHANGELOG
   - "LICENSE"                                 # this repo's own LICENSE
 
