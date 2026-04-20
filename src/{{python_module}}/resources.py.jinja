@@ -1,0 +1,27 @@
+"""Resource registrations for {{ human_name }}.
+
+See FastMCP resource docs: https://gofastmcp.com/servers/resources
+"""
+
+from __future__ import annotations
+
+from fastmcp import FastMCP
+from fastmcp.dependencies import Depends
+
+from {{ python_module }}._server_deps import get_service
+from {{ python_module }}.domain import Service
+
+
+def register_resources(mcp: FastMCP) -> None:
+    """Register all domain resources on *mcp*."""
+
+    @mcp.resource("status://{{ project_name }}")
+    async def status(service: Service = Depends(get_service)) -> dict:
+        """Service status resource — JSON-serialisable dict.
+
+        Templated resources take path parameters in the URI; static
+        resources don't. See
+        https://gofastmcp.com/servers/resources#templates for the full
+        pattern.
+        """
+        return await service.status()

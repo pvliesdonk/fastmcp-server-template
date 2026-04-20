@@ -1,0 +1,21 @@
+"""Prompt registrations for {{ human_name }}.
+
+See FastMCP prompt docs: https://gofastmcp.com/servers/prompts
+"""
+
+from __future__ import annotations
+
+from fastmcp import FastMCP
+
+
+def register_prompts(mcp: FastMCP) -> None:
+    """Register all domain prompts on *mcp*."""
+
+    @mcp.prompt()
+    async def summarize(context: str) -> str:
+        """Summarize ``context`` in one paragraph.
+
+        See https://gofastmcp.com/servers/prompts#prompt-arguments for
+        the full signature surface.
+        """
+        return f"Summarize the following in one paragraph:\n\n{context}"
