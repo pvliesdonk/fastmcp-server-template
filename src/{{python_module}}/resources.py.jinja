@@ -16,7 +16,7 @@ def register_resources(mcp: FastMCP) -> None:
     """Register all domain resources on *mcp*."""
 
     @mcp.resource("status://{{ project_name }}")
-    async def status(service: Service = Depends(get_service)) -> dict:
+    async def status(service: Service = Depends(get_service)) -> dict[str, object]:
         """Service status resource — JSON-serialisable dict.
 
         Templated resources take path parameters in the URI; static

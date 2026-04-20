@@ -27,6 +27,6 @@ class Service:
         """Health check."""
         return "pong" if self._ready else "not ready"
 
-    async def status(self) -> dict:
+    async def status(self) -> dict[str, object]:
         """Structured status payload."""
         return {"ready": self._ready}

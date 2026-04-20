@@ -64,6 +64,17 @@ select = [
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
+# Depends() and CurrentContext() calls in argument defaults are the standard
+# FastMCP dependency injection pattern — B008 is a false positive here.
+# Context/FastMCP/Service imports must stay runtime (not TYPE_CHECKING) for
+# DI resolution — TC001/TC002/TC003.
+"src/{{ python_module }}/_server_deps.py" = ["B008", "TC002", "TC003"]
+"src/{{ python_module }}/_server_apps.py" = ["B008", "TC001", "TC002"]
+"src/{{ python_module }}/tools.py" = ["B008", "TC001", "TC002"]
+"src/{{ python_module }}/resources.py" = ["B008", "TC001", "TC002"]
+"src/{{ python_module }}/prompts.py" = ["B008", "TC002"]
+"tests/conftest.py" = ["TC002", "TC003"]
+"tests/test_tools.py" = ["TC002"]
 # Add project-specific overrides below as needed.
 
 [tool.ruff.lint.isort]

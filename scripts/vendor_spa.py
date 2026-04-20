@@ -9,7 +9,9 @@ from __future__ import annotations
 
 def main() -> None:
     """No-op placeholder — replace with real vendor pipeline when needed."""
-    print("vendor_spa.py: no-op placeholder — see MV's scripts/vendor_spa.py for the real pipeline.")
+    print(
+        "vendor_spa.py: no-op placeholder — see MV's scripts/vendor_spa.py for the real pipeline."
+    )
 
 
 if __name__ == "__main__":

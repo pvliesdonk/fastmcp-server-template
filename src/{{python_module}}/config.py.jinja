@@ -28,7 +28,7 @@ class ProjectConfig:
     # CONFIG-FIELDS-END
 
     @classmethod
-    def from_env(cls) -> "ProjectConfig":
+    def from_env(cls) -> ProjectConfig:
         """Load :class:`ProjectConfig` from ``{{ env_prefix }}_*`` env vars."""
         return cls(
             server=ServerConfig.from_env(_ENV_PREFIX),
