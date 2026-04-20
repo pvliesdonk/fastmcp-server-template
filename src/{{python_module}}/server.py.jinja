@@ -15,9 +15,9 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp_pvl_core import (
     ArtifactStore,
-    ServerConfig,
+    ServerConfig,  # noqa: F401  — re-exported for downstream projects' convenience
     build_auth,
-    build_event_store,
+    build_event_store,  # noqa: F401  — re-exported for downstream projects' convenience
     build_instructions,
     configure_logging_from_env,
     resolve_auth_mode,
@@ -98,7 +98,3 @@ def make_server(
         ArtifactStore.register_route(mcp, artifact_store)
 
     return mcp
-
-
-def _unused_imports_silencer() -> None:
-    _ = ServerConfig, build_event_store  # re-exported for downstream use

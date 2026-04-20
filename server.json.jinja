@@ -12,19 +12,13 @@
   "packages": [
     {
       "registryType": "pypi",
-      "identifier": "{{ project_name }}",
+      "identifier": "{{ pypi_name }}",
       "version": "0.1.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
-        {
-          "name": "{{ env_prefix }}_READ_ONLY",
-          "description": "Disable write tools",
-          "format": "boolean",
-          "default": "true"
-        },
         {
           "name": "FASTMCP_LOG_LEVEL",
           "description": "Log level (DEBUG, INFO, WARNING, ERROR)",
@@ -99,12 +93,6 @@
         }
       ],
       "environmentVariables": [
-        {
-          "name": "{{ env_prefix }}_READ_ONLY",
-          "description": "Disable write tools",
-          "format": "boolean",
-          "default": "true"
-        },
         {
           "name": "FASTMCP_LOG_LEVEL",
           "description": "Log level (DEBUG, INFO, WARNING, ERROR)",

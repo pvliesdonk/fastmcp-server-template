@@ -10,12 +10,16 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 from fastmcp_pvl_core import (
     configure_logging_from_env,
     make_serve_parser,
     normalise_http_path,
 )
+
+if TYPE_CHECKING:
+    import argparse
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +59,7 @@ def main() -> None:
         parser.error(f"unknown command: {args.command}")
 
 
-def _cmd_serve(args) -> None:  # type: ignore[no-untyped-def]
+def _cmd_serve(args: argparse.Namespace) -> None:
     from {{ python_module }}.server import make_server
 
     transport = args.transport
