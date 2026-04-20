@@ -1,0 +1,21 @@
+# Installation
+
+## From PyPI
+
+```bash
+pip install {{ pypi_name }}
+```
+
+## From Docker
+
+```bash
+docker pull {{ docker_registry }}/{{ project_name }}:latest
+```
+
+## From source
+
+```bash
+git clone https://github.com/{{ github_org }}/{{ project_name }}
+cd {{ project_name }}
+uv sync --all-extras --dev
+```
