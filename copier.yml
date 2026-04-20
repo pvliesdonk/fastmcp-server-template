@@ -1,0 +1,86 @@
+# Copier configuration for fastmcp-server-template.
+#
+# Spec: docs/superpowers/specs/2026-04-20-fastmcp-copier-scaffold-design.md
+# (markdown-vault-mcp repo).
+
+_min_copier_version: "9.0"
+_answers_file: .copier-answers.yml
+_templates_suffix: .jinja
+
+_skip_if_exists:
+  - "src/{{python_module}}/tools.py"
+  - "src/{{python_module}}/resources.py"
+  - "src/{{python_module}}/prompts.py"
+  - "src/{{python_module}}/domain.py"
+  - "tests/conftest.py"
+  - "tests/test_tools.py"
+  - "tests/test_smoke.py"
+  - "docs/design.md"
+  - "docs/index.md"
+  - "docs/tools/index.md"
+  - "docs/configuration.md"
+  - "docs/installation.md"
+  - "README.md"
+  - "CHANGELOG.md"
+  - "LICENSE"
+  - ".env.example"
+
+_exclude:
+  - "copier.yml"
+  - "tests/fixtures"
+  - ".github/workflows/template-ci.yml"       # self-test — template-repo only
+  - ".github/workflows/template-release.yml"  # template's own release — template-repo only
+  - "docs/superpowers"
+  - "README.md"                               # this repo's own README (generated projects get README.md.jinja)
+  - "CHANGELOG.md"                            # this repo's own CHANGELOG
+  - "LICENSE"                                 # this repo's own LICENSE
+
+# --- Variables ---
+
+project_name:
+  type: str
+  help: "Repo name, CLI command, Docker image basename (e.g. markdown-vault-mcp)"
+  validator: >-
+    {% if not (project_name | regex_search('^[a-z][a-z0-9-]*$')) %}
+    Lowercase letters, digits, and hyphens only; must start with a letter.
+    {% endif %}
+
+pypi_name:
+  type: str
+  default: "{{ project_name }}"
+  help: "PyPI distribution name (override when it differs from project_name)"
+
+python_module:
+  type: str
+  default: "{{ pypi_name | replace('-', '_') }}"
+  help: "Python import name (underscore-separated)"
+  validator: >-
+    {% if not (python_module | regex_search('^[a-z][a-z0-9_]*$')) %}
+    Lowercase letters, digits, and underscores only; must start with a letter.
+    {% endif %}
+
+env_prefix:
+  type: str
+  help: "Env var prefix, no trailing underscore (e.g. MARKDOWN_VAULT_MCP)"
+  validator: >-
+    {% if not (env_prefix | regex_search('^[A-Z][A-Z0-9_]*[A-Z0-9]$')) %}
+    Uppercase letters, digits, and underscores only; must start and end with letter/digit.
+    {% endif %}
+
+human_name:
+  type: str
+  help: "Human-readable project name for docs (e.g. 'Markdown Vault MCP')"
+
+domain_description:
+  type: str
+  help: "One-line blurb for README and the default MCP instructions"
+
+github_org:
+  type: str
+  default: "pvliesdonk"
+  help: "Used for URLs, Docker registry path, and GitHub references"
+
+docker_registry:
+  type: str
+  default: "ghcr.io/{{ github_org }}"
+  help: "Docker registry (override for docker.io or a private registry)"
