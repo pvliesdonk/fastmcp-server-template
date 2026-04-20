@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/schema.json
+#
+# nfpm configuration for {{ project_name }} .deb and .rpm packages.
+# Build: VERSION=1.0.0 nfpm package --packager deb --target dist/
+#        VERSION=1.0.0 nfpm package --packager rpm --target dist/
+
+name: {{ project_name }}
+arch: "${ARCH:-amd64}"
+platform: linux
+# VERSION env var is required (e.g. VERSION=1.0.0 nfpm package ...)
+# Note: nfpm does not support bash :? guards — use simple ${VAR} only.
+version: "${VERSION}"
+version_schema: semver
+section: utils
+priority: optional
+maintainer: "{{ github_org }} <{{ github_org }}@users.noreply.github.com>"
+description: |
+  {{ domain_description }}
+homepage: "https://{{ github_org }}.github.io/{{ project_name }}/"
+license: "MIT"
+
+# --- Package contents ---
+
+contents:
+  # systemd unit file
+  - src: packaging/{{ project_name }}.service
+    dst: /usr/lib/systemd/system/{{ project_name }}.service
+
+  # Example environment file (preserved on upgrade, never overwritten)
+  - src: packaging/env.example
+    dst: /etc/{{ project_name }}/env.example
+    type: config|noreplace
+
+  # State directory (auto-created with correct ownership)
+  - dst: /var/lib/{{ project_name }}
+    type: dir
+    file_info:
+      mode: 0750
+      owner: {{ project_name }}
+      group: {{ project_name }}
+
+  # Install directory for venv
+  - dst: /opt/{{ project_name }}
+    type: dir
+    file_info:
+      mode: 0755
+      owner: root
+      group: root
+
+# --- Lifecycle scripts ---
+
+scripts:
+  preinstall: packaging/scripts/preinstall.sh
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
+  postremove: packaging/scripts/postremove.sh
+
+# --- Packager-specific overrides ---
+# Dependencies are defined per-packager (nfpm overrides replace, not extend).
+
+overrides:
+  deb:
+    depends:
+      - python3 (>= 3.11)
+      - python3-venv
+  rpm:
+    depends:
+      - python3 >= 3.11

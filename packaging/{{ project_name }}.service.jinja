@@ -1,0 +1,80 @@
+[Unit]
+Description={{ human_name }} Server
+Documentation=https://{{ github_org }}.github.io/{{ project_name }}/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ project_name }}
+Group={{ project_name }}
+
+# Configuration via environment file
+EnvironmentFile=-/etc/{{ project_name }}/env
+
+# Start the server in HTTP mode
+ExecStart=/opt/{{ project_name }}/venv/bin/{{ project_name }} serve --transport http
+
+# State directory (auto-creates /var/lib/{{ project_name }}/)
+StateDirectory={{ project_name }}
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ project_name }}
+
+# --- Security hardening ---
+
+# Filesystem
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/{{ project_name }}
+# Add extra ReadWritePaths if your data directory is elsewhere:
+#ReadWritePaths=/home/user/data
+
+# Capabilities
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Kernel
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+
+# Devices
+PrivateDevices=yes
+DevicePolicy=closed
+
+# Network — only IPv4/IPv6 + Unix sockets (no Netlink, etc.)
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# System calls
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+# Misc
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+
+# Python/numpy requires writable+executable memory for JIT
+MemoryDenyWriteExecute=no
+
+# Process
+# 0027 allows group-read so admins in the {{ project_name }} group can
+# inspect data/index files directly. Owner retains full access.
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
