@@ -1,0 +1,67 @@
+name: template-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  render-and-gate:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          version: "0.6"
+
+      - name: Set up Python ${{ matrix.python }}
+        run: uv python install ${{ matrix.python }}
+
+      - name: Render smoke project with copier
+        run: |
+          uv run --no-project --with copier \
+            copier copy --trust --defaults \
+            --data-file tests/fixtures/smoke-answers.yml \
+            . /tmp/smoke
+
+      - name: Install rendered project
+        working-directory: /tmp/smoke
+        run: uv sync --all-extras --dev
+
+      - name: ruff check
+        working-directory: /tmp/smoke
+        run: uv run ruff check .
+
+      - name: ruff format --check
+        working-directory: /tmp/smoke
+        run: uv run ruff format --check .
+
+      - name: mypy
+        working-directory: /tmp/smoke
+        run: uv run mypy src/
+
+      - name: pytest
+        working-directory: /tmp/smoke
+        run: uv run pytest -x -q
+
+      - name: Idempotence check (copier update yields empty diff)
+        working-directory: /tmp/smoke
+        run: |
+          git init -q
+          git config user.email "ci@example.com"
+          git config user.name "CI"
+          git add -A
+          git commit -q -m "initial render"
+          uv run --no-project --with copier \
+            copier update --trust --defaults --vcs-ref HEAD
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::copier update produced a non-empty diff — template is not idempotent"
+            git --no-pager diff
+            exit 1
+          fi
