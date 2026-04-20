@@ -30,6 +30,22 @@ jobs:
             --data-file tests/fixtures/smoke-answers.yml \
             . /tmp/smoke
 
+      - name: Idempotence check (second render is byte-identical)
+        # Runs BEFORE the gate so the first render is still pristine.
+        # ``uv sync``/``ruff``/``mypy``/``pytest`` would otherwise add
+        # .venv, uv.lock, .mypy_cache etc. that the second (untouched)
+        # render doesn't have.
+        run: |
+          uv run --no-project --with copier \
+            copier copy --trust --defaults \
+            --data-file tests/fixtures/smoke-answers.yml \
+            . /tmp/smoke2
+          if ! diff -r /tmp/smoke /tmp/smoke2 > /tmp/smoke-diff 2>&1; then
+            echo "::error::second render differs from first — template is not idempotent"
+            cat /tmp/smoke-diff
+            exit 1
+          fi
+
       - name: Install rendered project
         working-directory: /tmp/smoke
         run: uv sync --all-extras --dev
@@ -49,17 +65,3 @@ jobs:
       - name: pytest
         working-directory: /tmp/smoke
         run: uv run pytest -x -q
-
-      - name: Idempotence check (second render is byte-identical)
-        run: |
-          uv run --no-project --with copier \
-            copier copy --trust --defaults \
-            --data-file tests/fixtures/smoke-answers.yml \
-            . /tmp/smoke2
-          # _commit in .copier-answers.yml records the template SHA — identical
-          # between renders, so we just diff the whole tree.
-          if ! diff -r /tmp/smoke /tmp/smoke2 > /tmp/smoke-diff 2>&1; then
-            echo "::error::second render differs from first — template is not idempotent"
-            cat /tmp/smoke-diff
-            exit 1
-          fi
