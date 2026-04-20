@@ -11,7 +11,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from fastmcp_pvl_core import ServerConfig, env
+from fastmcp_pvl_core import (
+    ServerConfig,
+    env,  # noqa: F401  — re-exported so CONFIG-FROM-ENV additions don't need a new import
+)
 
 _ENV_PREFIX = "{{ env_prefix }}"
 
@@ -37,7 +40,3 @@ class ProjectConfig:
             # vault_path=Path(env(_ENV_PREFIX, "VAULT_PATH", "/data/vault")),
             # CONFIG-FROM-ENV-END
         )
-
-
-def _unused_imports_silencer() -> None:
-    _ = env  # re-exported so downstream from_env additions don't need a new import

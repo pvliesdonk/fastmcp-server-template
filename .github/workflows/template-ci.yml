@@ -50,18 +50,16 @@ jobs:
         working-directory: /tmp/smoke
         run: uv run pytest -x -q
 
-      - name: Idempotence check (copier update yields empty diff)
-        working-directory: /tmp/smoke
+      - name: Idempotence check (second render is byte-identical)
         run: |
-          git init -q
-          git config user.email "ci@example.com"
-          git config user.name "CI"
-          git add -A
-          git commit -q -m "initial render"
           uv run --no-project --with copier \
-            copier update --trust --defaults --vcs-ref HEAD
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::copier update produced a non-empty diff — template is not idempotent"
-            git --no-pager diff
+            copier copy --trust --defaults \
+            --data-file tests/fixtures/smoke-answers.yml \
+            . /tmp/smoke2
+          # _commit in .copier-answers.yml records the template SHA — identical
+          # between renders, so we just diff the whole tree.
+          if ! diff -r /tmp/smoke /tmp/smoke2 > /tmp/smoke-diff 2>&1; then
+            echo "::error::second render differs from first — template is not idempotent"
+            cat /tmp/smoke-diff
             exit 1
           fi
