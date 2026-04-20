@@ -2,13 +2,16 @@
 
 Composes :class:`fastmcp_pvl_core.ServerConfig` via the domain
 :class:`ProjectConfig` dataclass — never inherits.
+
+Add domain-specific fields between the CONFIG-FIELDS sentinels; copier
+update preserves that block across template updates.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from fastmcp_pvl_core import ServerConfig
+from fastmcp_pvl_core import ServerConfig, env
 
 _ENV_PREFIX = "{{ env_prefix }}"
 
@@ -19,6 +22,22 @@ class ProjectConfig:
 
     server: ServerConfig = field(default_factory=ServerConfig)
 
+    # CONFIG-FIELDS-START — add domain fields below; kept across copier update
+    # (example)
+    # vault_path: Path = Path("/data/vault")
+    # CONFIG-FIELDS-END
+
     @classmethod
     def from_env(cls) -> "ProjectConfig":
-        return cls(server=ServerConfig.from_env(_ENV_PREFIX))
+        """Load :class:`ProjectConfig` from ``{{ env_prefix }}_*`` env vars."""
+        return cls(
+            server=ServerConfig.from_env(_ENV_PREFIX),
+            # CONFIG-FROM-ENV-START — populate domain fields below; kept across copier update
+            # (example)
+            # vault_path=Path(env(_ENV_PREFIX, "VAULT_PATH", "/data/vault")),
+            # CONFIG-FROM-ENV-END
+        )
+
+
+def _unused_imports_silencer() -> None:
+    _ = env  # re-exported so downstream from_env additions don't need a new import
