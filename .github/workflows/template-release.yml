@@ -1,0 +1,101 @@
+name: template-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        type: choice
+        required: true
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        run: |
+          set -euo pipefail
+          LATEST="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo 'v0.0.0')"
+          VERSION="${LATEST#v}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
+          case "${{ inputs.bump }}" in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+          esac
+          NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT (from $LATEST)"
+
+      - name: Collect merged PR titles since latest tag
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          LATEST="${{ steps.version.outputs.latest }}"
+          SINCE="$(git log -1 --format=%cI "$LATEST" 2>/dev/null || echo '1970-01-01')"
+          PRS="$(gh pr list --base main --state merged \
+            --search "merged:>${SINCE}" \
+            --json number,title \
+            --jq '.[] | "- #\(.number) \(.title)"')"
+          if [ -z "$PRS" ]; then
+            PRS="- (no PRs merged since $LATEST)"
+          fi
+          {
+            echo "notes<<EOF"
+            echo "$PRS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update CHANGELOG.md
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          NOTES: ${{ steps.notes.outputs.notes }}
+        run: |
+          set -euo pipefail
+          DATE="$(date -u +%Y-%m-%d)"
+          HEADER="## ${NEXT} (${DATE})"
+          {
+            echo "# Changelog"
+            echo
+            echo "$HEADER"
+            echo
+            echo "$NOTES"
+            echo
+            tail -n +2 CHANGELOG.md 2>/dev/null || true
+          } > CHANGELOG.md.new
+          mv CHANGELOG.md.new CHANGELOG.md
+
+      - name: Commit, tag, push
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          set -euo pipefail
+          git config user.email "actions@users.noreply.github.com"
+          git config user.name "github-actions"
+          git add CHANGELOG.md
+          git commit -m "chore(release): $NEXT"
+          git tag -a "$NEXT" -m "Release $NEXT"
+          git push origin main
+          git push origin "$NEXT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+          NOTES: ${{ steps.notes.outputs.notes }}
+        run: |
+          gh release create "$NEXT" \
+            --title "$NEXT" \
+            --notes "$NOTES"
