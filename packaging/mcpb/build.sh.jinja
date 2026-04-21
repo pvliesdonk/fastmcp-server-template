@@ -10,8 +10,9 @@
 #   packaging/mcpb/{manifest.json.in,pyproject.toml.in,src/server.py,build.sh}
 #   are in the template's _skip_if_exists list, so future ``copier update``
 #   runs will NOT re-render them.  When mcpb bumps manifest_version, when
-#   you change license, or when the mcpb CLI version is bumped upstream,
-#   update these files manually.
+#   the project picks a license (starter is UNLICENSED — you MUST choose
+#   one before publishing), or when the mcpb CLI version is bumped
+#   upstream, update these files manually.
 set -euo pipefail
 
 VERSION="${VERSION:-dev}"
