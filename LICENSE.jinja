@@ -11,22 +11,45 @@ scaffold.  Until you replace it, the project is proprietary and no
 permission is granted to use, copy, modify, merge, publish, distribute,
 sublicense, or sell copies of this software.
 
-To open-source the project, replace this file with the full text of your
-chosen license (see https://choosealicense.com/) and update the matching
-fields in pyproject.toml:
+How to pick and apply a license
+-------------------------------
 
-  [project]
-  license = "MIT"          # or "Apache-2.0", "BSD-3-Clause", "GPL-3.0", ...
-  classifiers = [
-      "License :: OSI Approved :: MIT License",
-      ...
-  ]
+1. Pick one — see https://choosealicense.com/ (MIT, Apache-2.0,
+   BSD-3-Clause, GPL-3.0, MPL-2.0, and proprietary are all common).
 
-And update the matching field in packaging/mcpb/manifest.json.in:
+2. Replace this file with the full text of the chosen license.
 
-  "license": "MIT"
+3. Update the FOUR other places the scaffold claims a license:
 
-To keep the project proprietary, leave this file as-is (or replace with
-your own proprietary-license text) and make sure pyproject.toml and
-the MCPB manifest remain on "LicenseRef-Proprietary" and "UNLICENSED"
-respectively.
+   a. pyproject.toml:
+        license = "LicenseRef-Proprietary"
+                      ↓
+        license = "MIT"                         # or "Apache-2.0", etc.
+
+   b. pyproject.toml classifiers list:
+        "License :: Other/Proprietary License",
+                      ↓
+        "License :: OSI Approved :: MIT License",
+
+      See https://pypi.org/classifiers/ for the full classifier list.
+
+   c. packaging/mcpb/manifest.json.in:
+        "license": "UNLICENSED"
+                      ↓
+        "license": "MIT"                        # or the SPDX id you chose
+
+   d. packaging/nfpm.yaml:
+        license: "Proprietary"
+                      ↓
+        license: "MIT"
+
+4. If you never pick one, leave this file as-is and the project remains
+   proprietary.  Anyone you share the code with still has no license to
+   use it unless you explicitly grant rights separately.
+
+Caveat: the files above are in _skip_if_exists in the template, so
+future ``copier update`` runs will NOT re-render them — your license
+choice is durable across template bumps.  However, pyproject.toml
+itself is NOT skip-if-exists, so if you accept the default on a template
+update, the ``license =`` and classifier lines may flip back to the
+template's defaults.  If that happens, revert those two lines.
