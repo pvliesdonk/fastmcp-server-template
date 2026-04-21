@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.4 (2026-04-21)
+
+- #18 feat(cli): rewrite template CLI from argparse to typer
+
+
 ## v1.0.3 (2026-04-21)
 
 - #17 fix(release): ship bump_manifests.py + wire PSR build_command
