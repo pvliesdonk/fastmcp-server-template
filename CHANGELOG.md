@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.1 (2026-04-21)
+
+- #11 fix(release): publish linux packages on prerelease too
+
+
 ## v1.0.0 (2026-04-20)
 
 - #10 feat!: rewrite as copier template depending on fastmcp-pvl-core (v1.0.0)
