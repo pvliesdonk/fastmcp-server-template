@@ -14,8 +14,6 @@ from fastmcp_pvl_core import (
 
 from {{ python_module }}.config import _ENV_PREFIX, ProjectConfig
 
-logger = logging.getLogger(__name__)
-
 app = typer.Typer(
     name="{{ project_name }}",
     help="{{ domain_description }}",
@@ -32,8 +30,26 @@ def _root(
         False, "-v", "--verbose", help="Enable debug logging."
     ),
 ) -> None:
-    """Root callback — bootstraps logging for every subcommand."""
+    """Root callback — bootstraps logging for every subcommand.
+
+    ``configure_logging_from_env`` sets the root logger *level* and
+    configures FastMCP's own logger tree, but does NOT attach a handler
+    to the root logger — so ``{{ python_module }}.*`` loggers would have
+    no output.  Attach one here.  Kept idempotent via the
+    ``if not root.handlers`` guard so repeated calls (e.g. from
+    ``make_server()`` on the same process) are safe.
+    """
     configure_logging_from_env(verbose=verbose)
+    root = logging.getLogger()
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        root.addHandler(handler)
+    if verbose:
+        # httpx/httpcore are noisy at DEBUG; keep them quiet.  Core doesn't
+        # own these deps, so the silencing stays domain-local.
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 @app.command()
