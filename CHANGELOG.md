@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.2 (2026-04-21)
+
+- #15 fix(mcpb): add [build-system] table to pyproject starter
+- #14 fix(scaffold): default to proprietary, require explicit license choice
+- #13 ci: Add claude GitHub actions 1776773149181
+- #12 feat(packaging): add mcpb bundle scaffold
+
+
 ## v1.0.1 (2026-04-21)
 
 - #11 fix(release): publish linux packages on prerelease too
