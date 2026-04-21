@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "fastmcp-pvl-core>=1.0,<2",
+    "typer>=0.12",
     # PROJECT-DEPS-START — add domain dependencies below; kept across copier update
     # PROJECT-DEPS-END
 ]
@@ -68,6 +69,7 @@ ignore = ["E501"]
 # FastMCP dependency injection pattern — B008 is a false positive here.
 # Context/FastMCP/Service imports must stay runtime (not TYPE_CHECKING) for
 # DI resolution — TC001/TC002/TC003.
+"src/{{ python_module }}/cli.py" = ["B008"]
 "src/{{ python_module }}/_server_deps.py" = ["B008", "TC002", "TC003"]
 "src/{{ python_module }}/_server_apps.py" = ["B008", "TC001", "TC002"]
 "src/{{ python_module }}/tools.py" = ["B008", "TC001", "TC002"]
