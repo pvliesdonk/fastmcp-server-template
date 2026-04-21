@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.5 (2026-04-21)
+
+- #21 chore(actions): bump setup-uv, deploy-pages, codeql-action
+- #19 feat(gitignore): ship opinionated .gitignore starter + add to _skip_if_exists
+
+
 ## v1.0.4 (2026-04-21)
 
 - #18 feat(cli): rewrite template CLI from argparse to typer
