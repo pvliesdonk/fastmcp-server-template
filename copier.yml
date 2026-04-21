@@ -31,6 +31,7 @@ _skip_if_exists:
   - "packaging/mcpb/pyproject.toml.in"
   - "packaging/mcpb/src/server.py"
   - "packaging/mcpb/build.sh"
+  - "scripts/bump_manifests.py"
 # Note: CLAUDE.md is deliberately NOT in _skip_if_exists — it's a
 # hybrid file with template-owned and domain-owned sections marked by
 # sentinel blocks, and copier's 3-way merge needs to re-render the
