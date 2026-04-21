@@ -1,21 +1,55 @@
-MIT License
-
 Copyright (c) 2026 {{ github_org }}
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+All rights reserved.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+---
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+TODO: Choose a license for this project before publishing.
+
+This file is a placeholder shipped by the fastmcp-server-template
+scaffold.  Until you replace it, the project is proprietary and no
+permission is granted to use, copy, modify, merge, publish, distribute,
+sublicense, or sell copies of this software.
+
+How to pick and apply a license
+-------------------------------
+
+1. Pick one — see https://choosealicense.com/ (MIT, Apache-2.0,
+   BSD-3-Clause, GPL-3.0, MPL-2.0, and proprietary are all common).
+
+2. Replace this file with the full text of the chosen license.
+
+3. Update the FOUR other places the scaffold claims a license:
+
+   a. pyproject.toml:
+        license = "LicenseRef-Proprietary"
+                      ↓
+        license = "MIT"                         # or "Apache-2.0", etc.
+
+   b. pyproject.toml classifiers list:
+        "License :: Other/Proprietary License",
+                      ↓
+        "License :: OSI Approved :: MIT License",
+
+      See https://pypi.org/classifiers/ for the full classifier list.
+
+   c. packaging/mcpb/manifest.json.in:
+        "license": "UNLICENSED"
+                      ↓
+        "license": "MIT"                        # or the SPDX id you chose
+
+   d. packaging/nfpm.yaml:
+        license: "Proprietary"
+                      ↓
+        license: "MIT"
+
+4. If you never pick one, leave this file as-is and the project remains
+   proprietary.  Anyone you share the code with still has no license to
+   use it unless you explicitly grant rights separately.
+
+Caveat: the files above are in _skip_if_exists in the template, so
+future ``copier update`` runs will NOT re-render them — your license
+choice is durable across template bumps.  However, pyproject.toml
+itself is NOT skip-if-exists, so if you accept the default on a template
+update, the ``license =`` and classifier lines may flip back to the
+template's defaults.  If that happens, revert those two lines.
