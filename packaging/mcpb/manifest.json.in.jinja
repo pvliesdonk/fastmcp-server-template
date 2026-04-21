@@ -1,0 +1,64 @@
+{
+  "manifest_version": "0.4",
+  "name": "{{ project_name }}",
+  "display_name": "{{ human_name }}",
+  "version": "${VERSION}",
+  "description": "{{ domain_description }}",
+  "long_description": "{{ domain_description }}",
+  "author": {
+    "name": "{{ github_org }}",
+    "url": "https://github.com/{{ github_org }}"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/{{ github_org }}/{{ project_name }}.git"
+  },
+  "homepage": "https://{{ github_org }}.github.io/{{ project_name }}/",
+  "documentation": "https://{{ github_org }}.github.io/{{ project_name }}/",
+  "support": "https://github.com/{{ github_org }}/{{ project_name }}/issues",
+  "license": "UNLICENSED",
+  "keywords": [],
+  "server": {
+    "type": "uv",
+    "entry_point": "src/server.py",
+    "mcp_config": {
+      "command": "uvx",
+      "args": ["--from", "{{ pypi_name }}[all]==${VERSION}", "{{ project_name }}", "serve"],
+      "env": {
+        "{{ env_prefix }}_SERVER_NAME": "${user_config.server_name}",
+        "{{ env_prefix }}_READ_ONLY":   "${user_config.read_only}",
+        "FASTMCP_LOG_LEVEL":            "${user_config.log_level}"
+      }
+    }
+  },
+  "user_config": {
+    "server_name": {
+      "type": "string",
+      "title": "Server name",
+      "description": "Name shown in the Claude tool list.",
+      "required": false,
+      "default": "{{ project_name }}"
+    },
+    "read_only": {
+      "type": "boolean",
+      "title": "Read-only mode",
+      "description": "When true, write-tagged tools are hidden.",
+      "required": false,
+      "default": true
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Log level",
+      "description": "One of: DEBUG, INFO, WARNING, ERROR.",
+      "required": false,
+      "default": "INFO"
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.11,<4.0"
+    }
+  }
+}
