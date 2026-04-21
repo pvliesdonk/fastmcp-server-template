@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.3 (2026-04-21)
+
+- #17 fix(release): ship bump_manifests.py + wire PSR build_command
+- #16 fix(ci): docs workflow triggers on v* tag pushes
+
+
 ## v1.0.2 (2026-04-21)
 
 - #15 fix(mcpb): add [build-system] table to pyproject starter
