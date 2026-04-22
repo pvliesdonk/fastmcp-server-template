@@ -86,7 +86,9 @@ Empirical canary: `image-generation-mcp` run `24791600780` dispatched `copier-up
 
 **Short-term — DONE.** `RELEASE_TOKEN` has been re-issued with `workflow` scope and rotated across all four repos.
 
-**Long-term (follow-up issue, not part of this spec):** migrate to a GitHub App installation token via `actions/create-github-app-token`. Per-repo scoping, automatic rotation, no human-tied identity on automated commits. This is the Dependabot/Renovate pattern but requires registering an app and storing `app-id` + `private-key` secrets in each repo. Out of scope here; tracked as a follow-up.
+**Follow-ups (filed as issues, not part of this spec):**
+- Migrate `copier-update.yml` to a GitHub App installation token via `actions/create-github-app-token`. Per-repo scoping, automatic rotation, no human-tied identity on automated commits. Dependabot/Renovate pattern.
+- Sentinel-protect shared `docs/deployment/*.md` + `docs/guides/authentication.md`. Phase 1.5 converges these, which is the right near-term answer, but longer term each consumer may want to add deployment-specific caveats inline. Introduce `DOCS-DEPLOYMENT-EXTRA-*` / similar sentinel blocks analogous to `CONFIG-FIELDS-*`.
 
 ### 3.2 Decision B — CLAUDE.md migration order
 
@@ -110,7 +112,7 @@ For each drifted file identified in §2.4, decide: **converge** (force-sync cons
 - `Dockerfile`: **sentinel-protect.** Image-gen's `--extra all` + git-lfs + COPY strategy are legitimate domain needs. Add `DOCKERFILE-APT-DEPS-*` + `DOCKERFILE-UV-EXTRAS-*` sentinel markers to `Dockerfile.jinja`.
 - `compose.yml`: sentinel-protect if MV's divergence is domain-driven (volumes etc.); otherwise converge.
 - `codecov.yml`: converge (image-gen's `__main__.py` ignore is a one-liner worth upstreaming into the template's codecov.yml.jinja).
-- `docs/deployment/docker.md`, `docs/deployment/oidc.md`, `docs/guides/authentication.md`: these aren't in `_exclude` yet but behave like scaffolds. Decide: add to `_exclude` (they become domain-owned after copy), or keep template-owned and converge.
+- `docs/deployment/docker.md`, `docs/deployment/oidc.md`, `docs/guides/authentication.md`: **converge** (keep template-owned). Future changes in `fastmcp-pvl-core` (auth flow, OIDC config, deployment patterns) will naturally want to propagate into these pages across the fleet; losing them to `_exclude` would orphan that channel. Domain additions should be appended as separate pages (the consumers already do this — each has its own `docs/guides/*.md` for domain-specific content). If any consumer genuinely needs to customize the core docs, that's a signal for a follow-up effort to introduce sentinel blocks inside these pages — track as a separate issue ("sentinel-protect shared docs/deployment + docs/guides pages"), not part of this spec.
 
 Output of this phase: a small template PR adding any new sentinels + small consumer PRs converging the non-customized drift. This is the least glamorous phase but it means Phase 4's bot PRs will be *small* rather than *unmergeable*.
 
