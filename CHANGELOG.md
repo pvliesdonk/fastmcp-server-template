@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.5 (2026-04-22)
+
+- #27 feat: template v1.1.5 — CLAUDE.md Shared Infrastructure + Dockerfile sentinels + bump_manifests hardening
+
+
 ## v1.1.4 (2026-04-22)
 
 - #26 fix(copier-update): pass REF through env: + top-level import in test_smoke.py
