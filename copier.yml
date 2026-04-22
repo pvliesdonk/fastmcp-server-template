@@ -41,6 +41,14 @@ _skip_if_exists:
   - "packaging/mcpb/build.sh"
   - "scripts/bump_manifests.py"
   - ".gitignore"
+  # Shared deployment/auth docs — rendered as starter content on first copy,
+  # but consumers typically customize them with domain-specific env vars,
+  # auth flows, and deployment notes.  Protected from copier update to avoid
+  # clobbering that customization.  Tracked for future sentinel-based
+  # protection in issue #29.
+  - "docs/deployment/docker.md"
+  - "docs/deployment/oidc.md"
+  - "docs/guides/authentication.md"
 # Note: CLAUDE.md is deliberately NOT in _skip_if_exists — it's a
 # hybrid file with template-owned and domain-owned sections marked by
 # sentinel blocks, and copier's 3-way merge needs to re-render the
