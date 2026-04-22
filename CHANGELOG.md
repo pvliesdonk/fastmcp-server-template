@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.7 (2026-04-22)
+
+- #33 fix(claude-md): replace RST :class: with Markdown backticks
+
+
 ## v1.1.6 (2026-04-22)
 
 - #32 fix(copier): add shared deployment+auth docs to _skip_if_exists
