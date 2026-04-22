@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.8 (2026-04-22)
+
+- #34 fix(copier-update): stage conflict markers before git checkout -B
+
+
 ## v1.1.7 (2026-04-22)
 
 - #33 fix(claude-md): replace RST :class: with Markdown backticks
