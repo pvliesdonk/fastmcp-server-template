@@ -10,19 +10,15 @@ _templates_suffix: .jinja
 # Starter files: written once on first `copier copy`, protected from
 # `copier update`.  Domain-owned — users customise these and keep their
 # edits across template updates.
+#
+# NOTE: `_skip_if_exists` only preserves files that *already exist* at
+# destination; it does NOT protect against re-creation on projects that
+# never had the file.  For scaffold files that a retrofitted project
+# might legitimately skip (e.g. `tools.py` because the project uses a
+# different module layout), add the path to `_exclude` below instead of
+# here.
 _skip_if_exists:
-  - "src/{{python_module}}/tools.py"
-  - "src/{{python_module}}/resources.py"
-  - "src/{{python_module}}/prompts.py"
-  - "src/{{python_module}}/domain.py"
   - "tests/conftest.py"
-  - "tests/test_tools.py"
-  - "tests/test_smoke.py"
-  - "docs/design.md"
-  - "docs/index.md"
-  - "docs/tools/index.md"
-  - "docs/configuration.md"
-  - "docs/installation.md"
   - "README.md"
   - "CHANGELOG.md"
   - "LICENSE"
@@ -64,6 +60,23 @@ _exclude:
   - ".github/workflows/template-release.yml"  # template's own release — template-repo only
   - "docs/superpowers"
   - "uv.lock"                                 # generated projects create their own
+  # Scaffold files that projects may legitimately skip (different module
+  # layout, docs structure, or test organisation).  Excluding them here
+  # means they never render on copy OR update — fresh projects bring
+  # their own domain modules/tests/docs; retrofitted projects don't get
+  # spurious re-creations every week.  The `.jinja` files stay in this
+  # repo as maintainer-facing reference content.
+  - "src/{{python_module}}/tools.py"
+  - "src/{{python_module}}/resources.py"
+  - "src/{{python_module}}/prompts.py"
+  - "src/{{python_module}}/domain.py"
+  - "tests/test_tools.py"
+  - "tests/test_smoke.py"
+  - "docs/design.md"
+  - "docs/index.md"
+  - "docs/tools/index.md"
+  - "docs/configuration.md"
+  - "docs/installation.md"
 
 # --- Variables ---
 
