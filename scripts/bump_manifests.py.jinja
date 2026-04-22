@@ -61,16 +61,27 @@ def main() -> int:
     server = _load(server_path)
     if not isinstance(server, dict):
         print(
-            f"{server_path} must contain a JSON object (top-level)",
+            f"{server_path} must contain a JSON object (top-level), "
+            f"got {type(server).__name__}",
             file=sys.stderr,
         )
         return 1
     server["version"] = version
     packages = server.get("packages", [])
     if not isinstance(packages, list):
-        packages = []
-    for pkg in packages:
+        print(
+            f"{server_path}: 'packages' must be a JSON array, got "
+            f"{type(packages).__name__}",
+            file=sys.stderr,
+        )
+        return 1
+    for i, pkg in enumerate(packages):
         if not isinstance(pkg, dict):
+            print(
+                f"WARNING: packages[{i}] is not a JSON object "
+                f"(got {type(pkg).__name__}) — skipped",
+                file=sys.stderr,
+            )
             continue
         if pkg.get("registryType") == "pypi":
             pkg["version"] = version
