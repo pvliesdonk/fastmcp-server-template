@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.2 (2026-04-22)
+
+- #24 fix(copier-update): add dependencies label guard + drop unused step id
+
+
 ## v1.1.1 (2026-04-22)
 
 - #23 fix(copier-update): use --conflict=inline instead of --conflict=rej
