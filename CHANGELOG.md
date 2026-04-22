@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.6 (2026-04-22)
+
+- #32 fix(copier): add shared deployment+auth docs to _skip_if_exists
+
+
 ## v1.1.5 (2026-04-22)
 
 - #27 feat: template v1.1.5 — CLAUDE.md Shared Infrastructure + Dockerfile sentinels + bump_manifests hardening
