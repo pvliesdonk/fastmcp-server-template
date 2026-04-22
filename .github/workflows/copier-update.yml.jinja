@@ -89,7 +89,9 @@ jobs:
           # `--conflict=inline` writes standard `<<<<<<< before updating`
           # markers (not `.rej` sidecars).  Count files that contain at
           # least one conflict marker; skip binary files with `git grep -I`.
-          conflict_count=$(git grep -lI '^<<<<<<< before updating$' -- ':!.git' 2>/dev/null | wc -l | tr -d ' ')
+          # `|| true` swallows git grep's exit code 1 on no-match so the
+          # happy path (zero conflicts) doesn't trip `set -euo pipefail`.
+          conflict_count=$( { git grep -lI '^<<<<<<< before updating$' || true; } | wc -l | tr -d ' ')
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
           echo "conflict_count=${conflict_count}" >> "$GITHUB_OUTPUT"
 
