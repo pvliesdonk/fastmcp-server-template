@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1 (2026-04-22)
+
+- #23 fix(copier-update): use --conflict=inline instead of --conflict=rej
+
+
 ## v1.1.0 (2026-04-22)
 
 - #22 feat(ci): weekly copier update workflow
