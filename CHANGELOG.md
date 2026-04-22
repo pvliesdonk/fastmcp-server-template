@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.0 (2026-04-22)
+
+- #22 feat(ci): weekly copier update workflow
+
+
 ## v1.0.5 (2026-04-21)
 
 - #21 chore(actions): bump setup-uv, deploy-pages, codeql-action
