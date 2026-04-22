@@ -65,3 +65,16 @@ jobs:
       - name: pytest
         working-directory: /tmp/smoke
         run: uv run pytest -x -q
+
+      - name: CLAUDE.md sentinel structure
+        working-directory: /tmp/smoke
+        run: |
+          # Line-anchored regexes so prose mentions don't satisfy the check.
+          # Count assertions so a dropped inner DOMAIN-START/END pair fails
+          # loudly — copier's 3-way merge needs all fences intact.
+          start=$(grep -cE '^<!-- DOMAIN-START -->$' CLAUDE.md)
+          end=$(grep -cE '^<!-- DOMAIN-END -->$' CLAUDE.md)
+          [ "$start" = "3" ] || { echo "::error::expected 3 DOMAIN-START fences, found $start"; exit 1; }
+          [ "$end" = "3" ] || { echo "::error::expected 3 DOMAIN-END fences, found $end"; exit 1; }
+          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED opening fence"; exit 1; }
+          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED closing fence"; exit 1; }
