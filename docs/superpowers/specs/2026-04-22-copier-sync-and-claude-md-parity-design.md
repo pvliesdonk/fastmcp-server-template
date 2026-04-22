@@ -54,7 +54,25 @@ What remains brittle: the *next* bot PR will still produce a messy diff whenever
 
 A naive `copier update` against a consumer whose `CLAUDE.md` has no sentinel boundaries produces heavy inline conflict markers across the whole file — which is exactly why the operators have been unable to produce clean PRs even in the few cases where the push would have succeeded.
 
-### 2.4 What is NOT broken
+### 2.4 Empty PR ≠ template parity (silent drift audit)
+
+`copier update` short-circuits at the ref level: when the consumer's `_commit` matches the template's latest tag, it prints `Keeping template version vX.Y.Z` and exits with no file-level comparison. The `changed=false` that our workflow emits in that case is honest — **no diff was produced by this run** — but it is not the same as "all template-ownable content is currently in sync." Files silently drift in two ways:
+
+1. **Files listed in `_skip_if_exists`** are never updated by `copier update`. Intentional for scaffolds (`README.md`, `CHANGELOG.md`, `LICENSE`, `.env.example`, the `tools.py` / `resources.py` / `prompts.py` / `domain.py` starters) — but also affects `scripts/bump_manifests.py` and `.gitignore`, which *are* drifting:
+   - `markdown-vault-mcp/scripts/bump_manifests.py`: doctext references "three manifest paths" (plural, obsolete); missing `if not server_path.exists()` guard; different identifier bump logic.
+   - `image-generation-mcp/scripts/bump_manifests.py`: has local defensive `isinstance()` checks that the template lacks; missing the newer "additional versioned manifests" doc paragraph.
+   - `scholar-mcp/scripts/bump_manifests.py`: ✓ matches template.
+   - All three `.gitignore` files: consistent small stylistic diff from template (missing section-header comments).
+2. **Files *not* in `_skip_if_exists` that the consumers have modified anyway** — these WILL update on next template change, producing either a clean overwrite (if the consumer never needed the edit) or a conflict marker (if the consumer customized it):
+   - `Dockerfile`: all three consumers diverge. `image-generation-mcp` genuinely needs its customization (`--extra all` for provider SDK extras, git-lfs installation, different COPY strategy).
+   - `compose.yml`: `markdown-vault-mcp` diverges.
+   - `docker-entrypoint.sh`: all three diverge.
+   - `codecov.yml`: `image-generation-mcp` diverges by one line (`__main__.py` ignore).
+   - `docs/deployment/docker.md`, `docs/deployment/oidc.md`, `docs/guides/authentication.md`: all three diverge — these are template starters the domains extended.
+
+Empirical canary: `image-generation-mcp` run `24791600780` dispatched `copier-update.yml`, copier exited with `Keeping template version 1.1.4`, `changed=false`, no branch push, no PR opened. The happy-path is now demonstrably working at the ref level — but the drift above will become visible (as conflict markers) the moment the template touches any of those files in a release.
+
+### 2.5 What is NOT broken
 
 - `pyproject.toml` sentinels (`PROJECT-DEPS-*`, `PROJECT-EXTRAS-*`) are correctly placed in all three consumers.
 - `config.py` sentinels (`CONFIG-FIELDS-*`, `CONFIG-FROM-ENV-*`) are correctly placed in all three consumers.
@@ -81,6 +99,20 @@ Instead: **pre-migrate each consumer to the v1.1.4 sentinel shape in isolation, 
 **Phase 1 — unblock automation (mostly done)**
 1. ~~Re-issue `RELEASE_TOKEN` with `workflow` scope.~~ **Done.**
 2. File follow-up issue: "migrate copier-update workflow to GitHub App token" (Option B). Non-blocking.
+
+**Phase 1.5 — drift triage (one pass, before Phase 2 work begins)**
+
+For each drifted file identified in §2.4, decide: **converge** (force-sync consumer to template, discarding local edits) or **sentinel-protect** (add `DOCKERFILE-DEPS-*` / `COMPOSE-ENV-*` / etc. markers to the template's `.jinja`, then re-introduce the local edits inside the sentinel block). Default bias:
+
+- `.gitignore`: converge. The stylistic drift is noise.
+- `scripts/bump_manifests.py`: converge on scholar's (template-matching) shape. The other two's divergent versions are drift, not intentional customization — image-gen's defensive isinstance checks are the only bit worth upstreaming to the template first (small template PR).
+- `docker-entrypoint.sh`: inspect diff; likely converge.
+- `Dockerfile`: **sentinel-protect.** Image-gen's `--extra all` + git-lfs + COPY strategy are legitimate domain needs. Add `DOCKERFILE-APT-DEPS-*` + `DOCKERFILE-UV-EXTRAS-*` sentinel markers to `Dockerfile.jinja`.
+- `compose.yml`: sentinel-protect if MV's divergence is domain-driven (volumes etc.); otherwise converge.
+- `codecov.yml`: converge (image-gen's `__main__.py` ignore is a one-liner worth upstreaming into the template's codecov.yml.jinja).
+- `docs/deployment/docker.md`, `docs/deployment/oidc.md`, `docs/guides/authentication.md`: these aren't in `_exclude` yet but behave like scaffolds. Decide: add to `_exclude` (they become domain-owned after copy), or keep template-owned and converge.
+
+Output of this phase: a small template PR adding any new sentinels + small consumer PRs converging the non-customized drift. This is the least glamorous phase but it means Phase 4's bot PRs will be *small* rather than *unmergeable*.
 
 **Phase 2 — CLAUDE.md sentinel migration (three small PRs against template v1.1.4)**
 3. `markdown-vault-mcp`: finish review on existing `refactor/claude-md-sentinels` branch, merge into main. The "drop Shared Infrastructure" commit on that branch is harmless — template v1.1.5 restores the section via the TEMPLATE-OWNED block on the next copier-update pass.
@@ -130,11 +162,14 @@ Each PR is a structural move of existing text — no new content, no deletions b
 
 ## 5. Success criteria
 
-1. At least one consumer has a merged PR on `copier/update` branch produced by the `copier-update.yml` workflow (cron or `workflow_dispatch` — same code path). Kills the "never produced a mergeable PR" bug.
-2. At least one consumer has a successful workflow run that exits with "no changes" and opens no PR. Kills the "never produced an empty PR" bug — the workflow intentionally doesn't open a PR when there's no diff, so a green no-op run *is* the "empty PR" success case.
+**All five criteria below are hard gates. An acceptance criterion is not just a checkbox — for each one, a human must inspect the artifact (PR diff, workflow run log) and confirm the intent matches the outcome.**
+
+1. At least one consumer has a merged PR on `copier/update` branch produced by the `copier-update.yml` workflow (cron or `workflow_dispatch` — same code path) that required no hand-fixes on top of the bot commit. Kills the "never produced a mergeable PR" bug.
+2. At least one consumer has a successful workflow run that exits with "no changes" and opens no PR. Kills the "never produced an empty PR" bug — the workflow intentionally doesn't open a PR when there's no diff, so a green no-op run *is* the "empty PR" success case. *Partial credit already in hand:* image-gen run `24791600780` demonstrated this at the ref level; still need the file-level confirmation that comes from Phase 1.5 + 4.
 3. All three consumers have `CLAUDE.md` with both `DOMAIN-START`/`DOMAIN-END` and `TEMPLATE-OWNED` sentinel structure, matching the v1.1.5 template shape.
 4. Template v1.1.5 is tagged and released.
 5. `template-ci.yml` asserts the rendered CLAUDE.md structure so future drift is caught in the template's own PR gate.
+6. The Phase 4 bot PR on each consumer was **reviewed by a human and approved on its diff**, not merged blindly on green CI. This is an explicit criterion because the two failure modes this spec addresses (unmergeable bot PR, false-empty PR) are not catchable by CI alone.
 
 ## 6. Test plan
 
