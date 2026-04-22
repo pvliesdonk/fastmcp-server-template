@@ -65,3 +65,10 @@ jobs:
       - name: pytest
         working-directory: /tmp/smoke
         run: uv run pytest -x -q
+
+      - name: CLAUDE.md sentinel structure
+        working-directory: /tmp/smoke
+        run: |
+          grep -q 'DOMAIN-START' CLAUDE.md || { echo "::error::missing DOMAIN-START marker"; exit 1; }
+          grep -q 'TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED fence"; exit 1; }
+          grep -q 'TEMPLATE-OWNED SECTIONS END' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED end fence"; exit 1; }
