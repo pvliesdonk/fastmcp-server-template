@@ -7,18 +7,23 @@
 
 ## 1. Problem statement
 
-Three consumer repos were retrofitted onto `fastmcp-pvl-core` (shared library) and `fastmcp-server-template` (copier template). Two known gaps remain:
+Three consumer repos were retrofitted onto `fastmcp-pvl-core` (shared library) and `fastmcp-server-template` (copier template). Known gaps remain:
 
-1. **The weekly `copier update` workflow has never produced a mergeable or empty PR for any consumer.** Every run either silently exits (no diff) or fails at the `git push` step.
-2. **`CLAUDE.md` drift.** The template's sentinel-based hybrid structure (domain-owned vs. template-owned sections) is inconsistently adopted across consumers.
+1. **The weekly `copier update` workflow has never produced a PR that could merge without hand-intervention.** History:
+   - Early runs failed outright at `git push` (PAT scope issue — **since resolved**; `RELEASE_TOKEN` now carries `workflow` scope).
+   - The one truly automated PR that did open — `image-generation-mcp` PR #192 on `copier/update` — arrived CI-red because the copier-regenerated `tests/test_smoke.py` imported `make_server` from `server.py`, but the consumer was still mid-rebase (`mcp_server.py` + `create_server` alias). The operator had to push four hand-fix commits to get it green.
+   - `scholar-mcp` PR #156 on `copier/update` was opened then closed unmerged. `markdown-vault-mcp` has never had a bot-opened `copier/update` PR at all.
+   - No consumer has ever experienced the happy-path steady state: a green no-op cron tick that opens no PR.
+2. **`CLAUDE.md` drift.** The template's sentinel-based hybrid structure (domain-owned vs. template-owned sections) is inconsistently adopted across consumers. `scholar-mcp` and `image-generation-mcp` have no sentinels at all, so any `copier update` touching CLAUDE.md produces a wall of inline conflict markers.
+3. **Two half-landed refactor branches are blocking steady state:** `fastmcp-server-template/feat/shared-infra-claude-md` (Shared Infrastructure section + not-yet-released) and `markdown-vault-mcp/refactor/claude-md-sentinels` (MV's sentinel migration, unmerged). Until both land, no copier-update cycle will look clean.
 
-This spec fixes both.
+This spec fixes all three.
 
 ## 2. Root cause analysis
 
-### 2.1 Copier-update push failure
+### 2.1 Copier-update push failure — ROOT CAUSE RESOLVED
 
-Every failed `copier-update.yml` run terminates with the same GitHub API response:
+Earlier failed `copier-update.yml` runs terminated with:
 
 ```
 ! [remote rejected] copier/update -> copier/update
@@ -26,11 +31,19 @@ Every failed `copier-update.yml` run terminates with the same GitHub API respons
   `.github/workflows/copier-update.yml` without `workflow` scope)
 ```
 
-**Why:** the workflow re-renders all `.github/workflows/*.jinja` templates into `.github/workflows/*.yml` on every run. When those files change (including `copier-update.yml` re-rendering *itself*), the push includes workflow file modifications. GitHub's API rejects any PAT push that touches `.github/workflows/` unless the token carries the `workflow` scope. The current `RELEASE_TOKEN` PAT carries `contents:write` + `pull-requests:write` but not `workflow`.
+**Why:** the workflow re-renders all `.github/workflows/*.jinja` templates into `.github/workflows/*.yml` on every run, including `copier-update.yml` re-rendering itself. GitHub's API rejects any PAT push that touches `.github/workflows/` unless the token carries the `workflow` scope.
 
-**Evidence:** `image-generation-mcp` run `24772128041` (v1.1.2 update) and run `24772490841` (v1.1.3 update) both failed at the push step with this message. The one "success" run (`24776928650`) only succeeded because `_commit` was already at v1.1.4 — the update was a no-op and no push was attempted.
+**Status:** `RELEASE_TOKEN` has been rotated with `workflow` scope across all four repos. This class of failure is fixed. Post-rotation, `image-generation-mcp` successfully ran the workflow and bot-opened PR #192 on `copier/update` — which proves the push path works end-to-end.
 
-### 2.2 CLAUDE.md drift
+### 2.2 Unmergeable bot PR — the "incomplete rebase meets regenerated scaffold" class
+
+`image-generation-mcp` PR #192 (the first successful bot-opened PR) was unmergeable on arrival because copier regenerated `tests/test_smoke.py` importing `make_server` from `image_generation_mcp.server`, but the consumer's retrofit had left the module at `mcp_server.py` with a `create_server = make_server` backcompat alias. Fixing this required four manual commits on top of the bot's commit — a full `git mv` of the module plus 15-file import sweep.
+
+That specific failure is now historical: IG's `server.py` + `make_server` transition is finished (confirmed: `ls src/image_generation_mcp/server.py` present, `test_smoke.py` imports the canonical path). `scholar-mcp` and `markdown-vault-mcp` already have canonical `server.py` + `make_server` + canonical `test_smoke.py` shape. All template-canonical infrastructure files (`Dockerfile`, `compose.yml`, `docker-entrypoint.sh`, `packaging/nfpm.yaml`, `packaging/mcpb/*`, `scripts/bump_manifests.py`, `server.json`, `codecov.yml`) are present in all three consumers. **The rebase-level drift is substantively done.**
+
+What remains brittle: the *next* bot PR will still produce a messy diff whenever the template changes any file for which the consumer lacks sentinel boundaries. That's almost entirely a CLAUDE.md problem now — see §2.3.
+
+### 2.3 CLAUDE.md drift
 
 | Repo | Sentinel structure | Domain content wrapping | Template-owned sections present |
 |---|---|---|---|
@@ -41,7 +54,7 @@ Every failed `copier-update.yml` run terminates with the same GitHub API respons
 
 A naive `copier update` against a consumer whose `CLAUDE.md` has no sentinel boundaries produces heavy inline conflict markers across the whole file — which is exactly why the operators have been unable to produce clean PRs even in the few cases where the push would have succeeded.
 
-### 2.3 What is NOT broken
+### 2.4 What is NOT broken
 
 - `pyproject.toml` sentinels (`PROJECT-DEPS-*`, `PROJECT-EXTRAS-*`) are correctly placed in all three consumers.
 - `config.py` sentinels (`CONFIG-FIELDS-*`, `CONFIG-FROM-ENV-*`) are correctly placed in all three consumers.
@@ -53,7 +66,7 @@ A naive `copier update` against a consumer whose `CLAUDE.md` has no sentinel bou
 
 ### 3.1 Decision A — token strategy
 
-**Short-term (this work):** re-issue `RELEASE_TOKEN` PAT with `workflow` scope added. Rotate in all four repos via their existing Secrets settings. This is a one-line scope change; the PAT already has write access to the same repos, so the effective blast radius does not change.
+**Short-term — DONE.** `RELEASE_TOKEN` has been re-issued with `workflow` scope and rotated across all four repos.
 
 **Long-term (follow-up issue, not part of this spec):** migrate to a GitHub App installation token via `actions/create-github-app-token`. Per-repo scoping, automatic rotation, no human-tied identity on automated commits. This is the Dependabot/Renovate pattern but requires registering an app and storing `app-id` + `private-key` secrets in each repo. Out of scope here; tracked as a follow-up.
 
@@ -65,29 +78,36 @@ Instead: **pre-migrate each consumer to the v1.1.4 sentinel shape in isolation, 
 
 ### 3.3 Phased plan
 
-**Phase 1 — unblock automation**
-1. Re-issue `RELEASE_TOKEN` with `workflow` scope; rotate secret in all four repos.
-2. Manually dispatch `copier-update.yml` in `image-generation-mcp` as a canary. Confirm a PR lands on branch `copier/update`. (`image-generation-mcp` already has a `chore/copier-update-v1.1.4` branch from earlier attempts — delete that branch before dispatching so the workflow creates a clean one.)
-3. File follow-up issue: "migrate copier-update workflow to GitHub App token."
+**Phase 1 — unblock automation (mostly done)**
+1. ~~Re-issue `RELEASE_TOKEN` with `workflow` scope.~~ **Done.**
+2. File follow-up issue: "migrate copier-update workflow to GitHub App token" (Option B). Non-blocking.
 
-**Phase 2 — CLAUDE.md migration (per-consumer PRs, against template v1.1.4)**
-4. `markdown-vault-mcp`: finish review on `refactor/claude-md-sentinels`. The "drop Shared Infrastructure" commit on that branch becomes harmless once template v1.1.5 restores it via copier-update. Merge.
-5. `scholar-mcp`: new migration PR that:
+**Phase 2 — CLAUDE.md sentinel migration (three small PRs against template v1.1.4)**
+3. `markdown-vault-mcp`: finish review on existing `refactor/claude-md-sentinels` branch, merge into main. The "drop Shared Infrastructure" commit on that branch is harmless — template v1.1.5 restores the section via the TEMPLATE-OWNED block on the next copier-update pass.
+4. `scholar-mcp`: new migration PR that:
    - Wraps existing `## Project Structure` and `## Key Patterns` sections in `<!-- DOMAIN-START -->` / `<!-- DOMAIN-END -->` markers.
-   - Adopts the v1.1.4 template-owned block verbatim (Conventions, Hard PR Gates, GitHub Review Types, Documentation Discipline, Logging Standard, Config & Customization Contract).
-   - Preserves domain-specific content (async task queue, rate limiter patterns) inside DOMAIN blocks.
-6. `image-generation-mcp`: same as scholar-mcp. Preserve the provider-specific "Key Patterns" content inside a DOMAIN block.
+   - Adopts the v1.1.4 template-owned block verbatim (Conventions, Hard PR Gates, GitHub Review Types, Documentation Discipline, Logging Standard, Config & Customization Contract), enclosed in the `<!-- ===== TEMPLATE-OWNED SECTIONS BELOW ===== -->` / `<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->` fence.
+   - Preserves domain content (async task queue, rate limiter patterns) inside DOMAIN blocks.
+5. `image-generation-mcp`: same as scholar-mcp. Preserve provider-specific "Key Patterns" inside a DOMAIN block.
 
-Each of these three PRs is a structural move of existing text — no new content, no deletions beyond the explicit "move into sentinel block" operation. CI gate is the existing suite (ruff / mypy / pytest); CLAUDE.md is not code, so the gate's only job is to verify nothing else regressed.
+Each PR is a structural move of existing text — no new content, no deletions beyond "move into sentinel block". The existing gate (ruff / ruff format --check / mypy / pytest) runs unchanged; CLAUDE.md is not code, so the gate's role is regression-only.
 
 **Phase 3 — release template v1.1.5**
-7. Merge `feat/shared-infra-claude-md` → main in `fastmcp-server-template`.
-8. Dispatch `template-release.yml` with `bump: patch` → tags `v1.1.5`, cuts GitHub release.
-9. Manually dispatch `copier-update.yml` in each of the three consumers (don't wait for Monday cron). Each produces a small PR whose only CLAUDE.md change is inserting the Shared Infrastructure section inside the template-owned block. Merge all three.
+6. Merge `feat/shared-infra-claude-md` into `fastmcp-server-template/main`.
+7. Dispatch `template-release.yml` with `bump: patch` → tags `v1.1.5`, cuts GitHub release.
 
-**Phase 4 — harden**
-10. Verify the weekly cron tick on the next Monday produces zero-diff no-op runs in all three consumers (the "empty PR" case the user specifically called out as never having worked).
-11. Add a template-ci assertion that the rendered CLAUDE.md contains both `DOMAIN-START` and `TEMPLATE-OWNED` sentinel markers — cheap regression guard against future structural drift. This goes in the existing `template-ci.yml` after the `pytest` step.
+**Phase 4 — propagate + steady-state verification**
+8. Manually dispatch `copier-update.yml` in each of the three consumers (don't wait for Monday cron). Expected diff per consumer: `.copier-answers.yml:_commit` bump + Shared Infrastructure insertion inside the TEMPLATE-OWNED block of CLAUDE.md. Review, verify CI green, merge. **These are the first operator-mergeable bot PRs the fleet will have seen.**
+9. Wait for the next Monday cron. Expected outcome in each consumer: green no-op run, `Detect changes` → `changed=false`, no branch push, no PR. **This validates the "empty PR" success case the user flagged as never having worked.**
+10. Add a template-ci assertion that rendered CLAUDE.md contains both `DOMAIN-START` and `TEMPLATE-OWNED SECTIONS BELOW` sentinel markers — cheap regression guard. New step in `template-ci.yml` after `pytest`:
+    ```yaml
+    - name: CLAUDE.md sentinel structure
+      working-directory: /tmp/smoke
+      run: |
+        grep -q 'DOMAIN-START' CLAUDE.md || { echo "::error::missing DOMAIN-START"; exit 1; }
+        grep -q 'TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED fence"; exit 1; }
+        grep -q 'TEMPLATE-OWNED SECTIONS END' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED end fence"; exit 1; }
+    ```
 
 ### 3.4 Out of scope (explicitly)
 
@@ -106,7 +126,7 @@ Each of these three PRs is a structural move of existing text — no new content
 | A consumer has uncommitted edits to CLAUDE.md at migration time | Medium (markdown-vault-mcp has one) | Migration PR merge conflicts with open work | Merge or rebase open CLAUDE.md branches first; only start migration once the file is in known-clean state on main |
 | Template v1.1.5 release accidentally bumps minor/major | Low | Wrong tag, requires manual fixup | `template-release.yml` takes explicit `bump` input; pick `patch` |
 | Copier `--skip-answered` silently defaults new template vars | Low (v1.1.5 doesn't add vars) | Unnoticed default values land | Already mitigated by the PR body's "skim `.copier-answers.yml` for unexpected new keys" warning |
-| Canary run in Phase 1 step 2 still fails | Low | Diagnose from logs; the push error message is explicit | Rollback is a no-op (the branch is automation-only) |
+| Phase-4 bot PR surfaces a consumer rebase gap not caught here | Low-Medium (IG's mcp_server→server gap is fixed, but there could be others) | Bot PR arrives CI-red; operator has to hand-fix on top of the bot commit | Compare `copier copy` dry-render against main before dispatching Phase 4 (§6 step 4); if diff shows unexpected non-CLAUDE.md files, investigate before dispatching bot |
 
 ## 5. Success criteria
 
@@ -118,15 +138,23 @@ Each of these three PRs is a structural move of existing text — no new content
 
 ## 6. Test plan
 
-- **Phase 1:** canary workflow dispatch on `image-generation-mcp`. Expected: green run, `copier/update` branch created (or clean no-op if already at latest), PR with `copier` + `dependencies` labels.
-- **Phase 2:** for each consumer migration PR, run the existing gate locally (`uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv run pytest -x -q`). CLAUDE.md changes don't affect these, so the gate's role is regression-only.
-- **Phase 3:** template-ci runs on the v1.1.5 merge PR (full smoke render + idempotence). Post-release, per-consumer workflow dispatch + resulting PR review.
-- **Phase 4:** the Monday cron after Phase 3 merges is the first true end-to-end validation.
+- **Phase 1:** already validated — IG PR #192 proved the push path works end-to-end after rotation.
+- **Phase 2:** for each consumer migration PR, run the existing gate locally (`uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv run pytest -x -q`). CLAUDE.md changes don't affect these, so the gate is regression-only.
+- **Phase 3:** template-ci runs on the v1.1.5 merge PR (full smoke render + idempotence on Python 3.11–3.14).
+- **Phase 4, pre-dispatch dry run:** for each consumer, before dispatching `copier-update.yml`, do a local dry-render against v1.1.5 in a scratch checkout to preview the diff:
+  ```bash
+  cd /tmp/ && git clone <consumer-repo> scratch-<consumer> && cd scratch-<consumer>
+  uvx copier update --trust --defaults --skip-answered --conflict=inline --vcs-ref v1.1.5
+  git status && git diff --stat
+  ```
+  If the diff contains anything outside CLAUDE.md + `.copier-answers.yml` + `.github/workflows/copier-update.yml`, investigate before dispatching the bot.
+- **Phase 4, bot PR:** dispatch `copier-update.yml` per consumer. Inspect the bot-opened PR; green CI and sentinel-only CLAUDE.md diff = merge.
+- **Phase 4, steady-state cron:** the first Monday cron after all three consumer PRs merge must produce green no-op runs. If any produces a non-empty diff, it indicates live template drift in that week — triage as a new spec, not a bug in this one.
 
 ## 7. Rollback
 
 Each phase is independently revertable:
-- Phase 1: revoke the rotated PAT; restore old one. (Old PAT still works for everything except workflow pushes.)
+- Phase 1: PAT rotation already done; nothing to roll back for this spec.
 - Phase 2: revert the per-consumer migration PR. CLAUDE.md has no runtime effect.
-- Phase 3: `git revert` the v1.1.5 release commit and tag (or just don't roll forward any consumer).
-- Phase 4: remove the template-ci assertion if it proves too rigid.
+- Phase 3: `git revert` the v1.1.5 release commit and tag (or simply don't roll forward any consumer).
+- Phase 4: revert the consumer copier-update PRs individually; remove the template-ci assertion if it proves too rigid.
