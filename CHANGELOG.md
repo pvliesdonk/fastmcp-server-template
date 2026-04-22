@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.3 (2026-04-22)
+
+- #25 fix(copier): exclude scaffold files instead of `_skip_if_exists`
+
+
 ## v1.1.2 (2026-04-22)
 
 - #24 fix(copier-update): add dependencies label guard + drop unused step id
