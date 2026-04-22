@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.4 (2026-04-22)
+
+- #26 fix(copier-update): pass REF through env: + top-level import in test_smoke.py
+
+
 ## v1.1.3 (2026-04-22)
 
 - #25 fix(copier): exclude scaffold files instead of `_skip_if_exists`
