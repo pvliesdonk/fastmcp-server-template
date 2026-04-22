@@ -10,19 +10,27 @@ _templates_suffix: .jinja
 # Starter files: written once on first `copier copy`, protected from
 # `copier update`.  Domain-owned — users customise these and keep their
 # edits across template updates.
+#
+# NOTE: `_skip_if_exists` only preserves files that *already exist* at
+# destination; it does NOT protect against re-creation on projects that
+# never had the file.  For scaffold files that a retrofitted project
+# might legitimately skip (different docs layout etc.), add the path to
+# `_exclude` below instead of here.
+#
+# The four `src/{python_module}/{tools,resources,prompts,domain}.py`
+# scaffolds + `tests/test_smoke.py` stay in `_skip_if_exists` because
+# the template-owned `server.py` / `_server_deps.py` import from them
+# and the template CI gate (`pytest -x -q`) needs at least one test to
+# collect.  Retrofitted projects that don't want these files get a
+# one-time creation on first weekly cron; `_skip_if_exists` preserves
+# thereafter.
 _skip_if_exists:
   - "src/{{python_module}}/tools.py"
   - "src/{{python_module}}/resources.py"
   - "src/{{python_module}}/prompts.py"
   - "src/{{python_module}}/domain.py"
   - "tests/conftest.py"
-  - "tests/test_tools.py"
   - "tests/test_smoke.py"
-  - "docs/design.md"
-  - "docs/index.md"
-  - "docs/tools/index.md"
-  - "docs/configuration.md"
-  - "docs/installation.md"
   - "README.md"
   - "CHANGELOG.md"
   - "LICENSE"
@@ -64,6 +72,18 @@ _exclude:
   - ".github/workflows/template-release.yml"  # template's own release — template-repo only
   - "docs/superpowers"
   - "uv.lock"                                 # generated projects create their own
+  # Scaffold files that projects routinely have their own version of
+  # (different docs layout, different test organisation).  Excluding
+  # them here means they never render on copy OR update — fresh
+  # projects bring their own docs and tests; retrofitted projects don't
+  # get spurious re-creations every week.  The `.jinja` files stay in
+  # this repo as maintainer-facing reference content.
+  - "tests/test_tools.py"
+  - "docs/design.md"
+  - "docs/index.md"
+  - "docs/tools/index.md"
+  - "docs/configuration.md"
+  - "docs/installation.md"
 
 # --- Variables ---
 
