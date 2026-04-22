@@ -87,7 +87,7 @@ Every issue, PR, and code change must consider documentation impact. Before clos
 
 ## Config & Customization Contract
 
-Domain configuration composes :class:`fastmcp_pvl_core.ServerConfig` inside :class:`ProjectConfig` (see `src/{{ python_module }}/config.py`).  Add domain fields between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels and populate them in `from_env` between the `CONFIG-FROM-ENV-START` / `CONFIG-FROM-ENV-END` sentinels.  Never inherit from `ServerConfig`; always compose.
+Domain configuration composes `fastmcp_pvl_core.ServerConfig` inside your domain config class (see `src/{{ python_module }}/config.py`).  Add domain fields between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels and populate them in `from_env` between the `CONFIG-FROM-ENV-START` / `CONFIG-FROM-ENV-END` sentinels.  Never inherit from `ServerConfig`; always compose.
 
 Env var prefix is `{{ env_prefix }}_` — all env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent.
 
