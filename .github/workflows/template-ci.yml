@@ -119,3 +119,16 @@ jobs:
             count=$(grep -cF "$marker" Dockerfile || true)
             [ "$count" = "1" ] || { echo "::error::expected 1 '$marker' sentinel, found $count"; exit 1; }
           done
+
+      - name: release.yml marketplace upsert
+        working-directory: /tmp/smoke
+        run: |
+          # PR 4 of v1.1.10 replaces the jq map-only update with an
+          # upsert that appends a new git-subdir entry when the plugin
+          # is absent. The rendered workflow must carry both markers.
+          grep -qF '"git-subdir"' .github/workflows/release.yml \
+            || { echo "::error::release.yml missing git-subdir marker — upsert regressed"; exit 1; }
+          grep -qF '".claude-plugin/plugin"' .github/workflows/release.yml \
+            || { echo "::error::release.yml missing .claude-plugin/plugin path — upsert regressed"; exit 1; }
+          grep -qF 'any(.[]; .name == $name)' .github/workflows/release.yml \
+            || { echo "::error::release.yml missing upsert branch — still silently no-ops on missing entry"; exit 1; }
