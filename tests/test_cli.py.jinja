@@ -1,9 +1,9 @@
 """CLI tests for {{ human_name }}.
 
-Borrowed from scholar-mcp's ``test_cli.py`` typer pattern. ``--help``
-exits via typer before any command body runs, so these tests don't
-import ``server.py`` or start uvicorn — keeping them fast and free
-of side effects.
+Uses the standard typer ``CliRunner`` pattern: ``--help`` exits via
+typer before any command body runs, so these tests don't import
+``server.py`` or start uvicorn — keeping them fast and free of side
+effects.
 """
 
 from __future__ import annotations

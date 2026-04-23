@@ -42,18 +42,21 @@ async def test_status_resource_reports_ready(client: Client[Any]) -> None:
     The lifespan calls ``service.start()``, so the resource payload must
     contain ``ready: true`` — asserting the value (not just the key name)
     catches a future regression where the lifespan stops starting the
-    service.  Content is a union; narrow defensively — scaffold stays
-    generic on purpose so users copying it don't need to adjust types.
+    service.
     """
     result = await client.read_resource("status://{{ project_name }}")
     first = result[0]
-    text = first.text if hasattr(first, "text") else str(first)
-    assert json.loads(text) == {"ready": True}
+    assert hasattr(first, "text"), (
+        f"expected text resource content, got {type(first).__name__}"
+    )
+    assert json.loads(first.text) == {"ready": True}
 
 
 async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
     """The example ``summarize`` prompt round-trips its ``context`` argument."""
     result = await client.get_prompt("summarize", {"context": "hello world"})
     content = result.messages[0].content
-    text = content.text if hasattr(content, "text") else str(content)
-    assert "hello world" in text
+    assert hasattr(content, "text"), (
+        f"expected text prompt content, got {type(content).__name__}"
+    )
+    assert "hello world" in content.text

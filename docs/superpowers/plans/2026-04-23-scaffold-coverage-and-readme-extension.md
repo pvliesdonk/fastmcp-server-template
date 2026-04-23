@@ -125,28 +125,31 @@ def test_register_apps_logs_when_app_domain_set(
     """
     monkeypatch.setenv("{{ env_prefix }}_APP_DOMAIN", "example.com")
     with caplog.at_level("INFO", logger="{{ python_module }}._server_apps"):
-        # Pass None for the FastMCP instance — register_apps doesn't touch it
-        # in the scaffold's no-op branch.
-        register_apps(None)  # type: ignore[arg-type]
+        # Pass a real FastMCP instance — register_apps currently doesn't
+        # touch it in the scaffold's no-op branch, but downstream edits may.
+        register_apps(make_server())
     assert any("example.com" in r.message for r in caplog.records)
 
 
-async def test_status_resource_reports_ready(client: Client) -> None:
-    """The example ``status://`` resource returns the running service's state."""
+async def test_status_resource_reports_ready(client: Client[Any]) -> None:
+    """The example ``status://`` resource reports a started service."""
     result = await client.read_resource("status://{{ project_name }}")
-    text = result[0].text if hasattr(result[0], "text") else str(result[0])
-    assert "ready" in text
+    first = result[0]
+    assert hasattr(first, "text"), f"expected text resource content, got {type(first).__name__}"
+    assert json.loads(first.text) == {"ready": True}
 
 
-async def test_summarize_prompt_includes_context(client: Client) -> None:
+async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
     """The example ``summarize`` prompt round-trips its ``context`` argument."""
     result = await client.get_prompt("summarize", {"context": "hello world"})
-    assert "hello world" in result.messages[0].content.text
+    content = result.messages[0].content
+    assert hasattr(content, "text"), f"expected text prompt content, got {type(content).__name__}"
+    assert "hello world" in content.text
 ```
 
 Notes:
-- The `client` fixture comes from `tests/conftest.py.jinja` (also in `_skip_if_exists`, also rendered into greenfield scaffolds). It wraps `make_server()` in an in-memory FastMCP `Client`.
-- The `# type: ignore[arg-type]` is needed because `register_apps` is typed to take a `FastMCP`, but the scaffold body never dereferences it — simplest way to test the env-var branch without spinning up a server.
+- The `client` fixture comes from `tests/conftest.py.jinja` (also in `_skip_if_exists`, also rendered into greenfield scaffolds). It wraps `make_server()` in an in-memory FastMCP `Client`. Fixture annotation: `Client[Any]` (the generic parameterises the transport; `Any` keeps the scaffold transport-agnostic).
+- Passing `make_server()` into `register_apps` keeps the branch honest: downstream maintainers who add real `.resource()`/`.tool()` registrations to the `if app_domain:` body won't hit `AttributeError` because the test starts failing loudly.
 - `tests/test_tools.py.jinja` is **deliberately not modified** — it's in `_exclude` so changes there never reach scaffolds.
 
 - [ ] **Step 3: Render and run the new tests**
@@ -163,7 +166,7 @@ uv run pytest tests/test_smoke.py -v
 
 Expected: 4 tests pass (`test_make_server_constructs`, `test_register_apps_logs_when_app_domain_set`, `test_status_resource_reports_ready`, `test_summarize_prompt_includes_context`).
 
-If `test_status_resource_reports_ready` fails with an attribute error on `result[0]`, the FastMCP client API may have shifted — inspect with `python -c "from fastmcp import Client; help(Client.read_resource)"` and adjust the access pattern. The `hasattr(...)` guard is defensive against minor API shifts.
+If `test_status_resource_reports_ready` fails with an `AssertionError: expected text resource content, got ...`, the FastMCP client API may have shifted to a different content-union variant — inspect with `python -c "from fastmcp import Client; help(Client.read_resource)"` and adjust the access pattern.
 
 - [ ] **Step 4: Run mypy + coverage check**
 
@@ -244,9 +247,13 @@ def test_serve_help_exits_zero() -> None:
 
 
 def test_no_args_shows_help() -> None:
-    """Bare invocation exits 0 with help text via ``no_args_is_help=True``."""
+    """Bare invocation shows help text via ``no_args_is_help=True``.
+
+    Typer/Click exits with code 2 (missing command) but still prints the
+    help output.  Pinning the exit code locks in the documented behaviour.
+    """
     result = CliRunner().invoke(app, [])
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "serve" in result.output
 ```
 
