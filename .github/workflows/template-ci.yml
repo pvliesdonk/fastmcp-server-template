@@ -60,7 +60,7 @@ jobs:
 
       - name: mypy
         working-directory: /tmp/smoke
-        run: uv run mypy src/
+        run: uv run mypy src/ tests/
 
       - name: pytest
         working-directory: /tmp/smoke

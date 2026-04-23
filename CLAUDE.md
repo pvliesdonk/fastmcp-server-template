@@ -28,18 +28,24 @@ create new projects.
 ## Making changes
 
 1. Edit the relevant `.jinja` file(s).
-2. Render locally and verify the gate passes:
+2. Commit (copier reads from the git index — uncommitted changes are
+   silently ignored without `--vcs-ref=HEAD`).
+3. Render locally and verify the gate passes:
    ```bash
    rm -rf /tmp/smoke
    uv run --no-project --with copier copier copy --trust --defaults \
-     --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
+     --vcs-ref=HEAD --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
    cd /tmp/smoke
    uv sync --all-extras --dev
    uv run ruff check . && uv run ruff format --check .
-   uv run mypy src/ && uv run pytest -x -q
+   uv run mypy src/ tests/ && uv run pytest -x -q
    ```
-3. Commit, push, open a PR.
-4. `template-ci.yml` runs the same gate on Python 3.11–3.14.
+   `--vcs-ref=HEAD` tells copier to use the latest commit instead of the
+   latest git tag (the default).  Without it, your edits render only
+   after a release.  If you need to iterate, amend the commit or make
+   follow-up commits — rendering from the working tree is not supported.
+4. Commit any fixes, push, open a PR.
+5. `template-ci.yml` runs the same gate on Python 3.11–3.14.
 
 ## Release
 
