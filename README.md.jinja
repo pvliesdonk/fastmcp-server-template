@@ -15,6 +15,46 @@ pip install {{ pypi_name }}
 All configuration goes via `{{ env_prefix }}_*` env vars.  See
 [docs/configuration.md](docs/configuration.md).
 
+## Post-scaffold checklist
+
+After `copier copy` and `gh repo create --push`:
+
+1. Configure GitHub secrets (see below).
+2. Install dev dependencies: `uv sync --all-extras --dev`.
+3. Run the gate locally: `uv run pytest -x -q && uv run ruff check . && uv run mypy src/`.
+4. Push the first commit — CI should be green.
+
+## GitHub secrets
+
+CI workflows reference three repository secrets. Configure them via
+**Settings → Secrets and variables → Actions** or with `gh secret set`:
+
+| Secret | Used by | How to generate |
+|---|---|---|
+| `RELEASE_TOKEN` | `release.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write` (and `pull_requests: write` if release PRs are enabled). Scoped to this repo. |
+| `CODECOV_TOKEN` | `ci.yml`, `coverage-status.yml` | <https://codecov.io> — sign in with GitHub, add the repo, copy the upload token from the repo settings page. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
+
+```bash
+gh secret set RELEASE_TOKEN
+gh secret set CODECOV_TOKEN
+gh secret set CLAUDE_CODE_OAUTH_TOKEN
+```
+
+`GITHUB_TOKEN` is auto-provided — no action needed.
+
+## Local development
+
+The PR gate (matches CI):
+
+```bash
+uv run pytest -x -q                                  # tests
+uv run ruff check --fix . && uv run ruff format .    # lint + format
+uv run mypy src/                                     # type-check
+```
+
+See [`CLAUDE.md`](CLAUDE.md) for the full PR acceptance gates.
+
 ## Links
 
 - [Documentation](https://{{ github_org }}.github.io/{{ project_name }}/)
