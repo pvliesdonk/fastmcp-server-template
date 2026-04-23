@@ -1,28 +1,39 @@
-# Triaged fixes → template v1.1.9
+# Triaged fixes → template v1.1.10
 
 **Date:** 2026-04-23
 **Author:** Peter van Liesdonk (+ Claude Code)
 **Status:** Approved; ready for implementation plan.
 
+> **Note on versioning.**  This spec was originally drafted targeting
+> v1.1.9, but v1.1.9 was cut independently as a hotfix for a separate
+> `uv.lock` / `Dockerfile` issue (#39).  The scope here is now targeting
+> **v1.1.10**, unchanged in substance.
+
 ## Purpose
 
-Resolve three open issues surfaced during the 2026-04-22 copier-sync and
-post-sync triage, and ship them as a single template patch release.
+Resolve four open issues surfaced during the 2026-04-22 copier-sync and
+post-sync triage (plus one catalog-publication bug spotted on the
+2026-04-23 release of v1.1.9), and ship them as a single template patch
+release.
 
 | Issue | Priority | Summary |
 |---|---|---|
 | [#31](https://github.com/pvliesdonk/fastmcp-server-template/issues/31) | high | Shared docs hardcode `MCP_SERVER_` instead of `{{ env_prefix }}_`. |
 | [#30](https://github.com/pvliesdonk/fastmcp-server-template/issues/30) | medium | `Dockerfile.jinja` state-dir `mkdir` + `VOLUME` are unprotected by sentinels. |
 | [#37](https://github.com/pvliesdonk/fastmcp-server-template/issues/37) | medium | `CLAUDE.md.jinja` names upstream repos but doesn't tell an agent where to open a PR. |
+| [#38](https://github.com/pvliesdonk/fastmcp-server-template/issues/38) | medium | `publish-claude-plugin-pr` silently no-ops when the plugin is absent from the catalog. |
 
 ## Delivery shape
 
-Three focused PRs merged in sequence to `main`, then one
+Four focused PRs merged in sequence to `main`, then one
 `template-release.yml` dispatch.
 
-- **PR order:** #31 → #30 → #37.
-  (#31 is the only user-visible bug; #30 and #37 are additive and low-risk.)
-- **Release:** patch bump → **v1.1.9** once all three are on `main`.
+- **PR order:** #31 → #30 → #37 → #38.
+  (#31 is the only user-visible bug in rendered output; #30 and #37 are
+  additive and low-risk; #38 touches the release workflow itself and is
+  the most sensitive, so it lands last so we can dispatch the release
+  right after and watch it run end-to-end.)
+- **Release:** patch bump → **v1.1.10** once all four are on `main`.
 - **Consumer rollout:** next weekly `copier-update.yml` cron, or manual
   dispatch.
 
@@ -137,13 +148,115 @@ version needs fixing before resolving locally.
 assertion (3 `DOMAIN-START`, 3 `DOMAIN-END`) stays unchanged — the new
 section lives outside every sentinel block.
 
+### PR 4 — #38 upsert marketplace.json in publish-claude-plugin-pr
+
+**Problem.** The `publish-claude-plugin-pr` job in
+`.github/workflows/release.yml.jinja` (lines 334–369) uses a `jq` `map`
+that only *updates* an entry whose `.name` matches `{{ project_name }}`.
+When the plugin isn't yet in the shared `pvliesdonk/claude-plugins`
+catalog, the `map` is a no-op, `peter-evans/create-pull-request@v8`
+short-circuits on no-diff, and the job reports green without publishing
+anything.  First-time plugin publication is silently broken for
+`scholar-mcp` and `image-generation-mcp` today.
+
+**Catalog entry shape (current `markdown-vault-mcp`):**
+
+```json
+{
+  "name": "markdown-vault-mcp",
+  "source": {
+    "source": "git-subdir",
+    "url": "https://github.com/pvliesdonk/markdown-vault-mcp.git",
+    "path": ".claude-plugin/plugin",
+    "ref": "v1.23.0"
+  },
+  "version": "1.23.0"
+}
+```
+
+**Change in `release.yml.jinja` (`Bump marketplace.json entry` step).**
+Replace the single `jq` invocation with an upsert sequence: build a
+prospective new entry, then branch on whether the name already exists:
+
+```yaml
+      - name: Bump marketplace.json entry
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+        run: |
+          cd catalog
+          NEW_ENTRY=$(jq -n \
+            --arg name   "{{ project_name }}" \
+            --arg url    "https://github.com/{{ github_org }}/{{ project_name }}.git" \
+            --arg ref    "v$VERSION" \
+            --arg version "$VERSION" \
+            '{
+              name: $name,
+              source: {
+                source: "git-subdir",
+                url: $url,
+                path: ".claude-plugin/plugin",
+                ref: $ref
+              },
+              version: $version
+            }')
+          jq --arg name "{{ project_name }}" \
+             --arg v    "$VERSION" \
+             --arg ref  "v$VERSION" \
+             --argjson new "$NEW_ENTRY" '
+            .plugins |= (
+              if any(.[]; .name == $name)
+              then map(if .name == $name then .version = $v | .source.ref = $ref else . end)
+              else . + [$new]
+              end
+            )
+          ' marketplace.json > marketplace.json.tmp
+          mv marketplace.json.tmp marketplace.json
+```
+
+- When the entry exists: identical behaviour to today (update `version`
+  + `source.ref` in place).
+- When absent: append the prospective entry, which `peter-evans`
+  surfaces as a non-empty diff → catalog PR is opened.
+
+**Safety.** The rest of `source` (`source: "git-subdir"`, `path`,
+`url`) is hardcoded to match the existing catalog schema. Any consumer
+whose plugin shape differs (e.g. non-GitHub source) falls outside the
+v1.1.10 scope — when that comes up, promote these values to
+`copier.yml` variables (deferred; not in scope here).
+
+**`template-ci.yml`:** the template self-test renders the workflow but
+doesn't execute it.  Add a `grep` assertion on the rendered
+`.github/workflows/release.yml` to prove the upsert block is present
+(`"git-subdir"` and `".claude-plugin/plugin"` should both appear
+verbatim; `any(.[]; .name == $name)` should also be present).  Do not
+attempt to simulate the catalog API — that's an end-to-end concern
+caught on the first real release.
+
+**Verification at release time.** The first v1.1.10 dispatch will run
+the updated workflow against the real catalog. Because the template
+repo itself isn't listed in `pvliesdonk/claude-plugins`, the release
+will exercise the *append* path and prove the fix end-to-end.
+
+**Behavior matrix:**
+
+| Scenario | Result |
+|---|---|
+| Consumer plugin already in catalog | `version` + `source.ref` updated; catalog PR opened (same as today). |
+| Consumer plugin absent from catalog | New entry appended with the `git-subdir` shape; catalog PR opened (fixes the silent no-op). |
+| Non-GitHub source (hypothetical) | Out of scope for v1.1.10; entry values are hardcoded to GitHub. |
+
 ## Release
 
-After all three PRs are merged to `main`:
+After all four PRs are merged to `main`:
 
 1. Dispatch `template-release.yml` with `bump=patch`.
-2. Tag `v1.1.9` lands; GitHub release and updated `CHANGELOG.md` are
+2. Tag `v1.1.10` lands; GitHub release and updated `CHANGELOG.md` are
    produced by the workflow.
+3. Watch the `publish-claude-plugin-pr` job run — this release is the
+   live exercise of the #38 fix.  Template isn't in the catalog today,
+   so the append path fires; a PR should appear in
+   `pvliesdonk/claude-plugins` adding a `fastmcp-server-template`
+   entry.
 
 **CHANGELOG delta (produced by release workflow; content goal):**
 
@@ -152,6 +265,8 @@ After all three PRs are merged to `main`:
 - docs/deployment/docker.md, docs/deployment/oidc.md, and
   docs/guides/authentication.md now render with the consumer's
   `env_prefix` instead of the hardcoded `MCP_SERVER_` placeholder (#31).
+- release.yml.jinja publish-claude-plugin-pr job upserts the catalog
+  entry instead of silently no-op'ing when the plugin is missing (#38).
 
 ### Added
 - Dockerfile.jinja sentinels `DOCKERFILE-STATE-DIRS-*` and
@@ -193,6 +308,15 @@ After all three PRs are merged to `main`:
   future convergence.
   **Mitigation:** PR 2 adds the count assertion in the same change; no
   split delivery.
+
+- **Risk:** the new marketplace.json upsert path could append a
+  malformed entry if the hardcoded `source.*` shape drifts from what
+  the catalog schema expects.
+  **Mitigation:** entry shape is copied from the live
+  `markdown-vault-mcp` entry in `pvliesdonk/claude-plugins` on
+  2026-04-23; v1.1.10's own release dispatches the workflow against
+  the real catalog and exercises the append path, catching schema
+  drift before any downstream consumer relies on it.
 
 ## References
 
