@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.9 (2026-04-23)
+
+- #39 fix(dockerfile): COPY uv.lock so final uv sync sees the lockfile
+
+
 ## v1.1.8 (2026-04-22)
 
 - #34 fix(copier-update): stage conflict markers before git checkout -B
