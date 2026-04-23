@@ -107,9 +107,25 @@ jobs:
           else
             conflict_count=0
           fi
+          # Derive the template source repo from `_src_path` in .copier-answers.yml
+          # rather than synthesising from `{{ '{{ github_org }}' }}` — `github_org` is the
+          # *consumer's* org (for Docker paths, etc.), not the template source's.
+          # Normalize the common forms copier may have stored ({gh:,https://github.com/,
+          # git@github.com:}org/repo[.git]) down to `org/repo`; local paths or anything
+          # else unrecognised becomes empty and the PR step skips the release-notes
+          # and compare-link sections gracefully.
+          src_path=$(awk '/^_src_path:[[:space:]]/ {print $2; exit}' .copier-answers.yml || true)
+          template_repo=$(printf '%s' "${src_path}" \
+            | sed -E 's|^gh:||; s|^https?://github\.com/||; s|^git@github\.com:||; s|\.git$||; s|/+$||')
+          if ! printf '%s' "${template_repo}" | grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+            template_repo=""
+          fi
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
           echo "conflict_count=${conflict_count}" >> "$GITHUB_OUTPUT"
-          # Multiline values need the heredoc form of $GITHUB_OUTPUT.
+          echo "template_repo=${template_repo}" >> "$GITHUB_OUTPUT"
+          # Multiline `conflict_files` needs the heredoc form of $GITHUB_OUTPUT.
+          # The `CONFLICT_FILES_EOF` delimiter is safe because git-tracked file paths
+          # can't contain newlines, let alone a line that matches that literal string.
           {
             echo "conflict_files<<CONFLICT_FILES_EOF"
             printf '%s\n' "${conflict_files}"
@@ -176,6 +192,7 @@ jobs:
           GH_TOKEN: {{ '${{ secrets.RELEASE_TOKEN }}' }}
           REF: {{ '${{ steps.meta.outputs.ref }}' }}
           PREV_REF: {{ '${{ steps.copier.outputs.prev_ref }}' }}
+          TEMPLATE_REPO: {{ '${{ steps.meta.outputs.template_repo }}' }}
           CONFLICT_COUNT: {{ '${{ steps.meta.outputs.conflict_count }}' }}
           CONFLICT_FILES: {{ '${{ steps.meta.outputs.conflict_files }}' }}
           DIFF_COUNT: {{ '${{ steps.diff.outputs.diff_count }}' }}
@@ -184,25 +201,30 @@ jobs:
           set -euo pipefail
           branch="copier/update"
           title="chore(copier): update to ${REF}"
-          template_repo="{{ github_org }}/fastmcp-server-template"
 
           # Fetch release notes for the target ref.  Empty when the release
-          # isn't cut yet — e.g. a manual `--vcs-ref` run targeting an
-          # unreleased sha — in which case we just skip the notes section.
-          release_notes=$(gh release view "${REF}" \
-            --repo "${template_repo}" \
-            --json body --jq .body 2>/dev/null || true)
+          # isn't cut yet (e.g. a manual `--vcs-ref` run targeting an unreleased
+          # sha) or when `_src_path` doesn't resolve to a GitHub repo (local
+          # template dev) — in which case the notes section is skipped.
+          release_notes=""
+          if [ -n "${TEMPLATE_REPO}" ]; then
+            release_notes=$(gh release view "${REF}" \
+              --repo "${TEMPLATE_REPO}" \
+              --json body --jq .body 2>/dev/null || true)
+          fi
 
           # Build the PR body piece-by-piece with $'\n' separators — a single
           # multi-line bash string would break the enclosing YAML block scalar
           # because the continuation lines would need to stay at column 11.
 
           # Heading: render prev_ref→ref and a compare link when we have a
-          # previous ref that differs from the new one.  First-copy projects
-          # and identical refs fall back to a plain "update to REF" heading.
+          # previous ref that differs from the new one AND a resolvable
+          # template repo.  Otherwise fall back to a plain "update to REF".
           if [ -n "${PREV_REF}" ] && [ "${PREV_REF}" != "${REF}" ]; then
             body="## Template update: \`${PREV_REF}\` → \`${REF}\`"
-            body+=$'\n\n'"[Compare on GitHub](https://github.com/${template_repo}/compare/${PREV_REF}...${REF})"
+            if [ -n "${TEMPLATE_REPO}" ]; then
+              body+=$'\n\n'"[Compare on GitHub](https://github.com/${TEMPLATE_REPO}/compare/${PREV_REF}...${REF})"
+            fi
           else
             body="## Template update to \`${REF}\`"
           fi
