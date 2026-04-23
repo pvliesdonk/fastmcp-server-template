@@ -9,19 +9,19 @@ Optional token-based authentication for HTTP deployments. OIDC activates automat
 
 | Variable | Description |
 |----------|-------------|
-| `MCP_SERVER_BASE_URL` | Public base URL of the server (e.g. `https://mcp.example.com`; include prefix when mounted under subpath, e.g. `https://mcp.example.com/myservice`) |
-| `MCP_SERVER_OIDC_CONFIG_URL` | OIDC discovery endpoint (e.g. `https://auth.example.com/.well-known/openid-configuration`) |
-| `MCP_SERVER_OIDC_CLIENT_ID` | OIDC client ID registered with your provider |
-| `MCP_SERVER_OIDC_CLIENT_SECRET` | OIDC client secret |
+| `{{ env_prefix }}_BASE_URL` | Public base URL of the server (e.g. `https://mcp.example.com`; include prefix when mounted under subpath, e.g. `https://mcp.example.com/myservice`) |
+| `{{ env_prefix }}_OIDC_CONFIG_URL` | OIDC discovery endpoint (e.g. `https://auth.example.com/.well-known/openid-configuration`) |
+| `{{ env_prefix }}_OIDC_CLIENT_ID` | OIDC client ID registered with your provider |
+| `{{ env_prefix }}_OIDC_CLIENT_SECRET` | OIDC client secret |
 
 ## Optional Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_SERVER_OIDC_JWT_SIGNING_KEY` | ephemeral | JWT signing key. **Required on Linux/Docker** — the default is ephemeral and invalidates tokens on restart |
-| `MCP_SERVER_OIDC_AUDIENCE` | — | Expected JWT audience claim; leave unset if your provider does not set one |
-| `MCP_SERVER_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
-| `MCP_SERVER_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the upstream access token as JWT instead of the id token. Only needed when your provider issues JWT access tokens and you require audience-claim validation on that token |
+| `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY` | ephemeral | JWT signing key. **Required on Linux/Docker** — the default is ephemeral and invalidates tokens on restart |
+| `{{ env_prefix }}_OIDC_AUDIENCE` | — | Expected JWT audience claim; leave unset if your provider does not set one |
+| `{{ env_prefix }}_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
+| `{{ env_prefix }}_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the upstream access token as JWT instead of the id token. Only needed when your provider issues JWT access tokens and you require audience-claim validation on that token |
 
 ## JWT Signing Key
 
@@ -33,7 +33,7 @@ openssl rand -hex 32
 ```
 
 !!! danger "Linux / Docker"
-    On Linux (including Docker), the ephemeral key is especially problematic because it does not persist across process restarts. Always set `MCP_SERVER_OIDC_JWT_SIGNING_KEY` in production.
+    On Linux (including Docker), the ephemeral key is especially problematic because it does not persist across process restarts. Always set `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY` in production.
 
 ## Setup with Authelia
 
@@ -62,11 +62,11 @@ identity_providers:
 ### 2. Set environment variables
 
 ```bash
-MCP_SERVER_BASE_URL=https://mcp.example.com
-MCP_SERVER_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
-MCP_SERVER_OIDC_CLIENT_ID=my-mcp-server
-MCP_SERVER_OIDC_CLIENT_SECRET=your-client-secret
-MCP_SERVER_OIDC_JWT_SIGNING_KEY=$(openssl rand -hex 32)
+{{ env_prefix }}_BASE_URL=https://mcp.example.com
+{{ env_prefix }}_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
+{{ env_prefix }}_OIDC_CLIENT_ID=my-mcp-server
+{{ env_prefix }}_OIDC_CLIENT_SECRET=your-client-secret
+{{ env_prefix }}_OIDC_JWT_SIGNING_KEY=$(openssl rand -hex 32)
 ```
 
 ### 3. Start with HTTP transport
@@ -94,7 +94,7 @@ Client → mcp-server (with OIDCProxy) → OIDC Provider (Authelia/Keycloak)
 ```yaml
 services:
   mcp-server:
-    image: ghcr.io/pvliesdonk/fastmcp-server-template:latest
+    image: {{ docker_registry }}/{{ project_name }}:latest
     env_file: .env
     volumes:
       - state-data:/data/state
@@ -120,12 +120,12 @@ networks:
 With the corresponding `.env`:
 
 ```bash
-MCP_SERVER_READ_ONLY=true
-MCP_SERVER_BASE_URL=https://mcp.example.com
-MCP_SERVER_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
-MCP_SERVER_OIDC_CLIENT_ID=my-mcp-server
-MCP_SERVER_OIDC_CLIENT_SECRET=your-client-secret
-MCP_SERVER_OIDC_JWT_SIGNING_KEY=your-stable-hex-key
+{{ env_prefix }}_READ_ONLY=true
+{{ env_prefix }}_BASE_URL=https://mcp.example.com
+{{ env_prefix }}_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
+{{ env_prefix }}_OIDC_CLIENT_ID=my-mcp-server
+{{ env_prefix }}_OIDC_CLIENT_SECRET=your-client-secret
+{{ env_prefix }}_OIDC_JWT_SIGNING_KEY=your-stable-hex-key
 ```
 
 For a prefixed deployment (e.g., `https://mcp.example.com/myservice/mcp`), see [Subpath Deployments](#subpath-deployments) below.
@@ -149,8 +149,8 @@ The reverse proxy strips the subpath prefix before forwarding to the application
 Environment variables:
 
 ```bash
-MCP_SERVER_BASE_URL=https://mcp.example.com/myservice
-MCP_SERVER_HTTP_PATH=/mcp
+{{ env_prefix }}_BASE_URL=https://mcp.example.com/myservice
+{{ env_prefix }}_HTTP_PATH=/mcp
 ```
 
 Register this callback URI in your OIDC provider:

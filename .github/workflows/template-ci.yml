@@ -78,3 +78,29 @@ jobs:
           [ "$end" = "3" ] || { echo "::error::expected 3 DOMAIN-END fences, found $end"; exit 1; }
           grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED opening fence"; exit 1; }
           grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED closing fence"; exit 1; }
+
+      - name: shared docs render with consumer env_prefix
+        working-directory: /tmp/smoke
+        run: |
+          # Smoke answers set env_prefix=SMOKE_MCP — rendered docs
+          # should name some consumer-prefixed env var, never the placeholder.
+          # Negative check uses a word-boundary regex so legitimate
+          # rendered tokens like SMOKE_MCP_SERVER_NAME don't false-positive
+          # as MCP_SERVER_ leaks (substring collision).
+          for f in \
+              docs/deployment/oidc.md \
+              docs/deployment/docker.md \
+              docs/guides/authentication.md; do
+            grep -qE 'SMOKE_MCP_[A-Z][A-Z0-9_]*' "$f" \
+              || { echo "::error::$f missing any SMOKE_MCP_ env var — substitution did not occur"; exit 1; }
+          done
+          ! grep -lE '(^|[^A-Z0-9_])MCP_SERVER_' \
+              docs/deployment/docker.md \
+              docs/deployment/oidc.md \
+              docs/guides/authentication.md \
+            || { echo "::error::MCP_SERVER_ placeholder literal leaked into shared docs"; exit 1; }
+          ! grep -lF fastmcp-server-template \
+              docs/deployment/docker.md \
+              docs/deployment/oidc.md \
+              docs/guides/authentication.md \
+            || { echo "::error::fastmcp-server-template literal leaked into shared docs"; exit 1; }
