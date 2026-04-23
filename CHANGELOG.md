@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.11 (2026-04-23)
+
+- #49 feat(copier-update): enrich weekly PR body with delta, notes, diff, conflicts (#40)
+- #48 fix(ci): surface CLAUDE.md sentinel count errors under bash -e (#43)
+
+
 ## v1.1.10 (2026-04-23)
 
 - #45 fix(release): upsert marketplace.json when plugin is absent (#38)
