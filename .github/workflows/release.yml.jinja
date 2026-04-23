@@ -347,11 +347,30 @@ jobs:
           VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
         run: |
           cd catalog
-          jq --arg v "$VERSION" --arg ref "v$VERSION" '
-            .plugins |= map(
-              if .name == "{{ project_name }}"
-              then .version = $v | .source.ref = $ref
-              else . end
+          NEW_ENTRY=$(jq -n \
+            --arg name    "{{ project_name }}" \
+            --arg url     "https://github.com/{{ github_org }}/{{ project_name }}.git" \
+            --arg ref     "v$VERSION" \
+            --arg version "$VERSION" \
+            '{
+              name: $name,
+              source: {
+                source: "git-subdir",
+                url: $url,
+                path: ".claude-plugin/plugin",
+                ref: $ref
+              },
+              version: $version
+            }')
+          jq --arg name "{{ project_name }}" \
+             --arg v    "$VERSION" \
+             --arg ref  "v$VERSION" \
+             --argjson new "$NEW_ENTRY" '
+            .plugins |= (
+              if any(.[]; .name == $name)
+              then map(if .name == $name then .version = $v | .source.ref = $ref else . end)
+              else . + [$new]
+              end
             )
           ' marketplace.json > marketplace.json.tmp
           mv marketplace.json.tmp marketplace.json
