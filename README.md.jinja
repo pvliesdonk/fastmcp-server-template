@@ -31,8 +31,8 @@ CI workflows reference three repository secrets. Configure them via
 
 | Secret | Used by | How to generate |
 |---|---|---|
-| `RELEASE_TOKEN` | `release.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write` (and `pull_requests: write` if release PRs are enabled). Scoped to this repo. |
-| `CODECOV_TOKEN` | `ci.yml`, `coverage-status.yml` | <https://codecov.io> — sign in with GitHub, add the repo, copy the upload token from the repo settings page. |
+| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write` and `pull_requests: write` (the `copier-update` cron opens PRs). Scoped to this repo. |
+| `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io> — sign in with GitHub, add the repo, copy the upload token from the repo settings page. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
 
 ```bash
