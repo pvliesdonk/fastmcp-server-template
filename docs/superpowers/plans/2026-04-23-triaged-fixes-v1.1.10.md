@@ -92,14 +92,24 @@ Append this as a new step to the `smoke` job in
         working-directory: /tmp/smoke
         run: |
           # Smoke answers set env_prefix=SMOKE_MCP — rendered docs
-          # should name the consumer's prefix, never the placeholder.
-          grep -q SMOKE_MCP_OIDC_ISSUER docs/deployment/oidc.md \
-            || { echo "::error::docs/deployment/oidc.md missing SMOKE_MCP_ prefix"; exit 1; }
-          ! grep -lF MCP_SERVER_ \
+          # should name some consumer-prefixed env var, never the placeholder.
+          # Positive probe runs against all three files so a silent render
+          # failure in any one file is caught.
+          # Negative check uses a word-boundary regex so legitimate
+          # rendered tokens like SMOKE_MCP_SERVER_NAME don't false-positive
+          # as MCP_SERVER_ leaks (substring collision).
+          for f in \
+              docs/deployment/oidc.md \
+              docs/deployment/docker.md \
+              docs/guides/authentication.md; do
+            grep -qE 'SMOKE_MCP_[A-Z][A-Z0-9_]*' "$f" \
+              || { echo "::error::$f missing any SMOKE_MCP_ env var — substitution did not occur"; exit 1; }
+          done
+          ! grep -lE '(^|[^A-Z0-9_])MCP_SERVER_' \
               docs/deployment/docker.md \
               docs/deployment/oidc.md \
               docs/guides/authentication.md \
-            || { echo "::error::MCP_SERVER_ literal leaked into shared docs"; exit 1; }
+            || { echo "::error::MCP_SERVER_ placeholder literal leaked into shared docs"; exit 1; }
           ! grep -lF fastmcp-server-template \
               docs/deployment/docker.md \
               docs/deployment/oidc.md \
@@ -111,18 +121,19 @@ Append this as a new step to the `smoke` job in
 
 ```bash
 rm -rf /tmp/smoke
-uv run --no-project --with copier copier copy --trust --defaults \
+uv run --no-project --with copier copier copy --trust --defaults --vcs-ref HEAD \
   --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
 cd /tmp/smoke
-grep -q SMOKE_MCP_OIDC_ISSUER docs/deployment/oidc.md && echo PASS || echo FAIL
-! grep -lF MCP_SERVER_ \
-    docs/deployment/docker.md docs/deployment/oidc.md \
-    docs/guides/authentication.md && echo PASS || echo FAIL
+grep -qE 'SMOKE_MCP_[A-Z][A-Z0-9_]*' docs/deployment/oidc.md && echo PASS-pos || echo FAIL-pos
+if grep -lE '(^|[^A-Z0-9_])MCP_SERVER_' docs/deployment/docker.md docs/deployment/oidc.md docs/guides/authentication.md; then echo FAIL-leak; else echo PASS-no-leak; fi
 ```
 
-Expected: the `SMOKE_MCP_` check prints `FAIL`, and the
-`MCP_SERVER_` check also prints `FAIL`. That's your "red" — the
+Expected: `FAIL-pos` and `FAIL-leak`. That's your "red" — the
 assertion is live and the current code does not satisfy it.
+
+`--vcs-ref HEAD` is needed locally so copier renders from the
+branch tip instead of the latest tag. CI does not need it because
+`actions/checkout` produces a shallow clone with no tags visible.
 
 - [ ] **Step 4: Commit the assertion**
 
@@ -209,20 +220,18 @@ appropriate `{{ env_prefix }}_`, `{{ project_name }}`,
 
 ```bash
 rm -rf /tmp/smoke
-uv run --no-project --with copier copier copy --trust --defaults \
+uv run --no-project --with copier copier copy --trust --defaults --vcs-ref HEAD \
   --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
 cd /tmp/smoke
-grep -q SMOKE_MCP_OIDC_ISSUER docs/deployment/oidc.md && echo OK
-! grep -lF MCP_SERVER_ \
-    docs/deployment/docker.md docs/deployment/oidc.md \
-    docs/guides/authentication.md && echo OK
-! grep -lF fastmcp-server-template \
-    docs/deployment/docker.md docs/deployment/oidc.md \
-    docs/guides/authentication.md && echo OK
+for f in docs/deployment/oidc.md docs/deployment/docker.md docs/guides/authentication.md; do
+  grep -qE 'SMOKE_MCP_[A-Z][A-Z0-9_]*' "$f" && echo "OK-pos $f"
+done
+if grep -lE '(^|[^A-Z0-9_])MCP_SERVER_' docs/deployment/docker.md docs/deployment/oidc.md docs/guides/authentication.md; then echo FAIL; else echo OK-no-leak; fi
+if grep -lF fastmcp-server-template docs/deployment/docker.md docs/deployment/oidc.md docs/guides/authentication.md; then echo FAIL; else echo OK-no-fst; fi
 cd /mnt/code/fastmcp-server-template
 ```
 
-Expected: three `OK` prints.
+Expected: three `OK-pos ...` prints (one per file), `OK-no-leak`, `OK-no-fst`.
 
 - [ ] **Step 5: Commit**
 

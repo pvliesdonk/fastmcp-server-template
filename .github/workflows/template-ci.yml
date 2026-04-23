@@ -87,8 +87,13 @@ jobs:
           # Negative check uses a word-boundary regex so legitimate
           # rendered tokens like SMOKE_MCP_SERVER_NAME don't false-positive
           # as MCP_SERVER_ leaks (substring collision).
-          grep -qE 'SMOKE_MCP_[A-Z][A-Z0-9_]*' docs/deployment/oidc.md \
-            || { echo "::error::docs/deployment/oidc.md missing any SMOKE_MCP_ env var — substitution did not occur"; exit 1; }
+          for f in \
+              docs/deployment/oidc.md \
+              docs/deployment/docker.md \
+              docs/guides/authentication.md; do
+            grep -qE 'SMOKE_MCP_[A-Z][A-Z0-9_]*' "$f" \
+              || { echo "::error::$f missing any SMOKE_MCP_ env var — substitution did not occur"; exit 1; }
+          done
           ! grep -lE '(^|[^A-Z0-9_])MCP_SERVER_' \
               docs/deployment/docker.md \
               docs/deployment/oidc.md \
