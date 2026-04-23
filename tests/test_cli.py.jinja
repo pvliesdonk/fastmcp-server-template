@@ -31,7 +31,10 @@ def test_no_args_shows_help() -> None:
     """Bare invocation shows help text via ``no_args_is_help=True``.
 
     Typer/Click exits with code 2 (missing command) but still prints the
-    help output — assert on the output, not the exit code.
+    help output.  Pinning the exit code locks in the documented behaviour
+    so a future typer version that routes bare invocation to a different
+    code (e.g. 1 for runtime error) surfaces as a test failure.
     """
     result = CliRunner().invoke(app, [])
+    assert result.exit_code == 2
     assert "serve" in result.output
