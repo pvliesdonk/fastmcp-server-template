@@ -113,6 +113,9 @@ jobs:
             "# DOCKERFILE-STATE-DIRS-END" \
             "# DOCKERFILE-VOLUMES-START" \
             "# DOCKERFILE-VOLUMES-END"; do
-            count=$(grep -cF "$marker" Dockerfile)
+            # `|| true` keeps bash -e from aborting at the command substitution when
+            # grep finds zero matches (exit 1), so the ::error:: line below fires instead
+            # of an opaque "exit 1" without context.
+            count=$(grep -cF "$marker" Dockerfile || true)
             [ "$count" = "1" ] || { echo "::error::expected 1 '$marker' sentinel, found $count"; exit 1; }
           done
