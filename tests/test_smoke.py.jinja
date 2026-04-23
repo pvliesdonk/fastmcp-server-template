@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -25,22 +26,29 @@ def test_register_apps_logs_when_app_domain_set(
 
     Covers the ``if app_domain:`` branch of ``_server_apps.register_apps``,
     which the default smoke tests miss because no ``{{ env_prefix }}_APP_DOMAIN``
-    is set in the test env.
+    is set in the test env.  Pass a real ``FastMCP`` instance so the test
+    keeps working if a downstream maintainer adds real registrations to the
+    branch (the scaffold's no-op branch ignores the argument today).
     """
     monkeypatch.setenv("{{ env_prefix }}_APP_DOMAIN", "example.com")
     with caplog.at_level("INFO", logger="{{ python_module }}._server_apps"):
-        # Pass None for the FastMCP instance — register_apps doesn't touch it
-        # in the scaffold's no-op branch.
-        register_apps(None)  # type: ignore[arg-type]
+        register_apps(make_server())
     assert any("example.com" in r.message for r in caplog.records)
 
 
 async def test_status_resource_reports_ready(client: Client[Any]) -> None:
-    """The example ``status://`` resource returns the running service's state."""
+    """The example ``status://`` resource reports a started service.
+
+    The lifespan calls ``service.start()``, so the resource payload must
+    contain ``ready: true`` — asserting the value (not just the key name)
+    catches a future regression where the lifespan stops starting the
+    service.  Content is a union; narrow defensively — scaffold stays
+    generic on purpose so users copying it don't need to adjust types.
+    """
     result = await client.read_resource("status://{{ project_name }}")
     first = result[0]
     text = first.text if hasattr(first, "text") else str(first)
-    assert "ready" in text
+    assert json.loads(text) == {"ready": True}
 
 
 async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
