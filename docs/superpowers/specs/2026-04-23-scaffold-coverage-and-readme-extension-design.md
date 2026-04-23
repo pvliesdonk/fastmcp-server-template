@@ -3,6 +3,8 @@
 **Date:** 2026-04-23
 **Issues:** [#50](https://github.com/pvliesdonk/fastmcp-server-template/issues/50), [#51](https://github.com/pvliesdonk/fastmcp-server-template/issues/51)
 
+> **Revision 2026-04-23 (post-implementation):** Section 2 originally extended `tests/test_tools.py.jinja`, but that file is in `copier.yml`'s `_exclude` block — copier **never renders it**, on copy or update. The resource + prompt tests were folded into `tests/test_smoke.py.jinja` (which IS in `_skip_if_exists`) so they reach greenfield scaffolds as intended. Sections 2 + 3 below are kept as the original design record; the File changes table (§ "File changes") and the implementation plan reflect the corrected landing place.
+
 ## Problem
 
 Two papercuts surface on the first greenfield use of the template
@@ -126,8 +128,10 @@ async def test_summarize_prompt_includes_context(client: Client) -> None:
     assert "hello world" in result.messages[0].content.text
 ```
 
-`test_tools.py` is in `_exclude` — never re-rendered after first copy,
-so existing downstreams aren't affected.
+`test_tools.py` is in `_exclude` — copier never renders it (on copy
+or on update), so the plan landed these tests in
+`tests/test_smoke.py.jinja` instead. See the revision banner at the
+top of this document.
 
 ### 3. Extend `tests/test_smoke.py.jinja`
 
@@ -207,10 +211,12 @@ sections stay unchanged.
 | File | Change | Notes |
 |---|---|---|
 | `tests/test_cli.py.jinja` | **new** | CliRunner tests; covers `cli.py` |
-| `tests/test_tools.py.jinja` | extend | +2 handler tests (status, summarize) |
-| `tests/test_smoke.py.jinja` | extend | +1 branch test (`register_apps` env-var) |
+| `tests/test_smoke.py.jinja` | extend | +3 tests: `register_apps` env-var branch, `status` resource, `summarize` prompt |
+| `tests/conftest.py.jinja` | edit | `Client[Any]` on the `client` fixture (strict mypy) |
 | `copier.yml` | edit | Add `tests/test_cli.py` to `_skip_if_exists` |
-| `README.md.jinja` | extend | +3 sections (post-setup, secrets, local dev) |
+| `pyproject.toml.jinja` | edit | Add `tests/test_smoke.py` to ruff TC002 per-file ignores |
+| `README.md.jinja` | extend | +3 sections (post-scaffold checklist, GitHub secrets, local dev) |
+| `CLAUDE.md` | edit | Document `--vcs-ref=HEAD` for local iteration |
 
 ## Validation
 

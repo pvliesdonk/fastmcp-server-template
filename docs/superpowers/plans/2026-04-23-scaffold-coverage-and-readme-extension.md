@@ -16,13 +16,15 @@
 
 | File | Change | Why |
 |---|---|---|
-| `tests/test_tools.py.jinja` | extend (+2 tests) | Cover `status` resource + `summarize` prompt handlers |
-| `tests/test_smoke.py.jinja` | extend (+1 test) | Cover `_server_apps.register_apps` env-var branch |
+| `tests/test_smoke.py.jinja` | extend (+3 tests) | `register_apps` env-var branch, `status` resource, `summarize` prompt |
 | `tests/test_cli.py.jinja` | **create** | Cover `cli.py` (~26% of codebase, currently 0% covered) |
+| `tests/conftest.py.jinja` | edit | `Client[Any]` annotation so strict mypy on `tests/` passes |
 | `copier.yml` | edit (+1 entry in `_skip_if_exists`) | Preserve downstream `test_cli.py` if present |
+| `pyproject.toml.jinja` | edit (+1 ruff per-file ignore) | Silence TC002 on the new annotation-only imports in `tests/test_smoke.py` |
 | `README.md.jinja` | extend (+3 sections) | Post-scaffold checklist, GitHub secrets table, local dev gate |
+| `CLAUDE.md` | edit | Document `--vcs-ref=HEAD` for local iteration (template-maintainer gate) |
 
-No new files in `src/`. No changes to existing source jinja templates. No changes to `pyproject.toml.jinja`.
+No new files in `src/`.
 
 ---
 
