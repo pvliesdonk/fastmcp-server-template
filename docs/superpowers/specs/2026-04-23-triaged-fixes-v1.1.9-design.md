@@ -37,11 +37,14 @@ Three focused PRs merged in sequence to `main`, then one
 
 **Edits within each renamed file:**
 - Replace every literal `MCP_SERVER_` with `{{ env_prefix }}_`.
-- Audit for other literals that should be Jinja variables — specifically
-  `smoke-mcp`, `Smoke MCP`, `smoke_mcp` — and replace with
-  `{{ project_name }}` / `{{ human_name }}` / `{{ python_module }}` if
-  any are found. (Defensive: the files were rendered once with smoke
-  answers, so stray literals are possible.)
+- Replace `ghcr.io/pvliesdonk/fastmcp-server-template:latest` (found at
+  `oidc.md:97` on inspection) with
+  `{{ docker_registry }}/{{ project_name }}:latest`.
+- Re-grep each file after edits for `smoke-mcp`, `Smoke MCP`,
+  `smoke_mcp`, and `fastmcp-server-template` to confirm no other stale
+  literals were missed.  (Initial grep at spec-time found only the
+  `oidc.md:97` case, but the audit step catches regressions if the
+  three files acquire new literals before the PR lands.)
 
 **`copier.yml`:**
 - `_skip_if_exists` entries stay as `docs/deployment/docker.md`,
@@ -55,6 +58,7 @@ Three focused PRs merged in sequence to `main`, then one
   ```bash
   grep -q SMOKE_MCP_OIDC_ISSUER docs/deployment/oidc.md
   ! grep -F MCP_SERVER_ docs/deployment/docker.md docs/deployment/oidc.md docs/guides/authentication.md
+  ! grep -F fastmcp-server-template docs/deployment/docker.md docs/deployment/oidc.md docs/guides/authentication.md
   ```
 - Fails the CI gate on any regression.
 
@@ -178,10 +182,11 @@ After all three PRs are merged to `main`:
 - **Risk:** Jinja substitution inside the renamed docs could emit
   malformed content if a literal contains a lookalike of Jinja syntax
   (`{{ }}`, `{% %}`).
-  **Mitigation:** PR 1 author greps for `{{` / `{%` in the three files
-  before renaming. If anything unexpected is present, wrap with
-  `{% raw %}`. Smoke render in `template-ci.yml` will fail loudly on
-  a Jinja syntax error.
+  **Status:** initial grep at spec time found zero `{{` / `{%` tokens in
+  the three files, so this risk is theoretical for today's content.
+  **Mitigation:** PR 1 re-greps immediately before the rename; the
+  `copier copy` step in `template-ci.yml` fails loudly on any Jinja
+  syntax error introduced later.
 
 - **Risk:** new Dockerfile sentinels land but the assertion in
   `template-ci.yml` is forgotten, leaving them silently droppable on
