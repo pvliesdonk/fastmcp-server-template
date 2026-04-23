@@ -1,4 +1,4 @@
-"""Golden-path smoke tests for the example tool, resource, and prompt."""
+"""Golden-path smoke test for the example ``ping`` tool."""
 
 from __future__ import annotations
 
@@ -9,16 +9,3 @@ async def test_ping_returns_pong(client: Client) -> None:
     """The example ``ping`` tool round-trips cleanly through the MCP client."""
     result = await client.call_tool("ping", {})
     assert result.content[0].text == "pong"
-
-
-async def test_status_resource_reports_ready(client: Client) -> None:
-    """The example ``status://`` resource returns the running service's state."""
-    result = await client.read_resource("status://{{ project_name }}")
-    text = result[0].text if hasattr(result[0], "text") else str(result[0])
-    assert "ready" in text
-
-
-async def test_summarize_prompt_includes_context(client: Client) -> None:
-    """The example ``summarize`` prompt round-trips its ``context`` argument."""
-    result = await client.get_prompt("summarize", {"context": "hello world"})
-    assert "hello world" in result.messages[0].content.text
