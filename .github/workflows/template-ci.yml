@@ -119,3 +119,14 @@ jobs:
             count=$(grep -cF "$marker" Dockerfile || true)
             [ "$count" = "1" ] || { echo "::error::expected 1 '$marker' sentinel, found $count"; exit 1; }
           done
+
+      - name: release.yml marketplace upsert
+        working-directory: /tmp/smoke
+        run: |
+          # Regression guard: upsert block must survive template renders.
+          grep -qF '"git-subdir"' .github/workflows/release.yml \
+            || { echo "::error::release.yml missing git-subdir marker — upsert regressed"; exit 1; }
+          grep -qF '".claude-plugin/plugin"' .github/workflows/release.yml \
+            || { echo "::error::release.yml missing .claude-plugin/plugin path — upsert regressed"; exit 1; }
+          grep -qF 'any(.[]; .name == $name)' .github/workflows/release.yml \
+            || { echo "::error::release.yml missing upsert branch — still silently no-ops on missing entry"; exit 1; }
