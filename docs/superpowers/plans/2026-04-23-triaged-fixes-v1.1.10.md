@@ -264,7 +264,7 @@ gh pr create --repo pvliesdonk/fastmcp-server-template \
   the hardcoded ghcr path ever leaks back in
 
 ## Test plan
-- [x] template-ci smoke render produces `SMOKE_MCP_OIDC_ISSUER` in rendered `docs/deployment/oidc.md`
+- [x] template-ci smoke render produces some `SMOKE_MCP_*` env var in each of the three rendered shared docs (`docs/deployment/docker.md`, `docs/deployment/oidc.md`, `docs/guides/authentication.md`)
 - [x] rendered shared docs contain no `MCP_SERVER_` or `fastmcp-server-template` literals
 - [x] `_skip_if_exists` rendered-path semantics unchanged — existing consumer files still preserved on update
 
