@@ -104,3 +104,15 @@ jobs:
               docs/deployment/oidc.md \
               docs/guides/authentication.md \
             || { echo "::error::fastmcp-server-template literal leaked into shared docs"; exit 1; }
+
+      - name: Dockerfile sentinel structure
+        working-directory: /tmp/smoke
+        run: |
+          for marker in \
+            "# DOCKERFILE-STATE-DIRS-START" \
+            "# DOCKERFILE-STATE-DIRS-END" \
+            "# DOCKERFILE-VOLUMES-START" \
+            "# DOCKERFILE-VOLUMES-END"; do
+            count=$(grep -cF "$marker" Dockerfile)
+            [ "$count" = "1" ] || { echo "::error::expected 1 '$marker' sentinel, found $count"; exit 1; }
+          done
