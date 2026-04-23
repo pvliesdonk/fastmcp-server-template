@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.10 (2026-04-23)
+
+- #45 fix(release): upsert marketplace.json when plugin is absent (#38)
+- #44 docs(claude-md): add 'Contributing fixes upstream' section (#37)
+- #42 feat(dockerfile): sentinel-protect state-dir mkdir + VOLUME (#30)
+- #41 fix(docs): render shared docs with consumer env_prefix (#31)
+
+
 ## v1.1.9 (2026-04-23)
 
 - #39 fix(dockerfile): COPY uv.lock so final uv sync sees the lockfile
