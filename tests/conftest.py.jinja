@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 from fastmcp import Client
@@ -20,7 +21,7 @@ def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-async def client() -> AsyncIterator[Client]:
+async def client() -> AsyncIterator[Client[Any]]:
     """Return an in-memory FastMCP client connected to a fresh server."""
     server = make_server()
     async with Client(server) as c:
