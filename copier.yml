@@ -31,6 +31,7 @@ _skip_if_exists:
   - "src/{{python_module}}/domain.py"
   - "tests/conftest.py"
   - "tests/test_smoke.py"
+  - "tests/test_cli.py"
   - "README.md"
   - "CHANGELOG.md"
   - "LICENSE"
