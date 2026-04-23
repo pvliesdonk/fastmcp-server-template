@@ -74,98 +74,9 @@ Record the baseline coverage % and which lines are uncovered (look for `cli.py`,
 
 ---
 
-## Task 1: Add resource + prompt tests to `tests/test_tools.py.jinja`
+## Task 1+2 (merged): Extend `tests/test_smoke.py.jinja` with all new test coverage
 
-**Files:**
-- Modify: `tests/test_tools.py.jinja`
-
-- [ ] **Step 1: Read the current file**
-
-```bash
-cat /mnt/code/fastmcp-server-template/tests/test_tools.py.jinja
-```
-
-Confirm it currently contains only `test_ping_returns_pong` and the `from fastmcp import Client` import.
-
-- [ ] **Step 2: Replace with extended version**
-
-Overwrite `/mnt/code/fastmcp-server-template/tests/test_tools.py.jinja` with:
-
-```jinja
-"""Golden-path smoke tests for the example tool, resource, and prompt."""
-
-from __future__ import annotations
-
-from fastmcp import Client
-
-
-async def test_ping_returns_pong(client: Client) -> None:
-    """The example ``ping`` tool round-trips cleanly through the MCP client."""
-    result = await client.call_tool("ping", {})
-    assert result.content[0].text == "pong"
-
-
-async def test_status_resource_reports_ready(client: Client) -> None:
-    """The example ``status://`` resource returns the running service's state."""
-    result = await client.read_resource("status://{{ project_name }}")
-    text = result[0].text if hasattr(result[0], "text") else str(result[0])
-    assert "ready" in text
-
-
-async def test_summarize_prompt_includes_context(client: Client) -> None:
-    """The example ``summarize`` prompt round-trips its ``context`` argument."""
-    result = await client.get_prompt("summarize", {"context": "hello world"})
-    assert "hello world" in result.messages[0].content.text
-```
-
-- [ ] **Step 3: Render + run only the new tests**
-
-```bash
-cd /mnt/code/fastmcp-server-template
-rm -rf /tmp/smoke
-uv run --no-project --with copier copier copy --trust --defaults \
-  --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
-cd /tmp/smoke
-uv sync --all-extras --dev
-uv run pytest tests/test_tools.py -v
-```
-
-Expected: 3 tests pass (`test_ping_returns_pong`, `test_status_resource_reports_ready`, `test_summarize_prompt_includes_context`).
-
-If `test_status_resource_reports_ready` fails with an attribute error on `result[0]`, the FastMCP client API may have shifted — check `Client.read_resource`'s actual return type via `python -c "from fastmcp import Client; help(Client.read_resource)"` and adjust the access pattern. The `hasattr(...)` guard is defensive against future API minor shifts.
-
-- [ ] **Step 4: Run full gate to confirm coverage moved up**
-
-```bash
-cd /tmp/smoke
-uv run pytest --cov=src/smoke_mcp --cov-report=term 2>&1 | tail -15
-```
-
-Expected: total coverage > Task 0 baseline (gain from `resources.py` and `prompts.py` handler bodies + `domain.py:status`). Likely still under 80% — that's fine, more tests come in subsequent tasks.
-
-- [ ] **Step 5: Commit**
-
-```bash
-cd /mnt/code/fastmcp-server-template
-git add tests/test_tools.py.jinja
-git commit -m "$(cat <<'EOF'
-feat(scaffold-tests): cover example status resource and summarize prompt
-
-Pristine scaffolds had only `test_ping_returns_pong`, leaving the
-`status://` resource handler and `summarize` prompt handler uncovered.
-Add round-trip tests via the existing in-memory Client fixture so a
-greenfield scaffold exercises every shipped MCP primitive.
-
-Refs #50
-
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-## Task 2: Add `register_apps` env-var branch test to `tests/test_smoke.py.jinja`
+**Plan revision (2026-04-23):** Original Task 1 targeted `tests/test_tools.py.jinja`, but that file is in `copier.yml`'s `_exclude` block (not `_skip_if_exists`), so it never renders into greenfield scaffolds. Folding the resource + prompt tests into `tests/test_smoke.py.jinja` (which IS in `_skip_if_exists`) lands them where issue #50 needs them, without touching `_exclude`'s deliberate "downstream brings their own" semantics.
 
 **Files:**
 - Modify: `tests/test_smoke.py.jinja`
@@ -188,6 +99,7 @@ Overwrite `/mnt/code/fastmcp-server-template/tests/test_smoke.py.jinja` with:
 from __future__ import annotations
 
 import pytest
+from fastmcp import Client
 
 from {{ python_module }}._server_apps import register_apps
 from {{ python_module }}.server import make_server
@@ -215,13 +127,27 @@ def test_register_apps_logs_when_app_domain_set(
         # in the scaffold's no-op branch.
         register_apps(None)  # type: ignore[arg-type]
     assert any("example.com" in r.message for r in caplog.records)
+
+
+async def test_status_resource_reports_ready(client: Client) -> None:
+    """The example ``status://`` resource returns the running service's state."""
+    result = await client.read_resource("status://{{ project_name }}")
+    text = result[0].text if hasattr(result[0], "text") else str(result[0])
+    assert "ready" in text
+
+
+async def test_summarize_prompt_includes_context(client: Client) -> None:
+    """The example ``summarize`` prompt round-trips its ``context`` argument."""
+    result = await client.get_prompt("summarize", {"context": "hello world"})
+    assert "hello world" in result.messages[0].content.text
 ```
 
-Note: the `# type: ignore[arg-type]` is needed because `register_apps` is typed
-to take a `FastMCP`, but the scaffold body never dereferences it — it's
-the simplest way to test the env-var branch without spinning up a server.
+Notes:
+- The `client` fixture comes from `tests/conftest.py.jinja` (also in `_skip_if_exists`, also rendered into greenfield scaffolds). It wraps `make_server()` in an in-memory FastMCP `Client`.
+- The `# type: ignore[arg-type]` is needed because `register_apps` is typed to take a `FastMCP`, but the scaffold body never dereferences it — simplest way to test the env-var branch without spinning up a server.
+- `tests/test_tools.py.jinja` is **deliberately not modified** — it's in `_exclude` so changes there never reach scaffolds.
 
-- [ ] **Step 3: Render and run the new test**
+- [ ] **Step 3: Render and run the new tests**
 
 ```bash
 cd /mnt/code/fastmcp-server-template
@@ -233,17 +159,19 @@ uv sync --all-extras --dev
 uv run pytest tests/test_smoke.py -v
 ```
 
-Expected: 2 tests pass.
+Expected: 4 tests pass (`test_make_server_constructs`, `test_register_apps_logs_when_app_domain_set`, `test_status_resource_reports_ready`, `test_summarize_prompt_includes_context`).
 
-- [ ] **Step 4: Run mypy on the rendered project**
+If `test_status_resource_reports_ready` fails with an attribute error on `result[0]`, the FastMCP client API may have shifted — inspect with `python -c "from fastmcp import Client; help(Client.read_resource)"` and adjust the access pattern. The `hasattr(...)` guard is defensive against minor API shifts.
+
+- [ ] **Step 4: Run mypy + coverage check**
 
 ```bash
 cd /tmp/smoke
 uv run mypy src/ tests/
+uv run pytest --cov=src/smoke_mcp --cov-report=term 2>&1 | tail -15
 ```
 
-Expected: no errors. (The `# type: ignore[arg-type]` should silence the
-intentional misuse of `register_apps`.)
+Expected: mypy clean (the `# type: ignore[arg-type]` silences the intentional misuse). Coverage > Task 0 baseline (gain from `resources.py`, `prompts.py`, `domain.py:status`, and `_server_apps.py` if-branch). Likely still under 80% — Task 3 (CLI tests) closes the remaining gap.
 
 - [ ] **Step 5: Commit**
 
@@ -251,12 +179,18 @@ intentional misuse of `register_apps`.)
 cd /mnt/code/fastmcp-server-template
 git add tests/test_smoke.py.jinja
 git commit -m "$(cat <<'EOF'
-feat(scaffold-tests): cover register_apps env-var branch
+feat(scaffold-tests): cover register_apps branch + status resource + summarize prompt
 
-The default smoke test only exercises the inactive branch of
-register_apps. Add a test that sets {ENV_PREFIX}_APP_DOMAIN and
-asserts the info log fires, covering the if-branch that downstream
-projects always hit once they wire MCP Apps.
+The pristine scaffold's smoke test only exercised make_server() and
+register_apps's inactive branch; the status resource handler, summarize
+prompt handler, and register_apps's env-var branch were all uncovered,
+contributing to the 59% coverage that fails the project's own
+--fail-under=80 gate. Add three round-trip tests via the existing
+in-memory Client fixture (already shipped in conftest.py.jinja).
+
+Folded into test_smoke.py.jinja rather than test_tools.py.jinja
+because the latter is in copier.yml's _exclude block and never
+renders into greenfield scaffolds.
 
 Refs #50
 
