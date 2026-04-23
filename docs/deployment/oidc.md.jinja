@@ -64,7 +64,6 @@ identity_providers:
 ```bash
 {{ env_prefix }}_BASE_URL=https://mcp.example.com
 {{ env_prefix }}_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
-# {{ env_prefix }}_OIDC_ISSUER is derived from the config URL (auth server base URL)
 {{ env_prefix }}_OIDC_CLIENT_ID=my-mcp-server
 {{ env_prefix }}_OIDC_CLIENT_SECRET=your-client-secret
 {{ env_prefix }}_OIDC_JWT_SIGNING_KEY=$(openssl rand -hex 32)
@@ -124,7 +123,6 @@ With the corresponding `.env`:
 {{ env_prefix }}_READ_ONLY=true
 {{ env_prefix }}_BASE_URL=https://mcp.example.com
 {{ env_prefix }}_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
-# {{ env_prefix }}_OIDC_ISSUER is derived from the config URL (auth server base URL)
 {{ env_prefix }}_OIDC_CLIENT_ID=my-mcp-server
 {{ env_prefix }}_OIDC_CLIENT_SECRET=your-client-secret
 {{ env_prefix }}_OIDC_JWT_SIGNING_KEY=your-stable-hex-key

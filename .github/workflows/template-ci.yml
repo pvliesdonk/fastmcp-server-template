@@ -83,14 +83,17 @@ jobs:
         working-directory: /tmp/smoke
         run: |
           # Smoke answers set env_prefix=SMOKE_MCP — rendered docs
-          # should name the consumer's prefix, never the placeholder.
-          grep -q SMOKE_MCP_OIDC_ISSUER docs/deployment/oidc.md \
-            || { echo "::error::docs/deployment/oidc.md missing SMOKE_MCP_ prefix"; exit 1; }
-          ! grep -lF MCP_SERVER_ \
+          # should name some consumer-prefixed env var, never the placeholder.
+          # Negative check uses a word-boundary regex so legitimate
+          # rendered tokens like SMOKE_MCP_SERVER_NAME don't false-positive
+          # as MCP_SERVER_ leaks (substring collision).
+          grep -qE 'SMOKE_MCP_[A-Z][A-Z0-9_]*' docs/deployment/oidc.md \
+            || { echo "::error::docs/deployment/oidc.md missing any SMOKE_MCP_ env var — substitution did not occur"; exit 1; }
+          ! grep -lE '(^|[^A-Z0-9_])MCP_SERVER_' \
               docs/deployment/docker.md \
               docs/deployment/oidc.md \
               docs/guides/authentication.md \
-            || { echo "::error::MCP_SERVER_ literal leaked into shared docs"; exit 1; }
+            || { echo "::error::MCP_SERVER_ placeholder literal leaked into shared docs"; exit 1; }
           ! grep -lF fastmcp-server-template \
               docs/deployment/docker.md \
               docs/deployment/oidc.md \
