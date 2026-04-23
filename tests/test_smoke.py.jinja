@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+from fastmcp import Client
+
+from {{ python_module }}._server_apps import register_apps
 from {{ python_module }}.server import make_server
 
 
@@ -9,3 +15,37 @@ def test_make_server_constructs() -> None:
     """make_server() returns a FastMCP instance without raising."""
     server = make_server()
     assert server is not None
+
+
+def test_register_apps_logs_when_app_domain_set(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """register_apps logs the configured app domain when the env var is set.
+
+    Covers the ``if app_domain:`` branch of ``_server_apps.register_apps``,
+    which the default smoke tests miss because no ``{{ env_prefix }}_APP_DOMAIN``
+    is set in the test env.
+    """
+    monkeypatch.setenv("{{ env_prefix }}_APP_DOMAIN", "example.com")
+    with caplog.at_level("INFO", logger="{{ python_module }}._server_apps"):
+        # Pass None for the FastMCP instance — register_apps doesn't touch it
+        # in the scaffold's no-op branch.
+        register_apps(None)  # type: ignore[arg-type]
+    assert any("example.com" in r.message for r in caplog.records)
+
+
+async def test_status_resource_reports_ready(client: Client[Any]) -> None:
+    """The example ``status://`` resource returns the running service's state."""
+    result = await client.read_resource("status://{{ project_name }}")
+    first = result[0]
+    text = first.text if hasattr(first, "text") else str(first)
+    assert "ready" in text
+
+
+async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
+    """The example ``summarize`` prompt round-trips its ``context`` argument."""
+    result = await client.get_prompt("summarize", {"context": "hello world"})
+    content = result.messages[0].content
+    text = content.text if hasattr(content, "text") else str(content)
+    assert "hello world" in text
