@@ -44,7 +44,7 @@ This project ships a `.pre-commit-config.yaml` that runs ruff (check + format), 
 - **Run on demand before pushing:** `uv run pre-commit run --all-files`. A green run is a precondition for gates #2 and #3 above.
 - **Never bypass with `--no-verify`.** A failing hook means the same check will fail in CI; fix the underlying issue rather than silencing it.
 
-The config is in `_skip_if_exists`, so domain-specific additions (gitleaks, project-specific linters, additional file checks) survive `copier update`.
+The config is in `_skip_if_exists`, so domain-specific additions (shellcheck, yamllint, project-specific linters, additional file checks) on top of the shipped defaults survive `copier update`.
 
 ## PR Discipline
 
