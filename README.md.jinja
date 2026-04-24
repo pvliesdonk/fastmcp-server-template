@@ -38,7 +38,43 @@ server's tool surface.
 
 ## Installation
 
-<!-- INSTALLATION PLACEHOLDER -->
+### From PyPI
+
+```bash
+pip install {{ pypi_name }}
+```
+
+If you add optional extras via the `PROJECT-EXTRAS-START` / `PROJECT-EXTRAS-END` sentinels in `pyproject.toml`, document them here.
+
+### From source
+
+```bash
+git clone https://github.com/{{ github_org }}/{{ project_name }}.git
+cd {{ project_name }}
+uv sync --all-extras --dev
+```
+
+### Docker
+
+```bash
+docker pull ghcr.io/{{ github_org }}/{{ project_name }}:latest
+```
+
+A `compose.yml` ships at the repo root as a starting point — copy `.env.example` to `.env`, edit, and `docker compose up -d`.
+
+### Linux packages (.deb / .rpm)
+
+Download `.deb` or `.rpm` packages from the [GitHub Releases](https://github.com/{{ github_org }}/{{ project_name }}/releases) page. Both install a hardened systemd unit; env configuration is sourced from `/etc/{{ project_name }}/env` (copy from the shipped `/etc/{{ project_name }}/env.example`).
+
+### Claude Desktop (.mcpb bundle)
+
+Download the `.mcpb` bundle from the [GitHub Releases](https://github.com/{{ github_org }}/{{ project_name }}/releases) page and double-click to install, or run:
+
+```bash
+mcpb install {{ project_name }}-<version>.mcpb
+```
+
+Claude Desktop prompts for required env vars via a GUI wizard — no manual JSON editing needed.
 
 ## Quick start
 
