@@ -99,7 +99,14 @@ Domain-specific variables go below under [Domain configuration](#domain-configur
 
 ## Post-scaffold checklist
 
-<!-- CHECKLIST PLACEHOLDER -->
+After `copier copy` and `gh repo create --push`:
+
+1. **Fill in the DOMAIN blocks** in this README (Features, What you can do with it, Domain configuration, Key design decisions) and in `CLAUDE.md`.
+2. Configure GitHub secrets — see below.
+3. Install dev dependencies: `uv sync --all-extras --dev`.
+4. Install pre-commit hooks: `uv run pre-commit install`.
+5. Run the gate locally: `uv run pytest -x -q && uv run ruff check --fix . && uv run ruff format . && uv run mypy src/ tests/`.
+6. Push the first commit — CI should be green.
 
 ## GitHub secrets
 
