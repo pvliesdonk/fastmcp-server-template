@@ -127,6 +127,9 @@ ignore_missing_imports = true
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
+# src-layout editable installs use a .pth shim that Pyright does not execute;
+# point Pyright at src/ directly so IDE import resolution matches runtime.
+extraPaths = ["src"]
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
