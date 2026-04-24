@@ -32,7 +32,6 @@ _skip_if_exists:
   - "tests/conftest.py"
   - "tests/test_smoke.py"
   - "tests/test_cli.py"
-  - "README.md"
   - "CHANGELOG.md"
   - "LICENSE"
   - ".env.example"
@@ -69,10 +68,13 @@ _skip_if_exists:
   # yamllint, project-specific linters, etc.) on top of the shipped defaults;
   # preserve customisation across updates.
   - ".pre-commit-config.yaml"
-# Note: CLAUDE.md is deliberately NOT in _skip_if_exists — it's a
-# hybrid file with template-owned and domain-owned sections marked by
-# sentinel blocks, and copier's 3-way merge needs to re-render the
-# template-owned sections on update.
+# Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists —
+# both are hybrid files with template-owned and domain-owned sections
+# marked by sentinel blocks (<!-- DOMAIN-START -->/<!-- DOMAIN-END -->
+# plus ===== TEMPLATE-OWNED banner comments), and copier's 3-way merge
+# needs to re-render the template-owned sections on update while
+# preserving domain edits inside DOMAIN blocks.  README.md was moved
+# out of _skip_if_exists in #57.
 
 # Files in the template repo that should never land in generated projects.
 # Setting _exclude in copier.yml REPLACES copier's default exclude list
