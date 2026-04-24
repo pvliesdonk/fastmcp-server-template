@@ -133,3 +133,57 @@ jobs:
             || { echo "::error::release.yml missing .claude-plugin/plugin path — upsert regressed"; exit 1; }
           grep -qF 'any(.[]; .name == $name)' .github/workflows/release.yml \
             || { echo "::error::release.yml missing upsert branch — still silently no-ops on missing entry"; exit 1; }
+
+  # Runs the two downstream workflow shapes that generated projects invoke
+  # on their own CI — `mkdocs build --strict` (docs.yml) and `nfpm package`
+  # (release.yml).  Dedicated non-matrix job so the downstream-gate is
+  # decoupled from whichever Python versions render-and-gate's matrix rotates
+  # through.  nfpm pinned to the same version as release.yml.jinja so a
+  # template-ci pass genuinely implies a downstream-CI pass for this shape.
+  downstream-gate:
+    name: Downstream workflow gate (docs + packaging)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "0.6"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Render smoke project with copier
+        run: |
+          uv run --no-project --with copier \
+            copier copy --trust --defaults \
+            --data-file tests/fixtures/smoke-answers.yml \
+            . /tmp/smoke
+
+      - name: Install rendered project (with docs extra)
+        working-directory: /tmp/smoke
+        run: uv sync --all-extras --dev
+
+      - name: Install nfpm
+        # Pin matches release.yml.jinja so we exercise the same version
+        # downstream projects will use.  Bump both in lockstep.
+        run: |
+          curl -sfL https://github.com/goreleaser/nfpm/releases/download/v2.41.1/nfpm_2.41.1_Linux_x86_64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin nfpm
+
+      - name: mkdocs build --strict
+        working-directory: /tmp/smoke
+        run: uv run mkdocs build --strict
+
+      - name: nfpm package (deb)
+        working-directory: /tmp/smoke
+        run: |
+          mkdir -p dist
+          VERSION=0.0.0 ARCH=amd64 nfpm package --packager deb --target dist/ --config packaging/nfpm.yaml
+
+      - name: nfpm package (rpm)
+        working-directory: /tmp/smoke
+        run: |
+          mkdir -p dist
+          VERSION=0.0.0 ARCH=amd64 nfpm package --packager rpm --target dist/ --config packaging/nfpm.yaml
