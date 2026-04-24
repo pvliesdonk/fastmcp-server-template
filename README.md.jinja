@@ -44,7 +44,11 @@ server's tool surface.
 pip install {{ pypi_name }}
 ```
 
-If you add optional extras via the `PROJECT-EXTRAS-START` / `PROJECT-EXTRAS-END` sentinels in `pyproject.toml`, document them here.
+If you add optional extras via the `PROJECT-EXTRAS-START` / `PROJECT-EXTRAS-END` sentinels in `pyproject.toml`, document them below:
+
+<!-- DOMAIN-START -->
+<!-- List optional extras and their purpose here (e.g. `pip install {{ pypi_name }}[embeddings]`). Kept across copier update. -->
+<!-- DOMAIN-END -->
 
 ### From source
 
@@ -136,7 +140,7 @@ uv run ruff check --fix . && uv run ruff format .    # lint + format
 uv run mypy src/ tests/                              # type-check
 ```
 
-Pre-commit runs a subset of the gate on each commit; see `.pre-commit-config.yaml` or `CLAUDE.md` for details. See [`CLAUDE.md`](CLAUDE.md) for the full Hard PR Acceptance Gates.
+Pre-commit runs a subset of the gate on each commit; see `.pre-commit-config.yaml` for details, or [`CLAUDE.md`](CLAUDE.md) for the full Hard PR Acceptance Gates.
 
 ## Troubleshooting
 
