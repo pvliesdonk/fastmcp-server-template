@@ -169,7 +169,16 @@ When `copier update` introduces new dependencies (e.g. a new extra added to `pyp
 ## Domain configuration
 
 <!-- DOMAIN-START -->
-<!-- DOMAIN CONFIG PLACEHOLDER -->
+<!-- Replace with a table of domain-specific env vars. Kept across copier update. -->
+
+Domain environment variables use the `{{ env_prefix }}_` prefix:
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `{{ env_prefix }}_EXAMPLE_VAR` | — | **Yes** | Replace this row with your first required setting. |
+| `{{ env_prefix }}_ANOTHER_VAR` | `default` | No | Replace with an optional setting. |
+
+Domain-config fields are composed inside `src/{{ python_module }}/config.py` between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels; env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent.
 <!-- DOMAIN-END -->
 
 ## Key design decisions
