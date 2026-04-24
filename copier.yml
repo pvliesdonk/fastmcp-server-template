@@ -50,6 +50,15 @@ _skip_if_exists:
   - "docs/deployment/docker.md"
   - "docs/deployment/oidc.md"
   - "docs/guides/authentication.md"
+  # mkdocs nav pages — rendered as starter content on first copy so a fresh
+  # project's `mkdocs build --strict` passes.  Projects that customise these
+  # keep their edits across `copier update`.  Moved here from `_exclude` in
+  # #56 because the shipped mkdocs.yml references them; excluding them
+  # unconditionally broke the docs workflow out of the box.
+  - "docs/index.md"
+  - "docs/installation.md"
+  - "docs/configuration.md"
+  - "docs/tools/index.md"
 # Note: CLAUDE.md is deliberately NOT in _skip_if_exists — it's a
 # hybrid file with template-owned and domain-owned sections marked by
 # sentinel blocks, and copier's 3-way merge needs to re-render the
@@ -89,10 +98,6 @@ _exclude:
   # this repo as maintainer-facing reference content.
   - "tests/test_tools.py"
   - "docs/design.md"
-  - "docs/index.md"
-  - "docs/tools/index.md"
-  - "docs/configuration.md"
-  - "docs/installation.md"
 
 # --- Variables ---
 
