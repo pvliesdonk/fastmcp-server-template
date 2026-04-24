@@ -1,63 +1,67 @@
 # {{ human_name }}
 
+<!-- BADGES PLACEHOLDER -->
+
 {{ domain_description }}
+
+**[Documentation](https://{{ github_org }}.github.io/{{ project_name }}/)** | **[PyPI](https://pypi.org/project/{{ pypi_name }}/)** | **[Docker](https://github.com/{{ github_org }}/{{ project_name }}/pkgs/container/{{ project_name }})**
+
+## Features
+
+<!-- DOMAIN-START -->
+<!-- FEATURES PLACEHOLDER -->
+<!-- DOMAIN-END -->
+
+## What you can do with it
+
+<!-- DOMAIN-START -->
+<!-- USAGE NARRATIVES PLACEHOLDER -->
+<!-- DOMAIN-END -->
+
+<!-- ===== TEMPLATE-OWNED SECTIONS BELOW — DO NOT EDIT; CHANGES WILL BE OVERWRITTEN ON COPIER UPDATE ===== -->
+
+## Installation
+
+<!-- INSTALLATION PLACEHOLDER -->
 
 ## Quick start
 
-```bash
-pip install {{ pypi_name }}
-{{ project_name }} serve                                # stdio
-{{ project_name }} serve --transport http --port 8000   # HTTP
-```
+<!-- QUICK START PLACEHOLDER -->
 
 ## Configuration
 
-All configuration goes via `{{ env_prefix }}_*` env vars.  See
-[docs/configuration.md](docs/configuration.md).
+<!-- CORE CONFIG PLACEHOLDER -->
 
 ## Post-scaffold checklist
 
-After `copier copy` and `gh repo create --push`:
-
-1. Configure GitHub secrets (see below).
-2. Install dev dependencies: `uv sync --all-extras --dev`.
-3. Install pre-commit hooks: `uv run pre-commit install`.
-4. Run the gate locally: `uv run pytest -x -q && uv run ruff check --fix . && uv run ruff format . && uv run mypy src/ tests/`.
-5. Push the first commit — CI should be green.
+<!-- CHECKLIST PLACEHOLDER -->
 
 ## GitHub secrets
 
-CI workflows reference three repository secrets. Configure them via
-**Settings → Secrets and variables → Actions** or with `gh secret set`:
-
-| Secret | Used by | How to generate |
-|---|---|---|
-| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write` and `pull_requests: write` (the `copier-update` cron opens PRs). Scoped to this repo. |
-| `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io> — sign in with GitHub, add the repo, copy the upload token from the repo settings page. |
-| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
-
-```bash
-gh secret set RELEASE_TOKEN
-gh secret set CODECOV_TOKEN
-gh secret set CLAUDE_CODE_OAUTH_TOKEN
-```
-
-`GITHUB_TOKEN` is auto-provided — no action needed.
+<!-- GITHUB SECRETS PLACEHOLDER -->
 
 ## Local development
 
-The PR gate (matches CI):
+<!-- LOCAL DEV PLACEHOLDER -->
 
-```bash
-uv run pytest -x -q                                  # tests
-uv run ruff check --fix . && uv run ruff format .    # lint + format
-uv run mypy src/ tests/                              # type-check
-```
+## Troubleshooting
 
-See [`CLAUDE.md`](CLAUDE.md) for the full PR acceptance gates.
+<!-- TROUBLESHOOTING PLACEHOLDER -->
 
 ## Links
 
-- [Documentation](https://{{ github_org }}.github.io/{{ project_name }}/)
-- [FastMCP](https://gofastmcp.com)
-- [fastmcp-pvl-core](https://pypi.org/project/fastmcp-pvl-core/)
+<!-- LINKS PLACEHOLDER -->
+
+<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->
+
+## Domain configuration
+
+<!-- DOMAIN-START -->
+<!-- DOMAIN CONFIG PLACEHOLDER -->
+<!-- DOMAIN-END -->
+
+## Key design decisions
+
+<!-- DOMAIN-START -->
+<!-- KEY DESIGN PLACEHOLDER -->
+<!-- DOMAIN-END -->
