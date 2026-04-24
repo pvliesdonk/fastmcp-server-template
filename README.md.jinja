@@ -110,11 +110,33 @@ After `copier copy` and `gh repo create --push`:
 
 ## GitHub secrets
 
-<!-- GITHUB SECRETS PLACEHOLDER -->
+CI workflows reference three repository secrets. Configure them via **Settings → Secrets and variables → Actions** or with `gh secret set`:
+
+| Secret | Used by | How to generate |
+|---|---|---|
+| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write` and `pull_requests: write` (the `copier-update` cron opens PRs). Scoped to this repo. |
+| `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io> — sign in with GitHub, add the repo, copy the upload token from the repo settings page. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
+
+```bash
+gh secret set RELEASE_TOKEN
+gh secret set CODECOV_TOKEN
+gh secret set CLAUDE_CODE_OAUTH_TOKEN
+```
+
+`GITHUB_TOKEN` is auto-provided — no action needed.
 
 ## Local development
 
-<!-- LOCAL DEV PLACEHOLDER -->
+The PR gate (matches CI):
+
+```bash
+uv run pytest -x -q                                  # tests
+uv run ruff check --fix . && uv run ruff format .    # lint + format
+uv run mypy src/ tests/                              # type-check
+```
+
+Pre-commit runs a subset of the gate on each commit; see `.pre-commit-config.yaml` or `CLAUDE.md` for details. See [`CLAUDE.md`](CLAUDE.md) for the full Hard PR Acceptance Gates.
 
 ## Troubleshooting
 
