@@ -46,6 +46,12 @@ This project ships a `.pre-commit-config.yaml` that runs ruff (check + format), 
 
 The config is in `_skip_if_exists`, so domain-specific additions (gitleaks, project-specific linters, additional file checks) survive `copier update`.
 
+## PR Discipline
+
+**Every PR must have at least one associated issue.** If the work doesn't have one yet — a bug found in the wild, an opportunistic cleanup, a small improvement — create the issue first, then open the PR with `Closes #N` (or `Refs #N`) in the body. A single PR may close multiple issues (`Closes #A, closes #B`) — bundling related fixes is fine; the rule is "no orphan PRs", not "one PR per issue". This keeps the changelog, release notes, and cross-repo history coherent.
+
+Trivial exceptions: pure typo fixes and automated dependency bumps (Dependabot / Renovate) may skip the issue.
+
 ## GitHub Review Types
 
 GitHub has two distinct review mechanisms — **both must be read and addressed**:
