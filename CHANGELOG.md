@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.0 (2026-04-24)
+
+- #66 chore: mop-up — Gate #3 mypy scope + template-ci hardening
+- #65 feat(readme): expand README.md.jinja into structured template with DOMAIN sentinels
+- #63 feat: pre-commit gate + PR-issue discipline in template CLAUDE.md
+- #62 fix: three scaffolding-time bugs blocking downstream CI and releases
+- #54 Scaffold coverage + README post-setup (closes #50, #51)
+
+
 ## v1.1.11 (2026-04-23)
 
 - #49 feat(copier-update): enrich weekly PR body with delta, notes, diff, conflicts (#40)
