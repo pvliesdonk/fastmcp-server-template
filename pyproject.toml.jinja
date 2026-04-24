@@ -26,6 +26,11 @@ dependencies = [
 # PROJECT-EXTRAS-START — add domain-specific optional-dependency groups below; kept across copier update
 # PROJECT-EXTRAS-END
 
+docs = [
+    "mkdocs-material>=9",
+    "mkdocstrings[python]>=0.28",
+]
+
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
@@ -127,6 +132,9 @@ ignore_missing_imports = true
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
+# src-layout editable installs use a .pth shim that Pyright does not execute;
+# point Pyright at src/ directly so IDE import resolution matches runtime.
+extraPaths = ["src"]
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
