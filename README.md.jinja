@@ -87,7 +87,15 @@ For library usage (embedding the domain logic without the MCP transport), import
 
 ## Configuration
 
-<!-- CORE CONFIG PLACEHOLDER -->
+Core environment variables shared across all `fastmcp-pvl-core`-based services:
+
+| Variable | Default | Description |
+|---|---|---|
+| `FASTMCP_LOG_LEVEL` | `INFO` | Log level for FastMCP internals and app loggers (`DEBUG` / `INFO` / `WARNING` / `ERROR`). The `-v` CLI flag overrides to `DEBUG`. |
+| `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set to `false` for plain / structured JSON log output. |
+| `{{ env_prefix }}_EVENT_STORE_URL` | `memory://` | Event store backend for HTTP session persistence — `memory://` (dev), `file:///path` (survives restarts). |
+
+Domain-specific variables go below under [Domain configuration](#domain-configuration).
 
 ## Post-scaffold checklist
 
