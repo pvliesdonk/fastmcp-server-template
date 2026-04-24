@@ -185,4 +185,5 @@ jobs:
       - name: nfpm package (rpm)
         working-directory: /tmp/smoke
         run: |
+          mkdir -p dist
           VERSION=0.0.0 ARCH=amd64 nfpm package --packager rpm --target dist/ --config packaging/nfpm.yaml
