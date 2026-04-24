@@ -21,8 +21,9 @@ After `copier copy` and `gh repo create --push`:
 
 1. Configure GitHub secrets (see below).
 2. Install dev dependencies: `uv sync --all-extras --dev`.
-3. Run the gate locally: `uv run pytest -x -q && uv run ruff check . && uv run mypy src/ tests/`.
-4. Push the first commit — CI should be green.
+3. Install pre-commit hooks: `uv run pre-commit install`.
+4. Run the gate locally: `uv run pytest -x -q && uv run ruff check --fix . && uv run ruff format . && uv run mypy src/ tests/`.
+5. Push the first commit — CI should be green.
 
 ## GitHub secrets
 

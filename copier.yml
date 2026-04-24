@@ -65,6 +65,10 @@ _skip_if_exists:
   # /etc/{project}/env locally anyway, but keep the source customisation across
   # template updates.
   - "packaging/env.example"
+  # pre-commit hook config — users add domain-specific hooks (shellcheck,
+  # yamllint, project-specific linters, etc.) on top of the shipped defaults;
+  # preserve customisation across updates.
+  - ".pre-commit-config.yaml"
 # Note: CLAUDE.md is deliberately NOT in _skip_if_exists — it's a
 # hybrid file with template-owned and domain-owned sections marked by
 # sentinel blocks, and copier's 3-way merge needs to re-render the
