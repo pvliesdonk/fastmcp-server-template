@@ -133,7 +133,10 @@ async def _store_in_vault(data: bytes, ctx: FetchContext) -> FetchResult:
     path = await _vault.write(data, mime_type=ctx.mime_type, name=ctx.suggested_filename)
     return FetchResult(stored_at=str(path), bytes_written=len(data))
 
-handle = register_file_exchange(
+# Consume-only servers do not need to capture the handle — the facade
+# wires `fetch_file` itself; the handle is only required to call
+# `.publish()` from a tool body (see "Producing files" above).
+register_file_exchange(
     mcp,
     namespace="{{ project_name }}",
     env_prefix=_ENV_PREFIX,
