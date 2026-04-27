@@ -110,3 +110,6 @@ async def test_file_exchange_capability_when_http_and_exchange_dir(
     async with Client(server) as smoke_client:
         tools = {t.name for t in await smoke_client.list_tools()}
     assert "create_download_link" in tools
+    # Consumer side stays off until the scaffold passes consumer_sink= to
+    # register_file_exchange — this assertion locks the default in.
+    assert "fetch_file" not in tools

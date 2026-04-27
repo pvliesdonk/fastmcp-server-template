@@ -21,9 +21,9 @@ defaults are sensible for both stdio and HTTP deployments.
 |----------|---------|-------------|
 | `{{ env_prefix }}_FILE_EXCHANGE_ENABLED` | `true` on HTTP/SSE, `false` on stdio | Master switch. Set `false` to opt out entirely. |
 | `{{ env_prefix }}_FILE_EXCHANGE_PRODUCE` | `true` | Allow this server to mint `FileRef` objects via `handle.publish(...)`. |
-| `{{ env_prefix }}_FILE_EXCHANGE_CONSUME` | `true` | Allow this server to fetch files via the `fetch_file` tool (requires a `consumer_sink=` argument to `register_file_exchange`). |
+| `{{ env_prefix }}_FILE_EXCHANGE_CONSUME` | `true` | Master toggle for the consumer side. **Only effective when `consumer_sink=` is wired in `server.py`** — without that argument, `fetch_file` is never registered no matter how this var is set. See [the guide](guides/file-exchange.md#consuming-files-consumer_sink). |
 | `{{ env_prefix }}_FILE_EXCHANGE_TTL` | `3600` | Lifetime in seconds for download links and exchange-volume records. |
-| `{{ env_prefix }}_BASE_URL` | unset | Public base URL of this server. Required for the `http` transfer method (the `create_download_link` tool builds URLs against it). |
+| `{{ env_prefix }}_BASE_URL` | unset | Public base URL of this server. Required for the `http` transfer method (the `create_download_link` tool builds URLs against it). Also referenced by the OIDC guide and the universal-variables list above — set it once and every consumer picks it up. |
 
 The deployer also controls three **unprefixed** environment variables
 shared by every co-deployed server:

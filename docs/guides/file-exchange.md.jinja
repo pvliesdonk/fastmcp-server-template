@@ -65,19 +65,37 @@ return file_ref.to_dict()
 ## Producing files (`handle.publish`)
 
 `register_file_exchange` returns a `FileExchangeHandle`. Capture it
-in `make_server()` and stash it where your tool bodies can reach it
-— most projects attach it to the `FastMCP` instance:
+in `make_server()` and stash it where your tool bodies can reach it.
+The simplest pattern is a module-level singleton in `server.py` —
+this stays well-typed under `mypy --strict` (the alternative,
+attaching to the `FastMCP` instance, fails `attr-defined` because
+`FastMCP` does not declare a `file_exchange` field):
 
 ```python
 # server.py
-handle = register_file_exchange(
-    mcp,
-    namespace="{{ project_name }}",
-    env_prefix=_ENV_PREFIX,
-    transport="auto",
-    produces=("image/png", "image/webp"),
-)
-mcp.file_exchange = handle  # any attribute name works; pick one and stick to it
+from fastmcp_pvl_core import FileExchangeHandle, register_file_exchange
+
+_file_exchange: FileExchangeHandle | None = None
+
+
+def get_file_exchange() -> FileExchangeHandle:
+    """Return the registered handle. Raises if make_server has not run."""
+    if _file_exchange is None:
+        raise RuntimeError("file exchange is not initialised — call make_server first")
+    return _file_exchange
+
+
+def make_server(*, transport: str = "stdio", ...) -> FastMCP:
+    global _file_exchange
+    ...
+    _file_exchange = register_file_exchange(
+        mcp,
+        namespace="{{ project_name }}",
+        env_prefix=_ENV_PREFIX,
+        transport="auto",
+        produces=("image/png", "image/webp"),
+    )
+    return mcp
 ```
 
 Then in a tool body:
@@ -85,10 +103,13 @@ Then in a tool body:
 ```python
 from fastmcp_pvl_core import FileRefPreview
 
+from {{ python_module }}.server import get_file_exchange
+
+
 @mcp.tool
-async def render(prompt: str, ctx: Context) -> dict[str, Any]:
+async def render(prompt: str) -> dict[str, Any]:
     image_bytes = await _render(prompt)
-    file_ref = await ctx.fastmcp.file_exchange.publish(
+    file_ref = await get_file_exchange().publish(
         source=image_bytes,
         mime_type="image/png",
         preview=FileRefPreview(description=prompt),

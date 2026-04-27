@@ -97,6 +97,9 @@ def make_server(
     register_prompts(mcp)
     register_apps(mcp)
 
+    # To publish files from a tool body, capture the returned handle
+    # — see docs/guides/file-exchange.md for the module-level singleton
+    # pattern (e.g. ``_file_exchange = register_file_exchange(...)``).
     register_file_exchange(
         mcp,
         namespace="{{ project_name }}",
