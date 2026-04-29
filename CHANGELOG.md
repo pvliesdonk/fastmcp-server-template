@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.1 (2026-04-29)
+
+- #79 fix(ci): exclude dev/docs extras from pip-audit input
+- #73 feat(template): adopt register_file_exchange in server skeleton
+
+
 ## v1.2.0 (2026-04-24)
 
 - #66 chore: mop-up — Gate #3 mypy scope + template-ci hardening
