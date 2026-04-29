@@ -19,7 +19,7 @@ uv run --no-project --with copier \
 
 # Answer the prompts, then:
 cd my-new-service
-uv sync --all-extras --dev
+uv sync --all-extras --all-groups
 uv run pytest
 uv run my-new-service serve
 ```
