@@ -36,6 +36,24 @@ theme:
 
 plugins:
   - search
+  # Generates llms.txt + llms-full.txt for the README badge.
+  # Sections mirror `nav:` below — keep them aligned when customising.
+  # `guides/*.md` and `deployment/*.md` use globs deliberately so new pages
+  # in those directories are auto-indexed without a sections-list update.
+  - llmstxt:
+      full_output: llms-full.txt
+      sections:
+        Getting Started:
+          - index.md
+          - installation.md
+          - configuration.md
+        Guides:
+          - guides/*.md
+        MCP Interface:
+          - tools/index.md
+          - prompts.md
+        Deployment:
+          - deployment/*.md
   - mkdocstrings:
       handlers:
         python:
