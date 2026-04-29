@@ -14,12 +14,12 @@ from importlib.metadata import version as _pkg_version
 
 from fastmcp import FastMCP
 from fastmcp_pvl_core import (
-    ArtifactStore,
     ServerConfig,  # noqa: F401  — re-exported for downstream projects' convenience
     build_auth,
     build_event_store,  # noqa: F401  — re-exported for downstream projects' convenience
     build_instructions,
     configure_logging_from_env,
+    register_file_exchange,
     resolve_auth_mode,
     wire_middleware_stack,
 )
@@ -44,9 +44,12 @@ def make_server(
     """Construct the {{ human_name }} FastMCP server.
 
     Args:
-        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  HTTP-only
-            features (artifact downloads) are wired only when transport
-            != ``"stdio"``.
+        transport: ``"stdio"`` / ``"http"`` / ``"sse"``.  Used here for
+            logging only; MCP File Exchange wiring is gated by
+            ``register_file_exchange`` reading
+            ``{{ env_prefix }}_TRANSPORT`` / ``FASTMCP_TRANSPORT`` and
+            ``{{ env_prefix }}_FILE_EXCHANGE_ENABLED`` (default true on
+            HTTP/SSE, false on stdio).
         config: Optional pre-loaded config; default loads from env.
 
     Returns:
@@ -70,8 +73,9 @@ def make_server(
         pkg_ver = "unknown"
 
     logger.info(
-        "Server config: version=%s name={{ project_name }} auth=%s",
+        "Server config: version=%s name={{ project_name }} transport=%s auth=%s",
         pkg_ver,
+        transport,
         auth_mode,
     )
 
@@ -93,8 +97,16 @@ def make_server(
     register_prompts(mcp)
     register_apps(mcp)
 
-    if transport != "stdio":
-        artifact_store = ArtifactStore(ttl_seconds=3600)
-        ArtifactStore.register_route(mcp, artifact_store)
+    # To publish files from a tool body, capture the returned handle
+    # — see docs/guides/file-exchange.md for the module-level singleton
+    # pattern (e.g. ``_file_exchange = register_file_exchange(...)``).
+    register_file_exchange(
+        mcp,
+        namespace="{{ project_name }}",
+        env_prefix=_ENV_PREFIX,
+        transport="auto",
+        # produces=("application/octet-stream",),  # uncomment + customise per project
+        # consumer_sink=_my_sink,                  # uncomment if this server consumes file_refs
+    )
 
     return mcp

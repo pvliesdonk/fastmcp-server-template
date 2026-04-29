@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -60,3 +61,55 @@ async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
         f"expected text prompt content, got {type(content).__name__}"
     )
     assert "hello world" in content.text
+
+
+async def test_file_exchange_disabled_on_stdio_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stdio default omits file-exchange tools and capability.
+
+    Asserts the facade's transport-gating contract: with no
+    ``{{ env_prefix }}_FILE_EXCHANGE_ENABLED`` override and stdio
+    transport, neither ``create_download_link`` nor ``fetch_file`` is
+    registered, and ``MCP_EXCHANGE_DIR`` (deployer-controlled) is also
+    unset so the exchange-volume runtime stays disabled.
+    """
+    for var in (
+        "{{ env_prefix }}_FILE_EXCHANGE_ENABLED",
+        "{{ env_prefix }}_TRANSPORT",
+        "FASTMCP_TRANSPORT",
+        "MCP_EXCHANGE_DIR",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    server = make_server()
+    async with Client(server) as smoke_client:
+        tools = {t.name for t in await smoke_client.list_tools()}
+    assert "create_download_link" not in tools
+    assert "fetch_file" not in tools
+
+
+async def test_file_exchange_capability_when_http_and_exchange_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """HTTP transport + ``MCP_EXCHANGE_DIR`` registers the producer tool.
+
+    With ``transport=http`` resolved (via the env var) and an
+    exchange directory provided, ``register_file_exchange`` advertises
+    the producer side: ``create_download_link`` is registered when
+    ``{{ env_prefix }}_BASE_URL`` is set, and the exchange transfer
+    method activates because ``MCP_EXCHANGE_DIR`` resolves.
+    """
+    monkeypatch.setenv("{{ env_prefix }}_TRANSPORT", "http")
+    monkeypatch.setenv("{{ env_prefix }}_BASE_URL", "https://test.example.com")
+    monkeypatch.setenv("MCP_EXCHANGE_DIR", str(tmp_path))
+    monkeypatch.delenv("{{ env_prefix }}_FILE_EXCHANGE_ENABLED", raising=False)
+
+    server = make_server(transport="http")
+    async with Client(server) as smoke_client:
+        tools = {t.name for t in await smoke_client.list_tools()}
+    assert "create_download_link" in tools
+    # Consumer side stays off until the scaffold passes consumer_sink= to
+    # register_file_exchange — this assertion locks the default in.
+    assert "fetch_file" not in tools
