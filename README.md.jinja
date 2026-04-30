@@ -89,6 +89,10 @@ Claude Desktop prompts for required env vars via a GUI wizard — no manual JSON
 
 For library usage (embedding the domain logic without the MCP transport), import from the `{{ python_module }}` package directly — see the project's domain modules under `src/{{ python_module }}/` for entry points.
 
+### Server info
+
+The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream version reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/{{ python_module }}/server.py` — see [`CLAUDE.md`](CLAUDE.md#server-info-tool-get_server_info) for the wiring pattern.
+
 ## Configuration
 
 Core environment variables shared across all `fastmcp-pvl-core`-based services:
