@@ -53,6 +53,32 @@ async def test_status_resource_reports_ready(client: Client[Any]) -> None:
     assert json.loads(first.text) == {"ready": True}
 
 
+async def test_get_server_info_tool_registered(client: Client[Any]) -> None:
+    """``get_server_info`` is wired by default and returns the wrapper info.
+
+    The default scaffold registers the helper without an upstream provider,
+    so the response carries ``server_name``, ``server_version``, and
+    ``core_version`` — no ``upstream`` block. Projects that wire an
+    upstream provider inside the ``DOMAIN-UPSTREAM`` sentinel in
+    ``server.py`` extend this contract.
+    """
+    tools = {t.name for t in await client.list_tools()}
+    assert "get_server_info" in tools
+
+    result = await client.call_tool("get_server_info", {})
+    first = result.content[0]
+    assert hasattr(first, "text"), (
+        f"expected text tool content, got {type(first).__name__}"
+    )
+    payload = json.loads(first.text)
+    assert payload["server_name"] == "{{ project_name }}"
+    assert "server_version" in payload
+    assert "core_version" in payload
+    # No upstream block in the default scaffold — locks in the contract that
+    # projects opt into by wiring the DOMAIN-UPSTREAM sentinel in server.py.
+    assert "upstream" not in payload
+
+
 async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
     """The example ``summarize`` prompt round-trips its ``context`` argument."""
     result = await client.get_prompt("summarize", {"context": "hello world"})
