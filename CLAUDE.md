@@ -36,7 +36,7 @@ create new projects.
    uv run --no-project --with copier copier copy --trust --defaults \
      --vcs-ref=HEAD --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
    cd /tmp/smoke
-   uv sync --all-extras --dev
+   uv sync --all-extras --all-groups
    uv run ruff check . && uv run ruff format --check .
    uv run mypy src/ tests/ && uv run pytest -x -q
    ```

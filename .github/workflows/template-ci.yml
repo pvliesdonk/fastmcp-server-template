@@ -48,7 +48,7 @@ jobs:
 
       - name: Install rendered project
         working-directory: /tmp/smoke
-        run: uv sync --all-extras --dev
+        run: uv sync --all-extras --all-groups
 
       - name: ruff check
         working-directory: /tmp/smoke
@@ -161,9 +161,9 @@ jobs:
             --data-file tests/fixtures/smoke-answers.yml \
             . /tmp/smoke
 
-      - name: Install rendered project (with docs extra)
+      - name: Install rendered project (with all extras and groups)
         working-directory: /tmp/smoke
-        run: uv sync --all-extras --dev
+        run: uv sync --all-extras --all-groups
 
       - name: Install nfpm
         # Pin matches release.yml.jinja so we exercise the same version

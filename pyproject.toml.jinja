@@ -26,12 +26,9 @@ dependencies = [
 # PROJECT-EXTRAS-START — add domain-specific optional-dependency groups below; kept across copier update
 # PROJECT-EXTRAS-END
 
-docs = [
-    "mkdocs-material>=9.7.6",
-    "mkdocstrings[python]>=0.28",
-    "mkdocs-llmstxt>=0.5",
-]
-
+# Tooling lives under PEP 735 [dependency-groups] (not [project.optional-dependencies])
+# so it never ships to PyPI consumers and never lands in the security-audit input.
+[dependency-groups]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
@@ -41,6 +38,12 @@ dev = [
     "mypy>=1.11",
     "pre-commit>=3",
     "pip-audit>=2.7",
+]
+
+docs = [
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=0.28",
+    "mkdocs-llmstxt>=0.5",
 ]
 
 [project.scripts]

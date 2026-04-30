@@ -55,7 +55,7 @@ If you add optional extras via the `PROJECT-EXTRAS-START` / `PROJECT-EXTRAS-END`
 ```bash
 git clone https://github.com/{{ github_org }}/{{ project_name }}.git
 cd {{ project_name }}
-uv sync --all-extras --dev
+uv sync --all-extras --all-groups
 ```
 
 ### Docker
@@ -107,7 +107,7 @@ After `copier copy` and `gh repo create --push`:
 
 1. **Fill in the DOMAIN blocks** in this README (Features, What you can do with it, Domain configuration, Key design decisions) and in `CLAUDE.md`.
 2. Configure GitHub secrets — see below.
-3. Install dev dependencies: `uv sync --all-extras --dev`.
+3. Install dev + docs tooling: `uv sync --all-extras --all-groups`.
 4. Install pre-commit hooks: `uv run pre-commit install`.
 5. Run the gate locally: `uv run pytest -x -q && uv run ruff check --fix . && uv run ruff format . && uv run mypy src/ tests/`.
 6. Push the first commit — CI should be green.
@@ -152,7 +152,7 @@ Pre-commit runs a subset of the gate on each commit; see `.pre-commit-config.yam
 
 ```bash
 rm -rf .venv
-uv sync --all-extras --dev
+uv sync --all-extras --all-groups
 ```
 
 `uv run python -m pytest` also works as a one-shot workaround (bypasses the stale entry-script shim).
