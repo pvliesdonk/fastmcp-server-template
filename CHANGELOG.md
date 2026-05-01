@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.2 (2026-05-01)
+
+- #88 feat(release): gate publish-linux-packages on !inputs.prerelease
+- #87 refactor(pyproject): migrate dev/docs to PEP 735 dependency-groups
+- #86 fix(readme): genericise Quick start library-usage pointer
+- #85 chore(deps): bump mkdocs-material floor + add mkdocs-llmstxt
+- #84 feat(template): ship .gemini/config.yaml for review-scope control
+
+
 ## v1.2.1 (2026-04-29)
 
 - #79 fix(ci): exclude dev/docs extras from pip-audit input
