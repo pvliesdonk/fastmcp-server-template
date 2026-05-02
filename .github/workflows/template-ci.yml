@@ -187,3 +187,24 @@ jobs:
         run: |
           mkdir -p dist
           VERSION=0.0.0 ARCH=amd64 nfpm package --packager rpm --target dist/ --config packaging/nfpm.yaml
+
+      - name: docker build smoke
+        # Catches Dockerfile structural regressions (base-image drift,
+        # broken multi-line RUN chains, missing ENTRYPOINT/CMD/USER).
+        working-directory: /tmp/smoke
+        run: docker build --no-cache --progress=plain -t smoke-mcp-ci .
+
+      - name: docker run smoke (verify state dirs + ownership)
+        # Catches in-RUN sentinel-comment regressions: if a future Dockerfile
+        # parser ever passed `#` lines through to the shell, the joined
+        # `\\`-continuation would treat the DOCKERFILE-STATE-DIRS sentinel
+        # as a shell comment and silently drop the mkdir/chown — but
+        # `useradd` is the last preceding command and exits 0, so the build
+        # itself would succeed. Verifying the directories exist and are
+        # appuser-owned at runtime is what makes the sentinel guarantee
+        # actually testable.
+        run: |
+          docker run --rm --entrypoint /bin/sh smoke-mcp-ci -c '
+            stat -c "%U" /data/service | grep -qx appuser &&
+            stat -c "%U" /data/state/fastmcp | grep -qx appuser
+          '
