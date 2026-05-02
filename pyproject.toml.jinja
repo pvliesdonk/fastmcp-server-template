@@ -78,6 +78,10 @@ ignore = ["E501"]
 # FastMCP dependency injection pattern — B008 is a false positive here.
 # Context/FastMCP/Service imports must stay runtime (not TYPE_CHECKING) for
 # DI resolution — TC001/TC002/TC003.
+# PROJECT-RUFF-IGNORES-START — replace, extend, or override the entries below
+# for your project's real source/test paths (split _server_apps.py into
+# per-domain modules, rename tests, add per-file overrides as needed); kept
+# across copier update.
 "src/{{ python_module }}/cli.py" = ["B008"]
 "src/{{ python_module }}/_server_deps.py" = ["B008", "TC002", "TC003"]
 "src/{{ python_module }}/_server_apps.py" = ["B008", "TC001", "TC002"]
@@ -87,7 +91,7 @@ ignore = ["E501"]
 "tests/conftest.py" = ["TC002", "TC003"]
 "tests/test_smoke.py" = ["TC002", "TC003"]
 "tests/test_tools.py" = ["TC002"]
-# Add project-specific overrides below as needed.
+# PROJECT-RUFF-IGNORES-END
 
 [tool.ruff.lint.isort]
 known-first-party = ["{{ python_module }}"]
