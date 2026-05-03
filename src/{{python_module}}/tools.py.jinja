@@ -31,3 +31,21 @@ def register_tools(mcp: FastMCP) -> None:
         https://gofastmcp.com/servers/tools#async-tools for async + DI.
         """
         return await service.ping()
+
+    # Optional: attach Lucide-compatible SVG/PNG/ICO/JPEG icons to tools.
+    # Drop files into src/{{ python_module }}/static/icons/, lift the imports
+    # and the STATIC constant to module level, and pick one of the patterns
+    # below.
+    #
+    # (At module level, above this function:)
+    # from pathlib import Path
+    # from fastmcp_pvl_core import make_icon, register_tool_icons
+    # STATIC = Path(__file__).parent / "static" / "icons"
+    #
+    # Bulk (call here at the end of register_tools, after all @mcp.tool defs;
+    # rename the mapping to your tool→file pairs):
+    # register_tool_icons(mcp, {"ping": "ping.svg"}, static_dir=STATIC)
+    #
+    # Per-tool decoration (replace the @mcp.tool line above; preserve the
+    # existing annotations to avoid losing readOnlyHint / etc.):
+    # @mcp.tool(icons=[make_icon(STATIC / "ping.svg")], annotations={"readOnlyHint": True})
