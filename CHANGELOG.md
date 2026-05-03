@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.0 (2026-05-03)
+
+- #104 feat(readme): add template-version badge sourced from .copier-answers.yml
+- #102 fix(release): bump mcp-publisher to v1.7.6 for new OIDC audience
+- #100 feat(scaffold): commented Lucide-icon registration in tools.py + static/icons/
+- #99 fix(release): use pypi_name in publish-pypi environment URL
+- #98 feat(template-ci): add docker build smoke step
+- #97 docs(claude-md): include PROJECT-* in domain-only-fix enumeration
+- #93 docs(claude-md): enumerate Dockerfile sentinels as extension points
+- #91 feat(template): sentinel-protect recurring copier-update conflict zones
+- #89 feat(template): wire register_server_info_tool with upstream sentinel
+
+
 ## v1.2.2 (2026-05-01)
 
 - #88 feat(release): gate publish-linux-packages on !inputs.prerelease
