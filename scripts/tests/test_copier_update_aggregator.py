@@ -122,3 +122,49 @@ def test_compose_body_job_b_with_three_strata(write_job_json) -> None:
     # Rollup: count + ID list
     assert "**Internal / no downstream effect**" in body
     assert "#87" in body
+
+
+def test_compose_body_job_c_with_three_strata(write_job_json) -> None:
+    """Job C: recommend-port (action), informational (one-line), skip (rollup)."""
+    job_c = write_job_json(
+        "agent-job-c",
+        {
+            "status": "ok",
+            "files": [
+                {
+                    "file": "tests/test_tools.py",
+                    "classification": "recommend-port",
+                    "summary": "Template added a smoke test for the new register_server_info_tool helper.",
+                    "diff_summary": "+15 lines test fixture for get_server_info",
+                },
+                {
+                    "file": "docs/design.md",
+                    "classification": "informational",
+                    "summary": "Section renamed from 'Architecture' to 'System overview'.",
+                    "diff_summary": "1 heading change",
+                },
+                {
+                    "file": ".github/workflows/template-ci.yml",
+                    "classification": "skip",
+                    "summary": "Template-CI plumbing only.",
+                    "diff_summary": "+2 lines on a self-test job",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=job_c,
+        conflict_count=0,
+        pr_number=42,
+    )
+    body = agg.compose_body(inputs)
+    assert "📦 Excluded-file upstream changes" in body
+    assert "**Recommended to port**" in body
+    assert "tests/test_tools.py" in body
+    assert "**Informational**" in body
+    assert "docs/design.md" in body
+    assert "**Skipped (template-internal)**" in body

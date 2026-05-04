@@ -110,6 +110,43 @@ def _render_job_b(data: dict | None) -> str:
     return "\n".join(lines)
 
 
+def _render_job_c(data: dict | None) -> str:
+    """Render the 📦 Excluded-file upstream changes section."""
+    if data is None:
+        return "### 📦 Excluded-file upstream changes\n\n⚠️ Agent failed — see workflow log.\n"
+    if data.get("status") != "ok":
+        return "### 📦 Excluded-file upstream changes\n\n⚠️ Agent failed — see workflow log.\n"
+
+    files = data.get("files", [])
+    if not files:
+        return ""
+
+    by_class: dict[str, list[dict]] = {"recommend-port": [], "informational": [], "skip": []}
+    for f in files:
+        by_class.setdefault(f.get("classification", "informational"), []).append(f)
+
+    lines = ["### 📦 Excluded-file upstream changes", ""]
+    if by_class["recommend-port"]:
+        lines.append("**Recommended to port** (action-required):")
+        lines.append("")
+        for f in by_class["recommend-port"]:
+            lines.append(f"- `{f['file']}`: {f['summary']}")
+            lines.append(f"  Diff: {f['diff_summary']}")
+        lines.append("")
+    if by_class["informational"]:
+        lines.append("**Informational**:")
+        lines.append("")
+        for f in by_class["informational"]:
+            lines.append(f"- `{f['file']}`: {f['summary']}")
+        lines.append("")
+    if by_class["skip"]:
+        names = ", ".join(f"`{f['file']}`" for f in by_class["skip"])
+        n = len(by_class["skip"])
+        lines.append(f"**Skipped (template-internal)** ({n} {'file' if n == 1 else 'files'}): {names}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def compose_body(inputs: AggregatorInputs) -> str:
     """Compose the full PR body from existing #49 content + agent JSON outputs."""
     parts = [inputs.existing_body.rstrip(), "", "---", "", "## Agent analysis", ""]
@@ -131,5 +168,10 @@ def compose_body(inputs: AggregatorInputs) -> str:
     section_b = _render_job_b(job_b_data)
     if section_b:
         parts.append(section_b)
+
+    job_c_data = _read_job_json(inputs.job_c_path)
+    section_c = _render_job_c(job_c_data)
+    if section_c:
+        parts.append(section_c)
 
     return "\n".join(parts) + "\n"
