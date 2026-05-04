@@ -168,3 +168,47 @@ def test_compose_body_job_c_with_three_strata(write_job_json) -> None:
     assert "**Informational**" in body
     assert "docs/design.md" in body
     assert "**Skipped (template-internal)**" in body
+
+
+def test_compose_body_job_a_rate_limited(write_job_json) -> None:
+    """Job A rate-limited: shows transient-failure placeholder."""
+    job_a = write_job_json(
+        "agent-job-a",
+        {"status": "rate_limited", "message": "429 from anthropic API"},
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=job_a,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=2,
+        pr_number=42,
+    )
+    body = agg.compose_body(inputs)
+    assert "🔧 Conflict resolutions" in body
+    assert "⏳" in body
+    assert "rate-limited" in body or "rate_limited" in body
+    assert "next cron" in body
+
+
+def test_compose_body_job_a_errored(write_job_json) -> None:
+    """Job A errored: shows generic-failure placeholder with workflow-log hint."""
+    job_a = write_job_json(
+        "agent-job-a",
+        {"status": "error", "message": "tool call failed"},
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=job_a,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=2,
+        pr_number=42,
+    )
+    body = agg.compose_body(inputs)
+    assert "🔧 Conflict resolutions" in body
+    assert "⚠️" in body
+    assert "Agent failed" in body
+    assert "workflow log" in body

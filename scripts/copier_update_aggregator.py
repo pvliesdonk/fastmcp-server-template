@@ -42,14 +42,26 @@ def _read_job_json(path: Path | None) -> dict | None:
         return None
 
 
+def _placeholder(section_title: str, status: str) -> str:
+    """Render a state-specific placeholder for a section."""
+    if status == "rate_limited":
+        msg = "⏳ Agent rate-limited — full analysis will retry on next cron."
+    else:  # generic error or missing-but-expected
+        msg = "⚠️ Agent failed — see workflow log."
+    return f"### {section_title}\n\n{msg}\n"
+
+
 def _render_job_a(data: dict | None, conflict_count: int) -> str:
     """Render the 🔧 Conflict resolutions section."""
     if conflict_count == 0:
         return ""  # Job A is gated; no section if no conflicts
     if data is None:
-        return "### 🔧 Conflict resolutions\n\n⚠️ Agent failed — see workflow log.\n"
-    if data.get("status") != "ok":
-        return "### 🔧 Conflict resolutions\n\n⚠️ Agent failed — see workflow log.\n"
+        return _placeholder("🔧 Conflict resolutions", "error")
+    status = data.get("status", "error")
+    if status == "rate_limited":
+        return _placeholder("🔧 Conflict resolutions", "rate_limited")
+    if status != "ok":
+        return _placeholder("🔧 Conflict resolutions", "error")
 
     lines = ["### 🔧 Conflict resolutions", ""]
     auto = data.get("auto_resolved", [])
@@ -76,9 +88,12 @@ def _render_job_a(data: dict | None, conflict_count: int) -> str:
 def _render_job_b(data: dict | None) -> str:
     """Render the ✨ New features in this update section."""
     if data is None:
-        return "### ✨ New features in this update\n\n⚠️ Agent failed — see workflow log.\n"
-    if data.get("status") != "ok":
-        return "### ✨ New features in this update\n\n⚠️ Agent failed — see workflow log.\n"
+        return _placeholder("✨ New features in this update", "error")
+    status = data.get("status", "error")
+    if status == "rate_limited":
+        return _placeholder("✨ New features in this update", "rate_limited")
+    if status != "ok":
+        return _placeholder("✨ New features in this update", "error")
 
     entries = data.get("entries", [])
     if not entries:
@@ -113,9 +128,12 @@ def _render_job_b(data: dict | None) -> str:
 def _render_job_c(data: dict | None) -> str:
     """Render the 📦 Excluded-file upstream changes section."""
     if data is None:
-        return "### 📦 Excluded-file upstream changes\n\n⚠️ Agent failed — see workflow log.\n"
-    if data.get("status") != "ok":
-        return "### 📦 Excluded-file upstream changes\n\n⚠️ Agent failed — see workflow log.\n"
+        return _placeholder("📦 Excluded-file upstream changes", "error")
+    status = data.get("status", "error")
+    if status == "rate_limited":
+        return _placeholder("📦 Excluded-file upstream changes", "rate_limited")
+    if status != "ok":
+        return _placeholder("📦 Excluded-file upstream changes", "error")
 
     files = data.get("files", [])
     if not files:
