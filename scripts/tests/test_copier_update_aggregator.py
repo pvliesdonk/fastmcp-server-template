@@ -212,3 +212,66 @@ def test_compose_body_job_a_errored(write_job_json) -> None:
     assert "⚠️" in body
     assert "Agent failed" in body
     assert "workflow log" in body
+
+
+def test_overflow_spills_longest_section(write_job_json, tmp_path: Path) -> None:
+    """When body > 60k, longest action-required section spills to overflow comment file."""
+    # Build a Job B that will produce a very long body
+    long_summary = "x" * 5000  # 5k chars per entry
+    big_entries = [
+        {
+            "pr_number": 1000 + i,
+            "title": f"feature {i}",
+            "classification": "needs-opt-in",
+            "summary": long_summary,
+        }
+        for i in range(15)  # 15 * 5k = 75k chars in this section alone
+    ]
+    job_b = write_job_json("agent-job-b", {"status": "ok", "entries": big_entries})
+
+    overflow_dir = tmp_path / "overflow"
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+        pr_number=42,
+    )
+    body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=overflow_dir)
+    assert len(body) <= 60_000
+    # Body has spill marker
+    assert "full" in body.lower()
+    assert "comment" in body.lower()
+    # Overflow file written
+    assert len(overflow) >= 1
+    assert overflow[0].exists()
+    # Overflow file contains the displaced content
+    overflow_content = overflow[0].read_text(encoding="utf-8")
+    assert "feature 0" in overflow_content or "feature 14" in overflow_content
+
+
+def test_no_overflow_when_body_under_60k(write_job_json, tmp_path: Path) -> None:
+    """When body fits under 60k, no overflow spill happens."""
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {"pr_number": 1, "title": "small feature", "classification": "ships-automatically", "summary": "applied"}
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+        pr_number=42,
+    )
+    body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=tmp_path / "overflow")
+    assert len(body) < 60_000
+    assert overflow == []

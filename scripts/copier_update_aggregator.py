@@ -193,3 +193,56 @@ def compose_body(inputs: AggregatorInputs) -> str:
         parts.append(section_c)
 
     return "\n".join(parts) + "\n"
+
+
+BODY_LIMIT = 60_000
+SECTION_MARKERS = ["### 🔧 ", "### ✨ ", "### 📦 "]
+
+
+def compose_body_with_overflow(
+    inputs: AggregatorInputs, overflow_dir: Path
+) -> tuple[str, list[Path]]:
+    """Compose body; if > BODY_LIMIT chars, spill longest section(s) to overflow files.
+
+    Returns (body, overflow_paths). overflow_paths is empty if no spill occurred.
+    Each overflow path holds the displaced section content (caller posts as comments).
+    """
+    body = compose_body(inputs)
+    if len(body) <= BODY_LIMIT:
+        return body, []
+
+    overflow_dir.mkdir(parents=True, exist_ok=True)
+    overflow_paths: list[Path] = []
+    spill_index = 0
+
+    while len(body) > BODY_LIMIT:
+        # Find each section's start + length
+        sections: list[tuple[str, int, int]] = []  # (header, start, end)
+        for marker in SECTION_MARKERS:
+            start = body.find(marker)
+            if start == -1:
+                continue
+            # Section ends at the next "### " marker or EOF
+            after = body.find("\n### ", start + len(marker))
+            end = after if after != -1 else len(body)
+            sections.append((marker.strip(), start, end))
+
+        if not sections:
+            # No sections to spill (only existing-body content); we can't reduce further
+            break
+
+        sections.sort(key=lambda s: s[2] - s[1], reverse=True)
+        marker, start, end = sections[0]
+        spill_index += 1
+        overflow_path = overflow_dir / f"overflow-{spill_index}.md"
+        overflow_path.write_text(body[start:end], encoding="utf-8")
+        overflow_paths.append(overflow_path)
+
+        replacement = (
+            f"{marker}\n\n"
+            f"📎 Section is long; full analysis posted as a follow-up comment "
+            f"(see overflow #{spill_index}).\n\n"
+        )
+        body = body[:start] + replacement + body[end:]
+
+    return body, overflow_paths
