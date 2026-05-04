@@ -8,10 +8,10 @@ from pathlib import Path
 # Make the script importable as a module (pytest runs from repo root).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import copier_update_aggregator as agg  # noqa: E402
+import copier_update_aggregator as agg  # noqa: E402  # pyright: ignore[reportMissingImports]
 
 
-def test_compose_body_all_jobs_skipped(tmp_path: Path) -> None:
+def test_compose_body_all_jobs_skipped() -> None:
     """When agent_enabled=False, body has only #49 sections + skip notices."""
     inputs = agg.AggregatorInputs(
         existing_body="## Template update: v1.0.0 → v1.1.0\n\n### Release notes\n\n- #1 feat: foo\n",
@@ -358,7 +358,7 @@ def test_cli_entry_point_writes_body_file(tmp_path: Path, write_job_json) -> Non
     overflow_dir = tmp_path / "overflow"
 
     script = Path(__file__).resolve().parent.parent / "copier_update_aggregator.py"
-    result = subprocess.run(
+    subprocess.run(
         [
             sys.executable, str(script),
             "--existing-body", str(existing),
