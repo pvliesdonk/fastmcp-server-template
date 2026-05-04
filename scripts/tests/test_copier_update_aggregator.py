@@ -275,3 +275,70 @@ def test_no_overflow_when_body_under_60k(write_job_json, tmp_path: Path) -> None
     body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=tmp_path / "overflow")
     assert len(body) < 60_000
     assert overflow == []
+
+
+def test_deterministic_ordering(write_job_json) -> None:
+    """Same inputs across two runs produce byte-identical body."""
+    payload = {
+        "status": "ok",
+        "entries": [
+            {"pr_number": 100, "title": "a", "classification": "ships-automatically", "summary": "x"},
+            {"pr_number": 200, "title": "b", "classification": "needs-opt-in", "summary": "y"},
+            {"pr_number": 50, "title": "c", "classification": "ships-automatically", "summary": "z"},
+        ],
+    }
+    job_b1 = write_job_json("agent-job-b-1", payload)
+    job_b2 = write_job_json("agent-job-b-2", payload)
+    inputs1 = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b1,
+        job_c_path=None,
+        conflict_count=0,
+        pr_number=42,
+    )
+    inputs2 = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b2,
+        job_c_path=None,
+        conflict_count=0,
+        pr_number=42,
+    )
+    assert agg.compose_body(inputs1) == agg.compose_body(inputs2)
+
+
+def test_malformed_json_renders_errored_placeholder(tmp_path: Path) -> None:
+    """A JSON file with a syntax error renders the errored placeholder."""
+    bad = tmp_path / "agent-job-a.json"
+    bad.write_text("not valid json {", encoding="utf-8")
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=bad,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=2,
+        pr_number=42,
+    )
+    body = agg.compose_body(inputs)
+    assert "🔧 Conflict resolutions" in body
+    assert "⚠️" in body and "failed" in body.lower()
+
+
+def test_missing_required_field_renders_errored_placeholder(write_job_json) -> None:
+    """Missing 'status' field is treated as malformed."""
+    job_a = write_job_json("agent-job-a", {"auto_resolved": []})  # no status
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=job_a,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=2,
+        pr_number=42,
+    )
+    body = agg.compose_body(inputs)
+    assert "⚠️" in body and "failed" in body.lower()

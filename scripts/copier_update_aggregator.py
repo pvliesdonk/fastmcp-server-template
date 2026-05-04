@@ -42,6 +42,44 @@ def _read_job_json(path: Path | None) -> dict | None:
         return None
 
 
+def _validate_job_a(data: dict | None) -> dict | None:
+    """Return data if it has the expected schema, else None (treated as errored)."""
+    if data is None:
+        return None
+    if not isinstance(data.get("status"), str):
+        return None
+    if data["status"] == "ok":
+        if not isinstance(data.get("auto_resolved", []), list):
+            return None
+        if not isinstance(data.get("needs_review", []), list):
+            return None
+    return data
+
+
+def _validate_job_b(data: dict | None) -> dict | None:
+    """Return data if it has the expected schema, else None (treated as errored)."""
+    if data is None:
+        return None
+    if not isinstance(data.get("status"), str):
+        return None
+    if data["status"] == "ok":
+        if not isinstance(data.get("entries", []), list):
+            return None
+    return data
+
+
+def _validate_job_c(data: dict | None) -> dict | None:
+    """Return data if it has the expected schema, else None (treated as errored)."""
+    if data is None:
+        return None
+    if not isinstance(data.get("status"), str):
+        return None
+    if data["status"] == "ok":
+        if not isinstance(data.get("files", []), list):
+            return None
+    return data
+
+
 def _placeholder(section_title: str, status: str) -> str:
     """Render a state-specific placeholder for a section."""
     if status == "rate_limited":
@@ -55,6 +93,7 @@ def _render_job_a(data: dict | None, conflict_count: int) -> str:
     """Render the 🔧 Conflict resolutions section."""
     if conflict_count == 0:
         return ""  # Job A is gated; no section if no conflicts
+    data = _validate_job_a(data)
     if data is None:
         return _placeholder("🔧 Conflict resolutions", "error")
     status = data.get("status", "error")
@@ -87,6 +126,7 @@ def _render_job_a(data: dict | None, conflict_count: int) -> str:
 
 def _render_job_b(data: dict | None) -> str:
     """Render the ✨ New features in this update section."""
+    data = _validate_job_b(data)
     if data is None:
         return _placeholder("✨ New features in this update", "error")
     status = data.get("status", "error")
@@ -127,6 +167,7 @@ def _render_job_b(data: dict | None) -> str:
 
 def _render_job_c(data: dict | None) -> str:
     """Render the 📦 Excluded-file upstream changes section."""
+    data = _validate_job_c(data)
     if data is None:
         return _placeholder("📦 Excluded-file upstream changes", "error")
     status = data.get("status", "error")
