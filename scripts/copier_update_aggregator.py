@@ -73,6 +73,43 @@ def _render_job_a(data: dict | None, conflict_count: int) -> str:
     return "\n".join(lines)
 
 
+def _render_job_b(data: dict | None) -> str:
+    """Render the ✨ New features in this update section."""
+    if data is None:
+        return "### ✨ New features in this update\n\n⚠️ Agent failed — see workflow log.\n"
+    if data.get("status") != "ok":
+        return "### ✨ New features in this update\n\n⚠️ Agent failed — see workflow log.\n"
+
+    entries = data.get("entries", [])
+    if not entries:
+        return ""  # No features = no section (rare — refs differed but changelog empty)
+
+    by_class: dict[str, list[dict]] = {"needs-opt-in": [], "ships-automatically": [], "informational": []}
+    for e in entries:
+        by_class.setdefault(e.get("classification", "informational"), []).append(e)
+
+    lines = ["### ✨ New features in this update", ""]
+    if by_class["needs-opt-in"]:
+        lines.append("**Needs your attention** (action-required):")
+        lines.append("")
+        for e in by_class["needs-opt-in"]:
+            lines.append(f"- #{e['pr_number']} {e['title']} — needs opt-in.")
+            lines.append(f"  {e['summary']}")
+        lines.append("")
+    if by_class["ships-automatically"]:
+        lines.append("**Ships through automatically** (informational):")
+        lines.append("")
+        for e in by_class["ships-automatically"]:
+            lines.append(f"- #{e['pr_number']} {e['title']} — applied this run")
+        lines.append("")
+    if by_class["informational"]:
+        ids = ", ".join(f"#{e['pr_number']}" for e in by_class["informational"])
+        n = len(by_class["informational"])
+        lines.append(f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def compose_body(inputs: AggregatorInputs) -> str:
     """Compose the full PR body from existing #49 content + agent JSON outputs."""
     parts = [inputs.existing_body.rstrip(), "", "---", "", "## Agent analysis", ""]
@@ -89,5 +126,10 @@ def compose_body(inputs: AggregatorInputs) -> str:
     section_a = _render_job_a(job_a_data, inputs.conflict_count)
     if section_a:
         parts.append(section_a)
+
+    job_b_data = _read_job_json(inputs.job_b_path)
+    section_b = _render_job_b(job_b_data)
+    if section_b:
+        parts.append(section_b)
 
     return "\n".join(parts) + "\n"

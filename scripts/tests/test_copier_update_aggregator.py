@@ -72,3 +72,53 @@ def test_compose_body_job_a_success_with_auto_and_review(write_job_json) -> None
     assert "**Needs review**" in body
     assert "docs/guides/authentication.md" in body
     assert "Lift downstream's renamed anchor" in body
+
+
+def test_compose_body_job_b_with_three_strata(write_job_json) -> None:
+    """Job B: needs-opt-in (action), ships-automatically (informational), informational (rollup)."""
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": 89,
+                    "title": "wire register_server_info_tool",
+                    "classification": "needs-opt-in",
+                    "summary": "The template now wires get_server_info but downstream's _server_deps.py is in _skip_if_exists. To enable: ...",
+                },
+                {
+                    "pr_number": 84,
+                    "title": "ship .gemini/config.yaml",
+                    "classification": "ships-automatically",
+                    "summary": "Applied this run.",
+                },
+                {
+                    "pr_number": 87,
+                    "title": "PEP 735 dependency-groups",
+                    "classification": "informational",
+                    "summary": "Internal pyproject restructure.",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+        pr_number=42,
+    )
+    body = agg.compose_body(inputs)
+    # Action-required: full prose
+    assert "**Needs your attention**" in body
+    assert "#89 wire register_server_info_tool" in body
+    assert "needs opt-in" in body or "_server_deps.py" in body
+    # Informational: one-liner
+    assert "**Ships through automatically**" in body
+    assert "#84 ship .gemini/config.yaml — applied this run" in body
+    # Rollup: count + ID list
+    assert "**Internal / no downstream effect**" in body
+    assert "#87" in body
