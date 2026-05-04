@@ -342,3 +342,36 @@ def test_missing_required_field_renders_errored_placeholder(write_job_json) -> N
     )
     body = agg.compose_body(inputs)
     assert "⚠️" in body and "failed" in body.lower()
+
+
+def test_cli_entry_point_writes_body_file(tmp_path: Path, write_job_json) -> None:
+    """Invoking the script via subprocess writes a composed body to --output."""
+    import subprocess
+
+    job_a = write_job_json(
+        "agent-job-a",
+        {"status": "ok", "auto_resolved": [], "needs_review": []},
+    )
+    existing = tmp_path / "existing.md"
+    existing.write_text("## Template update: v1.0.0 → v1.1.0\n", encoding="utf-8")
+    output = tmp_path / "out.md"
+    overflow_dir = tmp_path / "overflow"
+
+    script = Path(__file__).resolve().parent.parent / "copier_update_aggregator.py"
+    result = subprocess.run(
+        [
+            sys.executable, str(script),
+            "--existing-body", str(existing),
+            "--agent-enabled", "true",
+            "--job-a", str(job_a),
+            "--conflict-count", "2",
+            "--pr-number", "42",
+            "--output-body", str(output),
+            "--overflow-dir", str(overflow_dir),
+        ],
+        capture_output=True, text=True, check=True,
+    )
+    assert output.exists()
+    body = output.read_text(encoding="utf-8")
+    assert "## Template update: v1.0.0 → v1.1.0" in body
+    assert "🔧 Conflict resolutions" in body

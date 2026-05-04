@@ -16,6 +16,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -287,3 +288,40 @@ def compose_body_with_overflow(
         body = body[:start] + replacement + body[end:]
 
     return body, overflow_paths
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Compose copier-update PR body from agent JSON outputs.")
+    p.add_argument("--existing-body", type=Path, required=True, help="Path to the existing #49-shaped body markdown.")
+    p.add_argument("--agent-enabled", choices=["true", "false"], required=True)
+    p.add_argument("--job-a", type=Path, default=None, help="Path to /tmp/agent-job-a.json (or absent).")
+    p.add_argument("--job-b", type=Path, default=None)
+    p.add_argument("--job-c", type=Path, default=None)
+    p.add_argument("--conflict-count", type=int, required=True)
+    p.add_argument("--pr-number", type=int, required=True)
+    p.add_argument("--output-body", type=Path, required=True, help="Where to write composed body.")
+    p.add_argument("--overflow-dir", type=Path, required=True, help="Directory for overflow comment files.")
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    inputs = AggregatorInputs(
+        existing_body=args.existing_body.read_text(encoding="utf-8"),
+        agent_enabled=(args.agent_enabled == "true"),
+        job_a_path=args.job_a,
+        job_b_path=args.job_b,
+        job_c_path=args.job_c,
+        conflict_count=args.conflict_count,
+        pr_number=args.pr_number,
+    )
+    body, overflow_paths = compose_body_with_overflow(inputs, overflow_dir=args.overflow_dir)
+    args.output_body.write_text(body, encoding="utf-8")
+    if overflow_paths:
+        for p in overflow_paths:
+            print(f"OVERFLOW: {p}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
