@@ -49,11 +49,10 @@ def _validate_job_a(data: dict | None) -> dict | None:
         return None
     if not isinstance(data.get("status"), str):
         return None
-    if data["status"] == "ok":
-        if not isinstance(data.get("auto_resolved", []), list):
-            return None
-        if not isinstance(data.get("needs_review", []), list):
-            return None
+    if data["status"] == "ok" and not isinstance(data.get("auto_resolved", []), list):
+        return None
+    if data["status"] == "ok" and not isinstance(data.get("needs_review", []), list):
+        return None
     return data
 
 
@@ -63,9 +62,8 @@ def _validate_job_b(data: dict | None) -> dict | None:
         return None
     if not isinstance(data.get("status"), str):
         return None
-    if data["status"] == "ok":
-        if not isinstance(data.get("entries", []), list):
-            return None
+    if data["status"] == "ok" and not isinstance(data.get("entries", []), list):
+        return None
     return data
 
 
@@ -75,9 +73,8 @@ def _validate_job_c(data: dict | None) -> dict | None:
         return None
     if not isinstance(data.get("status"), str):
         return None
-    if data["status"] == "ok":
-        if not isinstance(data.get("files", []), list):
-            return None
+    if data["status"] == "ok" and not isinstance(data.get("files", []), list):
+        return None
     return data
 
 
@@ -116,7 +113,9 @@ def _render_job_a(data: dict | None, conflict_count: int) -> str:
         lines.append("")
     review = data.get("needs_review", [])
     if review:
-        lines.append("**Needs review** — conflict markers remain, operator must resolve:")
+        lines.append(
+            "**Needs review** — conflict markers remain, operator must resolve:"
+        )
         lines.append("")
         for item in review:
             lines.append(f"- `{item['file']}`: {item['reasoning']}")
@@ -140,7 +139,11 @@ def _render_job_b(data: dict | None) -> str:
     if not entries:
         return ""  # No features = no section (rare — refs differed but changelog empty)
 
-    by_class: dict[str, list[dict]] = {"needs-opt-in": [], "ships-automatically": [], "informational": []}
+    by_class: dict[str, list[dict]] = {
+        "needs-opt-in": [],
+        "ships-automatically": [],
+        "informational": [],
+    }
     for e in entries:
         by_class.setdefault(e.get("classification", "informational"), []).append(e)
 
@@ -161,7 +164,9 @@ def _render_job_b(data: dict | None) -> str:
     if by_class["informational"]:
         ids = ", ".join(f"#{e['pr_number']}" for e in by_class["informational"])
         n = len(by_class["informational"])
-        lines.append(f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}")
+        lines.append(
+            f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}"
+        )
         lines.append("")
     return "\n".join(lines)
 
@@ -181,7 +186,11 @@ def _render_job_c(data: dict | None) -> str:
     if not files:
         return ""
 
-    by_class: dict[str, list[dict]] = {"recommend-port": [], "informational": [], "skip": []}
+    by_class: dict[str, list[dict]] = {
+        "recommend-port": [],
+        "informational": [],
+        "skip": [],
+    }
     for f in files:
         by_class.setdefault(f.get("classification", "informational"), []).append(f)
 
@@ -202,7 +211,9 @@ def _render_job_c(data: dict | None) -> str:
     if by_class["skip"]:
         names = ", ".join(f"`{f['file']}`" for f in by_class["skip"])
         n = len(by_class["skip"])
-        lines.append(f"**Skipped (template-internal)** ({n} {'file' if n == 1 else 'files'}): {names}")
+        lines.append(
+            f"**Skipped (template-internal)** ({n} {'file' if n == 1 else 'files'}): {names}"
+        )
         lines.append("")
     return "\n".join(lines)
 
@@ -291,16 +302,35 @@ def compose_body_with_overflow(
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Compose copier-update PR body from agent JSON outputs.")
-    p.add_argument("--existing-body", type=Path, required=True, help="Path to the existing #49-shaped body markdown.")
+    p = argparse.ArgumentParser(
+        description="Compose copier-update PR body from agent JSON outputs."
+    )
+    p.add_argument(
+        "--existing-body",
+        type=Path,
+        required=True,
+        help="Path to the existing #49-shaped body markdown.",
+    )
     p.add_argument("--agent-enabled", choices=["true", "false"], required=True)
-    p.add_argument("--job-a", type=Path, default=None, help="Path to /tmp/agent-job-a.json (or absent).")
+    p.add_argument(
+        "--job-a",
+        type=Path,
+        default=None,
+        help="Path to /tmp/agent-job-a.json (or absent).",
+    )
     p.add_argument("--job-b", type=Path, default=None)
     p.add_argument("--job-c", type=Path, default=None)
     p.add_argument("--conflict-count", type=int, required=True)
     p.add_argument("--pr-number", type=int, required=True)
-    p.add_argument("--output-body", type=Path, required=True, help="Where to write composed body.")
-    p.add_argument("--overflow-dir", type=Path, required=True, help="Directory for overflow comment files.")
+    p.add_argument(
+        "--output-body", type=Path, required=True, help="Where to write composed body."
+    )
+    p.add_argument(
+        "--overflow-dir",
+        type=Path,
+        required=True,
+        help="Directory for overflow comment files.",
+    )
     return p.parse_args(argv)
 
 
@@ -315,7 +345,9 @@ def main(argv: list[str] | None = None) -> int:
         conflict_count=args.conflict_count,
         pr_number=args.pr_number,
     )
-    body, overflow_paths = compose_body_with_overflow(inputs, overflow_dir=args.overflow_dir)
+    body, overflow_paths = compose_body_with_overflow(
+        inputs, overflow_dir=args.overflow_dir
+    )
     args.output_body.write_text(body, encoding="utf-8")
     if overflow_paths:
         for p in overflow_paths:
