@@ -31,6 +31,15 @@ class AggregatorInputs:
     job_c_path: Path | None
     conflict_count: int
     pr_number: int
+    template_advanced: bool = True
+    """Whether the template ref actually changed.
+
+    Jobs B and C only fire when `template_advanced=True`. When False (e.g. a
+    `workflow_dispatch` re-run with the same vcs-ref), Jobs B/C section
+    rendering is suppressed entirely rather than rendered as 'Agent failed'.
+    Defaults to True for backward compatibility with callers that don't pass
+    the flag (Job A's `conflict_count` already gates its own section).
+    """
 
 
 def _read_job_json(path: Path | None) -> dict | None:
@@ -124,8 +133,10 @@ def _render_job_a(data: dict | None, conflict_count: int) -> str:
     return "\n".join(lines)
 
 
-def _render_job_b(data: dict | None) -> str:
+def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
     """Render the ✨ New features in this update section."""
+    if not template_advanced:
+        return ""  # Job B is gated; no section if refs didn't differ
     data = _validate_job_b(data)
     if data is None:
         return _placeholder("✨ New features in this update", "error")
@@ -138,6 +149,10 @@ def _render_job_b(data: dict | None) -> str:
     entries = data.get("entries", [])
     if not entries:
         return ""  # No features = no section (rare — refs differed but changelog empty)
+
+    # Sort by PR# ascending for deterministic body across re-runs
+    # (LLM-emitted entry order may vary; canonical sort collapses that variance).
+    entries = sorted(entries, key=lambda e: e.get("pr_number", 0))
 
     by_class: dict[str, list[dict]] = {
         "needs-opt-in": [],
@@ -171,8 +186,10 @@ def _render_job_b(data: dict | None) -> str:
     return "\n".join(lines)
 
 
-def _render_job_c(data: dict | None) -> str:
+def _render_job_c(data: dict | None, template_advanced: bool = True) -> str:
     """Render the 📦 Excluded-file upstream changes section."""
+    if not template_advanced:
+        return ""  # Job C is gated; no section if refs didn't differ
     data = _validate_job_c(data)
     if data is None:
         return _placeholder("📦 Excluded-file upstream changes", "error")
@@ -185,6 +202,9 @@ def _render_job_c(data: dict | None) -> str:
     files = data.get("files", [])
     if not files:
         return ""
+
+    # Sort by file path for deterministic body across re-runs.
+    files = sorted(files, key=lambda f: f.get("file", ""))
 
     by_class: dict[str, list[dict]] = {
         "recommend-port": [],
@@ -218,16 +238,31 @@ def _render_job_c(data: dict | None) -> str:
     return "\n".join(lines)
 
 
+_DISABLED_NOTICE = (
+    "🔒 Agent disabled — `CLAUDE_CODE_OAUTH_TOKEN` not configured. "
+    "Set the secret in repo settings to enable."
+)
+
+
+def _disabled_section(section_title: str) -> str:
+    """Per-section placeholder when agent_enabled=False."""
+    return f"### {section_title}\n\n{_DISABLED_NOTICE}\n"
+
+
 def compose_body(inputs: AggregatorInputs) -> str:
     """Compose the full PR body from existing #49 content + agent JSON outputs."""
     parts = [inputs.existing_body.rstrip(), "", "---", "", "## Agent analysis", ""]
 
     if not inputs.agent_enabled:
-        skip_msg = (
-            "🔒 Agent disabled — `CLAUDE_CODE_OAUTH_TOKEN` not configured "
-            "in this repository. To enable, set the secret in repo settings."
-        )
-        parts.extend([skip_msg, ""])
+        # Per-section disabled placeholders so structure is consistent across
+        # configured / not-configured runs. Each section that WOULD have run
+        # gets a skip notice; sections gated out (e.g. Job A with no conflicts)
+        # are omitted entirely.
+        if inputs.conflict_count > 0:
+            parts.append(_disabled_section("🔧 Conflict resolutions"))
+        if inputs.template_advanced:
+            parts.append(_disabled_section("✨ New features in this update"))
+            parts.append(_disabled_section("📦 Excluded-file upstream changes"))
         return "\n".join(parts) + "\n"
 
     job_a_data = _read_job_json(inputs.job_a_path)
@@ -236,12 +271,12 @@ def compose_body(inputs: AggregatorInputs) -> str:
         parts.append(section_a)
 
     job_b_data = _read_job_json(inputs.job_b_path)
-    section_b = _render_job_b(job_b_data)
+    section_b = _render_job_b(job_b_data, inputs.template_advanced)
     if section_b:
         parts.append(section_b)
 
     job_c_data = _read_job_json(inputs.job_c_path)
-    section_c = _render_job_c(job_c_data)
+    section_c = _render_job_c(job_c_data, inputs.template_advanced)
     if section_c:
         parts.append(section_c)
 
@@ -321,6 +356,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--job-b", type=Path, default=None)
     p.add_argument("--job-c", type=Path, default=None)
     p.add_argument("--conflict-count", type=int, required=True)
+    p.add_argument(
+        "--template-advanced",
+        choices=["true", "false"],
+        default="true",
+        help="Whether the template ref changed; gates Jobs B/C section rendering.",
+    )
     p.add_argument("--pr-number", type=int, required=True)
     p.add_argument(
         "--output-body", type=Path, required=True, help="Where to write composed body."
@@ -343,6 +384,7 @@ def main(argv: list[str] | None = None) -> int:
         job_b_path=args.job_b,
         job_c_path=args.job_c,
         conflict_count=args.conflict_count,
+        template_advanced=(args.template_advanced == "true"),
         pr_number=args.pr_number,
     )
     body, overflow_paths = compose_body_with_overflow(

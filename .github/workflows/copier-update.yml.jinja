@@ -387,6 +387,7 @@ jobs:
           GH_TOKEN: {{ '${{ secrets.RELEASE_TOKEN }}' }}
           AGENT_ENABLED: {{ '${{ steps.agent-prereq.outputs.agent_enabled }}' }}
           CONFLICT_COUNT: {{ '${{ steps.meta.outputs.conflict_count }}' }}
+          TEMPLATE_ADVANCED: {{ '${{ steps.meta.outputs.template_advanced }}' }}
           PR_NUMBER: {{ "${{ steps.meta.outputs.pr_number || '0' }}" }}
         run: |
           set -euo pipefail
@@ -398,6 +399,7 @@ jobs:
             $( [ -f /tmp/agent-job-b.json ] && echo "--job-b /tmp/agent-job-b.json" ) \
             $( [ -f /tmp/agent-job-c.json ] && echo "--job-c /tmp/agent-job-c.json" ) \
             --conflict-count "${CONFLICT_COUNT}" \
+            --template-advanced "${TEMPLATE_ADVANCED}" \
             --pr-number "${PR_NUMBER}" \
             --output-body /tmp/aggregator/composed-body.md \
             --overflow-dir /tmp/aggregator/overflow

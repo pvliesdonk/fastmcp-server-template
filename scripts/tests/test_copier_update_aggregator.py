@@ -375,3 +375,82 @@ def test_cli_entry_point_writes_body_file(tmp_path: Path, write_job_json) -> Non
     body = output.read_text(encoding="utf-8")
     assert "## Template update: v1.0.0 → v1.1.0" in body
     assert "🔧 Conflict resolutions" in body
+
+
+def test_template_not_advanced_suppresses_jobs_b_and_c() -> None:
+    """When template_advanced=False, Jobs B and C sections are omitted entirely.
+
+    Even if the JSON files are absent (Jobs B/C were correctly gated off in the
+    workflow), the aggregator should NOT render 'Agent failed' placeholders for
+    them — the gating is intentional, not a failure.
+    """
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.0.0 (re-run)\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=0,
+        pr_number=42,
+        template_advanced=False,
+    )
+    body = agg.compose_body(inputs)
+    assert "✨ New features" not in body
+    assert "📦 Excluded-file" not in body
+    assert "Agent failed" not in body
+
+
+def test_job_b_entries_sorted_by_pr_number(write_job_json) -> None:
+    """Job B entries render in PR# ascending order regardless of input order."""
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                # Deliberately scrambled input order
+                {"pr_number": 100, "title": "c", "classification": "ships-automatically", "summary": ""},
+                {"pr_number": 50, "title": "a", "classification": "ships-automatically", "summary": ""},
+                {"pr_number": 75, "title": "b", "classification": "ships-automatically", "summary": ""},
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+        pr_number=42,
+    )
+    body = agg.compose_body(inputs)
+    # Find positions of the three entries in the output
+    pos_50 = body.find("#50")
+    pos_75 = body.find("#75")
+    pos_100 = body.find("#100")
+    assert 0 <= pos_50 < pos_75 < pos_100  # ascending order in body
+
+
+def test_agent_disabled_renders_per_section_placeholders() -> None:
+    """When agent_enabled=False, sections that WOULD have run get distinct skip notices.
+
+    Sections gated out (e.g. Job A with no conflicts) are omitted entirely.
+    """
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=False,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=2,  # Job A would have run
+        pr_number=42,
+        template_advanced=True,  # Jobs B/C would have run
+    )
+    body = agg.compose_body(inputs)
+    assert "🔧 Conflict resolutions" in body
+    assert "✨ New features" in body
+    assert "📦 Excluded-file" in body
+    # The disabled notice appears (per-section, but the notice itself appears
+    # multiple times — once under each section's heading)
+    assert body.count("Agent disabled") >= 3
+    assert "CLAUDE_CODE_OAUTH_TOKEN" in body
