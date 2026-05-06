@@ -30,7 +30,6 @@ class AggregatorInputs:
     job_b_path: Path | None
     job_c_path: Path | None
     conflict_count: int
-    pr_number: int
     template_advanced: bool = True
     """Whether the template ref actually changed.
 
@@ -265,22 +264,51 @@ def compose_body(inputs: AggregatorInputs) -> str:
             parts.append(_disabled_section("📦 Excluded-file upstream changes"))
         return "\n".join(parts) + "\n"
 
-    job_a_data = _read_job_json(inputs.job_a_path)
-    section_a = _render_job_a(job_a_data, inputs.conflict_count)
+    # Each render is wrapped in try/except so a malformed item in one job's
+    # JSON (e.g. LLM emitted entry missing a required field) degrades to that
+    # section's error placeholder without nuking the other two sections.
+    # See spec § Aggregator's four-state contract — sections must be
+    # independently failing.
+    section_a = _safe_render(
+        "🔧 Conflict resolutions",
+        lambda: _render_job_a(_read_job_json(inputs.job_a_path), inputs.conflict_count),
+    )
     if section_a:
         parts.append(section_a)
 
-    job_b_data = _read_job_json(inputs.job_b_path)
-    section_b = _render_job_b(job_b_data, inputs.template_advanced)
+    section_b = _safe_render(
+        "✨ New features in this update",
+        lambda: _render_job_b(
+            _read_job_json(inputs.job_b_path), inputs.template_advanced
+        ),
+    )
     if section_b:
         parts.append(section_b)
 
-    job_c_data = _read_job_json(inputs.job_c_path)
-    section_c = _render_job_c(job_c_data, inputs.template_advanced)
+    section_c = _safe_render(
+        "📦 Excluded-file upstream changes",
+        lambda: _render_job_c(
+            _read_job_json(inputs.job_c_path), inputs.template_advanced
+        ),
+    )
     if section_c:
         parts.append(section_c)
 
     return "\n".join(parts) + "\n"
+
+
+def _safe_render(section_title: str, render_fn) -> str:  # type: ignore[no-untyped-def]
+    """Run render_fn; on any exception, return that section's error placeholder.
+
+    Per-section isolation: a render-time crash on one job (e.g. KeyError from a
+    malformed item) must not affect the other two job sections. The render
+    callable is invoked and its result returned; only on exception do we
+    substitute an error placeholder.
+    """
+    try:
+        return render_fn()
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return _placeholder(section_title, "error")
 
 
 BODY_LIMIT = 60_000
@@ -362,7 +390,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="true",
         help="Whether the template ref changed; gates Jobs B/C section rendering.",
     )
-    p.add_argument("--pr-number", type=int, required=True)
     p.add_argument(
         "--output-body", type=Path, required=True, help="Where to write composed body."
     )
@@ -385,7 +412,6 @@ def main(argv: list[str] | None = None) -> int:
         job_c_path=args.job_c,
         conflict_count=args.conflict_count,
         template_advanced=(args.template_advanced == "true"),
-        pr_number=args.pr_number,
     )
     body, overflow_paths = compose_body_with_overflow(
         inputs, overflow_dir=args.overflow_dir

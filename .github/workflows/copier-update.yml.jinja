@@ -201,6 +201,12 @@ jobs:
           fi
 
       - name: Agent Job A — Conflict resolution
+        # Context (PREVIOUS_COMMIT, NEW_REF, CONFLICT_FILES_LIST) passed via env
+        # rather than --append-system-prompt to avoid (a) shell-injection risk
+        # from filenames containing quotes, and (b) the multi-line
+        # `conflict_files` not fitting cleanly into a single argv slot.
+        # The agent's prompt references these via ${VAR} which Bash substitutes
+        # at command-invocation time.
         if: |
           steps.changes.outputs.changed == 'true' &&
           steps.agent-prereq.outputs.agent_enabled == 'true' &&
@@ -208,13 +214,13 @@ jobs:
           steps.clone-template.outputs.template_clone_ok == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
+        env:
+          PREVIOUS_COMMIT: {{ '${{ steps.meta.outputs.previous_commit }}' }}
+          NEW_REF: {{ '${{ steps.meta.outputs.new_ref }}' }}
+          CONFLICT_FILES_LIST: {{ '${{ steps.meta.outputs.conflict_files }}' }}
         with:
           claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
           prompt_file: scripts/copier_update_prompts/job_a.md
-          claude_args: |
-            --append-system-prompt "PREVIOUS_COMMIT={{ '${{ steps.meta.outputs.previous_commit }}' }}"
-            --append-system-prompt "NEW_REF={{ '${{ steps.meta.outputs.new_ref }}' }}"
-            --append-system-prompt "CONFLICT_FILES_LIST={{ '${{ steps.meta.outputs.conflict_files }}' }}"
 
       - name: Agent Job B — Changelog triage
         if: |
@@ -224,12 +230,12 @@ jobs:
           steps.clone-template.outputs.template_clone_ok == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
+        env:
+          PREVIOUS_COMMIT: {{ '${{ steps.meta.outputs.previous_commit }}' }}
+          NEW_REF: {{ '${{ steps.meta.outputs.new_ref }}' }}
         with:
           claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
           prompt_file: scripts/copier_update_prompts/job_b.md
-          claude_args: |
-            --append-system-prompt "PREVIOUS_COMMIT={{ '${{ steps.meta.outputs.previous_commit }}' }}"
-            --append-system-prompt "NEW_REF={{ '${{ steps.meta.outputs.new_ref }}' }}"
 
       - name: Agent Job C — Excluded-file evolution
         if: |
@@ -239,12 +245,12 @@ jobs:
           steps.clone-template.outputs.template_clone_ok == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
+        env:
+          PREVIOUS_COMMIT: {{ '${{ steps.meta.outputs.previous_commit }}' }}
+          NEW_REF: {{ '${{ steps.meta.outputs.new_ref }}' }}
         with:
           claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
           prompt_file: scripts/copier_update_prompts/job_c.md
-          claude_args: |
-            --append-system-prompt "PREVIOUS_COMMIT={{ '${{ steps.meta.outputs.previous_commit }}' }}"
-            --append-system-prompt "NEW_REF={{ '${{ steps.meta.outputs.new_ref }}' }}"
 
       - name: Ensure PR labels exist
         if: steps.changes.outputs.changed == 'true'
@@ -400,7 +406,6 @@ jobs:
             $( [ -f /tmp/agent-job-c.json ] && echo "--job-c /tmp/agent-job-c.json" ) \
             --conflict-count "${CONFLICT_COUNT}" \
             --template-advanced "${TEMPLATE_ADVANCED}" \
-            --pr-number "${PR_NUMBER}" \
             --output-body /tmp/aggregator/composed-body.md \
             --overflow-dir /tmp/aggregator/overflow
 

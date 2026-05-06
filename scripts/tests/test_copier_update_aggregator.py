@@ -1,5 +1,6 @@
 # scripts/tests/test_copier_update_aggregator.py
 """Tests for scripts/copier_update_aggregator.py."""
+
 from __future__ import annotations
 
 import sys
@@ -8,7 +9,7 @@ from pathlib import Path
 # Make the script importable as a module (pytest runs from repo root).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import copier_update_aggregator as agg  # noqa: E402  # pyright: ignore[reportMissingImports]
+import copier_update_aggregator as agg  # pyright: ignore[reportMissingImports]
 
 
 def test_compose_body_all_jobs_skipped() -> None:
@@ -20,7 +21,6 @@ def test_compose_body_all_jobs_skipped() -> None:
         job_b_path=None,
         job_c_path=None,
         conflict_count=0,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     assert "## Template update: v1.0.0 → v1.1.0" in body
@@ -61,7 +61,6 @@ def test_compose_body_job_a_success_with_auto_and_review(write_job_json) -> None
         job_b_path=None,
         job_c_path=None,
         conflict_count=2,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     assert "🔧 Conflict resolutions" in body
@@ -109,7 +108,6 @@ def test_compose_body_job_b_with_three_strata(write_job_json) -> None:
         job_b_path=job_b,
         job_c_path=None,
         conflict_count=0,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     # Action-required: full prose
@@ -159,7 +157,6 @@ def test_compose_body_job_c_with_three_strata(write_job_json) -> None:
         job_b_path=None,
         job_c_path=job_c,
         conflict_count=0,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     assert "📦 Excluded-file upstream changes" in body
@@ -183,7 +180,6 @@ def test_compose_body_job_a_rate_limited(write_job_json) -> None:
         job_b_path=None,
         job_c_path=None,
         conflict_count=2,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     assert "🔧 Conflict resolutions" in body
@@ -205,7 +201,6 @@ def test_compose_body_job_a_errored(write_job_json) -> None:
         job_b_path=None,
         job_c_path=None,
         conflict_count=2,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     assert "🔧 Conflict resolutions" in body
@@ -237,7 +232,6 @@ def test_overflow_spills_longest_section(write_job_json, tmp_path: Path) -> None
         job_b_path=job_b,
         job_c_path=None,
         conflict_count=0,
-        pr_number=42,
     )
     body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=overflow_dir)
     assert len(body) <= 60_000
@@ -259,7 +253,12 @@ def test_no_overflow_when_body_under_60k(write_job_json, tmp_path: Path) -> None
         {
             "status": "ok",
             "entries": [
-                {"pr_number": 1, "title": "small feature", "classification": "ships-automatically", "summary": "applied"}
+                {
+                    "pr_number": 1,
+                    "title": "small feature",
+                    "classification": "ships-automatically",
+                    "summary": "applied",
+                }
             ],
         },
     )
@@ -270,9 +269,10 @@ def test_no_overflow_when_body_under_60k(write_job_json, tmp_path: Path) -> None
         job_b_path=job_b,
         job_c_path=None,
         conflict_count=0,
-        pr_number=42,
     )
-    body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=tmp_path / "overflow")
+    body, overflow = agg.compose_body_with_overflow(
+        inputs, overflow_dir=tmp_path / "overflow"
+    )
     assert len(body) < 60_000
     assert overflow == []
 
@@ -282,9 +282,24 @@ def test_deterministic_ordering(write_job_json) -> None:
     payload = {
         "status": "ok",
         "entries": [
-            {"pr_number": 100, "title": "a", "classification": "ships-automatically", "summary": "x"},
-            {"pr_number": 200, "title": "b", "classification": "needs-opt-in", "summary": "y"},
-            {"pr_number": 50, "title": "c", "classification": "ships-automatically", "summary": "z"},
+            {
+                "pr_number": 100,
+                "title": "a",
+                "classification": "ships-automatically",
+                "summary": "x",
+            },
+            {
+                "pr_number": 200,
+                "title": "b",
+                "classification": "needs-opt-in",
+                "summary": "y",
+            },
+            {
+                "pr_number": 50,
+                "title": "c",
+                "classification": "ships-automatically",
+                "summary": "z",
+            },
         ],
     }
     job_b1 = write_job_json("agent-job-b-1", payload)
@@ -296,7 +311,6 @@ def test_deterministic_ordering(write_job_json) -> None:
         job_b_path=job_b1,
         job_c_path=None,
         conflict_count=0,
-        pr_number=42,
     )
     inputs2 = agg.AggregatorInputs(
         existing_body="## Template update: v1.0.0 → v1.1.0\n",
@@ -305,7 +319,6 @@ def test_deterministic_ordering(write_job_json) -> None:
         job_b_path=job_b2,
         job_c_path=None,
         conflict_count=0,
-        pr_number=42,
     )
     assert agg.compose_body(inputs1) == agg.compose_body(inputs2)
 
@@ -321,7 +334,6 @@ def test_malformed_json_renders_errored_placeholder(tmp_path: Path) -> None:
         job_b_path=None,
         job_c_path=None,
         conflict_count=2,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     assert "🔧 Conflict resolutions" in body
@@ -338,7 +350,6 @@ def test_missing_required_field_renders_errored_placeholder(write_job_json) -> N
         job_b_path=None,
         job_c_path=None,
         conflict_count=2,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     assert "⚠️" in body and "failed" in body.lower()
@@ -360,16 +371,24 @@ def test_cli_entry_point_writes_body_file(tmp_path: Path, write_job_json) -> Non
     script = Path(__file__).resolve().parent.parent / "copier_update_aggregator.py"
     subprocess.run(
         [
-            sys.executable, str(script),
-            "--existing-body", str(existing),
-            "--agent-enabled", "true",
-            "--job-a", str(job_a),
-            "--conflict-count", "2",
-            "--pr-number", "42",
-            "--output-body", str(output),
-            "--overflow-dir", str(overflow_dir),
+            sys.executable,
+            str(script),
+            "--existing-body",
+            str(existing),
+            "--agent-enabled",
+            "true",
+            "--job-a",
+            str(job_a),
+            "--conflict-count",
+            "2",
+            "--output-body",
+            str(output),
+            "--overflow-dir",
+            str(overflow_dir),
         ],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     assert output.exists()
     body = output.read_text(encoding="utf-8")
@@ -391,7 +410,6 @@ def test_template_not_advanced_suppresses_jobs_b_and_c() -> None:
         job_b_path=None,
         job_c_path=None,
         conflict_count=0,
-        pr_number=42,
         template_advanced=False,
     )
     body = agg.compose_body(inputs)
@@ -408,9 +426,24 @@ def test_job_b_entries_sorted_by_pr_number(write_job_json) -> None:
             "status": "ok",
             "entries": [
                 # Deliberately scrambled input order
-                {"pr_number": 100, "title": "c", "classification": "ships-automatically", "summary": ""},
-                {"pr_number": 50, "title": "a", "classification": "ships-automatically", "summary": ""},
-                {"pr_number": 75, "title": "b", "classification": "ships-automatically", "summary": ""},
+                {
+                    "pr_number": 100,
+                    "title": "c",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
+                {
+                    "pr_number": 50,
+                    "title": "a",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
+                {
+                    "pr_number": 75,
+                    "title": "b",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
             ],
         },
     )
@@ -421,7 +454,6 @@ def test_job_b_entries_sorted_by_pr_number(write_job_json) -> None:
         job_b_path=job_b,
         job_c_path=None,
         conflict_count=0,
-        pr_number=42,
     )
     body = agg.compose_body(inputs)
     # Find positions of the three entries in the output
@@ -443,7 +475,6 @@ def test_agent_disabled_renders_per_section_placeholders() -> None:
         job_b_path=None,
         job_c_path=None,
         conflict_count=2,  # Job A would have run
-        pr_number=42,
         template_advanced=True,  # Jobs B/C would have run
     )
     body = agg.compose_body(inputs)

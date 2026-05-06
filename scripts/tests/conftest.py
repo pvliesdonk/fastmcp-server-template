@@ -1,9 +1,12 @@
 # scripts/tests/conftest.py
 """Fixtures for aggregator tests."""
+
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import (
+    Path,  # noqa: TC003  # used at runtime as fixture return-type via tmp_path / ...
+)
 
 import pytest
 

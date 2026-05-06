@@ -225,3 +225,20 @@ jobs:
 
       - name: Run aggregator tests
         run: uv run --with pytest pytest scripts/tests/ -v
+
+      - name: Lint aggregator (ruff check matching downstream's config)
+        # Mirror the rendered project's [tool.ruff.lint] block in
+        # pyproject.toml.jinja: same `select` list, same `ignore = ["E501"]`,
+        # same line-length 88. Catch regressions here before they surface in
+        # downstream CI on the next copier-update.
+        run: |
+          uv run --with ruff ruff check \
+            --select E,W,F,I,B,C4,UP,ARG,SIM,TC,PTH,RUF \
+            --ignore E501 \
+            --line-length 88 \
+            scripts/copier_update_aggregator.py scripts/tests/
+
+      - name: Format check aggregator (ruff format matching downstream)
+        run: |
+          uv run --with ruff ruff format --check --line-length 88 \
+            scripts/copier_update_aggregator.py scripts/tests/
