@@ -20,6 +20,10 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass
@@ -52,7 +56,16 @@ def _read_job_json(path: Path | None) -> dict | None:
 
 
 def _validate_job_a(data: dict | None) -> dict | None:
-    """Return data if it has the expected schema, else None (treated as errored)."""
+    """Return data if it has the expected schema, else None (treated as errored).
+
+    Validates ONLY the top-level shape (`status` is a str; `auto_resolved` /
+    `needs_review` are lists). Item-level shape (each entry's `file`,
+    `commit_sha`, `articulation` keys) is intentionally NOT validated here —
+    a malformed item raises KeyError at render time and `_safe_render` catches
+    it, degrading to that section's error placeholder. This matches the spec's
+    section-level isolation contract; do not extend item-level validation here
+    expecting it to change failure granularity (it won't).
+    """
     if data is None:
         return None
     if not isinstance(data.get("status"), str):
@@ -297,7 +310,7 @@ def compose_body(inputs: AggregatorInputs) -> str:
     return "\n".join(parts) + "\n"
 
 
-def _safe_render(section_title: str, render_fn) -> str:  # type: ignore[no-untyped-def]
+def _safe_render(section_title: str, render_fn: Callable[[], str]) -> str:
     """Run render_fn; on any exception, return that section's error placeholder.
 
     Per-section isolation: a render-time crash on one job (e.g. KeyError from a

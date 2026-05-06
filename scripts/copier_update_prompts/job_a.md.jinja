@@ -61,6 +61,14 @@ If you applied any auto-resolutions, run **once** at the end:
 
 ```bash
 git add <files-you-modified>
+
+# Verify ONLY the conflict files you intended to stage are staged.
+# The list below MUST be a subset of CONFLICT_FILES_LIST. If it isn't,
+# something else got staged — abort, do NOT commit, and report status
+# error in the JSON. Anything else risks pushing unrelated edits to
+# the PR branch under the auto-resolve commit.
+git diff --cached --name-only
+
 git commit -m "auto-resolve N trivial conflicts (claude-code)" --author="claude-code <claude-code@anthropic.com>"
 ```
 

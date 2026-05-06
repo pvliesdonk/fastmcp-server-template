@@ -209,6 +209,48 @@ def test_compose_body_job_a_errored(write_job_json) -> None:
     assert "workflow log" in body
 
 
+def test_compose_body_job_b_rate_limited(write_job_json) -> None:
+    """Job B rate-limited: shows transient-failure placeholder."""
+    job_b = write_job_json(
+        "agent-job-b",
+        {"status": "rate_limited", "message": "429 from anthropic API"},
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    assert "✨ New features in this update" in body
+    assert "⏳" in body
+    assert "rate-limited" in body or "rate_limited" in body
+    assert "next cron" in body
+
+
+def test_compose_body_job_c_rate_limited(write_job_json) -> None:
+    """Job C rate-limited: shows transient-failure placeholder."""
+    job_c = write_job_json(
+        "agent-job-c",
+        {"status": "rate_limited", "message": "429 from anthropic API"},
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=job_c,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    assert "📦 Excluded-file upstream changes" in body
+    assert "⏳" in body
+    assert "rate-limited" in body or "rate_limited" in body
+    assert "next cron" in body
+
+
 def test_overflow_spills_longest_section(write_job_json, tmp_path: Path) -> None:
     """When body > 60k, longest action-required section spills to overflow comment file."""
     # Build a Job B that will produce a very long body

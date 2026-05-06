@@ -200,6 +200,15 @@ jobs:
             echo "::notice::CLAUDE_CODE_OAUTH_TOKEN not set; skipping agent analysis. Set in repo secrets to enable."
           fi
 
+      # Jobs A, B, C are independent — they share no data dependency, only
+      # the cloned `/tmp/template` workspace and the per-job env vars.
+      # Currently sequential for simplicity (single workflow job, fewer
+      # `needs:` edges); could be parallelized into separate jobs if wall-
+      # clock latency becomes an issue. Don't make A→B→C serial for
+      # ordering reasons — there is no ordering reason. Agent JSON outputs
+      # land in distinct `/tmp/agent-job-{a,b,c}.json` files; the
+      # aggregator step reads each independently.
+      #
       # Each agent step has TWO sub-steps:
       #   1. Pre-render its prompt via `envsubst` and capture into a step
       #      output (heredoc form for multi-line content).
