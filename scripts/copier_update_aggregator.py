@@ -164,15 +164,25 @@ def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
 
     # Sort by PR# ascending for deterministic body across re-runs
     # (LLM-emitted entry order may vary; canonical sort collapses that variance).
-    entries = sorted(entries, key=lambda e: e.get("pr_number", 0))
+    # `int(... or 0)` coerces string PR numbers ("89") and null values without
+    # raising TypeError when the list mixes types — the LLM may emit either
+    # form. Without coercion a single bad entry would degrade the whole
+    # section to an error placeholder via _safe_render's TypeError catch.
+    entries = sorted(entries, key=lambda e: int(e.get("pr_number") or 0))
 
     by_class: dict[str, list[dict]] = {
         "needs-opt-in": [],
         "ships-automatically": [],
         "informational": [],
     }
+    # Map any unknown classification to "informational" so the render loop
+    # (which only iterates the three keys above) doesn't silently drop entries
+    # with off-spec classification strings (e.g., LLM emits "NEEDS-OPT-IN" or
+    # a typo). The `setdefault`-style pattern would have created a new dict
+    # key but the render loop wouldn't have visited it.
     for e in entries:
-        by_class.setdefault(e.get("classification", "informational"), []).append(e)
+        cls = e.get("classification")
+        by_class[cls if cls in by_class else "informational"].append(e)
 
     lines = ["### ✨ New features in this update", ""]
     if by_class["needs-opt-in"]:
@@ -216,15 +226,21 @@ def _render_job_c(data: dict | None, template_advanced: bool = True) -> str:
         return ""
 
     # Sort by file path for deterministic body across re-runs.
-    files = sorted(files, key=lambda f: f.get("file", ""))
+    # `str(... or "")` coerces null/missing file fields without raising
+    # TypeError on mixed-type lists (the LLM may emit `"file": null` for a
+    # malformed entry). Same robustness rationale as Job B's pr_number sort.
+    files = sorted(files, key=lambda f: str(f.get("file") or ""))
 
     by_class: dict[str, list[dict]] = {
         "recommend-port": [],
         "informational": [],
         "skip": [],
     }
+    # Map unknown classifications to "informational" — same rationale as
+    # Job B (avoid silent data loss from off-spec classification strings).
     for f in files:
-        by_class.setdefault(f.get("classification", "informational"), []).append(f)
+        cls = f.get("classification")
+        by_class[cls if cls in by_class else "informational"].append(f)
 
     lines = ["### 📦 Excluded-file upstream changes", ""]
     if by_class["recommend-port"]:

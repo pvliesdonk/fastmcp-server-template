@@ -230,6 +230,169 @@ def test_compose_body_job_b_rate_limited(write_job_json) -> None:
     assert "next cron" in body
 
 
+def test_unknown_classification_falls_back_to_informational_job_b(
+    write_job_json,
+) -> None:
+    """Job B entries with off-spec classification (typo / wrong casing) fall back
+    to the 'informational' rollup rather than vanishing silently."""
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": 1,
+                    "title": "off-spec classification",
+                    "classification": "NEEDS-OPT-IN",  # wrong casing
+                    "summary": "x",
+                },
+                {
+                    "pr_number": 2,
+                    "title": "typo classification",
+                    "classification": "internal",  # not in the 3-key set
+                    "summary": "y",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    # Both entries appear in the rollup count + ID list (informational stratum).
+    assert "#1" in body
+    assert "#2" in body
+
+
+def test_unknown_classification_falls_back_to_informational_job_c(
+    write_job_json,
+) -> None:
+    """Job C files with off-spec classification fall back to 'informational'."""
+    job_c = write_job_json(
+        "agent-job-c",
+        {
+            "status": "ok",
+            "files": [
+                {
+                    "file": "weird.md",
+                    "classification": "RECOMMEND-PORT",  # wrong casing
+                    "summary": "x",
+                    "diff_summary": "y",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=job_c,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    # Entry appears in body (informational stratum) instead of being dropped.
+    assert "weird.md" in body
+
+
+def test_string_or_null_pr_number_does_not_crash_sort_job_b(
+    write_job_json,
+) -> None:
+    """Job B sort tolerates string and null pr_number values without TypeError.
+
+    LLMs may emit `pr_number: "89"` (string) or `pr_number: null` for
+    malformed entries. Without coercion the mixed-type sort would raise
+    TypeError, which `_safe_render` would catch and degrade the WHOLE
+    section to an error placeholder.
+    """
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": "89",  # string instead of int
+                    "title": "string pr",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
+                {
+                    "pr_number": None,  # null
+                    "title": "null pr",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
+                {
+                    "pr_number": 50,  # int (the normal case)
+                    "title": "int pr",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    # Job B's section rendered without TypeError-degrading to error. (Job C
+    # may show a missing-file placeholder; we assert about Job B specifically.)
+    start = body.find("### ✨ New features")
+    end = body.find("\n### ", start + 1)
+    job_b_section = body[start : end if end != -1 else len(body)]
+    assert "Agent failed" not in job_b_section
+    assert "string pr" in job_b_section or "#89" in job_b_section
+    assert "int pr" in job_b_section or "#50" in job_b_section
+
+
+def test_null_file_does_not_crash_sort_job_c(write_job_json) -> None:
+    """Job C sort tolerates null file values without TypeError."""
+    job_c = write_job_json(
+        "agent-job-c",
+        {
+            "status": "ok",
+            "files": [
+                {
+                    "file": None,  # null
+                    "classification": "informational",
+                    "summary": "x",
+                    "diff_summary": "y",
+                },
+                {
+                    "file": "real.md",
+                    "classification": "informational",
+                    "summary": "x",
+                    "diff_summary": "y",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=job_c,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    # Job C's section rendered without TypeError-degrading to error. (Job B
+    # may show a missing-file placeholder; we assert about Job C specifically.)
+    job_c_section = body[body.find("### 📦 Excluded-file") :]
+    assert "Agent failed" not in job_c_section
+    assert "real.md" in job_c_section
+
+
 def test_compose_body_job_c_rate_limited(write_job_json) -> None:
     """Job C rate-limited: shows transient-failure placeholder."""
     job_c = write_job_json(
