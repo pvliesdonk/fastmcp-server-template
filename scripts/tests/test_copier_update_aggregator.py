@@ -235,9 +235,10 @@ def test_overflow_spills_longest_section(write_job_json, tmp_path: Path) -> None
     )
     body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=overflow_dir)
     assert len(body) <= 60_000
-    # Body has spill marker
-    assert "full" in body.lower()
-    assert "comment" in body.lower()
+    # Body preserves the section-name signal in the spill placeholder so
+    # the operator can tell which section was spilled at a glance.
+    assert "New features in this update" in body
+    assert "follow-up comment" in body
     # Overflow file written
     assert len(overflow) >= 1
     assert overflow[0].exists()

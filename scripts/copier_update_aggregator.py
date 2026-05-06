@@ -364,11 +364,17 @@ def compose_body_with_overflow(
         overflow_path.write_text(body[start:end], encoding="utf-8")
         overflow_paths.append(overflow_path)
 
-        # Replacement uses a non-`###` heading so the section finder won't
-        # match it on subsequent iterations.
+        # Capture the FULL heading line (`### 🔧 Conflict resolutions`) so the
+        # replacement preserves the section-name signal, then strip the `### `
+        # prefix for the bold replacement (which intentionally uses non-`###`
+        # so the section finder skips it on subsequent iterations).
+        heading_end = body.find("\n", start)
+        if heading_end == -1:
+            heading_end = end
+        full_heading = body[start:heading_end].lstrip("# ").rstrip()
         replacement = (
-            f"**{marker.strip().lstrip('# ').strip()} — full analysis "
-            f"posted as a follow-up comment (overflow #{spill_index}).**\n\n"
+            f"**{full_heading} — full analysis posted as a "
+            f"follow-up comment (overflow #{spill_index}).**\n\n"
         )
         body = body[:start] + replacement + body[end:]
 
