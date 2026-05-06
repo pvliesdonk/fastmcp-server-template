@@ -330,34 +330,45 @@ def compose_body_with_overflow(
     overflow_dir.mkdir(parents=True, exist_ok=True)
     overflow_paths: list[Path] = []
     spill_index = 0
+    # Track which markers have already been spilled so a later iteration
+    # doesn't re-pick the (now-tiny) replacement section as longest. Without
+    # this guard, the replacement (still beginning with "### …") would match
+    # the section finder forever, producing useless overflow files of stub
+    # content while the loop spins.
+    spilled_markers: set[str] = set()
 
     while len(body) > BODY_LIMIT:
-        # Find each section's start + length
+        # Find each not-yet-spilled section's start + length.
         sections: list[tuple[str, int, int]] = []  # (header, start, end)
         for marker in SECTION_MARKERS:
+            if marker in spilled_markers:
+                continue
             start = body.find(marker)
             if start == -1:
                 continue
             # Section ends at the next "### " marker or EOF
             after = body.find("\n### ", start + len(marker))
             end = after if after != -1 else len(body)
-            sections.append((marker.strip(), start, end))
+            sections.append((marker, start, end))
 
         if not sections:
-            # No sections to spill (only existing-body content); we can't reduce further
+            # All agent sections already spilled; can't reduce further
+            # (existing #49 body alone exceeds the limit). Bail.
             break
 
         sections.sort(key=lambda s: s[2] - s[1], reverse=True)
         marker, start, end = sections[0]
+        spilled_markers.add(marker)
         spill_index += 1
         overflow_path = overflow_dir / f"overflow-{spill_index}.md"
         overflow_path.write_text(body[start:end], encoding="utf-8")
         overflow_paths.append(overflow_path)
 
+        # Replacement uses a non-`###` heading so the section finder won't
+        # match it on subsequent iterations.
         replacement = (
-            f"{marker}\n\n"
-            f"📎 Section is long; full analysis posted as a follow-up comment "
-            f"(see overflow #{spill_index}).\n\n"
+            f"**{marker.strip().lstrip('# ').strip()} — full analysis "
+            f"posted as a follow-up comment (overflow #{spill_index}).**\n\n"
         )
         body = body[:start] + replacement + body[end:]
 

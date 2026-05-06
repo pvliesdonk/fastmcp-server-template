@@ -463,6 +463,50 @@ def test_job_b_entries_sorted_by_pr_number(write_job_json) -> None:
     assert 0 <= pos_50 < pos_75 < pos_100  # ascending order in body
 
 
+def test_overflow_loop_terminates_when_existing_body_alone_exceeds_limit(
+    write_job_json, tmp_path: Path
+) -> None:
+    """Pathological case: existing #49 body alone is > 60k chars.
+
+    Aggregator should spill each agent section ONCE (each spill produces a
+    short replacement) and then break out of the loop, NOT loop forever
+    re-picking the replacement as a section to spill. Replacement uses a
+    non-`###` heading so the section finder skips it after spilling.
+    """
+    long_existing = "## Template update: v1.0.0 → v2.0.0\n\n" + ("x" * 70_000)
+    job_a = write_job_json(
+        "agent-job-a",
+        {
+            "status": "ok",
+            "auto_resolved": [
+                {
+                    "file": "f.md",
+                    "region": "L1-L10",
+                    "articulation": "y" * 1000,
+                    "commit_sha": "deadbeef",
+                }
+            ],
+            "needs_review": [],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body=long_existing,
+        agent_enabled=True,
+        job_a_path=job_a,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=1,
+    )
+    overflow_dir = tmp_path / "overflow"
+    body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=overflow_dir)
+    # The loop must terminate (this would hang the test if it didn't);
+    # at most ONE overflow per agent section.
+    assert len(overflow) <= 3
+    # Body still exceeds limit (because existing_body alone does), but
+    # the loop didn't infinitely spill stub replacements.
+    assert "full analysis posted as a follow-up comment" in body
+
+
 def test_agent_disabled_renders_per_section_placeholders() -> None:
     """When agent_enabled=False, sections that WOULD have run get distinct skip notices.
 
