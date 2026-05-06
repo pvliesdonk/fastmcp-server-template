@@ -200,13 +200,37 @@ jobs:
             echo "::notice::CLAUDE_CODE_OAUTH_TOKEN not set; skipping agent analysis. Set in repo secrets to enable."
           fi
 
+      # Each agent step has TWO sub-steps:
+      #   1. Pre-render its prompt file via `envsubst` (substitute the ${VAR}
+      #      placeholders against the workflow's resolved values).
+      #   2. Invoke claude-code-action against the pre-rendered file.
+      # claude-code-action reads `prompt_file` verbatim — no shell, no
+      # envsubst — so the prompt files MUST be pre-rendered before they
+      # reach the action. envsubst's restricted-form `'${VAR1} ${VAR2}'`
+      # only substitutes those listed; any other `$VAR` references in the
+      # prompt body (e.g. shell-pattern examples) stay literal.
+      #
+      # Multi-line `CONFLICT_FILES_LIST` is safe via envsubst's file-to-file
+      # I/O — no argv quoting. Same pattern is used in release.yml.jinja's
+      # mcpb manifest rendering.
+
+      - name: Pre-render Job A prompt
+        id: prepare-prompt-a
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.conflict_count > 0 &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
+        env:
+          PREVIOUS_COMMIT: {{ '${{ steps.meta.outputs.previous_commit }}' }}
+          NEW_REF: {{ '${{ steps.meta.outputs.new_ref }}' }}
+          CONFLICT_FILES_LIST: {{ '${{ steps.meta.outputs.conflict_files }}' }}
+        run: |
+          envsubst '${PREVIOUS_COMMIT} ${NEW_REF} ${CONFLICT_FILES_LIST}' \
+            < scripts/copier_update_prompts/job_a.md \
+            > /tmp/agent-prompt-a.md
+
       - name: Agent Job A — Conflict resolution
-        # Context (PREVIOUS_COMMIT, NEW_REF, CONFLICT_FILES_LIST) passed via env
-        # rather than --append-system-prompt to avoid (a) shell-injection risk
-        # from filenames containing quotes, and (b) the multi-line
-        # `conflict_files` not fitting cleanly into a single argv slot.
-        # The agent's prompt references these via ${VAR} which Bash substitutes
-        # at command-invocation time.
         if: |
           steps.changes.outputs.changed == 'true' &&
           steps.agent-prereq.outputs.agent_enabled == 'true' &&
@@ -214,13 +238,24 @@ jobs:
           steps.clone-template.outputs.template_clone_ok == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
+          prompt_file: /tmp/agent-prompt-a.md
+
+      - name: Pre-render Job B prompt
+        id: prepare-prompt-b
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.template_advanced == 'true' &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
         env:
           PREVIOUS_COMMIT: {{ '${{ steps.meta.outputs.previous_commit }}' }}
           NEW_REF: {{ '${{ steps.meta.outputs.new_ref }}' }}
-          CONFLICT_FILES_LIST: {{ '${{ steps.meta.outputs.conflict_files }}' }}
-        with:
-          claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
-          prompt_file: scripts/copier_update_prompts/job_a.md
+        run: |
+          envsubst '${PREVIOUS_COMMIT} ${NEW_REF}' \
+            < scripts/copier_update_prompts/job_b.md \
+            > /tmp/agent-prompt-b.md
 
       - name: Agent Job B — Changelog triage
         if: |
@@ -230,12 +265,24 @@ jobs:
           steps.clone-template.outputs.template_clone_ok == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
+          prompt_file: /tmp/agent-prompt-b.md
+
+      - name: Pre-render Job C prompt
+        id: prepare-prompt-c
+        if: |
+          steps.changes.outputs.changed == 'true' &&
+          steps.agent-prereq.outputs.agent_enabled == 'true' &&
+          steps.meta.outputs.template_advanced == 'true' &&
+          steps.clone-template.outputs.template_clone_ok == 'true'
         env:
           PREVIOUS_COMMIT: {{ '${{ steps.meta.outputs.previous_commit }}' }}
           NEW_REF: {{ '${{ steps.meta.outputs.new_ref }}' }}
-        with:
-          claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
-          prompt_file: scripts/copier_update_prompts/job_b.md
+        run: |
+          envsubst '${PREVIOUS_COMMIT} ${NEW_REF}' \
+            < scripts/copier_update_prompts/job_c.md \
+            > /tmp/agent-prompt-c.md
 
       - name: Agent Job C — Excluded-file evolution
         if: |
@@ -245,12 +292,9 @@ jobs:
           steps.clone-template.outputs.template_clone_ok == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
-        env:
-          PREVIOUS_COMMIT: {{ '${{ steps.meta.outputs.previous_commit }}' }}
-          NEW_REF: {{ '${{ steps.meta.outputs.new_ref }}' }}
         with:
           claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
-          prompt_file: scripts/copier_update_prompts/job_c.md
+          prompt_file: /tmp/agent-prompt-c.md
 
       - name: Ensure PR labels exist
         if: steps.changes.outputs.changed == 'true'
