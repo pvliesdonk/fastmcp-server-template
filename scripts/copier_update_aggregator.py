@@ -143,28 +143,33 @@ def _render_job_a(data: dict | None, conflict_count: int) -> str:
     if status != "ok":
         return _placeholder("🔧 Conflict resolutions", "error")
 
-    lines = ["### 🔧 Conflict resolutions", ""]
+    content: list[str] = []
     auto = data.get("auto_resolved", [])
     if auto:
-        lines.append("**Auto-committed by claude-code** — VERIFY before merging:")
-        lines.append("")
+        content.append("**Auto-committed by claude-code** — VERIFY before merging:")
+        content.append("")
         for item in auto:
-            lines.append(
+            content.append(
                 f"- `{item['file']}` (commit {item['commit_sha']}): "
                 f"_{item['articulation']}_"
             )
-        lines.append("")
+        content.append("")
     review = data.get("needs_review", [])
     if review:
-        lines.append(
+        content.append(
             "**Needs review** — conflict markers remain, operator must resolve:"
         )
-        lines.append("")
+        content.append("")
         for item in review:
-            lines.append(f"- `{item['file']}`: {item['reasoning']}")
-            lines.append(f"  Recommended approach: {item['recommended_resolution']}")
-        lines.append("")
-    return "\n".join(lines)
+            content.append(f"- `{item['file']}`: {item['reasoning']}")
+            content.append(f"  Recommended approach: {item['recommended_resolution']}")
+        content.append("")
+    if not content:
+        # Status was "ok" but the LLM reported neither auto-resolved nor
+        # needs-review entries.  Suppress the section entirely rather than
+        # emitting an orphaned `### 🔧` header above empty content.
+        return ""
+    return "\n".join(["### 🔧 Conflict resolutions", "", *content])
 
 
 def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
@@ -208,20 +213,20 @@ def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
         cls = e.get("classification")
         by_class[cls if cls in by_class else "informational"].append(e)
 
-    lines = ["### ✨ New features in this update", ""]
+    content: list[str] = []
     if by_class["needs-opt-in"]:
-        lines.append("**Needs your attention** (action-required):")
-        lines.append("")
+        content.append("**Needs your attention** (action-required):")
+        content.append("")
         for e in by_class["needs-opt-in"]:
-            lines.append(f"- {_pr_label(e)} {e['title']} — needs opt-in.")
-            lines.append(f"  {e['summary']}")
-        lines.append("")
+            content.append(f"- {_pr_label(e)} {e['title']} — needs opt-in.")
+            content.append(f"  {e['summary']}")
+        content.append("")
     if by_class["ships-automatically"]:
-        lines.append("**Ships through automatically** (informational):")
-        lines.append("")
+        content.append("**Ships through automatically** (informational):")
+        content.append("")
         for e in by_class["ships-automatically"]:
-            lines.append(f"- {_pr_label(e)} {e['title']} — applied this run")
-        lines.append("")
+            content.append(f"- {_pr_label(e)} {e['title']} — applied this run")
+        content.append("")
     if by_class["informational"]:
         # Drop entries with null pr_number from the rollup — they'd render
         # as the literal "#None" otherwise (LLM-emitted malformed entries
@@ -236,11 +241,16 @@ def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
         if rollup:
             ids = ", ".join(_pr_label(e) for e in rollup)
             n = len(rollup)
-            lines.append(
+            content.append(
                 f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}"
             )
-            lines.append("")
-    return "\n".join(lines)
+            content.append("")
+    if not content:
+        # Entries existed but every stratum filtered out (e.g. all
+        # informational with null pr_number); suppress the section entirely
+        # rather than emit an orphaned `### ✨` header above empty content.
+        return ""
+    return "\n".join(["### ✨ New features in this update", "", *content])
 
 
 def _render_job_c(data: dict | None, template_advanced: bool = True) -> str:
@@ -277,20 +287,20 @@ def _render_job_c(data: dict | None, template_advanced: bool = True) -> str:
         cls = f.get("classification")
         by_class[cls if cls in by_class else "informational"].append(f)
 
-    lines = ["### 📦 Excluded-file upstream changes", ""]
+    content: list[str] = []
     if by_class["recommend-port"]:
-        lines.append("**Recommended to port** (action-required):")
-        lines.append("")
+        content.append("**Recommended to port** (action-required):")
+        content.append("")
         for f in by_class["recommend-port"]:
-            lines.append(f"- {_file_label(f)}: {f['summary']}")
-            lines.append(f"  Diff: {f['diff_summary']}")
-        lines.append("")
+            content.append(f"- {_file_label(f)}: {f['summary']}")
+            content.append(f"  Diff: {f['diff_summary']}")
+        content.append("")
     if by_class["informational"]:
-        lines.append("**Informational**:")
-        lines.append("")
+        content.append("**Informational**:")
+        content.append("")
         for f in by_class["informational"]:
-            lines.append(f"- {_file_label(f)}: {f['summary']}")
-        lines.append("")
+            content.append(f"- {_file_label(f)}: {f['summary']}")
+        content.append("")
     if by_class["skip"]:
         # Drop entries with null file from the rollup — same rationale as
         # Job B's informational rollup (see :func:`_render_job_b`).
@@ -298,11 +308,17 @@ def _render_job_c(data: dict | None, template_advanced: bool = True) -> str:
         if rollup:
             names = ", ".join(_file_label(f) for f in rollup)
             n = len(rollup)
-            lines.append(
+            content.append(
                 f"**Skipped (template-internal)** ({n} {'file' if n == 1 else 'files'}): {names}"
             )
-            lines.append("")
-    return "\n".join(lines)
+            content.append("")
+    if not content:
+        # Files existed but the skip rollup was the only non-empty
+        # stratum and every entry in it had null file (so the rollup
+        # got filtered out).  Suppress the section entirely rather
+        # than emit an orphaned `### 📦` header above empty content.
+        return ""
+    return "\n".join(["### 📦 Excluded-file upstream changes", "", *content])
 
 
 _DISABLED_NOTICE = (

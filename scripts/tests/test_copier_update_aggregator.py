@@ -665,7 +665,18 @@ def test_cli_entry_point_writes_body_file(tmp_path: Path, write_job_json) -> Non
 
     job_a = write_job_json(
         "agent-job-a",
-        {"status": "ok", "auto_resolved": [], "needs_review": []},
+        {
+            "status": "ok",
+            "auto_resolved": [
+                {
+                    "file": "docs/foo.md",
+                    "region": "L1-L5",
+                    "articulation": "trivial",
+                    "commit_sha": "abc1234",
+                }
+            ],
+            "needs_review": [],
+        },
     )
     existing = tmp_path / "existing.md"
     existing.write_text("## Template update: v1.0.0 → v1.1.0\n", encoding="utf-8")
@@ -1047,6 +1058,120 @@ def test_job_c_bullet_strata_coerce_null_file_to_placeholder(
     assert "`None`" not in body
     assert "`(unnamed)`: Untracked port — file path missing." in body
     assert "`(unnamed)`: Trivial change without path." in body
+
+
+def test_job_a_no_resolutions_suppresses_section_header(write_job_json) -> None:
+    """Job A returns empty when status=ok with both auto_resolved and needs_review empty.
+
+    Edge case: agent ran on a real conflict (conflict_count > 0), reported
+    status=ok, but neither stratum populated.  Previously emitted an
+    orphaned `### 🔧 Conflict resolutions` header with nothing under it;
+    now the whole section is suppressed and (since this was the only
+    section) the parent `## Agent analysis` header is suppressed too.
+    """
+    job_a = write_job_json(
+        "agent-job-a",
+        {"status": "ok", "auto_resolved": [], "needs_review": []},
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=job_a,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=2,
+        template_advanced=False,  # only Job A would run; suppression cascades
+    )
+    body = agg.compose_body(inputs)
+    assert "🔧 Conflict resolutions" not in body
+    assert "## Agent analysis" not in body
+
+
+def test_job_b_only_informational_with_null_pr_suppresses_section_header(
+    write_job_json,
+) -> None:
+    """Job B returns empty when entries exist but every stratum filters out.
+
+    Edge case: every entry is informational with null pr_number — the rollup
+    drops them all, leaving no content under the `### ✨` header.  Also
+    pass an empty Job C JSON so its render returns "" cleanly (rather than
+    the error placeholder a missing job_c_path would produce while
+    template_advanced=True).
+    """
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": None,
+                    "title": "untracked a",
+                    "classification": "informational",
+                    "summary": "",
+                },
+                {
+                    "pr_number": None,
+                    "title": "untracked b",
+                    "classification": "informational",
+                    "summary": "",
+                },
+            ],
+        },
+    )
+    job_c_empty = write_job_json("agent-job-c", {"status": "ok", "files": []})
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=job_c_empty,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    assert "✨ New features in this update" not in body
+    assert "## Agent analysis" not in body
+
+
+def test_job_c_only_skip_with_null_file_suppresses_section_header(
+    write_job_json,
+) -> None:
+    """Job C returns empty when only skip entries exist and every one has null file.
+
+    Empty Job B JSON paired with the null-file Job C so the missing-data
+    error placeholder doesn't smear the assertion.
+    """
+    job_c = write_job_json(
+        "agent-job-c",
+        {
+            "status": "ok",
+            "files": [
+                {
+                    "file": None,
+                    "classification": "skip",
+                    "summary": "untracked a",
+                    "diff_summary": "",
+                },
+                {
+                    "file": None,
+                    "classification": "skip",
+                    "summary": "untracked b",
+                    "diff_summary": "",
+                },
+            ],
+        },
+    )
+    job_b_empty = write_job_json("agent-job-b", {"status": "ok", "entries": []})
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b_empty,
+        job_c_path=job_c,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    assert "📦 Excluded-file upstream changes" not in body
+    assert "## Agent analysis" not in body
 
 
 def test_job_c_skip_rollup_drops_null_file(write_job_json) -> None:
