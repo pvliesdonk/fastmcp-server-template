@@ -28,6 +28,11 @@ class ProjectConfig:
     # CONFIG-FIELDS-START — add domain fields below; kept across copier update
     # (example)
     # vault_path: Path = Path("/data/vault")
+    #
+    # (example: enable optional authorization — see fastmcp-pvl-core's
+    #  README "Authorization" section for the full opt-in story.  Absence
+    #  of the path means no authorization middleware is installed.)
+    # acl_path: Path | None = None
     # CONFIG-FIELDS-END
 
     @classmethod
@@ -38,5 +43,9 @@ class ProjectConfig:
             # CONFIG-FROM-ENV-START — populate domain fields below; kept across copier update
             # (example)
             # vault_path=Path(env(_ENV_PREFIX, "VAULT_PATH", "/data/vault")),
+            #
+            # (example: load ``acl_path`` from ``{{ env_prefix }}_ACL_PATH``;
+            #  unset env var means no authorization middleware.)
+            # acl_path=Path(env(_ENV_PREFIX, "ACL_PATH")) if env(_ENV_PREFIX, "ACL_PATH") else None,
             # CONFIG-FROM-ENV-END
         )
