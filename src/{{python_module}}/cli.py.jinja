@@ -51,14 +51,6 @@ def _root(
         # own these deps, so the silencing stays domain-local.
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
-    # Optional remote-debugger listener — call AFTER the root handler is
-    # attached above; otherwise the helper's "debugpy listening on …"
-    # INFO log falls through to Python's lastResort handler and is silently
-    # dropped.  No-op unless ``{{ env_prefix }}_DEBUG_PORT`` is set in the
-    # env; ``debugpy`` itself is only present when the image was built with
-    # ``--build-arg DEBUG=true`` (a missing import logs a WARNING and
-    # continues, so this is safe in default scaffolds).
-    maybe_start_debugpy(_ENV_PREFIX)
 
 
 @app.command()
@@ -79,6 +71,18 @@ def serve(
     import os
 
     from {{ python_module }}.server import make_server
+
+    # Optional remote-debugger listener — placed in ``serve`` (not the
+    # typer root callback) so non-server commands like ``--help``,
+    # ``--version``, or future ``dump-config``-style subcommands are
+    # never blocked by ``{{ env_prefix }}_DEBUG_WAIT=true``.  No-op
+    # unless ``{{ env_prefix }}_DEBUG_PORT`` is set; ``debugpy`` is only
+    # present when the image was built with ``--build-arg DEBUG=true``
+    # (a missing import logs a WARNING and continues).  ``_root`` has
+    # already attached the StreamHandler by the time ``serve`` runs, so
+    # the helper's INFO/WARNING logs route through the configured
+    # formatter rather than Python's lastResort.
+    maybe_start_debugpy(_ENV_PREFIX)
 
     config = ProjectConfig.from_env()
     server = make_server(transport=transport, config=config)
