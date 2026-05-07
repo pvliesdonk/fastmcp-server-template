@@ -24,6 +24,10 @@ dependencies = [
 
 [project.optional-dependencies]
 # PROJECT-EXTRAS-START — add domain-specific optional-dependency groups below; kept across copier update
+# Pulls debugpy transitively via fastmcp-pvl-core's [debug] extra.  The
+# version range is inherited from the [project] dependency on
+# fastmcp-pvl-core above; pip resolves a single, consistent version.
+debug = ["fastmcp-pvl-core[debug]"]
 # PROJECT-EXTRAS-END
 
 # Tooling lives under PEP 735 [dependency-groups] (not [project.optional-dependencies])
