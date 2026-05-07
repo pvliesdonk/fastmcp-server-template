@@ -108,6 +108,28 @@ def _placeholder(section_title: str, status: str) -> str:
     return f"### {section_title}\n\n{msg}\n"
 
 
+def _pr_label(entry: dict) -> str:
+    """Render an entry's pr_number as ``#N``, or ``#?`` when null/missing.
+
+    LLM-emitted entries without a PR reference would otherwise render as
+    the literal ``#None`` in the body via Python's ``None.__str__`` inside
+    an f-string.  Used by Job B's three render strata.
+    """
+    pr = entry.get("pr_number")
+    return f"#{pr}" if pr is not None else "#?"
+
+
+def _file_label(entry: dict) -> str:
+    """Render an entry's file as ``\\`name\\```, or ``\\`(unnamed)\\``` when null/missing.
+
+    Same null-safety rationale as :func:`_pr_label` but for Job C's file
+    field; without coercion a null ``file`` renders as the literal
+    backticked ``\\`None\\```.
+    """
+    name = entry.get("file")
+    return f"`{name}`" if name is not None else "`(unnamed)`"
+
+
 def _render_job_a(data: dict | None, conflict_count: int) -> str:
     """Render the 🔧 Conflict resolutions section."""
     if conflict_count == 0:
@@ -191,25 +213,28 @@ def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
         lines.append("**Needs your attention** (action-required):")
         lines.append("")
         for e in by_class["needs-opt-in"]:
-            lines.append(f"- #{e['pr_number']} {e['title']} — needs opt-in.")
+            lines.append(f"- {_pr_label(e)} {e['title']} — needs opt-in.")
             lines.append(f"  {e['summary']}")
         lines.append("")
     if by_class["ships-automatically"]:
         lines.append("**Ships through automatically** (informational):")
         lines.append("")
         for e in by_class["ships-automatically"]:
-            lines.append(f"- #{e['pr_number']} {e['title']} — applied this run")
+            lines.append(f"- {_pr_label(e)} {e['title']} — applied this run")
         lines.append("")
     if by_class["informational"]:
         # Drop entries with null pr_number from the rollup — they'd render
         # as the literal "#None" otherwise (LLM-emitted malformed entries
         # without a PR reference can't be looked up anyway, so dropping
         # them from the displayed list is preferable to a placeholder).
+        # The bullet strata above use ``_pr_label`` which coerces null to
+        # ``#?`` — preserves the entry where its prose detail is useful;
+        # the rollup is a tally so dropping is cleaner there.
         rollup = [
             e for e in by_class["informational"] if e.get("pr_number") is not None
         ]
         if rollup:
-            ids = ", ".join(f"#{e['pr_number']}" for e in rollup)
+            ids = ", ".join(_pr_label(e) for e in rollup)
             n = len(rollup)
             lines.append(
                 f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}"
@@ -257,22 +282,26 @@ def _render_job_c(data: dict | None, template_advanced: bool = True) -> str:
         lines.append("**Recommended to port** (action-required):")
         lines.append("")
         for f in by_class["recommend-port"]:
-            lines.append(f"- `{f['file']}`: {f['summary']}")
+            lines.append(f"- {_file_label(f)}: {f['summary']}")
             lines.append(f"  Diff: {f['diff_summary']}")
         lines.append("")
     if by_class["informational"]:
         lines.append("**Informational**:")
         lines.append("")
         for f in by_class["informational"]:
-            lines.append(f"- `{f['file']}`: {f['summary']}")
+            lines.append(f"- {_file_label(f)}: {f['summary']}")
         lines.append("")
     if by_class["skip"]:
-        names = ", ".join(f"`{f['file']}`" for f in by_class["skip"])
-        n = len(by_class["skip"])
-        lines.append(
-            f"**Skipped (template-internal)** ({n} {'file' if n == 1 else 'files'}): {names}"
-        )
-        lines.append("")
+        # Drop entries with null file from the rollup — same rationale as
+        # Job B's informational rollup (see :func:`_render_job_b`).
+        rollup = [f for f in by_class["skip"] if f.get("file") is not None]
+        if rollup:
+            names = ", ".join(_file_label(f) for f in rollup)
+            n = len(rollup)
+            lines.append(
+                f"**Skipped (template-internal)** ({n} {'file' if n == 1 else 'files'}): {names}"
+            )
+            lines.append("")
     return "\n".join(lines)
 
 

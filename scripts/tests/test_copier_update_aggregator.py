@@ -842,8 +842,9 @@ def test_no_agent_sections_suppresses_agent_analysis_header() -> None:
     template_advanced=False) — previously emitted an orphaned `## Agent
     analysis` separator with nothing under it.
     """
+    existing = "## Template update: v1.0.0 → v1.0.0 (re-run)\n"
     inputs = agg.AggregatorInputs(
-        existing_body="## Template update: v1.0.0 → v1.0.0 (re-run)\n",
+        existing_body=existing,
         agent_enabled=True,
         job_a_path=None,
         job_b_path=None,
@@ -853,13 +854,19 @@ def test_no_agent_sections_suppresses_agent_analysis_header() -> None:
     )
     body = agg.compose_body(inputs)
     assert "## Agent analysis" not in body
-    assert "---" not in body  # the separator preceding the header is also gone
+    # Body is just the existing body (single trailing newline).  Asserting
+    # equality rather than `"---" not in body` because the real workflow's
+    # existing-body construction may include horizontal rules for unrelated
+    # reasons; the regression invariant is "nothing was appended after the
+    # existing body", not "no horizontal rule appears anywhere".
+    assert body.rstrip() == existing.rstrip()
 
 
 def test_agent_disabled_no_gates_suppresses_agent_analysis_header() -> None:
     """Same suppression holds when agent_enabled=False and both gates closed."""
+    existing = "## Template update: v1.0.0 → v1.0.0 (re-run)\n"
     inputs = agg.AggregatorInputs(
-        existing_body="## Template update: v1.0.0 → v1.0.0 (re-run)\n",
+        existing_body=existing,
         agent_enabled=False,
         job_a_path=None,
         job_b_path=None,
@@ -870,6 +877,7 @@ def test_agent_disabled_no_gates_suppresses_agent_analysis_header() -> None:
     body = agg.compose_body(inputs)
     assert "## Agent analysis" not in body
     assert "Agent disabled" not in body  # nothing to disable; no section emitted
+    assert body.rstrip() == existing.rstrip()
 
 
 def test_job_b_informational_rollup_drops_null_pr_numbers(write_job_json) -> None:
@@ -955,3 +963,124 @@ def test_job_b_informational_rollup_all_null_pr_numbers_omits_rollup_line(
     body = agg.compose_body(inputs)
     assert "#None" not in body
     assert "Internal / no downstream effect" not in body
+
+
+def test_job_b_bullet_strata_coerce_null_pr_number_to_placeholder(
+    write_job_json,
+) -> None:
+    """needs-opt-in and ships-automatically bullets coerce null pr_number to #?.
+
+    Bullet entries carry prose detail (title, summary) that's useful even
+    when the PR number is missing, so they're preserved with a placeholder
+    rather than dropped (which is the rollup's choice).
+    """
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": None,
+                    "title": "untracked merge a",
+                    "classification": "needs-opt-in",
+                    "summary": "Pulled in via cherry-pick; manual opt-in needed.",
+                },
+                {
+                    "pr_number": None,
+                    "title": "untracked merge b",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    assert "#None" not in body
+    assert "#? untracked merge a — needs opt-in." in body
+    assert "#? untracked merge b — applied this run" in body
+    # Prose detail is preserved
+    assert "Pulled in via cherry-pick" in body
+
+
+def test_job_c_bullet_strata_coerce_null_file_to_placeholder(
+    write_job_json,
+) -> None:
+    """recommend-port and informational bullets coerce null file to `(unnamed)`."""
+    job_c = write_job_json(
+        "agent-job-c",
+        {
+            "status": "ok",
+            "files": [
+                {
+                    "file": None,
+                    "classification": "recommend-port",
+                    "summary": "Untracked port — file path missing.",
+                    "diff_summary": "+10 lines on something",
+                },
+                {
+                    "file": None,
+                    "classification": "informational",
+                    "summary": "Trivial change without path.",
+                    "diff_summary": "1 line",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=job_c,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    # Backticked literal `None` must not leak into the body
+    assert "`None`" not in body
+    assert "`(unnamed)`: Untracked port — file path missing." in body
+    assert "`(unnamed)`: Trivial change without path." in body
+
+
+def test_job_c_skip_rollup_drops_null_file(write_job_json) -> None:
+    """skip rollup mirrors Job B informational rollup: null file dropped, count adjusts."""
+    job_c = write_job_json(
+        "agent-job-c",
+        {
+            "status": "ok",
+            "files": [
+                {
+                    "file": None,
+                    "classification": "skip",
+                    "summary": "untracked",
+                    "diff_summary": "",
+                },
+                {
+                    "file": ".github/workflows/template-ci.yml",
+                    "classification": "skip",
+                    "summary": "Template-CI plumbing only.",
+                    "diff_summary": "+2 lines",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=job_c,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    assert "`None`" not in body
+    assert "`.github/workflows/template-ci.yml`" in body
+    # Count reflects the displayed entry (1), not the raw bucket (2).
+    assert "(1 file)" in body
