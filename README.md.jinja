@@ -66,6 +66,8 @@ docker pull ghcr.io/{{ github_org }}/{{ project_name }}:latest
 
 A `compose.yml` ships at the repo root as a starting point — copy `.env.example` to `.env`, edit, and `docker compose up -d`.
 
+To attach a remote Python debugger (development only — the protocol is unauthenticated), see [Remote debugging](docs/deployment/docker.md#remote-debugging).
+
 ### Linux packages (.deb / .rpm)
 
 Download `.deb` or `.rpm` packages from the [GitHub Releases](https://github.com/{{ github_org }}/{{ project_name }}/releases) page. Both install a hardened systemd unit; env configuration is sourced from `/etc/{{ project_name }}/env` (copy from the shipped `/etc/{{ project_name }}/env.example`).

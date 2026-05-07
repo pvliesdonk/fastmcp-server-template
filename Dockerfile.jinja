@@ -13,18 +13,28 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
+# Optional remote-debugger listener.  Default off so production images stay
+# lean; pass ``--build-arg DEBUG=true`` to install the ``[debug]`` extra
+# (debugpy) and bake the listener into the image.  See
+# ``docs/deployment/docker.md`` for the full attach workflow.
+ARG DEBUG=false
+
 # DOCKERFILE-UV-EXTRAS-START — append `--extra <name>` flags below to pull domain-specific extras; kept across copier update
-# Install dependencies first (cache layer).
+# Install dependencies first (cache layer).  The ``$( ... )`` shell
+# expansion appends ``--extra debug`` only when ``--build-arg DEBUG=true``;
+# default builds get the lean install.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev \
+        $( [ "$DEBUG" = "true" ] && echo "--extra debug" )
 
 # Copy source and install project.
 COPY pyproject.toml uv.lock README.md /app/
 COPY src/ /app/src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev \
+        $( [ "$DEBUG" = "true" ] && echo "--extra debug" )
 # DOCKERFILE-UV-EXTRAS-END
 
 # Create non-root user with configurable UID/GID for bind-mount compatibility.
@@ -45,6 +55,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     FASTMCP_HOME=/data/state/fastmcp
 
 EXPOSE 8000
+# Remote debugger: only bound at runtime when ``{{ env_prefix }}_DEBUG_PORT``
+# is set in the container env.  Always declared so the build-arg-toggled
+# ``[debug]`` extra has a stable port surface to reach.
+EXPOSE 5678
 
 # DOCKERFILE-VOLUMES-START — mounted volume list; kept across copier update
 VOLUME ["/data/service", "/data/state"]
