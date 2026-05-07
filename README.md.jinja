@@ -127,7 +127,9 @@ Wire it in by uncommenting the `acl_path` field in `src/{{ python_module }}/conf
 
 ### Subject ↔ bearer-token alignment
 
-The subject string used as a *value* in the bearer-tokens TOML (`{{ env_prefix }}_BEARER_TOKENS_FILE`) is the same string used as a *key* in the ACL TOML.  Same string, opposite roles — keep the two files consistent when adding or removing a principal.  In stdio mode the subject is the literal `"local"`; reference it as the ACL key for stdio-only deployments.
+The subject string used as a *value* in the bearer-tokens TOML (`{{ env_prefix }}_BEARER_TOKENS_FILE`) is the same string used as a *key* in the ACL TOML.  Same string, opposite roles — keep the two files consistent when adding or removing a principal.  See [Mapped bearer tokens](docs/guides/authentication.md#mapped-bearer-tokens-multi-subject) in the authentication guide for the bearer-tokens TOML schema.
+
+In single-token mode (`{{ env_prefix }}_BEARER_TOKEN`) every authenticated caller shares one subject — by default `"bearer-anon"`, override with `{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`; reference *that* string as the ACL key.  In stdio mode the subject is the literal `"local"`.
 
 ### Load semantics
 

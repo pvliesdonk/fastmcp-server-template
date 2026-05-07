@@ -46,6 +46,6 @@ class ProjectConfig:
             #
             # (example: load ``acl_path`` from ``{{ env_prefix }}_ACL_PATH``;
             #  unset env var means no authorization middleware.)
-            # acl_path=Path(env(_ENV_PREFIX, "ACL_PATH")) if env(_ENV_PREFIX, "ACL_PATH") else None,
+            # acl_path=Path(_p) if (_p := env(_ENV_PREFIX, "ACL_PATH")) else None,
             # CONFIG-FROM-ENV-END
         )
