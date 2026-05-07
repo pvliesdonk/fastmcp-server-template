@@ -34,6 +34,8 @@ shared by every co-deployed server:
 | `MCP_EXCHANGE_ID` | persisted in `.exchange-id` | Optional explicit exchange-group identifier; first server to start writes a UUID into `${MCP_EXCHANGE_DIR}/.exchange-id`, subsequent starts must agree. |
 | `MCP_EXCHANGE_NAMESPACE` | the server's `namespace=` argument | Override the namespace used in `exchange://` URIs for this process. |
 
+<!-- DOMAIN-CONFIG-VARS-START -->
 ## Domain variables
 
 Document your project-specific variables here.
+<!-- DOMAIN-CONFIG-VARS-END -->

@@ -41,16 +41,6 @@ _skip_if_exists:
   - "packaging/mcpb/build.sh"
   - "scripts/bump_manifests.py"
   - ".gitignore"
-  # mkdocs nav pages — rendered as starter content on first copy so a fresh
-  # project's `mkdocs build --strict` passes.  Projects that customise these
-  # keep their edits across `copier update`.  Moved here from `_exclude` in
-  # #56 because the shipped mkdocs.yml references them; excluding them
-  # unconditionally broke the docs workflow out of the box.
-  - "docs/index.md"
-  - "docs/installation.md"
-  - "docs/configuration.md"
-  - "docs/tools/index.md"
-  - "docs/prompts.md"
   # nfpm env template — users customise with domain-specific env vars; installs
   # to /etc/{project}/env.example with config|noreplace so operators copy it to
   # /etc/{project}/env locally anyway, but keep the source customisation across
@@ -70,7 +60,12 @@ _skip_if_exists:
 # those changes get re-applied.  The DOMAIN markers and the
 # ===== TEMPLATE-OWNED ===== banner comments are a human/agent convention
 # — copier itself doesn't act on them.  README.md was moved out of
-# _skip_if_exists in #57.
+# _skip_if_exists in #57.  The same hybrid pattern applies to
+# docs/*.md.jinja files: docs/deployment/* and docs/guides/authentication.md
+# moved out in #29 (PR #108); the remaining top-level docs/*.md files
+# (index, installation, configuration, tools/index, prompts) moved out in #106.
+# Those docs files use topic-specific DOMAIN-{TOPIC}-{KIND} sentinels
+# rather than the bare DOMAIN-START used in CLAUDE.md / README.md.
 
 # Files in the template repo that should never land in generated projects.
 # Setting _exclude in copier.yml REPLACES copier's default exclude list
