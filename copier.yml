@@ -60,7 +60,12 @@ _skip_if_exists:
 # those changes get re-applied.  The DOMAIN markers and the
 # ===== TEMPLATE-OWNED ===== banner comments are a human/agent convention
 # — copier itself doesn't act on them.  README.md was moved out of
-# _skip_if_exists in #57.
+# _skip_if_exists in #57.  The same hybrid pattern applies to
+# docs/*.md.jinja files: docs/deployment/* and docs/guides/authentication.md
+# moved out in #29 (PR #108); the remaining top-level docs/*.md files
+# (index, installation, configuration, tools/index, prompts) moved out in #106.
+# Those docs files use topic-specific DOMAIN-{TOPIC}-{KIND} sentinels
+# rather than the bare DOMAIN-START used in CLAUDE.md / README.md.
 
 # Files in the template repo that should never land in generated projects.
 # Setting _exclude in copier.yml REPLACES copier's default exclude list
