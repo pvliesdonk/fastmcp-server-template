@@ -57,7 +57,7 @@ Production images ship without `debugpy` to keep the image lean.  To attach a re
     ```
 
     | Env var | Effect |
-    |---|---|
+    |---------|--------|
     | `{{ env_prefix }}_DEBUG_PORT` | TCP port the debugger listens on (any value parsing to ``0`` disables; non-numeric or out-of-range values log a WARNING and the listener stays off) |
     | `{{ env_prefix }}_DEBUG_WAIT` | When truthy (``1``/``true``/``yes``/``on``), block startup until the IDE attaches.  Default is non-blocking. |
 
