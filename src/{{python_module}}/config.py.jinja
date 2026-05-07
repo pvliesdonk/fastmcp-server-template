@@ -26,6 +26,8 @@ class ProjectConfig:
     server: ServerConfig = field(default_factory=ServerConfig)
 
     # CONFIG-FIELDS-START — add domain fields below; kept across copier update
+    # (uncommenting the Path-typed examples below also requires adding
+    #  ``from pathlib import Path`` to the imports at the top of this file.)
     # (example)
     # vault_path: Path = Path("/data/vault")
     #
