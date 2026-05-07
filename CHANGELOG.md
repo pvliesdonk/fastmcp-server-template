@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.1 (2026-05-07)
+
+- #115 feat(docker): optional debug extra + remote-debugger wiring (#105)
+- #114 fix(aggregator): three follow-ups from #109 review (#110)
+
+
 ## v1.5.0 (2026-05-07)
 
 - #113 feat(scaffold): commented opt-in authorization stubs + pin pvl-core 2.0
