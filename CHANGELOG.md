@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.0 (2026-05-07)
+
+- #113 feat(scaffold): commented opt-in authorization stubs + pin pvl-core 2.0
+- #112 feat(docs): extend sentinel-protection to remaining docs/ files (#106)
+- #111 docs(claude-md): add bot-reviewer-as-gate paragraph (#107)
+
+
 ## v1.4.0 (2026-05-07)
 
 - #109 feat(workflow): wire claude-code agent into copier-update.yml
