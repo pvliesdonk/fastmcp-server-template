@@ -355,6 +355,52 @@ def test_string_or_null_pr_number_does_not_crash_sort_job_b(
     assert "int pr" in job_b_section or "#50" in job_b_section
 
 
+def test_hash_prefixed_pr_number_does_not_crash_sort_job_b(
+    write_job_json,
+) -> None:
+    """Job B sort tolerates LLM-emitted `#`-prefixed pr_number forms.
+
+    LLMs sometimes emit `pr_number: "#89"` mirroring how PRs are written
+    in prose. Without `lstrip("#")` int() raises ValueError, which
+    `_safe_render` would catch and degrade the WHOLE section.
+    """
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": "#89",
+                    "title": "hash-prefixed",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
+                {
+                    "pr_number": 50,
+                    "title": "plain int",
+                    "classification": "ships-automatically",
+                    "summary": "",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    start = body.find("### ✨ New features")
+    end = body.find("\n### ", start + 1)
+    job_b_section = body[start : end if end != -1 else len(body)]
+    assert "Agent failed" not in job_b_section
+    assert "hash-prefixed" in job_b_section
+    assert "plain int" in job_b_section
+
+
 def test_null_file_does_not_crash_sort_job_c(write_job_json) -> None:
     """Job C sort tolerates null file values without TypeError."""
     job_c = write_job_json(
@@ -412,6 +458,51 @@ def test_compose_body_job_c_rate_limited(write_job_json) -> None:
     assert "⏳" in body
     assert "rate-limited" in body or "rate_limited" in body
     assert "next cron" in body
+
+
+def test_overflow_section_boundary_ignores_agent_subheaders(
+    write_job_json, tmp_path: Path
+) -> None:
+    """Section boundary detection anchors to known SECTION_MARKERS only.
+
+    A bare `body.find("\\n### ", ...)` would split a section prematurely
+    if agent-supplied text (Job A articulation, Job B/C summaries) contained
+    a `### Sub-header` line. The boundary search instead uses the next known
+    marker so agent text is preserved intact.
+    """
+    long_summary = "intro paragraph\n\n### Background subsection\n\n" + (
+        "filler line\n" * 800
+    )
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": 1,
+                    "title": "feat with subheader in summary",
+                    "classification": "needs-opt-in",
+                    "summary": long_summary,
+                },
+            ],
+        },
+    )
+    overflow_dir = tmp_path / "overflow"
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+    )
+    body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=overflow_dir)
+    if overflow:
+        spilled = overflow[0].read_text(encoding="utf-8")
+        # The full agent summary including the `### Background subsection`
+        # line must travel with the section, not be left orphaned in body.
+        assert "Background subsection" in spilled
+        assert "Background subsection" not in body
 
 
 def test_overflow_spills_longest_section(write_job_json, tmp_path: Path) -> None:

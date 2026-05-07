@@ -164,11 +164,13 @@ def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
 
     # Sort by PR# ascending for deterministic body across re-runs
     # (LLM-emitted entry order may vary; canonical sort collapses that variance).
-    # `int(... or 0)` coerces string PR numbers ("89") and null values without
-    # raising TypeError when the list mixes types — the LLM may emit either
-    # form. Without coercion a single bad entry would degrade the whole
+    # `lstrip("#")` tolerates LLM-emitted prefixes like `"#89"`. `or 0` covers
+    # null values. Without coercion a single bad entry would degrade the whole
     # section to an error placeholder via _safe_render's TypeError catch.
-    entries = sorted(entries, key=lambda e: int(e.get("pr_number") or 0))
+    entries = sorted(
+        entries,
+        key=lambda e: int(str(e.get("pr_number") or "0").lstrip("#") or "0"),
+    )
 
     by_class: dict[str, list[dict]] = {
         "needs-opt-in": [],
@@ -375,9 +377,18 @@ def compose_body_with_overflow(
             start = body.find(marker)
             if start == -1:
                 continue
-            # Section ends at the next "### " marker or EOF
-            after = body.find("\n### ", start + len(marker))
-            end = after if after != -1 else len(body)
+            # Section ends at the start of the NEXT known SECTION_MARKER, or
+            # EOF. Don't bare-find `\n### ` — agent-supplied text inside a
+            # section (Job A articulation, Job B/C summaries) may legitimately
+            # contain `### Sub-header` lines that would otherwise be mistaken
+            # for a section boundary, splitting the section prematurely.
+            other_starts = [
+                body.find(m, start + len(marker))
+                for m in SECTION_MARKERS
+                if m != marker
+            ]
+            other_starts = [s for s in other_starts if s != -1]
+            end = min(other_starts) if other_starts else len(body)
             sections.append((marker, start, end))
 
         if not sections:
