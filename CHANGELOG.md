@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.0 (2026-05-07)
+
+- #109 feat(workflow): wire claude-code agent into copier-update.yml
+- #108 feat(template): sentinel-protect shared deployment + auth docs
+
+
 ## v1.3.0 (2026-05-03)
 
 - #104 feat(readme): add template-version badge sourced from .copier-answers.yml
