@@ -15,7 +15,9 @@ WORKDIR /app
 
 # Optional remote-debugger listener.  Default off so production images stay
 # lean; pass ``--build-arg DEBUG=true`` to install the ``[debug]`` extra
-# (debugpy) and bake the listener into the image.  See
+# (debugpy) and bake the listener into the image.  Accepts the same boolean
+# vocabulary as runtime ``parse_bool`` (``true``/``1``/``yes``/``on``,
+# case-insensitive); anything else is treated as off.  See
 # ``docs/deployment/docker.md`` for the full attach workflow.
 ARG DEBUG=false
 
@@ -27,14 +29,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     uv sync --frozen --no-install-project --no-dev \
-        $( [ "$DEBUG" = "true" ] && echo "--extra debug" )
+        $( case "$DEBUG" in [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) echo "--extra debug" ;; esac )
 
 # Copy source and install project.
 COPY pyproject.toml uv.lock README.md /app/
 COPY src/ /app/src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev \
-        $( [ "$DEBUG" = "true" ] && echo "--extra debug" )
+        $( case "$DEBUG" in [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) echo "--extra debug" ;; esac )
 # DOCKERFILE-UV-EXTRAS-END
 
 # Create non-root user with configurable UID/GID for bind-mount compatibility.
@@ -55,9 +57,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     FASTMCP_HOME=/data/state/fastmcp
 
 EXPOSE 8000
-# Remote debugger: only bound at runtime when ``{{ env_prefix }}_DEBUG_PORT``
-# is set in the container env.  Always declared so the build-arg-toggled
-# ``[debug]`` extra has a stable port surface to reach.
+# Remote debugger: ``EXPOSE`` is metadata — nothing actually listens unless
+# the image was built with ``--build-arg DEBUG=true`` (which installs
+# debugpy) AND ``{{ env_prefix }}_DEBUG_PORT`` is set at runtime.  Always
+# declared so the toggled ``[debug]`` extra has a stable port surface
+# to reach with ``-p 127.0.0.1:5678:5678``.
 EXPOSE 5678
 
 # DOCKERFILE-VOLUMES-START — mounted volume list; kept across copier update

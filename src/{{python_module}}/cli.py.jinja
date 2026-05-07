@@ -41,11 +41,6 @@ def _root(
     ``make_server()`` on the same process) are safe.
     """
     configure_logging_from_env(verbose=verbose)
-    # Optional remote-debugger listener.  No-op unless ``{{ env_prefix }}_DEBUG_PORT``
-    # is set in the env; ``debugpy`` itself is only present when the image
-    # was built with ``--build-arg DEBUG=true`` (a missing import logs a
-    # WARNING and continues, so this is safe in default scaffolds).
-    maybe_start_debugpy(_ENV_PREFIX)
     root = logging.getLogger()
     if not root.handlers:
         handler = logging.StreamHandler()
@@ -56,6 +51,14 @@ def _root(
         # own these deps, so the silencing stays domain-local.
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
+    # Optional remote-debugger listener — call AFTER the root handler is
+    # attached above; otherwise the helper's "debugpy listening on …"
+    # INFO log falls through to Python's lastResort handler and is silently
+    # dropped.  No-op unless ``{{ env_prefix }}_DEBUG_PORT`` is set in the
+    # env; ``debugpy`` itself is only present when the image was built with
+    # ``--build-arg DEBUG=true`` (a missing import logs a WARNING and
+    # continues, so this is safe in default scaffolds).
+    maybe_start_debugpy(_ENV_PREFIX)
 
 
 @app.command()
