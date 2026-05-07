@@ -470,8 +470,13 @@ def test_overflow_section_boundary_ignores_agent_subheaders(
     a `### Sub-header` line. The boundary search instead uses the next known
     marker so agent text is preserved intact.
     """
+    # ~6000 lines * ~12 chars/line ~= 72k chars — enough to push the body
+    # past BODY_LIMIT (60k) so overflow actually triggers.  The previous
+    # 800-line filler stayed under the limit, leaving the overflow branch
+    # unverified (the `assert overflow` below now fails the test if that
+    # regresses).
     long_summary = "intro paragraph\n\n### Background subsection\n\n" + (
-        "filler line\n" * 800
+        "filler line\n" * 6000
     )
     job_b = write_job_json(
         "agent-job-b",
@@ -497,12 +502,14 @@ def test_overflow_section_boundary_ignores_agent_subheaders(
         conflict_count=0,
     )
     body, overflow = agg.compose_body_with_overflow(inputs, overflow_dir=overflow_dir)
-    if overflow:
-        spilled = overflow[0].read_text(encoding="utf-8")
-        # The full agent summary including the `### Background subsection`
-        # line must travel with the section, not be left orphaned in body.
-        assert "Background subsection" in spilled
-        assert "Background subsection" not in body
+    assert overflow, (
+        "expected overflow with 6000-line filler (~72k chars > 60k BODY_LIMIT)"
+    )
+    spilled = overflow[0].read_text(encoding="utf-8")
+    # The full agent summary including the `### Background subsection`
+    # line must travel with the section, not be left orphaned in body.
+    assert "Background subsection" in spilled
+    assert "Background subsection" not in body
 
 
 def test_overflow_spills_longest_section(write_job_json, tmp_path: Path) -> None:
@@ -826,3 +833,125 @@ def test_agent_disabled_renders_per_section_placeholders() -> None:
     # multiple times — once under each section's heading)
     assert body.count("Agent disabled") >= 3
     assert "CLAUDE_CODE_OAUTH_TOKEN" in body
+
+
+def test_no_agent_sections_suppresses_agent_analysis_header() -> None:
+    """Agent-analysis header is suppressed when no sections will follow it.
+
+    Edge case: agent_enabled=True with all gates closed (no conflicts,
+    template_advanced=False) — previously emitted an orphaned `## Agent
+    analysis` separator with nothing under it.
+    """
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.0.0 (re-run)\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=0,
+        template_advanced=False,
+    )
+    body = agg.compose_body(inputs)
+    assert "## Agent analysis" not in body
+    assert "---" not in body  # the separator preceding the header is also gone
+
+
+def test_agent_disabled_no_gates_suppresses_agent_analysis_header() -> None:
+    """Same suppression holds when agent_enabled=False and both gates closed."""
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.0.0 (re-run)\n",
+        agent_enabled=False,
+        job_a_path=None,
+        job_b_path=None,
+        job_c_path=None,
+        conflict_count=0,
+        template_advanced=False,
+    )
+    body = agg.compose_body(inputs)
+    assert "## Agent analysis" not in body
+    assert "Agent disabled" not in body  # nothing to disable; no section emitted
+
+
+def test_job_b_informational_rollup_drops_null_pr_numbers(write_job_json) -> None:
+    """Informational entries with pr_number=null are dropped from the rollup.
+
+    Without filtering, an LLM-emitted entry with `pr_number: null` rendered
+    as the literal "#None" inside the rollup line.
+    """
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": None,
+                    "title": "internal merge with no PR",
+                    "classification": "informational",
+                    "summary": "",
+                },
+                {
+                    "pr_number": 87,
+                    "title": "real PR",
+                    "classification": "informational",
+                    "summary": "",
+                },
+                {
+                    "pr_number": 91,
+                    "title": "another real PR",
+                    "classification": "informational",
+                    "summary": "",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    assert "#None" not in body
+    assert "#87" in body
+    assert "#91" in body
+    # Count reflects the displayed entries (2), not the raw bucket (3).
+    assert "(2 entries)" in body
+
+
+def test_job_b_informational_rollup_all_null_pr_numbers_omits_rollup_line(
+    write_job_json,
+) -> None:
+    """If every informational entry has null pr_number, the rollup line is omitted entirely."""
+    job_b = write_job_json(
+        "agent-job-b",
+        {
+            "status": "ok",
+            "entries": [
+                {
+                    "pr_number": None,
+                    "title": "internal a",
+                    "classification": "informational",
+                    "summary": "",
+                },
+                {
+                    "pr_number": None,
+                    "title": "internal b",
+                    "classification": "informational",
+                    "summary": "",
+                },
+            ],
+        },
+    )
+    inputs = agg.AggregatorInputs(
+        existing_body="## Template update: v1.0.0 → v1.1.0\n",
+        agent_enabled=True,
+        job_a_path=None,
+        job_b_path=job_b,
+        job_c_path=None,
+        conflict_count=0,
+    )
+    body = agg.compose_body(inputs)
+    assert "#None" not in body
+    assert "Internal / no downstream effect" not in body

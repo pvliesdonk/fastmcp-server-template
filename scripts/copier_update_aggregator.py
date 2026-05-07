@@ -201,12 +201,20 @@ def _render_job_b(data: dict | None, template_advanced: bool = True) -> str:
             lines.append(f"- #{e['pr_number']} {e['title']} — applied this run")
         lines.append("")
     if by_class["informational"]:
-        ids = ", ".join(f"#{e['pr_number']}" for e in by_class["informational"])
-        n = len(by_class["informational"])
-        lines.append(
-            f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}"
-        )
-        lines.append("")
+        # Drop entries with null pr_number from the rollup — they'd render
+        # as the literal "#None" otherwise (LLM-emitted malformed entries
+        # without a PR reference can't be looked up anyway, so dropping
+        # them from the displayed list is preferable to a placeholder).
+        rollup = [
+            e for e in by_class["informational"] if e.get("pr_number") is not None
+        ]
+        if rollup:
+            ids = ", ".join(f"#{e['pr_number']}" for e in rollup)
+            n = len(rollup)
+            lines.append(
+                f"**Internal / no downstream effect** ({n} {'entry' if n == 1 else 'entries'}): {ids}"
+            )
+            lines.append("")
     return "\n".join(lines)
 
 
@@ -281,7 +289,7 @@ def _disabled_section(section_title: str) -> str:
 
 def compose_body(inputs: AggregatorInputs) -> str:
     """Compose the full PR body from existing #49 content + agent JSON outputs."""
-    parts = [inputs.existing_body.rstrip(), "", "---", "", "## Agent analysis", ""]
+    agent_sections: list[str] = []
 
     if not inputs.agent_enabled:
         # Per-section disabled placeholders so structure is consistent across
@@ -289,42 +297,52 @@ def compose_body(inputs: AggregatorInputs) -> str:
         # gets a skip notice; sections gated out (e.g. Job A with no conflicts)
         # are omitted entirely.
         if inputs.conflict_count > 0:
-            parts.append(_disabled_section("🔧 Conflict resolutions"))
+            agent_sections.append(_disabled_section("🔧 Conflict resolutions"))
         if inputs.template_advanced:
-            parts.append(_disabled_section("✨ New features in this update"))
-            parts.append(_disabled_section("📦 Excluded-file upstream changes"))
-        return "\n".join(parts) + "\n"
+            agent_sections.append(_disabled_section("✨ New features in this update"))
+            agent_sections.append(
+                _disabled_section("📦 Excluded-file upstream changes")
+            )
+    else:
+        # Each render is wrapped in try/except so a malformed item in one job's
+        # JSON (e.g. LLM emitted entry missing a required field) degrades to
+        # that section's error placeholder without nuking the other two
+        # sections.  See spec § Aggregator's four-state contract — sections
+        # must be independently failing.
+        section_a = _safe_render(
+            "🔧 Conflict resolutions",
+            lambda: _render_job_a(
+                _read_job_json(inputs.job_a_path), inputs.conflict_count
+            ),
+        )
+        if section_a:
+            agent_sections.append(section_a)
 
-    # Each render is wrapped in try/except so a malformed item in one job's
-    # JSON (e.g. LLM emitted entry missing a required field) degrades to that
-    # section's error placeholder without nuking the other two sections.
-    # See spec § Aggregator's four-state contract — sections must be
-    # independently failing.
-    section_a = _safe_render(
-        "🔧 Conflict resolutions",
-        lambda: _render_job_a(_read_job_json(inputs.job_a_path), inputs.conflict_count),
-    )
-    if section_a:
-        parts.append(section_a)
+        section_b = _safe_render(
+            "✨ New features in this update",
+            lambda: _render_job_b(
+                _read_job_json(inputs.job_b_path), inputs.template_advanced
+            ),
+        )
+        if section_b:
+            agent_sections.append(section_b)
 
-    section_b = _safe_render(
-        "✨ New features in this update",
-        lambda: _render_job_b(
-            _read_job_json(inputs.job_b_path), inputs.template_advanced
-        ),
-    )
-    if section_b:
-        parts.append(section_b)
+        section_c = _safe_render(
+            "📦 Excluded-file upstream changes",
+            lambda: _render_job_c(
+                _read_job_json(inputs.job_c_path), inputs.template_advanced
+            ),
+        )
+        if section_c:
+            agent_sections.append(section_c)
 
-    section_c = _safe_render(
-        "📦 Excluded-file upstream changes",
-        lambda: _render_job_c(
-            _read_job_json(inputs.job_c_path), inputs.template_advanced
-        ),
-    )
-    if section_c:
-        parts.append(section_c)
-
+    parts = [inputs.existing_body.rstrip()]
+    # Suppress the agent-analysis header entirely when no sections will follow
+    # it (e.g. agent_enabled=True with conflict_count=0 + template_advanced=False,
+    # or agent_disabled with both gates closed) — otherwise the body emits an
+    # orphaned `## Agent analysis` separator with nothing under it.
+    if agent_sections:
+        parts.extend(["", "---", "", "## Agent analysis", "", *agent_sections])
     return "\n".join(parts) + "\n"
 
 
