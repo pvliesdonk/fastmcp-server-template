@@ -154,6 +154,42 @@ def make_server(
         # produces=("application/octet-stream",),  # uncomment + customise per project
         # consumer_sink=_my_sink,                  # uncomment if this server consumes file_refs
     )
+
+    # Optional upload direction — uncomment + flesh out the helpers below
+    # to accept agent-pushed files via POST /<namespace>/uploads/{token}.
+    # The route mounts only when transport is HTTP/SSE AND
+    # {{ env_prefix }}_BASE_URL is set; sync receivers run in a thread.
+    # See docs/guides/file-exchange.md for the full pattern.
+    #
+    # from typing import Any
+    # from fastmcp_pvl_core import (
+    #     UploadRecord,
+    #     register_file_exchange_upload,
+    # )
+    #
+    # def _validate_upload_target(target_id: str, extra: dict[str, Any] | None) -> None:
+    #     """Pre-link validator: reject obviously bad target_ids in-band.
+    #
+    #     Runs inside create_upload_link before the token is minted, so an
+    #     LLM gets a clean tool error rather than a wasted upload.
+    #     """
+    #     # Example: reject anything outside the domain's allowlist.
+    #     # raise ValueError(f"target_id not allowed: {target_id}")
+    #     pass
+    #
+    # def _upload_receiver(record: UploadRecord, body: bytes) -> dict[str, Any]:
+    #     """Commit the uploaded bytes. Raise ValueError → 400, FileExistsError → 409,
+    #     anything else → 500 (with traceback logged)."""
+    #     ...
+    #     return {"path": record.target_id, "size_bytes": len(body)}
+    #
+    # register_file_exchange_upload(
+    #     mcp,
+    #     namespace="{{ project_name }}",
+    #     env_prefix=_ENV_PREFIX,
+    #     receiver=_upload_receiver,
+    #     pre_link_validator=_validate_upload_target,
+    # )
     # DOMAIN-FILE-EXCHANGE-END
 
     return mcp
