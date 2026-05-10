@@ -235,8 +235,11 @@ jobs:
       # Each agent step constrains tool access via `claude_args
       # --allowed-tools` to enforce the spec's per-job tool boundaries
       # (Job A: file read/write + git commit on the working tree; Jobs B/C:
-      # read-only). Without this, a prompt-injection-vulnerable model could
-      # bypass the prose constraints in the prompt body.
+      # read on the working tree and the cloned template, plus a path-scoped
+      # write on their single output JSON at /tmp/agent-job-{b,c}.json).
+      # Without this, a prompt-injection-vulnerable model could bypass the
+      # prose constraints in the prompt body — e.g. attempt to write a
+      # workflow file or clobber another job's output JSON.
 
       - name: Pre-render Job A prompt
         id: prepare-prompt-a
@@ -305,7 +308,7 @@ jobs:
           claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
           prompt: {{ '${{ steps.prepare-prompt-b.outputs.prompt }}' }}
           claude_args: |
-            --allowed-tools "Read,Bash(cat:*),Bash(git -C /tmp/template:*)"
+            --allowed-tools "Read,Write(//tmp/agent-job-b.json),Bash(cat:*),Bash(git -C /tmp/template:*)"
 
       - name: Pre-render Job C prompt
         id: prepare-prompt-c
@@ -339,7 +342,7 @@ jobs:
           claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
           prompt: {{ '${{ steps.prepare-prompt-c.outputs.prompt }}' }}
           claude_args: |
-            --allowed-tools "Read,Bash(cat:*),Bash(git -C /tmp/template:*)"
+            --allowed-tools "Read,Write(//tmp/agent-job-c.json),Bash(cat:*),Bash(git -C /tmp/template:*)"
 
       - name: Ensure PR labels exist
         if: steps.changes.outputs.changed == 'true'
