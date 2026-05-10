@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.6.0 (2026-05-10)
+
+- #121 feat(file-exchange): scaffold register_file_exchange_upload + DOMAIN-FILE-EXCHANGE sentinel
+
+
 ## v1.5.1 (2026-05-07)
 
 - #115 feat(docker): optional debug extra + remote-debugger wiring (#105)
