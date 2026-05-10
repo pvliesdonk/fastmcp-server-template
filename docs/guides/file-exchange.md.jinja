@@ -149,6 +149,88 @@ register_file_exchange(
 `consumes=` is advertised in the capability declaration; the LLM and
 peer servers use it to pick a destination for `fetch_file` calls.
 
+## Uploading files (`receiver=`)
+
+The download direction is producer-driven: this server `publish()`es
+a file, and a peer (or LLM tool) fetches it. The **upload direction**
+is the inverse — an agent or peer pushes bytes into this server, and
+a **receiver** in your code commits them.
+
+Wire it by uncommenting the `register_file_exchange_upload(...)`
+block in `src/{{ python_module }}/server.py` (inside the
+`DOMAIN-FILE-EXCHANGE-START / END` sentinel) and supplying a
+`receiver`:
+
+```python
+from typing import Any
+from fastmcp_pvl_core import UploadRecord, register_file_exchange_upload
+
+def _upload_receiver(record: UploadRecord, body: bytes) -> dict[str, Any]:
+    # record.target_id, record.extra, record.max_bytes available.
+    path = _vault.write(record.target_id, body)
+    return {"path": str(path), "size_bytes": len(body)}
+
+register_file_exchange_upload(
+    mcp,
+    namespace="{{ project_name }}",
+    env_prefix=_ENV_PREFIX,
+    receiver=_upload_receiver,
+)
+```
+
+Once registered, an LLM-visible `create_upload_link` tool appears.
+The agent calls it with a `target_id` (and optional `extra`,
+`ttl_seconds`, `max_bytes`); the helper mints a one-time HTTPS
+`POST /<namespace>/uploads/{token}` URL and returns it. The agent
+POSTs the bytes; the route hands them to your receiver.
+
+### Pre-link validation
+
+To reject bad `target_id`s **before** the token is minted — so an LLM
+sees a clean tool error rather than wastes a round-trip — supply
+`pre_link_validator`:
+
+```python
+def _validate_upload_target(target_id: str, extra: dict[str, Any] | None) -> None:
+    if not target_id.startswith("inbox/"):
+        raise ValueError(f"target_id must begin with 'inbox/': {target_id}")
+
+register_file_exchange_upload(
+    mcp,
+    namespace="{{ project_name }}",
+    env_prefix=_ENV_PREFIX,
+    receiver=_upload_receiver,
+    pre_link_validator=_validate_upload_target,
+)
+```
+
+Raising `ValueError` surfaces the message verbatim to the caller.
+Other exceptions also propagate but are logged at ERROR with a
+`non-ValueError` marker so operators distinguish bugs from
+caller-input errors. Sync validators run in `asyncio.to_thread`
+automatically; `async def` validators run on the loop.
+
+### Receiver error contract
+
+| Exception | Response | When to use |
+|-----------|----------|-------------|
+| `ValueError` | `400` Bad Request | Request body fails domain validation. |
+| `FileExistsError` | `409` Conflict | `target_id` collides with existing data. |
+| Anything else | `500` Internal Server Error | Server-side bug. Traceback is logged. |
+
+A returned `dict[str, Any]` produces `200` and is JSON-encoded into
+the response. Sync receivers run in `asyncio.to_thread` (blocking I/O
+does not stall the loop); `async def` receivers run on the loop.
+
+Tokens are **one-time** — every non-2xx response burns the link;
+retries call `create_upload_link` again. For uploads too large to
+buffer, use `stream_receiver=` (`AsyncIterator[bytes]` shape;
+documented in the upstream `fastmcp-pvl-core` README — the template
+scaffolds the buffered shape only).
+
+See [Configuration → MCP File Exchange](../configuration.md#mcp-file-exchange)
+for the env-var matrix.
+
 ## Co-deploying two servers (docker-compose)
 
 The `exchange://` transfer method requires both servers to share a
