@@ -98,11 +98,12 @@ The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.re
 ### File exchange
 
 The server scaffolds [MCP File Exchange](docs/guides/file-exchange.md)
-wiring — download direction is registered by default (active on
-HTTP/SSE, transparent on stdio); an upload direction ships fully
-commented-out for opt-in via `register_file_exchange_upload(...)`.
-See the guide for producing / consuming / uploading patterns and the
-env-var matrix.
+wiring — download direction is registered by default (on for HTTP/SSE,
+off for stdio); an upload direction ships fully commented-out for
+opt-in via `register_file_exchange_upload(...)`. See the guide for
+producing / consuming / uploading patterns and the env-var matrix, or
+[`CLAUDE.md`](CLAUDE.md#file-exchange-register_file_exchange--opt-in-upload)
+for the wiring pattern.
 
 ## Configuration
 

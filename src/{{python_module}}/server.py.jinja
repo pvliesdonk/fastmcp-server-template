@@ -162,6 +162,7 @@ def make_server(
     # See docs/guides/file-exchange.md for the full pattern.
     #
     # from typing import Any
+    #
     # from fastmcp_pvl_core import (
     #     UploadRecord,
     #     register_file_exchange_upload,
@@ -171,15 +172,18 @@ def make_server(
     #     """Pre-link validator: reject obviously bad target_ids in-band.
     #
     #     Runs inside create_upload_link before the token is minted, so an
-    #     LLM gets a clean tool error rather than a wasted upload.
+    #     LLM gets a clean tool error rather than after a wasted upload
+    #     round-trip.
     #     """
     #     # Example: reject anything outside the domain's allowlist.
     #     # raise ValueError(f"target_id not allowed: {target_id}")
     #     pass
     #
     # def _upload_receiver(record: UploadRecord, body: bytes) -> dict[str, Any]:
-    #     """Commit the uploaded bytes. Raise ValueError → 400, FileExistsError → 409,
-    #     anything else → 500 (with traceback logged)."""
+    #     """Commit the uploaded bytes. Raise ValueError → 400,
+    #     FileExistsError → 409, anything else → 500 (with traceback
+    #     logged). Return value MUST be a dict — non-dict returns are
+    #     treated as receiver bugs (500 + WARNING log)."""
     #     ...
     #     return {"path": record.target_id, "size_bytes": len(body)}
     #
@@ -187,6 +191,7 @@ def make_server(
     #     mcp,
     #     namespace="{{ project_name }}",
     #     env_prefix=_ENV_PREFIX,
+    #     transport="auto",
     #     receiver=_upload_receiver,
     #     pre_link_validator=_validate_upload_target,
     # )
