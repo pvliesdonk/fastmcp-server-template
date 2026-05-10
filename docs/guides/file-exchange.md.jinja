@@ -170,6 +170,7 @@ from typing import Any
 
 from fastmcp_pvl_core import UploadRecord, register_file_exchange_upload
 
+
 # _vault is illustrative — replace with your domain's storage helper.
 def _upload_receiver(record: UploadRecord, body: bytes) -> dict[str, Any]:
     # record.target_id, record.extra, record.max_bytes available.
