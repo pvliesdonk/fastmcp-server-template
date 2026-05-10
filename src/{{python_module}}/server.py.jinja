@@ -159,7 +159,9 @@ def make_server(
     # to accept agent-pushed files via POST /<namespace>/uploads/{token}.
     # The route mounts only when transport is HTTP/SSE AND
     # {{ env_prefix }}_BASE_URL is set; sync receivers run in a thread.
-    # See docs/guides/file-exchange.md for the full pattern.
+    # See docs/guides/file-exchange.md for the full pattern. When
+    # uncommenting, move the two ``from`` imports below to the
+    # module-level import block at the top of this file.
     #
     # from typing import Any
     #
@@ -184,7 +186,7 @@ def make_server(
     #     FileExistsError → 409, anything else → 500 (with traceback
     #     logged). Return value MUST be a dict — non-dict returns are
     #     treated as receiver bugs (500 + WARNING log)."""
-    #     ...
+    #     # TODO: replace with your storage logic.
     #     return {"path": record.target_id, "size_bytes": len(body)}
     #
     # register_file_exchange_upload(
