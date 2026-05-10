@@ -27,6 +27,11 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # Required by anthropics/claude-code-action@v1: setupGitHubToken() mints
+      # a Claude-app GitHub token via OIDC token exchange, which needs
+      # id-token: write at the job level. Without it the agent steps retry
+      # 3x then abort on "Could not fetch an OIDC token".
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
