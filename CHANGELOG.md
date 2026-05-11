@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.6.1 (2026-05-11)
+
+- #123 fix(copier-update): OIDC permission + bare Write for Jobs B/C
+
+
 ## v1.6.0 (2026-05-10)
 
 - #121 feat(file-exchange): scaffold register_file_exchange_upload + DOMAIN-FILE-EXCHANGE sentinel
