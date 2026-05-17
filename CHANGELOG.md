@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.7.0 (2026-05-17)
+
+- #136 ci(release): expose `prerelease` as a force option so a second rc can be cut
+
+
 ## v1.6.1 (2026-05-11)
 
 - #123 fix(copier-update): OIDC permission + bare Write for Jobs B/C
