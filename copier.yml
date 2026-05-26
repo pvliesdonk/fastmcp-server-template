@@ -50,6 +50,10 @@ _skip_if_exists:
   # yamllint, project-specific linters, etc.) on top of the shipped defaults;
   # preserve customisation across updates.
   - ".pre-commit-config.yaml"
+  # Vale config — users tune rule overrides, add Vocab, pin Packages
+  # versions per their docs corpus.  Initial render seeds the file; later
+  # template updates leave their tuning intact.
+  - ".vale.ini"
 # Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is
