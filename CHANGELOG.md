@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.8.0 (2026-05-26)
+
+- #145 docs: clean up rendered docs/** to pass Vale (closes #141)
+- #142 feat(docs): add Vale prose linter for downstream docs/**
+- #140 ci(claude-review): skip on fork PRs to avoid auth-failing checks
+
+
 ## v1.7.0 (2026-05-17)
 
 - #136 ci(release): expose `prerelease` as a force option so a second rc can be cut
