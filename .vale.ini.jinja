@@ -16,15 +16,15 @@
 # See https://vale.sh/docs/keys/format for the full key reference and
 # https://vale.sh/docs/topics/styles for rule-tuning syntax.
 #
-# To add project-specific accepted vocabulary (terms that should not be
-# flagged as unknown words), create
-# `.vale/styles/config/vocabularies/Base/accept.txt`, list one term per
-# line, then add `Vocab = Base` below `MinAlertLevel`. The config/
-# subtree is preserved across `vale sync`; see .gitignore for the
-# include/exclude rules.
+# Project-specific accepted vocabulary lives at
+# `.vale/styles/config/vocabularies/Base/accept.txt` (one term per line,
+# matched case-insensitively). The `Vocab = Base` line below activates it.
+# The config/ subtree is preserved across `vale sync`; see .gitignore for
+# the include/exclude rules.
 
 StylesPath = .vale/styles
 MinAlertLevel = error
+Vocab = Base
 
 # `Vale` is a built-in style, always available without listing here.
 # `Google`, `proselint`, `write-good` are upstream packages fetched by
@@ -39,3 +39,10 @@ Packages = Google, proselint, write-good, https://github.com/tbhb/vale-ai-tells/
 
 [*.md]
 BasedOnStyles = Vale, Google, proselint, write-good, ai-tells
+
+# Vale.Terms enforces strict casing of every accept.txt entry — useful for
+# product names (e.g. "GitHub" not "Github") but overzealous for generic
+# tech vocab where sentence-start, heading-start, and mid-sentence usages
+# legitimately appear with different casing. Vale.Spelling still accepts
+# all entries case-insensitively; we just don't enforce one canonical form.
+Vale.Terms = NO

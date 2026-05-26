@@ -24,7 +24,7 @@ uv sync --all-extras --all-groups
 
 ## Project-specific notes
 
-_Add domain-specific install notes here, e.g. system dependencies, optional
+_Add domain-specific install notes here, such as system dependencies, optional
 extras, or custom configuration steps._
 
 <!-- DOMAIN-INSTALL-EXTRA-END -->

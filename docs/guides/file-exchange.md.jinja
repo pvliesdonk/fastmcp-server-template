@@ -1,7 +1,7 @@
 # MCP File Exchange
 
-{{ human_name }} participates in the **MCP File Exchange** convention
-— a lightweight, spec-defined way for co-deployed MCP servers to pass
+{{ human_name }} participates in the **MCP File Exchange** convention,
+a lightweight, spec-defined way for co-deployed MCP servers to pass
 files to each other by reference instead of by base64-in-context.
 
 The full specification lives in `fastmcp-pvl-core`'s docs:
@@ -19,16 +19,16 @@ That single call:
 2. Advertises the `experimental.file_exchange` capability on the MCP
    `initialize` response.
 3. Registers two MCP tools when the surrounding env permits:
-    - `create_download_link` — producer-side; mints time-limited HTTP
+    - `create_download_link` (producer-side): mints time-limited HTTP
       URLs for `FileRef`s this server has published.
-    - `fetch_file` — consumer-side; resolves a `FileRef` (via
+    - `fetch_file` (consumer-side): resolves a `FileRef` (via
       `exchange://` or `https://`) and hands the bytes to your sink.
 
 By default the feature is **on** for HTTP/SSE deployments and **off**
 for stdio. See [Configuration → MCP File Exchange](../configuration.md#mcp-file-exchange)
 for the env-var matrix.
 
-The **upload direction** is opt-in and not wired by default — see
+The **upload direction** is opt-in and not wired by default; see
 [Uploading files](#uploading-files-receiver) below for the
 `register_file_exchange_upload(...)` pattern.
 
@@ -58,7 +58,7 @@ return {
 
 ### Reference-only
 
-The tool returns just the `FileRef` — appropriate when the file is
+The tool returns just the `FileRef`, appropriate when the file is
 large and you do not want to spend tokens on inline data:
 
 ```python
@@ -70,8 +70,8 @@ return file_ref.to_dict()
 
 `register_file_exchange` returns a `FileExchangeHandle`. Capture it
 in `make_server()` and stash it where your tool bodies can reach it.
-The simplest pattern is a module-level singleton in `server.py` —
-this stays well-typed under `mypy --strict` (the alternative,
+The simplest pattern is a module-level singleton in `server.py`.
+This stays well-typed under `mypy --strict` (the alternative,
 attaching to the `FastMCP` instance, fails `attr-defined` because
 `FastMCP` does not declare a `file_exchange` field):
 
@@ -85,7 +85,7 @@ _file_exchange: FileExchangeHandle | None = None
 def get_file_exchange() -> FileExchangeHandle:
     """Return the registered handle. Raises if make_server has not run."""
     if _file_exchange is None:
-        raise RuntimeError("file exchange is not initialised — call make_server first")
+        raise RuntimeError("file exchange is not initialised; call make_server first")
     return _file_exchange
 
 
@@ -137,7 +137,7 @@ async def _store_in_vault(data: bytes, ctx: FetchContext) -> FetchResult:
     path = await _vault.write(data, mime_type=ctx.mime_type, name=ctx.suggested_filename)
     return FetchResult(stored_at=str(path), bytes_written=len(data))
 
-# Consume-only servers do not need to capture the handle — the facade
+# Consume-only servers do not need to capture the handle; the facade
 # wires `fetch_file` itself; the handle is only required to call
 # `.publish()` from a tool body (see "Producing files" above).
 register_file_exchange(
@@ -157,7 +157,7 @@ peer servers use it to pick a destination for `fetch_file` calls.
 
 The download direction is producer-driven: this server `publish()`es
 a file, and a peer (or LLM tool) fetches it. The **upload direction**
-is the inverse — an agent or peer pushes bytes into this server, and
+is the inverse: an agent or peer pushes bytes into this server, and
 a **receiver** in your code commits them.
 
 Wire it by uncommenting the `register_file_exchange_upload(...)`
@@ -171,7 +171,7 @@ from typing import Any
 from fastmcp_pvl_core import UploadRecord, register_file_exchange_upload
 
 
-# _vault is illustrative — replace with your domain's storage helper.
+# _vault is illustrative; replace with your domain's storage helper.
 def _upload_receiver(record: UploadRecord, body: bytes) -> dict[str, Any]:
     # record.target_id, record.extra, record.max_bytes available.
     path = _vault.write(record.target_id, body)
@@ -193,8 +193,8 @@ POSTs the bytes; the route hands them to your receiver.
 
 ### Pre-link validation
 
-To reject bad `target_id`s **before** the token is minted — so an LLM
-sees a clean tool error rather than wastes a round-trip — supply
+To reject bad `target_id`s **before** the token is minted (so an LLM
+sees a clean tool error rather than wastes a round-trip), supply
 `pre_link_validator`:
 
 ```python
@@ -231,18 +231,18 @@ runs, exceptions translate to status codes as follows:
 | Anything else | `500` Internal Server Error | Server-side bug. Traceback is logged. |
 
 For `400` and `409`, the exception's `str(exc)` becomes the response
-body — frame those messages as caller-facing diagnostics. The `500`
+body, so frame those messages as caller-facing diagnostics. The `500`
 path returns a generic body and logs the traceback server-side. A
 returned `dict[str, Any]` produces `200` and is JSON-encoded into the
 response; non-dict returns are treated as receiver bugs (`500` with a
 WARNING log). Sync receivers run in `asyncio.to_thread` (blocking I/O
 does not stall the loop); `async def` receivers run on the loop.
 
-Tokens are **one-time** — every non-2xx response burns the link;
+Tokens are **one-time**: every non-2xx response burns the link;
 retries call `create_upload_link` again. For uploads too large to
 buffer, use `stream_receiver=` (`AsyncIterator[bytes]` shape; **`async
-def` only** — sync stream receivers cannot iterate the body).
-Documented in the upstream `fastmcp-pvl-core` README — the template
+def` only**, since sync stream receivers cannot iterate the body).
+Documented in the upstream `fastmcp-pvl-core` README; the template
 scaffolds the buffered shape only.
 
 See [Configuration → MCP File Exchange](../configuration.md#mcp-file-exchange)
@@ -280,7 +280,7 @@ volumes:
 Both containers see the same `.exchange-id` file, so they agree on
 the exchange group automatically. When `image-mcp` publishes a file,
 `vault-mcp` can fetch it via the `exchange://` URI without an HTTP
-round-trip — the bytes never leave the shared volume.
+round-trip: the bytes never leave the shared volume.
 
 When the servers are deployed apart (no shared volume), the spec's
 `http` transfer method handles it: peers call `create_download_link`
