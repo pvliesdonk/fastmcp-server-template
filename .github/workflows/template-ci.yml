@@ -134,6 +134,43 @@ jobs:
           grep -qF 'any(.[]; .name == $name)' .github/workflows/release.yml \
             || { echo "::error::release.yml missing upsert branch — still silently no-ops on missing entry"; exit 1; }
 
+      - name: vale config structural check
+        working-directory: /tmp/smoke
+        run: |
+          # Cheap sanity check on the rendered .vale.ini — catches
+          # template breakage (empty file, missing Packages directive)
+          # without paying the cost of a full vale sync+lint round.
+          [ -f .vale.ini ] || { echo "::error::.vale.ini missing — render regressed"; exit 1; }
+          grep -qE '^StylesPath\s*=' .vale.ini \
+            || { echo "::error::.vale.ini missing StylesPath directive"; exit 1; }
+          grep -qE '^Packages\s*=' .vale.ini \
+            || { echo "::error::.vale.ini missing Packages directive"; exit 1; }
+          grep -qE '^\[\*\.md\]$' .vale.ini \
+            || { echo "::error::.vale.ini missing [*.md] section"; exit 1; }
+          grep -qE '^BasedOnStyles\s*=' .vale.ini \
+            || { echo "::error::.vale.ini missing BasedOnStyles directive"; exit 1; }
+
+      - name: vale version pin lockstep
+        working-directory: /tmp/smoke
+        run: |
+          # CI's vale-cli/vale-action `version:` and pre-commit's vale hook
+          # `rev:` must stay in lockstep — drift means local pre-commit and
+          # CI exercise different Vale binaries, so a finding visible to one
+          # becomes silent to the other. Same discipline as the nfpm
+          # lockstep enforced in PR #66.
+          #
+          # CI_VER extraction is scoped to the `vale:` job to avoid
+          # accidentally matching a `version: "X.Y.Z"` if some other job
+          # (e.g. setup-uv) ever moves off `version: "latest"` to a pinned
+          # semver — that would silently extract the wrong pin and let real
+          # drift slip through.
+          CI_VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' .github/workflows/ci.yml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          PC_VER=$(awk '/^[[:space:]]*-[[:space:]]*repo:.*vale-cli\/vale[[:space:]]*$/{f=1; next} f && /rev:/{print; exit}' .pre-commit-config.yaml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          [ -n "$CI_VER" ] || { echo "::error::vale version pin not found in rendered ci.yml"; exit 1; }
+          [ -n "$PC_VER" ] || { echo "::error::vale rev not found in rendered .pre-commit-config.yaml"; exit 1; }
+          [ "$CI_VER" = "$PC_VER" ] \
+            || { echo "::error::vale version drift — ci.yml=$CI_VER pre-commit=$PC_VER (bump in lockstep)"; exit 1; }
+
   # Runs the two downstream workflow shapes that generated projects invoke
   # on their own CI — `mkdocs build --strict` (docs.yml) and `nfpm package`
   # (release.yml).  Dedicated non-matrix job so the downstream-gate is

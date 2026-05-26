@@ -29,6 +29,12 @@ htmlcov/
 # MkDocs build output
 site/
 
+# Vale-synced style packages (downloaded by `vale sync`). Custom config
+# (vocabularies, ini overrides) under .vale/styles/config/ stays
+# versioned — sync never touches that subtree.
+.vale/styles/*
+!.vale/styles/config/
+
 # Local environment
 .env
 .env.local
