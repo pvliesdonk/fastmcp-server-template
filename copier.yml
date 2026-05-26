@@ -54,6 +54,11 @@ _skip_if_exists:
   # versions per their docs corpus.  Initial render seeds the file; later
   # template updates leave their tuning intact.
   - ".vale.ini"
+  # Vale Vocab accept list — the activation vehicle for `Vocab = Base` in
+  # .vale.ini above.  Users add project-specific accepted terms as their
+  # docs corpus grows; without _skip_if_exists, copier update would wipe
+  # those additions on every weekly cron and reseed the template version.
+  - ".vale/styles/config/vocabularies/Base/accept.txt"
 # Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is
