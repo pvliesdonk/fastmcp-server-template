@@ -33,6 +33,8 @@ def test_spa_shell_html_rewrite_succeeded() -> None:
 
     assert len(_APP_TOOL_NAMES) > 0
     assert _SPA_SHELL_HTML
+
+
 {% else -%}
 def test_register_apps_logs_when_app_domain_set(
     monkeypatch: pytest.MonkeyPatch,
@@ -50,6 +52,8 @@ def test_register_apps_logs_when_app_domain_set(
     with caplog.at_level("INFO", logger="{{ python_module }}._server_apps"):
         register_apps(make_server())
     assert any("example.com" in r.message for r in caplog.records)
+
+
 {% endif -%}
 
 
