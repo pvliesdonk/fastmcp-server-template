@@ -321,6 +321,7 @@ jobs:
           test -f "$bundle" || { echo "::error::bundle missing: $bundle"; exit 1; }
 
           work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
           unzip -q "$bundle" -d "$work"
 
           test -f "$work/manifest.json"  || { echo "::error::manifest.json missing from bundle"; exit 1; }
