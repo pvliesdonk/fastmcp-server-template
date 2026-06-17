@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.0.0 (2026-06-17)
+
+- #153 feat(deps): bump fastmcp-pvl-core to >=3.2.0,<4 and expose build_kv_store
+- #152 fix: convert DOMAIN-*-EXTRA sentinels to pure HTML-comment blocks
+- #151 feat: remove file-exchange scaffolding for the pvl-core 3.x line
+
+
 ## v1.8.0 (2026-05-26)
 
 - #145 docs: clean up rendered docs/** to pass Vale (closes #141)
