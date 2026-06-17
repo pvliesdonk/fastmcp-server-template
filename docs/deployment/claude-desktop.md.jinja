@@ -18,23 +18,15 @@ Or with uv:
 uv tool install {{ pypi_name }}
 ```
 
-Or download the `.mcpb` bundle from the [GitHub Releases](https://github.com/{{ github_org }}/{{ project_name }}/releases) page and double-click to install — Claude Desktop prompts for required env vars via a GUI wizard, no manual JSON editing needed.
+Or download the `.mcpb` bundle from the [GitHub Releases](https://github.com/{{ github_org }}/{{ project_name }}/releases) page and double-click to install; Claude Desktop prompts for required env vars via a GUI wizard, no manual JSON editing needed.
 
 ### 2. Configure Claude Desktop
 
-Add the server to your Claude Desktop configuration file:
+Add the server to your Claude Desktop configuration file. The path varies by operating system:
 
-=== "macOS"
-
-    Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-=== "Windows"
-
-    Edit `%APPDATA%\Claude\claude_desktop_config.json`:
-
-=== "Linux"
-
-    Edit `~/.config/Claude/claude_desktop_config.json`:
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -63,21 +55,9 @@ Restart the application to pick up the new configuration. You should see the {{ 
 
 ## Using with uv
 
-If you installed with `uv tool install`, the command is already on your PATH. If you installed in a project with `uv pip install`, point to the uv-managed binary:
+Install with `uv tool install {{ pypi_name }}` to make `{{ project_name }}` available as a global command on your PATH. The configuration in step 2 works as-is.
 
-```json
-{
-  "mcpServers": {
-    "{{ project_name }}": {
-      "command": "uv",
-      "args": ["run", "{{ project_name }}", "serve"],
-      "env": {
-        "{{ env_prefix }}_READ_ONLY": "true"
-      }
-    }
-  }
-}
-```
+If the binary is not on your PATH, use the full path to it instead — see [Command not found](#command-not-found) below.
 
 ## Troubleshooting
 
