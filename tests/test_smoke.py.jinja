@@ -9,7 +9,9 @@ from typing import Any
 import pytest
 from fastmcp import Client
 
+{% if not include_mcp_apps_scaffold -%}
 from {{ python_module }}._server_apps import register_apps
+{% endif -%}
 from {{ python_module }}.server import make_server
 
 
@@ -19,6 +21,19 @@ def test_make_server_constructs() -> None:
     assert server is not None
 
 
+{% if include_mcp_apps_scaffold -%}
+def test_spa_shell_html_rewrite_succeeded() -> None:
+    """_SPA_SHELL_HTML was built successfully at module import.
+
+    Verifies that _rewrite_spa_app_tool_calls validated _APP_TOOL_NAMES
+    against the HTML literals at import time — if any invariant failed,
+    the import would have raised RuntimeError before reaching this test.
+    """
+    from {{ python_module }}._server_apps import _APP_TOOL_NAMES, _SPA_SHELL_HTML
+
+    assert len(_APP_TOOL_NAMES) > 0
+    assert _SPA_SHELL_HTML
+{% else -%}
 def test_register_apps_logs_when_app_domain_set(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
@@ -35,6 +50,7 @@ def test_register_apps_logs_when_app_domain_set(
     with caplog.at_level("INFO", logger="{{ python_module }}._server_apps"):
         register_apps(make_server())
     assert any("example.com" in r.message for r in caplog.records)
+{% endif -%}
 
 
 async def test_status_resource_reports_ready(client: Client[Any]) -> None:
