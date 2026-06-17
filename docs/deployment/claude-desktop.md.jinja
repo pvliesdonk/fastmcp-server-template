@@ -72,18 +72,36 @@ If the binary is not on your PATH, use the full path to it instead — see [Comm
 
 ### "Command not found"
 
-Ensure `{{ project_name }}` is on your PATH. If installed in a virtualenv, use the full path to the binary (macOS/Linux example):
+Ensure `{{ project_name }}` is on your PATH. If installed in a virtualenv, use the full path to the binary. Replace only the `"command"` value in your existing config — keep `"args"` and `"env"` as-is.
+
+macOS/Linux:
 
 ```json
 {
-  "command": "/Users/me/.venvs/mcp/bin/{{ project_name }}"
+  "mcpServers": {
+    "{{ project_name }}": {
+      "command": "/Users/me/.venvs/mcp/bin/{{ project_name }}",
+      "args": ["serve"],
+      "env": {
+        "{{ env_prefix }}_READ_ONLY": "true"
+      }
+    }
+  }
 }
 ```
 
-On Windows, the equivalent path uses `Scripts\` instead of `bin/` and includes the `.exe` suffix:
+Windows (`Scripts\` not `bin\`, `.exe` suffix):
 
 ```json
 {
-  "command": "%USERPROFILE%\\.venvs\\mcp\\Scripts\\{{ project_name }}.exe"
+  "mcpServers": {
+    "{{ project_name }}": {
+      "command": "%USERPROFILE%\\.venvs\\mcp\\Scripts\\{{ project_name }}.exe",
+      "args": ["serve"],
+      "env": {
+        "{{ env_prefix }}_READ_ONLY": "true"
+      }
+    }
+  }
 }
 ```
