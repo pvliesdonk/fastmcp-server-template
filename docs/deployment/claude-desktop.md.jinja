@@ -1,0 +1,99 @@
+# Claude Desktop
+
+{{ human_name }} integrates with [Claude Desktop](https://claude.ai/download) via the stdio transport.
+
+## Setup
+
+### 1. Install
+
+From PyPI:
+
+```bash
+pip install {{ pypi_name }}
+```
+
+Or with uv:
+
+```bash
+uv tool install {{ pypi_name }}
+```
+
+Or download the `.mcpb` bundle from the [GitHub Releases](https://github.com/{{ github_org }}/{{ project_name }}/releases) page and double-click to install — Claude Desktop prompts for required env vars via a GUI wizard, no manual JSON editing needed.
+
+### 2. Configure Claude Desktop
+
+Add the server to your Claude Desktop configuration file:
+
+=== "macOS"
+
+    Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+=== "Windows"
+
+    Edit `%APPDATA%\Claude\claude_desktop_config.json`:
+
+=== "Linux"
+
+    Edit `~/.config/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "{{ project_name }}": {
+      "command": "{{ project_name }}",
+      "args": ["serve"],
+      "env": {
+        "{{ env_prefix }}_READ_ONLY": "true"
+      }
+    }
+  }
+}
+```
+
+### 3. Restart Claude Desktop
+
+Restart the application to pick up the new configuration. You should see the {{ human_name }} tools available in Claude's tool list.
+
+## Configuration examples
+
+<!-- DOMAIN-CLAUDE-DESKTOP-START -->
+<!-- Add domain-specific Claude Desktop configuration examples here.
+     Kept across copier update. -->
+<!-- DOMAIN-CLAUDE-DESKTOP-END -->
+
+## Using with uv
+
+If you installed with `uv tool install`, the command is already on your PATH. If you installed in a project with `uv pip install`, point to the uv-managed binary:
+
+```json
+{
+  "mcpServers": {
+    "{{ project_name }}": {
+      "command": "uv",
+      "args": ["run", "{{ project_name }}", "serve"],
+      "env": {
+        "{{ env_prefix }}_READ_ONLY": "true"
+      }
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+### Server not appearing in Claude Desktop
+
+1. Check the config file path is correct for your OS
+2. Ensure the JSON is valid (no trailing commas)
+3. Restart Claude Desktop completely (quit and reopen)
+4. Check Claude Desktop logs for error messages
+
+### "Command not found"
+
+Ensure `{{ project_name }}` is on your PATH. If installed in a virtualenv, use the full path to the binary:
+
+```json
+{
+  "command": "/Users/me/.venvs/mcp/bin/{{ project_name }}"
+}
+```
