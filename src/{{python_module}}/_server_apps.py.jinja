@@ -1,4 +1,4 @@
-{% if include_mcp_apps_scaffold %}
+{% if include_mcp_apps_scaffold -%}
 """MCP Apps scaffold for {{ human_name }}.
 
 Demonstrates the fastmcp >=3.2.4 app-tool addressing pattern:
@@ -64,9 +64,7 @@ _APP_TOOL_NAMES: frozenset[str] = frozenset(
 def _app_tool_meta(tool_name: str) -> dict[str, Any]:
     """Build the per-tool ``meta`` dict for a fastmcp >=3.2.4 app-only tool."""
     if tool_name not in _APP_TOOL_NAMES:
-        raise ValueError(
-            f"Unknown app tool {tool_name!r}; add to _APP_TOOL_NAMES."
-        )
+        raise ValueError(f"Unknown app tool {tool_name!r}; add to _APP_TOOL_NAMES.")
     return {
         "fastmcp": {
             "app": _APP_NAME,
@@ -199,7 +197,7 @@ def register_apps(mcp: FastMCP) -> None:
         return {"name": "{{ human_name }}", "version": "0.0.0"}
 
     # DOMAIN-APP-TOOLS-END
-{% else %}
+{% else -%}
 """MCP Apps scaffolding for {{ human_name }}.
 
 Ships as an inert placeholder: ``register_apps`` is a no-op unless the
@@ -237,4 +235,4 @@ def register_apps(_mcp: FastMCP) -> None:
         )
     else:
         logger.debug("MCP Apps scaffold inactive (no app_domain configured)")
-{% endif %}
+{% endif -%}
