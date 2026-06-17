@@ -105,9 +105,9 @@
           ]
         },
         {
-          "name": "{{ env_prefix }}_EVENT_STORE_URL",
-          "description": "Event store backend for HTTP session persistence (file:///path or memory://)",
-          "default": "file:///data/state/events"
+          "name": "{{ env_prefix }}_KV_STORE_URL",
+          "description": "Persistent-state backend URL for pvl-core subsystems. Schemes: file:///path (survives restarts), memory:// (dev/ephemeral).",
+          "default": "file:///data/state"
         },
         {
           "name": "{{ env_prefix }}_SERVER_NAME",
