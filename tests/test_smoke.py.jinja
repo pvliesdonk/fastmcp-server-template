@@ -89,53 +89,27 @@ async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
     assert "hello world" in content.text
 
 
-async def test_file_exchange_disabled_on_stdio_default(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Stdio default omits file-exchange tools and capability.
-
-    Asserts the facade's transport-gating contract: with no
-    ``{{ env_prefix }}_FILE_EXCHANGE_ENABLED`` override and stdio
-    transport, neither ``create_download_link`` nor ``fetch_file`` is
-    registered, and ``MCP_EXCHANGE_DIR`` (deployer-controlled) is also
-    unset so the exchange-volume runtime stays disabled.
-    """
-    for var in (
-        "{{ env_prefix }}_FILE_EXCHANGE_ENABLED",
-        "{{ env_prefix }}_TRANSPORT",
-        "FASTMCP_TRANSPORT",
-        "MCP_EXCHANGE_DIR",
-    ):
-        monkeypatch.delenv(var, raising=False)
-
-    server = make_server()
-    async with Client(server) as smoke_client:
-        tools = {t.name for t in await smoke_client.list_tools()}
-    assert "create_download_link" not in tools
-    assert "fetch_file" not in tools
-
-
-async def test_file_exchange_capability_when_http_and_exchange_dir(
+async def test_no_file_exchange_scaffolding(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """HTTP transport + ``MCP_EXCHANGE_DIR`` registers the producer tool.
+    """make_server() registers no file-exchange tools.
 
-    With ``transport=http`` resolved (via the env var) and an
-    exchange directory provided, ``register_file_exchange`` advertises
-    the producer side: ``create_download_link`` is registered when
-    ``{{ env_prefix }}_BASE_URL`` is set, and the exchange transfer
-    method activates because ``MCP_EXCHANGE_DIR`` resolves.
+    The scaffold no longer calls ``register_file_exchange`` (removed
+    because the upstream pvl-core 3.x line dropped the API). Under the
+    HTTP + ``MCP_EXCHANGE_DIR`` configuration that previously activated
+    the producer tool, ``create_download_link`` is absent — so re-adding
+    ``register_file_exchange`` to ``make_server()`` would re-register it
+    and fail the first assertion below. The ``fetch_file`` /
+    ``create_upload_link`` assertions are defence-in-depth.
     """
     monkeypatch.setenv("{{ env_prefix }}_TRANSPORT", "http")
     monkeypatch.setenv("{{ env_prefix }}_BASE_URL", "https://test.example.com")
     monkeypatch.setenv("MCP_EXCHANGE_DIR", str(tmp_path))
-    monkeypatch.delenv("{{ env_prefix }}_FILE_EXCHANGE_ENABLED", raising=False)
 
     server = make_server(transport="http")
     async with Client(server) as smoke_client:
         tools = {t.name for t in await smoke_client.list_tools()}
-    assert "create_download_link" in tools
-    # Consumer side stays off until the scaffold passes consumer_sink= to
-    # register_file_exchange — this assertion locks the default in.
+    assert "create_download_link" not in tools
     assert "fetch_file" not in tools
+    assert "create_upload_link" not in tools
