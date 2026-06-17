@@ -12,7 +12,7 @@ From PyPI:
 pip install {{ pypi_name }}
 ```
 
-Or with uv:
+Or with uv (installs `{{ project_name }}` as a global command on your PATH):
 
 ```bash
 uv tool install {{ pypi_name }}
@@ -55,12 +55,6 @@ Restart the application to pick up the new configuration. If the server connects
      Kept across copier update. -->
 <!-- DOMAIN-CLAUDE-DESKTOP-END -->
 
-## Using with uv
-
-Install with `uv tool install {{ pypi_name }}` to make `{{ project_name }}` available as a global command on your PATH. The configuration in step 2 works as-is.
-
-If the binary is not on your PATH, use the full path to it instead — see [Command not found](#command-not-found) below.
-
 ## Troubleshooting
 
 ### Server not appearing in Claude Desktop
@@ -96,7 +90,7 @@ Windows (`Scripts\` not `bin\`, `.exe` suffix):
 {
   "mcpServers": {
     "{{ project_name }}": {
-      "command": "%USERPROFILE%\\.venvs\\mcp\\Scripts\\{{ project_name }}.exe",
+      "command": "C:\\Users\\me\\.venvs\\mcp\\Scripts\\{{ project_name }}.exe",
       "args": ["serve"],
       "env": {
         "{{ env_prefix }}_READ_ONLY": "true"
