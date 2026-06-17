@@ -12,6 +12,8 @@ on:
 permissions:
   contents: read
 
+# Include event_name so push/PR/release runs on the same ref get separate
+# concurrency buckets and don't cancel each other.
 concurrency:
   group: {% raw %}${{ github.workflow }}{% endraw %}-{% raw %}${{ github.ref }}{% endraw %}-{% raw %}${{ github.event_name }}{% endraw %}
   cancel-in-progress: true
@@ -63,6 +65,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      # `needs: build` is a sequencing gate only — mike drives its own
+      # build internally; no artifact is passed from the build job.
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
