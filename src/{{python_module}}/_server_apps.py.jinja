@@ -90,7 +90,8 @@ def _rewrite_spa_app_tool_calls(html: str) -> str:
     Raises :class:`RuntimeError` if:
 
     - zero ``{{ python_module }}___<tool>`` literals are found in the HTML;
-    - the captured name set doesn't match :data:`_APP_TOOL_NAMES`.
+    - the HTML references a tool name not in :data:`_APP_TOOL_NAMES`;
+    - :data:`_APP_TOOL_NAMES` contains a name absent from the HTML.
     """
     captured: set[str] = set()
 

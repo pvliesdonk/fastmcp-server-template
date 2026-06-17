@@ -33,6 +33,8 @@ def test_spa_shell_html_rewrite_succeeded() -> None:
 
     assert len(_APP_TOOL_NAMES) > 0
     assert _SPA_SHELL_HTML
+    # Verify _rewrite_spa_app_tool_calls replaced all source-form literals.
+    assert "{{ python_module }}___" not in _SPA_SHELL_HTML
 
 
 {% else -%}
