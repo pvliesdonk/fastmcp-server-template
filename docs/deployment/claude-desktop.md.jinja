@@ -22,7 +22,9 @@ Or download the `.mcpb` bundle from the [GitHub Releases](https://github.com/{{ 
 
 ### 2. Configure Claude Desktop
 
-Add the server to your Claude Desktop configuration file. The path varies by operating system:
+If you installed via `.mcpb`, skip this step — Claude Desktop was configured automatically by the wizard.
+
+Otherwise, add the server to your Claude Desktop configuration file. The path varies by operating system:
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
@@ -70,10 +72,18 @@ If the binary is not on your PATH, use the full path to it instead — see [Comm
 
 ### "Command not found"
 
-Ensure `{{ project_name }}` is on your PATH. If installed in a virtualenv, use the full path to the binary:
+Ensure `{{ project_name }}` is on your PATH. If installed in a virtualenv, use the full path to the binary (macOS/Linux example):
 
 ```json
 {
   "command": "/Users/me/.venvs/mcp/bin/{{ project_name }}"
+}
+```
+
+On Windows, the equivalent path uses `Scripts\` instead of `bin/` and includes the `.exe` suffix:
+
+```json
+{
+  "command": "%USERPROFILE%\\.venvs\\mcp\\Scripts\\{{ project_name }}.exe"
 }
 ```
