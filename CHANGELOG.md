@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.1.1 (2026-06-18)
+
+- #159 fix(vale): Milestone C — cache clobber, exclusion-scope lockstep, ai-tells URL ownership
+
+
 ## v2.1.0 (2026-06-18)
 
 - #158 feat(scaffold): add include_mcp_apps_scaffold flag with full SPA hash-routing scaffold
