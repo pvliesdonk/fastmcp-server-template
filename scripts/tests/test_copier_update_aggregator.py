@@ -1261,6 +1261,29 @@ def test_main_missing_existing_body_exits_1_with_error_annotation(
     assert "nonexistent.md" in err
 
 
+def test_main_existing_body_is_directory_exits_1_with_error_annotation(
+    tmp_path, capsys
+) -> None:
+    """main() returns 1 with ::error:: when --existing-body is a directory, not a file."""
+    rc = agg.main(
+        [
+            "--existing-body",
+            str(tmp_path),  # directory, not a file
+            "--agent-enabled",
+            "false",
+            "--conflict-count",
+            "0",
+            "--output-body",
+            str(tmp_path / "out.md"),
+            "--overflow-dir",
+            str(tmp_path / "overflow"),
+        ]
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "::error::" in err
+
+
 def test_job_c_skip_rollup_drops_null_file(write_job_json) -> None:
     """skip rollup mirrors Job B informational rollup: null file dropped, count adjusts."""
     job_c = write_job_json(

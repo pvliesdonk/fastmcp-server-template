@@ -47,12 +47,13 @@ class AggregatorInputs:
 
 
 def _read_job_json(path: Path | None) -> dict | None:
-    """Read and JSON-parse an agent output file. Returns None if missing or unreadable.
+    """Read and JSON-parse an agent output file.
 
     Absent paths (None or not a regular file) return None silently — expected
     when an agent was gated off. Parse, encoding, or I/O failures emit a
     ::warning:: annotation so operators have a breadcrumb without aborting the
-    aggregator run.
+    aggregator run. Note: UnicodeDecodeError requires its own except clause
+    because it is a ValueError subclass, not an OSError subclass.
     """
     if path is None or not path.is_file():
         return None
