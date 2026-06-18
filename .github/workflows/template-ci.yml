@@ -182,11 +182,15 @@ jobs:
           # version check above) to avoid false matches on other vale_flags
           # values if a downstream adds a second Vale invocation.
           CI_EXCL=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' .github/workflows/ci.yml \
-            | grep -oE '!docs/[^"'"'"' ]*')
-          PC_EXCL=$(awk '/vale-cli\/vale[[:space:]]*$/{f=1; next} f && /exclude:/{print; exit}' .pre-commit-config.yaml \
-            | grep -oE 'docs/[^[:space:]]*')
+            | grep -oE '!docs/[^"'"'"' ]*' || true)
+          # grep -A10 bounds the search to the vale hook block — prevents a
+          # false-OK if the vale hook's exclude is removed and unbounded awk
+          # would silently capture a later hook's exclude instead.
+          PC_EXCL=$(grep -A10 '^[[:space:]]*- id: vale' .pre-commit-config.yaml \
+            | grep -m1 'exclude:' \
+            | grep -oE 'docs/[^[:space:]]*' || true)
           [ -n "$CI_EXCL" ] || { echo "::error::vale exclusion glob not found in ci.yml vale_flags"; exit 1; }
-          [ -n "$PC_EXCL" ] || { echo "::error::vale exclude not found in .pre-commit-config.yaml"; exit 1; }
+          [ -n "$PC_EXCL" ] || { echo "::error::vale exclude not found in .pre-commit-config.yaml vale hook"; exit 1; }
           # Normalize: strip leading ! / ^ and trailing /** / before comparing.
           CI_NORM=$(echo "${CI_EXCL#!}" | sed 's|/\*\*$||;s|/$||')
           PC_NORM=$(echo "${PC_EXCL#^}" | sed 's|/\*\*$||;s|/$||')
