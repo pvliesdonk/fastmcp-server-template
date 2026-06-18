@@ -69,6 +69,7 @@ jobs:
       # build internally; no artifact is passed from the build job.
       - uses: actions/checkout@v6
         with:
+          # Full history required: mike reads and pushes the gh-pages branch.
           fetch-depth: 0
           ref: main
 
@@ -96,7 +97,7 @@ jobs:
         run: |
           version="${TAG#v}"
           if [ "$PRERELEASE" = "true" ]; then
-            uv run mike deploy --push --update-aliases unstable --title "unstable (${version})"
+            uv run mike deploy --push unstable --title "unstable (${version})"
           else
             minor="$(echo "$version" | cut -d. -f1-2)"
             uv run mike deploy --push --update-aliases --title "$version" "$minor" latest
