@@ -33,8 +33,12 @@ Vocab = Base
 # each sync. Intentional: keeps style rules current. To pin for
 # reproducibility, append a version (e.g. `Google@1.0.0`).
 # `ai-tells` (https://github.com/tbhb/vale-ai-tells) catches common
-# LLM-prose tells; pinned to a release URL since it is not in Vale's
-# package index.
+# LLM-prose tells; pinned to a specific release URL since it is not in
+# Vale's package index. NOTE: this file is `_skip_if_exists` — after the
+# first `copier copy`, copier updates no longer propagate URL changes here.
+# If tbhb/vale-ai-tells renames or removes the pinned release, `vale sync`
+# will fail permanently for this project. Periodically check
+# https://github.com/tbhb/vale-ai-tells/releases and bump the URL manually.
 Packages = Google, proselint, write-good, https://github.com/tbhb/vale-ai-tells/releases/download/v1.9.0/ai-tells.zip
 
 [*.md]
