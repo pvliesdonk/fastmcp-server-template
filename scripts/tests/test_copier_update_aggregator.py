@@ -1174,6 +1174,116 @@ def test_job_c_only_skip_with_null_file_suppresses_section_header(
     assert "## Agent analysis" not in body
 
 
+# ── Silent-failure annotations ────────────────────────────────────────────────
+
+
+def test_read_job_json_no_warning_for_none_path(capsys) -> None:
+    """Path=None is expected-missing; no stderr annotation emitted."""
+    result = agg._read_job_json(None)
+    assert result is None
+    assert capsys.readouterr().err == ""
+
+
+def test_read_job_json_no_warning_for_missing_file(tmp_path, capsys) -> None:
+    """Non-existent path is expected-missing; no stderr annotation emitted."""
+    result = agg._read_job_json(tmp_path / "absent.json")
+    assert result is None
+    assert capsys.readouterr().err == ""
+
+
+def test_read_job_json_no_warning_for_directory_path(tmp_path, capsys) -> None:
+    """Directory path fails is_file() and returns None silently (not an OSError warning)."""
+    result = agg._read_job_json(tmp_path)  # tmp_path is a directory
+    assert result is None
+    assert capsys.readouterr().err == ""
+
+
+def test_read_job_json_warns_on_malformed_json(tmp_path, capsys) -> None:
+    """JSONDecodeError emits a ::warning:: annotation to stderr."""
+    bad = tmp_path / "job.json"
+    bad.write_text("not valid json {", encoding="utf-8")
+    result = agg._read_job_json(bad)
+    assert result is None
+    err = capsys.readouterr().err
+    assert "::warning::" in err
+    assert str(bad) in err
+
+
+def test_read_job_json_warns_on_oserror(tmp_path, capsys, monkeypatch) -> None:
+    """OSError emits a ::warning:: annotation to stderr."""
+    p = tmp_path / "job.json"
+    p.write_text('{"status": "ok"}', encoding="utf-8")
+
+    def raise_oserror(*_args, **_kwargs):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(type(p), "read_text", raise_oserror)
+    result = agg._read_job_json(p)
+    assert result is None
+    err = capsys.readouterr().err
+    assert "::warning::" in err
+    assert str(p) in err
+
+
+def test_read_job_json_warns_on_unicode_error(tmp_path, capsys) -> None:
+    """UnicodeDecodeError emits a ::warning:: annotation to stderr."""
+    p = tmp_path / "job.json"
+    p.write_bytes(b"\xff\xfe not utf-8")  # invalid UTF-8 sequence
+
+    result = agg._read_job_json(p)
+    assert result is None
+    err = capsys.readouterr().err
+    assert "::warning::" in err
+    assert str(p) in err
+
+
+def test_main_missing_existing_body_exits_1_with_error_annotation(
+    tmp_path, capsys
+) -> None:
+    """main() returns exit code 1 with a ::error:: annotation when --existing-body is absent."""
+    rc = agg.main(
+        [
+            "--existing-body",
+            str(tmp_path / "nonexistent.md"),
+            "--agent-enabled",
+            "false",
+            "--conflict-count",
+            "0",
+            "--output-body",
+            str(tmp_path / "out.md"),
+            "--overflow-dir",
+            str(tmp_path / "overflow"),
+        ]
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "::error::" in err
+    assert "nonexistent.md" in err
+
+
+def test_main_existing_body_is_directory_exits_1_with_error_annotation(
+    tmp_path, capsys
+) -> None:
+    """main() returns 1 with ::error:: when --existing-body is a directory, not a file."""
+    rc = agg.main(
+        [
+            "--existing-body",
+            str(tmp_path),  # directory, not a file
+            "--agent-enabled",
+            "false",
+            "--conflict-count",
+            "0",
+            "--output-body",
+            str(tmp_path / "out.md"),
+            "--overflow-dir",
+            str(tmp_path / "overflow"),
+        ]
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "::error::" in err
+
+
 def test_job_c_skip_rollup_drops_null_file(write_job_json) -> None:
     """skip rollup mirrors Job B informational rollup: null file dropped, count adjusts."""
     job_c = write_job_json(
