@@ -171,6 +171,34 @@ jobs:
           [ "$CI_VER" = "$PC_VER" ] \
             || { echo "::error::vale version drift — ci.yml=$CI_VER pre-commit=$PC_VER (bump in lockstep)"; exit 1; }
 
+      - name: vale exclusion-scope lockstep
+        working-directory: /tmp/smoke
+        run: |
+          # CI's vale_flags glob and pre-commit's exclude regex must scope to
+          # the same subtree. Drift means CI and pre-commit lint different file
+          # sets — a finding visible to one is silent to the other.
+          #
+          # CI extraction is scoped to the vale: job (same awk anchor as the
+          # version check above) to avoid false matches on other vale_flags
+          # values if a downstream adds a second Vale invocation.
+          CI_EXCL=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' .github/workflows/ci.yml \
+            | grep -oE '!docs/[^"'"'"' ]*' || true)
+          # grep -A15 bounds the search to the vale hook block. The `$`
+          # anchor avoids matching `- id: vale-sync`. Window of 15 safely
+          # covers the 11-line gap between `- id: vale` and `exclude:` in the
+          # rendered pre-commit config; prevents capturing a later hook's
+          # exclude if the vale hook's own exclude is removed.
+          PC_EXCL=$(grep -A15 '^[[:space:]]*- id: vale$' .pre-commit-config.yaml \
+            | grep -m1 'exclude:' \
+            | grep -oE 'docs/[^[:space:]]*' || true)
+          [ -n "$CI_EXCL" ] || { echo "::error::vale exclusion glob not found in ci.yml vale_flags"; exit 1; }
+          [ -n "$PC_EXCL" ] || { echo "::error::vale exclude not found in .pre-commit-config.yaml vale hook"; exit 1; }
+          # Normalize: strip leading ! / ^ and trailing /** / before comparing.
+          CI_NORM=$(echo "${CI_EXCL#!}" | sed 's|/\*\*$||;s|/$||')
+          PC_NORM=$(echo "${PC_EXCL#^}" | sed 's|/\*\*$||;s|/$||')
+          [ "$CI_NORM" = "$PC_NORM" ] \
+            || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL pre-commit=$PC_EXCL"; exit 1; }
+
   # Runs the two downstream workflow shapes that generated projects invoke
   # on their own CI — `mkdocs build --strict` (docs.yml) and `nfpm package`
   # (release.yml).  Dedicated non-matrix job so the downstream-gate is
