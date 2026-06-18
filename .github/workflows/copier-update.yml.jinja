@@ -171,6 +171,7 @@ jobs:
         continue-on-error: true
         env:
           PREVIOUS_COMMIT: {{ '${{ steps.meta.outputs.previous_commit }}' }}
+          NEW_REF: {{ '${{ steps.meta.outputs.new_ref }}' }}
           TEMPLATE_REPO: {{ '${{ steps.meta.outputs.template_repo }}' }}
         run: |
           set -euo pipefail
@@ -182,10 +183,14 @@ jobs:
           git clone --filter=blob:none \
             "https://github.com/${TEMPLATE_REPO}.git" \
             /tmp/template
-          # Verify both refs are reachable
+          # Verify both refs are reachable before declaring the clone usable.
           git -C /tmp/template fetch --tags
           if [ -n "${PREVIOUS_COMMIT}" ]; then
             git -C /tmp/template rev-parse "${PREVIOUS_COMMIT}^{commit}" >/dev/null
+          fi
+          if [ -n "${NEW_REF}" ]; then
+            git -C /tmp/template rev-parse "${NEW_REF}^{commit}" >/dev/null \
+              || { echo "::error::NEW_REF not reachable in template clone: ${NEW_REF}"; exit 1; }
           fi
           echo "template_clone_ok=true" >> "$GITHUB_OUTPUT"
 

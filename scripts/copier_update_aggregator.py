@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -46,12 +47,21 @@ class AggregatorInputs:
 
 
 def _read_job_json(path: Path | None) -> dict | None:
-    """Read and JSON-parse an agent output file. Returns None if missing or unreadable."""
+    """Read and JSON-parse an agent output file. Returns None if missing or unreadable.
+
+    Absent paths (None or not-exists) return None silently — expected when an
+    agent was gated off. Parse or read failures emit a ::warning:: annotation so
+    operators have a breadcrumb without aborting the aggregator run.
+    """
     if path is None or not path.exists():
         return None
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError as e:
+        print(f"::warning::agent output at {path} is not valid JSON: {e}", file=sys.stderr)
+        return None
+    except OSError as e:
+        print(f"::warning::could not read agent output at {path}: {e}", file=sys.stderr)
         return None
 
 
@@ -524,6 +534,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    if not args.existing_body.exists():
+        print(f"::error::--existing-body file not found: {args.existing_body}", file=sys.stderr)
+        return 1
     inputs = AggregatorInputs(
         existing_body=args.existing_body.read_text(encoding="utf-8"),
         agent_enabled=(args.agent_enabled == "true"),
