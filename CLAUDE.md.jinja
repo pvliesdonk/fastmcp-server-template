@@ -88,12 +88,14 @@ try to make them conform:
   automatically. Tool-call lines carry `tool=<name>`. Governed by
   `fastmcp-pvl-core` itself (see pvliesdonk/fastmcp-pvl-core#90); no
   first-party code needed.
-- **uvicorn access logs and `mcp.server.lowlevel.server` lines**: upstream
+- **`uvicorn.access` and `mcp.server.lowlevel.server` log lines**: upstream
   transport / SDK output. `configure_logging_from_env` raises their effective
-  level to `WARNING`, suppressing their per-request `INFO` output at the
-  default level; they reappear at `DEBUG` via `NOTSET` inheritance
-  (pvliesdonk/fastmcp-pvl-core#91). Do not silence or reformat them — they
-  are out of scope by design.
+  level to `WARNING`, suppressing per-request `INFO` output at the default
+  level; at `DEBUG` they are reset to `NOTSET` so the root logger governs
+  their effective level via propagation (pvliesdonk/fastmcp-pvl-core#91).
+  `uvicorn.error` is intentionally not suppressed — it carries startup and
+  bind failures. Do not silence or reformat any of these — they are out of
+  scope by design.
 
 ### Framework
 - Standard library `logging` throughout. Every module: `logger = logging.getLogger(__name__)`.
