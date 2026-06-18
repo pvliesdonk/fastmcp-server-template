@@ -77,6 +77,23 @@ Every issue, PR, and code change must consider documentation impact. Before clos
 
 ## Logging Standard
 
+### Scope
+
+This standard governs **first-party code only** — `src/{{ python_module }}/` and
+`tests/`. Two categories of log output are explicitly **out of scope**; do not
+try to make them conform:
+
+- **FastMCP middleware stack** (`fastmcp-pvl-core` timing / logging /
+  error-handling middleware): emits conforming, bare-event-name-first lines
+  automatically. Tool-call lines carry `tool=<name>`. Governed by
+  `fastmcp-pvl-core` itself (see pvliesdonk/fastmcp-pvl-core#90); no
+  first-party code needed.
+- **uvicorn access logs and `mcp.server.lowlevel.server` lines**: upstream
+  transport / SDK output. `configure_logging_from_env` demotes them below
+  `INFO` so they are silent at the default level and reappear only at `DEBUG`
+  (pvliesdonk/fastmcp-pvl-core#91). Do not silence or reformat them — they
+  are out of scope by design.
+
 ### Framework
 - Standard library `logging` throughout. Every module: `logger = logging.getLogger(__name__)`.
 - No `print()` for operational output. No third-party logging libraries.
