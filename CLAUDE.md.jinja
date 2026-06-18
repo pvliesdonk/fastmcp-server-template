@@ -89,8 +89,9 @@ try to make them conform:
   `fastmcp-pvl-core` itself (see pvliesdonk/fastmcp-pvl-core#90); no
   first-party code needed.
 - **uvicorn access logs and `mcp.server.lowlevel.server` lines**: upstream
-  transport / SDK output. `configure_logging_from_env` demotes them below
-  `INFO` so they are silent at the default level and reappear only at `DEBUG`
+  transport / SDK output. `configure_logging_from_env` raises their effective
+  level to `WARNING`, suppressing their per-request `INFO` output at the
+  default level; they reappear at `DEBUG` via `NOTSET` inheritance
   (pvliesdonk/fastmcp-pvl-core#91). Do not silence or reformat them — they
   are out of scope by design.
 
