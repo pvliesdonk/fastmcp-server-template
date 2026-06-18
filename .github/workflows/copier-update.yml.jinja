@@ -406,7 +406,7 @@ jobs:
             echo "DIFF_STAT_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build #49 body content
+      - name: Build PR body content
         id: build-body
         if: steps.changes.outputs.changed == 'true'
         env:
@@ -483,10 +483,10 @@ jobs:
 
       - name: Compose PR body via aggregator
         id: compose
-        # Reads the existing #49-shaped body data + three /tmp/agent-job-*.json
+        # Reads the existing PR body data + three /tmp/agent-job-*.json
         # files (any may be missing/errored) and writes the composed PR body.
         # Failure-tolerant: if aggregator crashes, PR still opens with the
-        # existing #49 body (no agent sections).
+        # existing body (no agent sections).
         if: steps.changes.outputs.changed == 'true'
         continue-on-error: true
         env:
@@ -529,8 +529,8 @@ jobs:
           branch="copier/update"
           title="chore(copier): update to ${REF}"
 
-          # Prefer the aggregator's composed body; fall back to the plain
-          # #49 body if the aggregator step failed (continue-on-error: true).
+          # Prefer the aggregator's composed body; fall back to the plain body
+          # if the aggregator step failed (continue-on-error: true).
           if [ -f /tmp/aggregator/composed-body.md ]; then
             body_file=/tmp/aggregator/composed-body.md
           else
