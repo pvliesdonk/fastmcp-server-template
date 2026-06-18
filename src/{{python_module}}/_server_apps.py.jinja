@@ -101,7 +101,7 @@ def _rewrite_spa_app_tool_calls(html: str) -> str:
         return _hashed(name)
 
     new_html, count = re.subn(
-        r"{{ python_module }}___([a-z_]+)",
+        r"{{ python_module }}___([a-z_][a-z0-9_]*)",
         _capture,
         html,
     )
