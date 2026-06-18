@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.0 (2026-06-18)
+
+- #158 feat(scaffold): add include_mcp_apps_scaffold flag with full SPA hash-routing scaffold
+- #157 feat(docs): mike versioned-docs publishing (#148)
+- #156 feat(docs): add Claude Desktop deployment guide (#119)
+- #155 feat(ci): surface MCPB_VERSION as env var and add bundle smoke-test
+
+
 ## v2.0.0 (2026-06-17)
 
 - #153 feat(deps): bump fastmcp-pvl-core to >=3.2.0,<4 and expose build_kv_store
