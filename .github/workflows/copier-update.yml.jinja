@@ -373,6 +373,11 @@ jobs:
           REF: {{ '${{ steps.meta.outputs.ref }}' }}
         run: |
           set -euo pipefail
+          # claude-code-action overwrites local git config (user.name/email) to
+          # claude[bot] during the agent step; reset here so this commit is
+          # attributed to github-actions[bot], not the agent identity.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="copier/update"
           # `git add -A` runs BEFORE `git checkout -B` because copier's
           # `--conflict=inline` mode leaves conflict-marker files in the
