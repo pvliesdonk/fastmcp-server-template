@@ -24,17 +24,17 @@ import re
 from typing import Any
 
 from fastmcp import FastMCP
-from fastmcp.apps import AppConfig
 
 try:
+    from fastmcp.apps import AppConfig
     from fastmcp.server.providers.addressing import (
         hash_tool,
         hashed_backend_name,
     )
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
-        "fastmcp.server.providers.addressing is required for MCP Apps SPA "
-        "tool routing. Pin fastmcp>=3.2.4 in pyproject.toml."
+        "fastmcp.apps and fastmcp.server.providers.addressing are required "
+        "for MCP Apps SPA tool routing. Pin fastmcp>=3.2.4 in pyproject.toml."
     ) from exc
 
 logger = logging.getLogger(__name__)
