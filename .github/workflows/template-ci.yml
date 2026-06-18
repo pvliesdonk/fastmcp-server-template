@@ -183,10 +183,12 @@ jobs:
           # values if a downstream adds a second Vale invocation.
           CI_EXCL=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' .github/workflows/ci.yml \
             | grep -oE '!docs/[^"'"'"' ]*' || true)
-          # grep -A10 bounds the search to the vale hook block — prevents a
-          # false-OK if the vale hook's exclude is removed and unbounded awk
-          # would silently capture a later hook's exclude instead.
-          PC_EXCL=$(grep -A10 '^[[:space:]]*- id: vale' .pre-commit-config.yaml \
+          # grep -A15 bounds the search to the vale hook block. The `$`
+          # anchor avoids matching `- id: vale-sync`. Window of 15 safely
+          # covers the 11-line gap between `- id: vale` and `exclude:` in the
+          # rendered pre-commit config; prevents capturing a later hook's
+          # exclude if the vale hook's own exclude is removed.
+          PC_EXCL=$(grep -A15 '^[[:space:]]*- id: vale$' .pre-commit-config.yaml \
             | grep -m1 'exclude:' \
             | grep -oE 'docs/[^[:space:]]*' || true)
           [ -n "$CI_EXCL" ] || { echo "::error::vale exclusion glob not found in ci.yml vale_flags"; exit 1; }
