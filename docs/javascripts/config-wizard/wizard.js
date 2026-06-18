@@ -151,9 +151,11 @@ function render() {
         // Fallback for non-secure contexts: select the block so Ctrl/Cmd-C works.
         const range = document.createRange();
         range.selectNodeContents(pre);
-        const sel = getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
+        const sel = window.getSelection();
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
       }
     });
     head.appendChild(copy);
@@ -207,6 +209,11 @@ async function init() {
     return;
   }
   readUrlState(SPEC);
+  for (const q of SPEC.questions) {
+    if (answers[q.id] === undefined && q.type === "select" && q.options?.length) {
+      answers[q.id] = q.options[0].value;
+    }
+  }
   render();
 }
 

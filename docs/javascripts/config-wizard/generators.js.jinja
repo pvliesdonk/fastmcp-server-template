@@ -21,7 +21,7 @@ const shellQuote = (v) => {
 // break parsing (or has surrounding whitespace, or is empty).
 const yamlScalar = (v) => {
   const s = String(v);
-  return /[:#[\]{}&*?|<>=!%@,`"']|^\s|\s$|^$/.test(s) ? JSON.stringify(s) : s;
+  return /[\n:#[\]{}&*?|<>=!%@,`"']|^\s|\s$|^$/.test(s) ? JSON.stringify(s) : s;
 };
 
 // A systemd `Environment=` line. systemd does NOT expand `$` in Environment=
@@ -78,7 +78,7 @@ function dockerEnvMap(map) {
 const dotenvQuote = (v) => {
   const s = String(v);
   if (!/[#"'\\\s]/.test(s)) return s;
-  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\$/g, '\\$')}"`;
 };
 
 export function generateDotenv(map) {
