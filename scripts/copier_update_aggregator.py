@@ -58,7 +58,15 @@ def _read_job_json(path: Path | None) -> dict | None:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        print(f"::warning::agent output at {path} is not valid JSON: {e}", file=sys.stderr)
+        print(
+            f"::warning::agent output at {path} is not valid JSON: {e}", file=sys.stderr
+        )
+        return None
+    except UnicodeDecodeError as e:
+        print(
+            f"::warning::agent output at {path} is not valid UTF-8: {e}",
+            file=sys.stderr,
+        )
         return None
     except OSError as e:
         print(f"::warning::could not read agent output at {path}: {e}", file=sys.stderr)
@@ -535,7 +543,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     if not args.existing_body.exists():
-        print(f"::error::--existing-body file not found: {args.existing_body}", file=sys.stderr)
+        print(
+            f"::error::--existing-body file not found: {args.existing_body}",
+            file=sys.stderr,
+        )
         return 1
     inputs = AggregatorInputs(
         existing_body=args.existing_body.read_text(encoding="utf-8"),
