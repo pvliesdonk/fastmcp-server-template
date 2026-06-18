@@ -54,6 +54,10 @@ jobs:
   test:
     name: Test (Python {% raw %}${{ matrix.python-version }}{% endraw %})
     runs-on: ubuntu-latest
+    # Prevent a stalled `uv python install` from blocking the PR for hours.
+    # 20 min covers the full test matrix with headroom; cold interpreter
+    # downloads from python-build-standalone are the most likely stall source.
+    timeout-minutes: 20
     continue-on-error: {% raw %}${{ matrix.experimental || false }}{% endraw %}
     permissions:
       contents: read
@@ -77,6 +81,16 @@ jobs:
         uses: astral-sh/setup-uv@v8.1.0
         with:
           version: "latest"
+
+      - name: Cache Python interpreter
+        uses: actions/cache@v4
+        with:
+          # `uv python install` writes to UV_PYTHON_INSTALL_DIR, which is
+          # separate from the uv package cache and not covered by setup-uv's
+          # enable-cache. Caching by version + OS avoids re-downloading the
+          # python-build-standalone tarball on every run.
+          path: ~/.local/share/uv/python
+          key: uv-python-{% raw %}${{ matrix.python-version }}-${{ runner.os }}{% endraw %}
 
       - name: Set up Python {% raw %}${{ matrix.python-version }}{% endraw %}
         run: uv python install {% raw %}${{ matrix.python-version }}{% endraw %}
@@ -202,7 +216,13 @@ jobs:
         run: uv export --all-extras --no-default-groups --frozen --no-emit-project --no-hashes -o {% raw %}${{ runner.temp }}{% endraw %}/requirements.txt
 
       - name: Run pip-audit
-        run: uvx pip-audit --strict --progress-spinner off -r {% raw %}${{ runner.temp }}{% endraw %}/requirements.txt
+        run: |
+          uvx pip-audit --strict --progress-spinner off \
+            --ignore-vuln CVE-2026-42561 \
+            -r {% raw %}${{ runner.temp }}{% endraw %}/requirements.txt
+          # CVE-2026-42561: python-multipart <0.0.27, pulled in transitively by
+          # fastmcp/starlette. Ignored until the upstream pin chain propagates
+          # the fix to 0.0.27. Remove once `uv lock` resolves >=0.0.27.
 
   secrets:
     name: Secret Detection
