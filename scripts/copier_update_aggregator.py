@@ -49,11 +49,12 @@ class AggregatorInputs:
 def _read_job_json(path: Path | None) -> dict | None:
     """Read and JSON-parse an agent output file. Returns None if missing or unreadable.
 
-    Absent paths (None or not-exists) return None silently — expected when an
-    agent was gated off. Parse or read failures emit a ::warning:: annotation so
-    operators have a breadcrumb without aborting the aggregator run.
+    Absent paths (None or not a regular file) return None silently — expected
+    when an agent was gated off. Parse, encoding, or I/O failures emit a
+    ::warning:: annotation so operators have a breadcrumb without aborting the
+    aggregator run.
     """
-    if path is None or not path.exists():
+    if path is None or not path.is_file():
         return None
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -542,9 +543,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    if not args.existing_body.exists():
+    if not args.existing_body.is_file():
         print(
-            f"::error::--existing-body file not found: {args.existing_body}",
+            f"::error::--existing-body not found or not a regular file: {args.existing_body}",
             file=sys.stderr,
         )
         return 1

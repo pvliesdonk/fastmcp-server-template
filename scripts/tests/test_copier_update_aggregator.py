@@ -1191,6 +1191,13 @@ def test_read_job_json_no_warning_for_missing_file(tmp_path, capsys) -> None:
     assert capsys.readouterr().err == ""
 
 
+def test_read_job_json_no_warning_for_directory_path(tmp_path, capsys) -> None:
+    """Directory path fails is_file() and returns None silently (not an OSError warning)."""
+    result = agg._read_job_json(tmp_path)  # tmp_path is a directory
+    assert result is None
+    assert capsys.readouterr().err == ""
+
+
 def test_read_job_json_warns_on_malformed_json(tmp_path, capsys) -> None:
     """JSONDecodeError emits a ::warning:: annotation to stderr."""
     bad = tmp_path / "job.json"
