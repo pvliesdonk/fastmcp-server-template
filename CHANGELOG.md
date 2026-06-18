@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.2 (2026-06-18)
+
+- #165 fix(release): auto-advance rc revision; remove force=prerelease workaround
+- #164 fix(workflow): restore github-actions[bot] identity on copier-update commits
+- #162 fix(aggregator): surface silent failures at operator boundary
+- #161 docs(claude-md): add Logging Standard Scope subsection
+- #160 fix(ci): CVE-2026-42561 ignore, test timeout, interpreter cache, stale #49 ref
+
+
 ## v2.1.1 (2026-06-18)
 
 - #159 fix(vale): Milestone C — cache clobber, exclusion-scope lockstep, ai-tells URL ownership
