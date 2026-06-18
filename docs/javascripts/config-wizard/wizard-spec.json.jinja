@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "secretKeys": [
+    "{{ env_prefix }}_BEARER_TOKEN"
+  ],
+  "questions": [
+    {
+      "id": "deployment",
+      "label": "Where will the server run?",
+      "help": "Local stdio for Claude Desktop/Code, or an HTTP server for Docker/systemd.",
+      "type": "select",
+      "options": [
+        { "value": "local", "label": "Local (Claude Desktop / Claude Code, stdio)" },
+        { "value": "server", "label": "Server (HTTP — Docker / Compose / systemd)" }
+      ]
+    },
+    {
+      "id": "bearer_token",
+      "label": "Bearer token",
+      "help": "Any non-empty string enables bearer auth. Browser-only.",
+      "type": "text",
+      "var": "{{ env_prefix }}_BEARER_TOKEN",
+      "showIf": { "deployment": ["server"] }
+    },
+    {
+      "id": "log_level",
+      "label": "Log level",
+      "type": "text",
+      "var": "FASTMCP_LOG_LEVEL",
+      "advancedGroup": "Logging"
+    },
+    {
+      "id": "rich_logging",
+      "label": "Rich logging",
+      "type": "bool",
+      "var": "FASTMCP_ENABLE_RICH_LOGGING",
+      "advancedGroup": "Logging"
+    }
+  ],
+  "guards": []
+}

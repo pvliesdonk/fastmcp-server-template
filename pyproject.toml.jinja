@@ -56,6 +56,10 @@ docs = [
     "mkdocs-llmstxt>=0.5",
 ]
 
+browser = [
+    "pytest-playwright>=0.5",
+]
+
 [project.scripts]
 {{ project_name }} = "{{ python_module }}.cli:main"
 
@@ -114,6 +118,9 @@ indent-style = "space"
 testpaths = ["tests"]
 addopts = ["--strict-markers", "-ra"]
 asyncio_mode = "auto"
+markers = [
+    "browser: end-to-end test that drives a headless browser (requires the 'browser' dependency group + 'playwright install chromium')",
+]
 
 [tool.coverage.run]
 source = ["src/{{ python_module }}"]

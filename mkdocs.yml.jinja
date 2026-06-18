@@ -39,6 +39,13 @@ extra:
     provider: mike
     default: latest
 
+extra_javascript:
+  - path: javascripts/config-wizard/wizard.js
+    type: module
+
+extra_css:
+  - stylesheets/config-wizard.css
+
 plugins:
   - search
   # Generates llms.txt + llms-full.txt for the README badge.
@@ -55,6 +62,7 @@ plugins:
           - index.md
           - installation.md
           - configuration.md
+          - configuration-generator.md
         Guides:
           - guides/*.md
         MCP Interface:
@@ -102,6 +110,7 @@ nav:
   - Getting Started:
       - Installation: installation.md
       - Configuration: configuration.md
+      - Configuration Generator: configuration-generator.md
   - Guides:
       - Authentication: guides/authentication.md
   - MCP Interface:
