@@ -118,7 +118,8 @@ deviation from the shapes above will cause the section to render as
 
 - Tool access: file read/write on the working tree, file read on `/tmp/template`,
   `git -C /tmp/template <subcommand>`, `git status`, `git diff`, `git add <path>`,
-  `git commit -m '<msg>'`. NO `git push`, NO branch operations, NO network calls.
+  `git config user.name`, `git config user.email`, `git commit -m '<msg>'`,
+  `git rev-parse`. NO `git push`, NO branch operations, NO network calls.
 - Do not modify files outside the conflict files listed above.
 - Sentinel-block awareness: lines inside `<!-- DOMAIN-*-START -->` ... `<!-- DOMAIN-*-END -->`,
   `<!-- PROJECT-*-START -->` ... `<!-- PROJECT-*-END -->`, `# CONFIG-*-START` ...
