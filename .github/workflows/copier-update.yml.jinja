@@ -280,7 +280,7 @@ jobs:
           claude_code_oauth_token: {{ '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' }}
           prompt: {{ '${{ steps.prepare-prompt-a.outputs.prompt }}' }}
           claude_args: |
-            --allowed-tools "Read,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git add:*),Bash(git commit:*),Bash(git rev-parse:*),Bash(git -C /tmp/template:*)"
+            --allowed-tools "Read,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git add:*),Bash(git config user.name:*),Bash(git config user.email:*),Bash(git commit:*),Bash(git rev-parse:*),Bash(git -C /tmp/template:*)"
 
       - name: Pre-render Job B prompt
         id: prepare-prompt-b
@@ -373,6 +373,11 @@ jobs:
           REF: {{ '${{ steps.meta.outputs.ref }}' }}
         run: |
           set -euo pipefail
+          # claude-code-action overwrites local git config (user.name/email) to
+          # claude[bot] during the agent step; reset here so this commit is
+          # attributed to github-actions[bot], not the agent identity.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="copier/update"
           # `git add -A` runs BEFORE `git checkout -B` because copier's
           # `--conflict=inline` mode leaves conflict-marker files in the
