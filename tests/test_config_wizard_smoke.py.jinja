@@ -11,11 +11,15 @@ import functools
 import http.server
 import socketserver
 import threading
+import typing
 from pathlib import Path
 
 import pytest
 
 pytest.importorskip("playwright.sync_api")
+
+if typing.TYPE_CHECKING:
+    from playwright.sync_api import Browser, Page
 
 SITE = Path(__file__).resolve().parent.parent / "site"
 
@@ -23,7 +27,7 @@ pytestmark = pytest.mark.browser
 
 
 @pytest.fixture(scope="module")
-def site_url():
+def site_url() -> typing.Iterator[str]:
     if not (SITE / "configuration-generator" / "index.html").exists():
         pytest.skip("site/ not built -- run `uv run mkdocs build` first")
     handler = functools.partial(
@@ -40,7 +44,7 @@ def site_url():
 
 
 @pytest.fixture(scope="module")
-def browser(site_url):  # noqa: ARG001 — depended on only for fixture ordering
+def browser(site_url: str) -> typing.Iterator[Browser]:  # noqa: ARG001 — depended on only for fixture ordering
     # Depend on site_url so its "site not built" skip runs BEFORE we try to
     # launch Chromium. In the main CI test lane (no built site, no installed
     # browser) this makes the smoke tests skip cleanly instead of erroring.
@@ -53,7 +57,7 @@ def browser(site_url):  # noqa: ARG001 — depended on only for fixture ordering
 
 
 @pytest.fixture
-def page(browser, site_url):
+def page(browser: Browser, site_url: str) -> typing.Iterator[Page]:
     # Fresh page per test: the wizard keeps answer state in a module-level JS
     # object, so each test must start from a clean load to stay order-independent.
     pg = browser.new_page()
@@ -63,13 +67,13 @@ def page(browser, site_url):
     pg.close()
 
 
-def test_local_path_emits_claude_json(page):
+def test_local_path_emits_claude_json(page: Page) -> None:
     page.select_option('[data-qid="deployment"] select', "local")
     text = page.inner_text(".cfg-output")
     assert "{{ project_name }}" in text
 
 
-def test_server_docker_path_emits_image(page):
+def test_server_docker_path_emits_image(page: Page) -> None:
     page.select_option('[data-qid="deployment"] select', "server")
     page.fill('[data-qid="bearer_token"] input', "secret-token")
     text = page.inner_text("#cfg-wizard")
