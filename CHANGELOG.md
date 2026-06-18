@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.2.0 (2026-06-18)
+
+- #166 feat(template): port in-browser configuration generator
+
+
 ## v2.1.2 (2026-06-18)
 
 - #165 fix(release): auto-advance rc revision; remove force=prerelease workaround
