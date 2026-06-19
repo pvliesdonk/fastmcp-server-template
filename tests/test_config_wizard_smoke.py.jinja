@@ -207,3 +207,27 @@ def test_systemd_uses_raw_host_path_not_container(page: Page) -> None:
     # systemd is a host-path context: no container-path rewrite.
     assert "DEMO_DATA_DIR=/host/data" in result
     assert "/data/app" not in result
+
+
+def test_compose_quotes_yaml_typed_env_values(page: Page) -> None:
+    result = _eval_generators(
+        page,
+        """(g) => {
+          const spec = { version: 1,
+            meta: { projectName: 'demo', dockerImage: 'img:latest', envPrefix: 'DEMO' },
+            secretKeys: [],
+            questions: [
+              { id: 'flag', label: 'F', type: 'text', var: 'DEMO_FLAG' },
+              { id: 'port', label: 'P', type: 'text', var: 'DEMO_PORT' },
+            ],
+            guards: [] };
+          const answers = { deployment: 'server', flag: 'true', port: '8080' };
+          const map = g.buildEnvMap(spec, answers);
+          return g.generateCompose(spec, answers, map);
+        }""",
+    )
+    # YAML 1.1 parsers coerce bare true/8080 to bool/int; env values are
+    # strings, so compose must emit them quoted.
+    assert 'DEMO_FLAG: "true"' in result
+    assert "DEMO_FLAG: true\n" not in result
+    assert 'DEMO_PORT: "8080"' in result
