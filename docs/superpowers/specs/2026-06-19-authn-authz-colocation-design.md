@@ -1,7 +1,7 @@
 # Co-locate authentication + authorization across the template
 
 **Date:** 2026-06-19
-**Status:** Design — approved, pending spec review
+**Status:** Implemented
 **Repo:** fastmcp-server-template (the template itself)
 **Related:** PR #177 (added `enable_authorization` gating), issue #176
 
