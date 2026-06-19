@@ -19,7 +19,7 @@ and `src/{{ python_module }}/server.py` — uncomment them to enable the
 "user:alice@example.com" = ["read", "write"]
 "user:admin@example.com" = ["*"]              # wildcard — any required scope passes
 "service:ci-bot"         = ["read"]
-"local"                  = ["*"]              # stdio mode subject
+"local"                  = ["*"]              # no-auth mode subject (default for stdio)
 ```
 
 - **Subject strings are opaque.** The `<kind>:<id>` convention is
@@ -40,22 +40,27 @@ string used as a *value* in the bearer-tokens TOML
 (`{{ env_prefix }}_BEARER_TOKENS_FILE`) — keep the two consistent. In
 single-token mode every caller shares one subject (the library default,
 currently `"bearer-anon"`, overridable via
-`{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`); in stdio mode the subject is
-`"local"`.
+`{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`); in no-auth mode (the default for
+stdio) the subject is `"local"`.
 
 ## Load semantics and privacy
 
 The ACL file loads **once at startup** and `load_acl` fails fast with
-`ConfigurationError` on any malformed entry (a typo aborts startup rather
-than silently denying). Denied requests are logged at WARNING with the
-subject; the wire-side error omits the subject by default — pass
-`AuthorizationMiddleware(..., expose_subject_in_error=True)` to surface it on
-internal-only servers.
+`ConfigurationError` on a *structural* error (missing or unreadable file,
+malformed TOML, no `[subjects]` table, a `*` subject key, or a non-string
+scope), aborting startup rather than running in a broken state. A *scope-name*
+typo is not structural — `"rite"` instead of `"write"` is valid TOML, loads
+cleanly, and then silently never matches, so the affected calls are denied;
+double-check scope spelling against the table below. Denied requests are
+logged at WARNING with the subject; the wire-side error omits the subject by
+default — pass `AuthorizationMiddleware(..., expose_subject_in_error=True)` to
+surface it on internal-only servers.
 
 ## Gated tools
 
 <!-- DOMAIN-AUTHZ-SCOPES-START — list THIS server's gated tools; kept across copier update -->
-<!-- Replace with this server's tool→scope mapping. Example: -->
+<!-- Replace with this server's tool→scope mapping. For each gated tool, also set
+     meta={"required_scope": "<scope>"} on its registration in tools.py. Example: -->
 | Tool | Required scope |
 |------|----------------|
 | `delete_entry` | `write` |
@@ -66,3 +71,9 @@ internal-only servers.
 
 - [fastmcp-pvl-core README — Authorization](https://github.com/pvliesdonk/fastmcp-pvl-core#authorization-opt-in--authorizationmiddleware) — full design, the `check_authorization` per-call helper, and per-token subject mapping.
 - [Authorization submodule spec](https://github.com/pvliesdonk/fastmcp-pvl-core/blob/main/docs/specs/authorization-submodule.md) — design rationale and deviations table.
+
+<!-- DOMAIN-AUTHZ-EXTRA-START -->
+<!-- Project-specific authorization notes go here; kept across copier
+     update. (E.g. "the import tool requires the 'write:admin' scope",
+     "the CI service account uses the 'service:ci-bot' subject".) -->
+<!-- DOMAIN-AUTHZ-EXTRA-END -->
