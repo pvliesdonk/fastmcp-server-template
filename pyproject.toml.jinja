@@ -47,6 +47,7 @@ dev = [
     "mypy>=1.11",
     "pre-commit>=3",
     "pip-audit>=2.7",
+    "jsonschema>=4.18",
 ]
 
 docs = [
@@ -149,6 +150,10 @@ no_implicit_optional = true
 
 [[tool.mypy.overrides]]
 module = ["fastmcp_pvl_core", "fastmcp_pvl_core.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["jsonschema", "jsonschema.*"]
 ignore_missing_imports = true
 
 [tool.pyright]

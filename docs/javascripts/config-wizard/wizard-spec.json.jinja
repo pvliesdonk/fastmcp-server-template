@@ -1,5 +1,10 @@
 {
   "version": 1,
+  "meta": {
+    "projectName": "{{ project_name }}",
+    "dockerImage": "{{ docker_registry }}/{{ project_name }}:latest",
+    "envPrefix": "{{ env_prefix }}"
+  },
   "secretKeys": [
     "{{ env_prefix }}_BEARER_TOKEN"
   ],
