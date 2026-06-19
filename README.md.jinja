@@ -109,33 +109,14 @@ Core environment variables shared across all `fastmcp-pvl-core`-based services:
 
 Domain-specific variables go below under [Domain configuration](#domain-configuration).
 
+## Authentication
+
+Callers authenticate via a bearer token or OIDC (mutually exclusive). See the [Authentication guide](docs/guides/authentication.md) for setup, mapped multi-subject tokens, OIDC, and troubleshooting.
+
 {% if enable_authorization -%}
 ## Authorization (opt-in)
 
-This server supports opt-in per-subject authorization from `fastmcp-pvl-core`.  The default runtime posture is **off** — every authenticated caller can use every tool, resource, and prompt.  Turn it on by pointing `{{ env_prefix }}_ACL_PATH` at a TOML ACL file; the middleware is installed only when the path is set, and individual tools opt in by declaring `meta={"required_scope": "<scope>"}` at registration.  A tool without `required_scope` is unrestricted regardless of caller.  (The wiring ships as commented stubs in `src/{{ python_module }}/config.py` and `src/{{ python_module }}/server.py`.)
-
-### ACL TOML schema
-
-```toml
-[subjects]
-"user:alice@example.com" = ["read", "write"]
-"user:admin@example.com" = ["*"]              # wildcard — any required scope passes
-"service:ci-bot"         = ["read"]
-"local"                  = ["*"]              # stdio mode subject
-```
-
-- **Subject strings are opaque.** The `<kind>:<id>` convention is documentation only; the library treats each subject as a literal string.
-- **`*` is the only library-treated special scope** — it grants every required scope.  Subject-side wildcards (`*` as an ACL key) are rejected at load time.
-- **Scope vocabulary is domain-defined.** Per-project or per-folder gating is encoded into the scope string itself (e.g. `read:project-foo`, `write:vault/personal`).
-
-The subject keyed in the ACL TOML is the same string used as a *value* in the bearer-tokens TOML (`{{ env_prefix }}_BEARER_TOKENS_FILE`) — keep the two consistent.  In single-token mode every caller shares one subject (the library default, currently `"bearer-anon"`, overridable via `{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`); in stdio mode the subject is `"local"`.  See [Mapped bearer tokens](docs/guides/authentication.md#mapped-bearer-tokens-multi-subject).
-
-The ACL file loads **once at startup** and `load_acl` fails fast with `ConfigurationError` on any malformed entry (a typo aborts startup rather than silently denying).  Denied requests are logged at WARNING with the subject; the wire-side error omits the subject by default — pass `AuthorizationMiddleware(..., expose_subject_in_error=True)` to surface it on internal-only servers.
-
-### See also
-
-- [fastmcp-pvl-core README — Authorization](https://github.com/pvliesdonk/fastmcp-pvl-core#authorization-opt-in--authorizationmiddleware) — full design, the `check_authorization` per-call helper, and per-token subject mapping.
-- [Authorization submodule spec](https://github.com/pvliesdonk/fastmcp-pvl-core/blob/main/docs/specs/authorization-submodule.md) — design rationale and deviations table.
+Per-subject authorization is **off by default** — every authenticated caller can use every tool. Point `{{ env_prefix }}_ACL_PATH` at a TOML ACL file to gate tools by scope (tools opt in via `meta={"required_scope": "<scope>"}`). See the [Authorization guide](docs/guides/authorization.md).
 
 {% endif -%}
 ## Post-scaffold checklist

@@ -80,7 +80,9 @@ _skip_if_exists:
 # — copier itself doesn't act on them.  README.md was moved out of
 # _skip_if_exists in #57.  The same hybrid pattern applies to
 # docs/*.md.jinja files: docs/deployment/* and docs/guides/authentication.md
-# moved out in #29 (PR #108); the remaining top-level docs/*.md files
+# moved out in #29 (PR #108); docs/guides/authorization.md (the
+# enable_authorization-gated guide, DOMAIN-AUTHZ-SCOPES/EXTRA sentinels)
+# added in #178; the remaining top-level docs/*.md files
 # (index, installation, configuration, tools/index, prompts) moved out in #106.
 # Those docs files use topic-specific DOMAIN-{TOPIC}-{KIND} sentinels
 # rather than the bare DOMAIN-START used in CLAUDE.md / README.md.
@@ -179,4 +181,4 @@ include_mcp_apps_scaffold:
 enable_authorization:
   type: bool
   default: false
-  help: "Scaffold the opt-in per-subject authorization surface: the commented ACL middleware stubs in config.py/server.py, the README 'Authorization' section, the *_ACL_PATH line in .env.example, and the cross-link in the authentication guide. Leave off unless this server needs per-caller scope gating (runtime enablement is still via the *_ACL_PATH env var)."
+  help: "Scaffold the opt-in per-subject authorization surface: the commented ACL middleware stubs in config.py/server.py, the brief README 'Authorization' pointer, the docs/guides/authorization.md guide and its nav entry, the *_ACL_PATH line in .env.example, and the cross-link in the authentication guide. Leave off unless this server needs per-caller scope gating (runtime enablement is still via the *_ACL_PATH env var)."
