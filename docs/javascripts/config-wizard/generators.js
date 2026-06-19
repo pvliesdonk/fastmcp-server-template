@@ -19,11 +19,22 @@ const shellQuote = (v) => {
   return /^[A-Za-z0-9_@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
 };
 
-// Quote a YAML scalar only when it contains characters that would otherwise
-// break parsing (or has surrounding whitespace, or is empty).
+// Bare tokens that YAML 1.1 parsers (used by Docker Compose) coerce to
+// bool/null/number. Env values are always strings, so these must be quoted to
+// stay strings — `KEY: true` would otherwise load as a boolean, `KEY: 8080` as
+// an int. Case-insensitive; covers bool, null, decimal/hex/octal ints, floats
+// (incl. exponent and ±.inf/.nan).
+const YAML_TYPED =
+  /^(?:y|n|yes|no|on|off|true|false|null|~|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?|0x[0-9a-fA-F]+|0o[0-7]+|[-+]?\.(?:inf|nan))$/i;
+
+// Quote a YAML scalar when it contains characters that would otherwise break
+// parsing (or has surrounding whitespace, or is empty), or when it is a bare
+// token a YAML 1.1 parser would type-coerce.
 const yamlScalar = (v) => {
   const s = String(v);
-  return /[\n:#[\]{}&*?|<>=!%@,`"']|^\s|\s$|^$/.test(s) ? JSON.stringify(s) : s;
+  return YAML_TYPED.test(s) || /[\n:#[\]{}&*?|<>=!%@,`"']|^\s|\s$|^$/.test(s)
+    ? JSON.stringify(s)
+    : s;
 };
 
 // A systemd `Environment=` line. systemd does NOT expand `$` in Environment=
