@@ -175,3 +175,8 @@ include_mcp_apps_scaffold:
   type: bool
   default: false
   help: "Include MCP Apps SPA scaffold (hash-routed app-only tools, inline HTML placeholder); leave off for projects without a visual UI"
+
+enable_authorization:
+  type: bool
+  default: false
+  help: "Scaffold the opt-in per-subject authorization surface: the commented ACL middleware stubs in config.py/server.py, the README 'Authorization' section, the *_ACL_PATH line in .env.example, and the cross-link in the authentication guide. Leave off unless this server needs per-caller scope gating (runtime enablement is still via the *_ACL_PATH env var)."
