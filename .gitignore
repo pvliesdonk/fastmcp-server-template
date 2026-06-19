@@ -25,3 +25,16 @@ site/
 
 # Git worktrees (superpowers skill convention)
 .worktrees/
+
+# Repowise local index cache (never tracked — large binary churn)
+.repowise/
+
+# Superpowers subagent-driven-development scratch (briefs, reports, diffs, ledger)
+.superpowers/
+
+# Local MCP + scratch artifacts from agent sessions
+.mcp.json
+full_pr_feedback.json
+pr_comments.txt
+pr_inline_comments.json
+pr_issue_comments.json
