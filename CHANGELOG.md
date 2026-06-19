@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.2.1 (2026-06-19)
+
+- #168 fix(config-wizard): five correctness bugs found during v2.2.0 adoption
+
+
 ## v2.2.0 (2026-06-18)
 
 - #166 feat(template): port in-browser configuration generator
