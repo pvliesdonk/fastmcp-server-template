@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.4.0 (2026-06-19)
+
+- #179 feat(scaffold): co-locate authentication + authorization (closes #178)
+- #177 feat(scaffold): gate Authorization scaffold behind enable_authorization (closes #176)
+- #174 fix(config-wizard): deep meta validation + dockerVolume/dockerPath var constraint (closes #172, #173)
+
+
 ## v2.3.0 (2026-06-19)
 
 - #170 feat(wizard): spec-owned domain via meta + dockerVolume/dockerPath (closes #169)
