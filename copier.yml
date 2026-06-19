@@ -59,6 +59,15 @@ _skip_if_exists:
   # docs corpus grows; without _skip_if_exists, copier update would wipe
   # those additions on every weekly cron and reseed the template version.
   - ".vale/styles/config/vocabularies/Base/accept.txt"
+  # Config-wizard domain spec — the entire file is domain content (the project's
+  # questions, secrets, guards, and meta identity).  The wizard *runtime*
+  # (generators.js, wizard.js, config-wizard.css, wizard-spec-schema.json) is
+  # template-owned and overwritten on update; only this spec is domain-owned.
+  - "docs/javascripts/config-wizard/wizard-spec.json"
+  # Domain-specific wizard browser tests — seeded with one skipped placeholder,
+  # owned downstream.  Generic framework tests stay in
+  # test_config_wizard_smoke.py (template-owned).
+  - "tests/test_config_wizard_domain.py"
 # Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is

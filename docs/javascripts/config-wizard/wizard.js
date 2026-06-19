@@ -124,14 +124,15 @@ function render() {
     els.forEach((e) => drawer.appendChild(e));
   }
 
+  const meta = spec.meta;
   const map = buildEnvMap(spec, answers);
   const local = answers.deployment !== "server";
   const tabs = local
-    ? [["Claude config", generateClaudeJson(map)], [".env", generateDotenv(map)]]
+    ? [["Claude config", generateClaudeJson(meta, map)], [".env", generateDotenv(map)]]
     : [
-        ["docker run", generateDockerRun(map)],
-        ["compose", generateCompose(map)],
-        ["systemd", generateSystemd(map)],
+        ["docker run", generateDockerRun(spec, answers, map)],
+        ["compose", generateCompose(spec, answers, map)],
+        ["systemd", generateSystemd(meta, map)],
         [".env", generateDotenv(map)],
       ];
   const out = document.createElement("div");
