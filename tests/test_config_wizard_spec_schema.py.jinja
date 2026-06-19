@@ -125,3 +125,31 @@ def test_schema_rejects_dockervolume_and_dockerpath_together(
     )
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(bad, schema)
+
+
+def test_schema_accepts_dockervolume_alone(schema: dict[str, Any]) -> None:
+    spec = _minimal_valid_spec()
+    spec["questions"].append(
+        {
+            "id": "data_dir",
+            "label": "Data",
+            "type": "text",
+            "var": "DEMO_DATA_DIR",
+            "dockerVolume": "/data/app",
+        }
+    )
+    jsonschema.validate(spec, schema)
+
+
+def test_schema_accepts_dockerpath_alone(schema: dict[str, Any]) -> None:
+    spec = _minimal_valid_spec()
+    spec["questions"].append(
+        {
+            "id": "index_path",
+            "label": "Index",
+            "type": "text",
+            "var": "DEMO_INDEX_PATH",
+            "dockerPath": "/data/state/index.db",
+        }
+    )
+    jsonschema.validate(spec, schema)

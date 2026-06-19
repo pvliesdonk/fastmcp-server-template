@@ -6,8 +6,11 @@ const FASTMCP_HOME = "/data/state/fastmcp";
 // The named state volume, mounted in every Docker/Compose artifact.
 const STATE_VOLUME = "state-data:/data/state";
 
-const secretPlaceholder = (key, envPrefix) =>
-  `<YOUR_${key.replace(new RegExp(`^${envPrefix}_`), "")}>`;
+const secretPlaceholder = (key, envPrefix) => {
+  const prefix = `${envPrefix}_`;
+  const short = key.startsWith(prefix) ? key.slice(prefix.length) : key;
+  return `<YOUR_${short}>`;
+};
 
 // Single-quote a value for a POSIX shell `-e KEY=value` argument, but only when
 // it contains characters outside the shell-safe set (keeps clean output tidy).

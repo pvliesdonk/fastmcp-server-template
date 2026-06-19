@@ -221,6 +221,12 @@ async function init() {
     if (!spec || typeof spec !== "object" || !Array.isArray(spec.questions)) {
       throw new Error("wizard-spec.json is malformed (missing questions array)");
     }
+    if (!spec.meta || typeof spec.meta !== "object") {
+      // The generators read project identity from spec.meta; a spec missing it
+      // (e.g. mid-migration) must fail loudly here rather than throw an
+      // uncaught TypeError deep inside render().
+      throw new Error("wizard-spec.json is malformed (missing meta block)");
+    }
     SPEC = spec;
   } catch (e) {
     ROOT.textContent = `Failed to load the configuration generator: ${e.message}`;

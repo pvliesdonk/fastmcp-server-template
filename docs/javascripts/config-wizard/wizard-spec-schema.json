@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pvliesdonk.github.io/fastmcp-server-template/wizard-spec-schema.json",
   "title": "fastmcp config-wizard spec",
+  "$comment": "Runtime convention not expressible here: wizard.js keys local-vs-server output off a question with id 'deployment' whose 'server' value selects the HTTP/Docker/systemd tabs. A spec omitting it degrades to local-only output.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "meta", "questions"],
@@ -14,7 +15,11 @@
       "properties": {
         "projectName": { "type": "string", "minLength": 1 },
         "dockerImage": { "type": "string", "minLength": 1 },
-        "envPrefix": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*[A-Z0-9]$" }
+        "envPrefix": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*[A-Z0-9]$",
+          "description": "Mirrors the copier.yml env_prefix validator: uppercase/digits/underscore, ≥2 chars, no trailing underscore."
+        }
       }
     },
     "secretKeys": {
