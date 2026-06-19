@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.3.0 (2026-06-19)
+
+- #170 feat(wizard): spec-owned domain via meta + dockerVolume/dockerPath (closes #169)
+
+
 ## v2.2.1 (2026-06-19)
 
 - #168 fix(config-wizard): five correctness bugs found during v2.2.0 adoption
