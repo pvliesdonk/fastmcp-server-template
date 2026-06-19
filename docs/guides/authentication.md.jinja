@@ -72,7 +72,7 @@ The bearer-token mode above shares one subject across every authenticated caller
 
 Each token resolves to a distinct subject string for downstream attribution. Subject strings are opaque: the `<kind>:<id>` convention (`user:`, `service:`, `token:`) is documentation only. When `BEARER_TOKENS_FILE` is set it overrides `BEARER_TOKEN` (a `WARNING` is logged if both are present). A missing or malformed file aborts startup with `ConfigurationError` rather than silently denying every request.
 {% if enable_authorization %}
-For the per-tool authorization that consumes these subjects, see [Authorization (opt-in)](https://github.com/{{ github_org }}/{{ project_name }}/blob/main/README.md#authorization-opt-in) in the project README.
+For the per-tool authorization that consumes these subjects, see the [Authorization guide](authorization.md).
 {% endif %}
 ---
 

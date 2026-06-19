@@ -113,7 +113,8 @@ nav:
       - Configuration Generator: configuration-generator.md
   - Guides:
       - Authentication: guides/authentication.md
-  - MCP Interface:
+{% if enable_authorization %}      - Authorization: guides/authorization.md
+{% endif %}  - MCP Interface:
       - Tools: tools/index.md
       - Prompts: prompts.md
   - Deployment:
