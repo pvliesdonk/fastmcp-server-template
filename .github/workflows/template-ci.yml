@@ -81,6 +81,15 @@ jobs:
           [ "$end" = "3" ] || { echo "::error::expected 3 DOMAIN-END fences, found $end"; exit 1; }
           grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED opening fence"; exit 1; }
           grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED closing fence"; exit 1; }
+          # TEMPLATE-TRACKING marker pairs (2): one around the bot-reviewer
+          # paragraph, one around Shared Infrastructure + Contributing fixes
+          # upstream. FORKING.md's detach scrub deletes them as a sed range — a
+          # dropped marker would make the scrub delete the wrong span, so the
+          # count must stay exact.
+          ttstart=$(grep -cE '^<!-- TEMPLATE-TRACKING-START -->$' CLAUDE.md || true)
+          ttend=$(grep -cE '^<!-- TEMPLATE-TRACKING-END -->$' CLAUDE.md || true)
+          [ "$ttstart" = "2" ] || { echo "::error::expected 2 TEMPLATE-TRACKING-START markers, found $ttstart"; exit 1; }
+          [ "$ttend" = "2" ] || { echo "::error::expected 2 TEMPLATE-TRACKING-END markers, found $ttend"; exit 1; }
 
       - name: shared docs render with consumer env_prefix
         working-directory: /tmp/smoke
