@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.5.0 (2026-06-20)
+
+- #181 feat(scaffold): migrate authorization to pvl-core v4 native AuthChecks
+
+
 ## v2.4.0 (2026-06-19)
 
 - #179 feat(scaffold): co-locate authentication + authorization (closes #178)
