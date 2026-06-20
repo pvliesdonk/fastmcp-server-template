@@ -1,6 +1,6 @@
 # Clean detach from the copier template for independent forks
 
-- **Status:** Approved (design)
+- **Status:** Implemented
 - **Date:** 2026-06-20
 - **Issue:** [#182](https://github.com/pvliesdonk/fastmcp-server-template/issues/182)
 - **Related:** pvliesdonk/fastmcp-pvl-core#194 (the pvl-core half of the
