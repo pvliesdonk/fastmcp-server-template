@@ -222,6 +222,7 @@ jobs:
                 .github/workflows/claude.yml \
                 .github/workflows/claude-code-review.yml
           rm -rf .gemini
+          rm -rf scripts/copier_update_aggregator.py scripts/copier_update_prompts
           # --- Step 3: scrub CLAUDE.md template-tracking blocks ---
           sed -i '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md
           # --- Step 4 (closing): remove the now-obsolete detach guide ---
@@ -246,17 +247,26 @@ jobs:
             && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
           grep -qF 'claude-review, gemini-code-assist' CLAUDE.md \
             && { echo "::error::bot-reviewer paragraph survived the scrub"; exit 1; } || true
-          # neutral guidance must remain:
-          grep -qE '^## Conventions$' CLAUDE.md \
-            || { echo "::error::Conventions section lost — scrub deleted too much"; exit 1; }
-          grep -qE '^## GitHub Review Types$' CLAUDE.md \
-            || { echo "::error::GitHub Review Types section lost — scrub deleted too much"; exit 1; }
+          # neutral guidance must remain — these are the sections FORKING.md
+          # promises survive; assert each so a balanced-but-misplaced marker
+          # pair that swallows an adjacent section is caught:
+          for kept_section in \
+              '^## Conventions$' \
+              '^## Hard PR Acceptance Gates$' \
+              '^## Logging Standard$' \
+              '^## Config & Customization Contract$' \
+              '^## GitHub Review Types$'; do
+            grep -qE "$kept_section" CLAUDE.md \
+              || { echo "::error::neutral section '$kept_section' lost — scrub deleted too much"; exit 1; }
+          done
           # stripped files gone:
           for gone in \
               .github/workflows/copier-update.yml \
               .github/workflows/claude.yml \
               .github/workflows/claude-code-review.yml \
-              .gemini; do
+              .gemini \
+              scripts/copier_update_aggregator.py \
+              scripts/copier_update_prompts; do
             [ ! -e "$gone" ] \
               || { echo "::error::$gone not removed by detach"; exit 1; }
           done
