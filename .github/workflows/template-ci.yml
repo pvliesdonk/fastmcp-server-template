@@ -224,14 +224,22 @@ jobs:
           rm -rf .gemini
           # --- Step 3: scrub CLAUDE.md template-tracking blocks ---
           sed -i '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md
+          # --- Step 4 (closing): remove the now-obsolete detach guide ---
+          rm -f FORKING.md
 
           # --- assert the detached state ---
           [ ! -f .copier-answers.yml ] \
             || { echo "::error::.copier-answers.yml still present after detach"; exit 1; }
+          [ ! -f FORKING.md ] \
+            || { echo "::error::FORKING.md not removed by detach"; exit 1; }
           ! grep -rn "copier" .github/ \
             || { echo "::error::copier reference remains under .github/ after detach"; exit 1; }
-          ! grep -rniE "fleet|downstream conforms|shape lives in pvl-core" CLAUDE.md \
-            || { echo "::error::fleet/downstream tracking language remains in CLAUDE.md"; exit 1; }
+          # The first three tokens are issue #182's literal Verification block;
+          # the last two ("lives upstream", "propagate here via copier update")
+          # are actual prose inside the scrubbed TEMPLATE-TRACKING range, so this
+          # grep bites on a regressed scrub rather than passing vacuously.
+          ! grep -rniE "fleet|downstream conforms|shape lives in pvl-core|lives upstream|propagate here via .?copier update" CLAUDE.md \
+            || { echo "::error::template-tracking language remains in CLAUDE.md after scrub"; exit 1; }
           grep -qE '^## Shared Infrastructure$' CLAUDE.md \
             && { echo "::error::Shared Infrastructure section survived the scrub"; exit 1; } || true
           grep -qE '^## Contributing fixes upstream$' CLAUDE.md \
