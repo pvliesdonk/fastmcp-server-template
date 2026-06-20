@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.5.1 (2026-06-20)
+
+- #183 feat(scaffold): document and enable clean detach from the template (closes #182)
+
+
 ## v2.5.0 (2026-06-20)
 
 - #181 feat(scaffold): migrate authorization to pvl-core v4 native AuthChecks
