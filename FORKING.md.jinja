@@ -17,7 +17,7 @@ Detaching is mechanical. Run the steps below once, then commit.
 ## Step 1 — Stop tracking the template
 
 ```bash
-rm .copier-answers.yml
+rm -f .copier-answers.yml
 ```
 
 This removes the link copier uses to reattach. The weekly cron that ran
@@ -30,7 +30,8 @@ rm -f .github/workflows/copier-update.yml \
       .github/workflows/claude.yml \
       .github/workflows/claude-code-review.yml
 rm -rf .gemini
-rm -rf scripts/copier_update_aggregator.py scripts/copier_update_prompts
+rm -f scripts/copier_update_aggregator.py
+rm -rf scripts/copier_update_prompts
 ```
 
 What this removes and why:
@@ -76,7 +77,7 @@ These leftover references are harmless but now misleading:
 Remove this guide (it no longer applies once detached) and commit the result:
 
 ```bash
-rm FORKING.md
+rm -f FORKING.md
 git add -A
 git commit -m "chore: detach from fastmcp-server-template"
 ```

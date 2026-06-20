@@ -222,7 +222,8 @@ jobs:
                 .github/workflows/claude.yml \
                 .github/workflows/claude-code-review.yml
           rm -rf .gemini
-          rm -rf scripts/copier_update_aggregator.py scripts/copier_update_prompts
+          rm -f scripts/copier_update_aggregator.py
+          rm -rf scripts/copier_update_prompts
           # --- Step 3: scrub CLAUDE.md template-tracking blocks ---
           sed -i '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md
           # --- Closing ("You are now standalone"): remove the detach guide.
