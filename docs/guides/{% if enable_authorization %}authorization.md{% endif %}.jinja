@@ -1,25 +1,61 @@
 # Authorization
 
-This server supports opt-in **per-subject authorization** from
-`fastmcp-pvl-core`. It is **off by default** — every authenticated caller can
-use every tool, resource, and prompt. Turn it on by pointing
-`{{ env_prefix }}_ACL_PATH` at a TOML ACL file; the middleware is installed
-only when the path is set, and individual tools opt in by declaring
-`meta={"required_scope": "<scope>"}` at registration. A tool without
-`required_scope` is unrestricted regardless of caller.
+This server supports opt-in **authorization** from `fastmcp-pvl-core`,
+layered on FastMCP's native `AuthMiddleware`. It is **off by default** —
+every authenticated caller can use every tool, resource, and prompt. A
+component opts in by declaring `meta={"required_scope": "<scope>"}` at
+registration; one without `required_scope` is unrestricted regardless of
+caller.
+
+pvl-core ships the two checks the framework has no built-in for, plus an
+OR-combinator:
+
+- **`make_acl_check(load_acl(path))`** — a static **subject→scope** ACL,
+  keyed by the caller's `sub` claim (OIDC) or `client_id` (bearer). This
+  is the **only** per-caller authz available in **bearer** modes (bearer
+  tokens carry no OIDC claims).
+- **`make_claims_check(claim, grants=None)`** — **claim→scope** for
+  **OIDC** modes. It reads an OIDC *claim* (e.g. `groups`, `roles`) —
+  the IdP's assertion about the user — not OAuth *scopes*.
+- **`any_check(a, b)`** — OR the two for `multi` mode (bearer break-glass
+  *and* OIDC users on one server).
+
+Scope- and tag-only patterns can also use FastMCP's own `require_scopes`
+/ `restrict_tag` directly.
 
 The wiring ships as commented stubs in `src/{{ python_module }}/config.py`
-and `src/{{ python_module }}/server.py` — uncomment them to enable the
-`acl_path` config field and the `AuthorizationMiddleware` registration.
+and `src/{{ python_module }}/server.py` — uncomment the check that
+matches your auth mode and install it with
+`AuthMiddleware(auth=<check>)`.
 
-## ACL TOML schema
+## Claim vs. scope (OIDC)
+
+Claim-based authz reads OIDC **claims** (`groups`, `roles`) — the user's
+IdP-issued permissions — **not** OAuth **scopes** (which describe the
+client/token grant and are usually fixed, e.g. `openid profile email`).
+Configure which claim to read with `{{ env_prefix }}_AUTHZ_CLAIM`.
+
+**Identity mapping (zero-config):** when your IdP's group names already
+match your scope strings, no translation is needed — a caller is granted
+exactly the values in their claim. Only when the vocabularies differ do
+you supply an inline-JSON **translation map**:
+
+```jsonc
+// {{ env_prefix }}_AUTHZ_GRANTS
+{"app-writers": ["read", "write"], "app-admins": ["*"]}
+```
+
+A literal `"*"` from a raw claim value never escalates — the `"*"`
+wildcard is honoured only when an operator places it in a `grants` scope
+list.
+
+## ACL TOML schema (subject→scope)
 
 ```toml
 [subjects]
 "user:alice@example.com" = ["read", "write"]
 "user:admin@example.com" = ["*"]              # wildcard — any required scope passes
 "service:ci-bot"         = ["read"]
-"local"                  = ["*"]              # no-auth mode subject (default for stdio)
 ```
 
 - **Subject strings are opaque.** The `<kind>:<id>` convention is
@@ -40,21 +76,29 @@ string used as a *value* in the bearer-tokens TOML
 (`{{ env_prefix }}_BEARER_TOKENS_FILE`) — keep the two consistent. In
 single-token mode every caller shares one subject (the library default,
 currently `"bearer-anon"`, overridable via
-`{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`); in no-auth mode (the default for
-stdio) the subject is `"local"`.
+`{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`).
 
-## Load semantics and privacy
+## Load semantics and mode coverage
 
-The ACL file loads **once at startup** and `load_acl` fails fast with
-`ConfigurationError` on a *structural* error (missing or unreadable file,
-malformed TOML, no `[subjects]` table, a `*` subject key, or a non-string
-scope), aborting startup rather than running in a broken state. A *scope-name*
-typo is not structural — `"rite"` instead of `"write"` is valid TOML, loads
-cleanly, and then silently never matches, so the affected calls are denied;
-double-check scope spelling against the table below. Denied requests are
-logged at WARNING with the subject; the wire-side error omits the subject by
-default — pass `AuthorizationMiddleware(..., expose_subject_in_error=True)` to
-surface it on internal-only servers.
+Config loads **once at startup**: `load_acl` (TOML) and `parse_claim_grants`
+(inline JSON) both **fail fast** with `ConfigurationError` on a *structural*
+error (unreadable/malformed input, wrong shape, a `*` key), aborting startup
+rather than running broken. A *scope-name* typo is not structural —
+`"rite"` for `"write"` loads cleanly and then silently never matches, so the
+affected calls are denied; double-check spelling against the table below.
+
+A few mode facts worth knowing:
+
+- **Bearer** tokens carry no OIDC claims, so only the **subject-ACL** check
+  gates them per-caller.
+- Authorization is **meaningful only under an `AuthProvider`.** `stdio`
+  bypasses checks entirely; on HTTP `AuthMiddleware` still runs without a
+  provider, but every request then carries no token — so a component with
+  `required_scope` is **denied**. Install these checks alongside real
+  authentication.
+- Deny handling is delegated to FastMCP's `AuthMiddleware` (it raises an
+  authorization error on an unauthorized call and filters `list_*`
+  responses); pvl-core no longer ships its own deny envelope.
 
 ## Gated tools
 
@@ -69,8 +113,8 @@ surface it on internal-only servers.
 
 ## See also
 
-- [fastmcp-pvl-core README — Authorization](https://github.com/pvliesdonk/fastmcp-pvl-core#authorization-opt-in--authorizationmiddleware) — full design, the `check_authorization` per-call helper, and per-token subject mapping.
-- [Authorization submodule spec](https://github.com/pvliesdonk/fastmcp-pvl-core/blob/main/docs/specs/authorization-submodule.md) — design rationale and deviations table.
+- [fastmcp-pvl-core README](https://github.com/pvliesdonk/fastmcp-pvl-core#readme) — the "Authorization" section covers the native `AuthCheck` factories, the claim-vs-scope distinction, and per-mode coverage in full.
+- [Authz native-rebuild design](https://github.com/pvliesdonk/fastmcp-pvl-core/blob/main/docs/superpowers/specs/2026-06-19-authz-native-rebuild-design.md) — design rationale for the move to native checks.
 
 <!-- DOMAIN-AUTHZ-EXTRA-START -->
 <!-- Project-specific authorization notes go here; kept across copier

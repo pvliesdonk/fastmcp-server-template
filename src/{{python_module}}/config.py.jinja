@@ -32,10 +32,15 @@ class ProjectConfig:
     # vault_path: Path = Path("/data/vault")
     {%- if enable_authorization %}
     #
-    # (example: enable optional authorization — see fastmcp-pvl-core's
-    #  README "Authorization" section for the full opt-in story.  Absence
-    #  of the path means no authorization middleware is installed.)
+    # (example: opt-in authorization — see fastmcp-pvl-core's README
+    #  "Authorization" section.  Subject->scope ACL gating (bearer + any
+    #  mode) uses ``acl_path``; OIDC claim->scope gating uses
+    #  ``authz_claim`` plus an optional inline-JSON ``authz_grants`` map.
+    #  A component is unrestricted unless it sets
+    #  ``meta={"required_scope": "<scope>"}``.)
     # acl_path: Path | None = None
+    # authz_claim: str | None = None
+    # authz_grants: str | None = None
     {%- endif %}
     # CONFIG-FIELDS-END
 
@@ -49,9 +54,12 @@ class ProjectConfig:
             # vault_path=Path(env(_ENV_PREFIX, "VAULT_PATH", "/data/vault")),
             {%- if enable_authorization %}
             #
-            # (example: load ``acl_path`` from ``{{ env_prefix }}_ACL_PATH``;
-            #  unset env var means no authorization middleware.)
+            # (example: load the authz config from ``{{ env_prefix }}_*``;
+            #  wire whichever the deployment uses in server.py — ACL for
+            #  bearer, claim for OIDC, or both via any_check.)
             # acl_path=Path(_p) if (_p := env(_ENV_PREFIX, "ACL_PATH")) else None,
+            # authz_claim=env(_ENV_PREFIX, "AUTHZ_CLAIM"),
+            # authz_grants=env(_ENV_PREFIX, "AUTHZ_GRANTS"),
             {%- endif %}
             # CONFIG-FROM-ENV-END
         )
