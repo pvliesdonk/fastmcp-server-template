@@ -208,6 +208,62 @@ jobs:
           [ "$CI_NORM" = "$PC_NORM" ] \
             || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL pre-commit=$PC_EXCL"; exit 1; }
 
+      - name: detach smoke (FORKING.md commands produce a clean standalone state)
+        working-directory: /tmp/smoke
+        run: |
+          # Mirrors the documented detach in the rendered FORKING.md. Runs LAST
+          # because it mutates the tree in place; idempotence + gate already ran
+          # on the pristine render. Asserts issue #182's Verification block.
+
+          # --- Step 1: stop tracking ---
+          rm -f .copier-answers.yml
+          # --- Step 2: prune template-origin CI + fleet review wiring ---
+          rm -f .github/workflows/copier-update.yml \
+                .github/workflows/claude.yml \
+                .github/workflows/claude-code-review.yml
+          rm -rf .gemini
+          # --- Step 3: scrub CLAUDE.md template-tracking blocks ---
+          sed -i '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md
+
+          # --- assert the detached state ---
+          [ ! -f .copier-answers.yml ] \
+            || { echo "::error::.copier-answers.yml still present after detach"; exit 1; }
+          ! grep -rn "copier" .github/ \
+            || { echo "::error::copier reference remains under .github/ after detach"; exit 1; }
+          ! grep -rniE "fleet|downstream conforms|shape lives in pvl-core" CLAUDE.md \
+            || { echo "::error::fleet/downstream tracking language remains in CLAUDE.md"; exit 1; }
+          grep -qE '^## Shared Infrastructure$' CLAUDE.md \
+            && { echo "::error::Shared Infrastructure section survived the scrub"; exit 1; } || true
+          grep -qE '^## Contributing fixes upstream$' CLAUDE.md \
+            && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
+          grep -qF 'claude-review, gemini-code-assist' CLAUDE.md \
+            && { echo "::error::bot-reviewer paragraph survived the scrub"; exit 1; } || true
+          # neutral guidance must remain:
+          grep -qE '^## Conventions$' CLAUDE.md \
+            || { echo "::error::Conventions section lost — scrub deleted too much"; exit 1; }
+          grep -qE '^## GitHub Review Types$' CLAUDE.md \
+            || { echo "::error::GitHub Review Types section lost — scrub deleted too much"; exit 1; }
+          # stripped files gone:
+          for gone in \
+              .github/workflows/copier-update.yml \
+              .github/workflows/claude.yml \
+              .github/workflows/claude-code-review.yml \
+              .gemini; do
+            [ ! -e "$gone" ] \
+              || { echo "::error::$gone not removed by detach"; exit 1; }
+          done
+          # kept files present:
+          for kept in \
+              .github/workflows/ci.yml \
+              .github/workflows/codeql.yml \
+              .github/workflows/coverage-status.yml \
+              .github/workflows/docs.yml \
+              .github/workflows/release.yml; do
+            [ -f "$kept" ] \
+              || { echo "::error::$kept was removed but should be kept"; exit 1; }
+          done
+          echo "detach smoke passed"
+
   # Runs the two downstream workflow shapes that generated projects invoke
   # on their own CI — `mkdocs build --strict` (docs.yml) and `nfpm package`
   # (release.yml).  Dedicated non-matrix job so the downstream-gate is
