@@ -247,14 +247,18 @@ jobs:
             && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
           grep -qF 'claude-review, gemini-code-assist' CLAUDE.md \
             && { echo "::error::bot-reviewer paragraph survived the scrub"; exit 1; } || true
-          # neutral guidance must remain — these are the sections FORKING.md
-          # promises survive; assert each so a balanced-but-misplaced marker
-          # pair that swallows an adjacent section is caught:
+          # neutral guidance must remain. Includes the five sections FORKING.md
+          # promises survive, plus the two sections physically adjacent to the
+          # marker starts (## PR Discipline above pair 1, ## Server Info Tool
+          # above pair 2) — those are exactly what a balanced-but-misplaced
+          # marker pair would swallow first, so they must be asserted too.
           for kept_section in \
               '^## Conventions$' \
               '^## Hard PR Acceptance Gates$' \
+              '^## PR Discipline$' \
               '^## Logging Standard$' \
               '^## Config & Customization Contract$' \
+              '^## Server Info Tool' \
               '^## GitHub Review Types$'; do
             grep -qE "$kept_section" CLAUDE.md \
               || { echo "::error::neutral section '$kept_section' lost — scrub deleted too much"; exit 1; }
