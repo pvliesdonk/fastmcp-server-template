@@ -116,7 +116,7 @@ Callers authenticate via a bearer token or OIDC (mutually exclusive). See the [A
 {% if enable_authorization -%}
 ## Authorization (opt-in)
 
-Per-subject authorization is **off by default** — every authenticated caller can use every tool. Point `{{ env_prefix }}_ACL_PATH` at a TOML ACL file to gate tools by scope (tools opt in via `meta={"required_scope": "<scope>"}`). See the [Authorization guide](docs/guides/authorization.md).
+Authorization gates individual tools by scope and is **off by default** — every authenticated caller can use everything. Decide a caller's scopes from a subject ACL file (`{{ env_prefix }}_ACL_PATH`, for bearer) or an OIDC identity claim (`{{ env_prefix }}_AUTHZ_CLAIM`). See the [Authorization guide](docs/guides/authorization.md).
 
 {% endif -%}
 ## Post-scaffold checklist

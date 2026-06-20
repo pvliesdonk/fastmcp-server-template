@@ -1,60 +1,94 @@
 # Authorization
 
-This server supports opt-in **per-subject authorization** from
-`fastmcp-pvl-core`. It is **off by default** — every authenticated caller can
-use every tool, resource, and prompt. Turn it on by pointing
-`{{ env_prefix }}_ACL_PATH` at a TOML ACL file; the middleware is installed
-only when the path is set, and individual tools opt in by declaring
-`meta={"required_scope": "<scope>"}` at registration. A tool without
-`required_scope` is unrestricted regardless of caller.
+This server supports opt-in **authorization** — gating individual tools,
+resources, and prompts by *scope*. It is **off by default**: every
+authenticated caller can use everything. A component is gated only once
+it declares a required scope; one without is unrestricted regardless of
+caller.
 
-The wiring ships as commented stubs in `src/{{ python_module }}/config.py`
-and `src/{{ python_module }}/server.py` — uncomment them to enable the
-`acl_path` config field and the `AuthorizationMiddleware` registration.
+There are two ways to decide which scopes a caller holds — pick the one
+that matches how callers authenticate (see the
+[Authentication guide](authentication.md)):
 
-## ACL TOML schema
+- **Bearer tokens → a subject ACL file.** A TOML file maps each caller's
+  subject to the scopes it holds. Point `{{ env_prefix }}_ACL_PATH` at
+  it. This is the only option for bearer callers.
+- **OIDC → an identity claim.** The server reads a claim the identity
+  provider issues about the user (group or role membership) and treats
+  its values as the caller's scopes. Set `{{ env_prefix }}_AUTHZ_CLAIM`
+  to that claim's name (e.g. `groups`).
+
+To turn either on: set the relevant `{{ env_prefix }}_*` variable(s)
+and uncomment the matching block in `src/{{ python_module }}/server.py`
+(plus the config field it reads in `config.py`). Both may run together —
+e.g. an OIDC deployment that keeps a bearer break-glass account.
+
+## Gating by an OIDC claim
+
+Authorization reads OIDC **claims** — what the identity provider asserts
+about the *user* (their groups/roles) — not the OAuth scopes the client
+negotiated. Set `{{ env_prefix }}_AUTHZ_CLAIM` to the claim that carries
+the user's group/role list.
+
+**No mapping is needed when the names already match.** If your IdP's
+group names are the same strings as your tool scopes, a caller is
+granted exactly the values in their claim — there is nothing else to
+configure. Only when the two vocabularies differ do you supply a
+translation map in `{{ env_prefix }}_AUTHZ_GRANTS`, as inline JSON
+mapping each claim value to the scopes it grants:
+
+```json
+{"app-writers": ["read", "write"], "app-admins": ["*"]}
+```
+
+In this map, `"*"` grants every scope.
+
+## The ACL file (subject → scope)
+
+Point `{{ env_prefix }}_ACL_PATH` at a TOML file shaped like:
 
 ```toml
 [subjects]
 "user:alice@example.com" = ["read", "write"]
 "user:admin@example.com" = ["*"]              # wildcard — any required scope passes
 "service:ci-bot"         = ["read"]
-"local"                  = ["*"]              # no-auth mode subject (default for stdio)
 ```
 
 - **Subject strings are opaque.** The `<kind>:<id>` convention is
-  documentation only; the library treats each subject as a literal string.
-- **`*` is the only library-treated special scope** — it grants every
-  required scope. Subject-side wildcards (`*` as an ACL key) are rejected at
-  load time.
-- **Scope vocabulary is domain-defined.** Per-project or per-folder gating is
+  documentation only; each subject is matched as a literal string.
+- **`*` is the only special scope** — it grants every required scope.
+  Subject-side wildcards (`*` as a subject key) are rejected at startup.
+- **Scope vocabulary is yours.** Per-project or per-folder gating is
   encoded into the scope string itself (e.g. `read:project-foo`,
   `write:vault/personal`).
 
-## Subjects and bearer alignment
+### Aligning subjects with bearer tokens
 
-Subjects are minted by the authentication layer — see the
-[Authentication guide](authentication.md) for how bearer tokens and OIDC map
-callers to subject strings. The subject keyed in the ACL TOML is the same
-string used as a *value* in the bearer-tokens TOML
+Subjects come from the authentication layer — see the
+[Authentication guide](authentication.md) for how bearer tokens and OIDC
+map callers to subject strings. The subject keyed in this ACL is the
+same string used as a *value* in the bearer-tokens TOML
 (`{{ env_prefix }}_BEARER_TOKENS_FILE`) — keep the two consistent. In
-single-token mode every caller shares one subject (the library default,
-currently `"bearer-anon"`, overridable via
-`{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`); in no-auth mode (the default for
-stdio) the subject is `"local"`.
+single-token mode every caller shares one subject (the default
+`"bearer-anon"`, overridable via
+`{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`).
 
-## Load semantics and privacy
+## Operating notes
 
-The ACL file loads **once at startup** and `load_acl` fails fast with
-`ConfigurationError` on a *structural* error (missing or unreadable file,
-malformed TOML, no `[subjects]` table, a `*` subject key, or a non-string
-scope), aborting startup rather than running in a broken state. A *scope-name*
-typo is not structural — `"rite"` instead of `"write"` is valid TOML, loads
-cleanly, and then silently never matches, so the affected calls are denied;
-double-check scope spelling against the table below. Denied requests are
-logged at WARNING with the subject; the wire-side error omits the subject by
-default — pass `AuthorizationMiddleware(..., expose_subject_in_error=True)` to
-surface it on internal-only servers.
+- **Loaded once at startup.** Restart the server to pick up edits to the
+  ACL file or the grants map.
+- **Fails fast on a structural error.** An unreadable or malformed file,
+  the wrong shape, or a `*` subject key aborts startup rather than
+  running half-configured. A scope-*name* typo is **not** structural —
+  `"rite"` for `"write"` is valid and loads cleanly, then silently never
+  matches, so those calls are denied. Double-check scope spelling
+  against the table below.
+- **Meaningful only with authentication.** Over stdio, authorization is
+  bypassed entirely. On HTTP with no authentication configured there is
+  no caller to scope, so every gated component is denied. Run
+  authorization only alongside real authentication.
+- A denied call is rejected, and gated components a caller can't use are
+  hidden from `tools` / `resources` / `prompts` listings.
 
 ## Gated tools
 
@@ -69,8 +103,8 @@ surface it on internal-only servers.
 
 ## See also
 
-- [fastmcp-pvl-core README — Authorization](https://github.com/pvliesdonk/fastmcp-pvl-core#authorization-opt-in--authorizationmiddleware) — full design, the `check_authorization` per-call helper, and per-token subject mapping.
-- [Authorization submodule spec](https://github.com/pvliesdonk/fastmcp-pvl-core/blob/main/docs/specs/authorization-submodule.md) — design rationale and deviations table.
+- [Authentication guide](authentication.md) — how callers obtain the
+  subject and claims this guide gates on.
 
 <!-- DOMAIN-AUTHZ-EXTRA-START -->
 <!-- Project-specific authorization notes go here; kept across copier
