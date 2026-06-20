@@ -90,27 +90,31 @@ def make_server(
     wire_middleware_stack(mcp)
 {% if enable_authorization %}
     # Optional: opt-in authorization on tools / resources / prompts via
-    # FastMCP's native ``AuthMiddleware``.  See fastmcp-pvl-core's README
-    # "Authorization" section.  Components opt in by setting
+    # FastMCP's native ``AuthMiddleware``.  Components opt in by setting
     # ``meta={"required_scope": "<scope>"}``; without it they are
-    # unrestricted.  Pick the check(s) that match your auth mode:
+    # unrestricted.  See fastmcp-pvl-core's README "Authorization" section.
+    #
+    # Install exactly ONE ``AuthMiddleware``.  Build ONE check below — for
+    # bearer + OIDC together, OR them with ``any_check`` (a single
+    # middleware); do NOT add two.
     #
     # from fastmcp.server.middleware import AuthMiddleware
     # from fastmcp_pvl_core import (
     #     any_check, load_acl, make_acl_check, make_claims_check, parse_claim_grants,
     # )
     #
-    # # bearer (subject -> scope ACL — the only per-token authz for bearer):
-    # if config.acl_path is not None:
-    #     mcp.add_middleware(AuthMiddleware(auth=make_acl_check(load_acl(config.acl_path))))
-    #
-    # # OIDC (claim -> scope); identity map when IdP groups == scope names:
-    # if config.authz_claim is not None:
-    #     grants = parse_claim_grants(config.authz_grants) if config.authz_grants else None
-    #     mcp.add_middleware(AuthMiddleware(auth=make_claims_check(config.authz_claim, grants)))
-    #
-    # # multi (bearer break-glass + OIDC): OR the two —
-    # #   AuthMiddleware(auth=any_check(make_acl_check(...), make_claims_check(...)))
+    # grants = parse_claim_grants(config.authz_grants) if config.authz_grants else None
+    # # Choose one and assign it to ``check``:
+    # #   bearer (subject -> scope ACL; the only per-token authz for bearer):
+    # #     check = make_acl_check(load_acl(config.acl_path))
+    # #   OIDC (claim -> scope; identity map when IdP groups == scope names):
+    # #     check = make_claims_check(config.authz_claim, grants)
+    # #   both (bearer break-glass + OIDC, evaluated as OR):
+    # #     check = any_check(
+    # #         make_acl_check(load_acl(config.acl_path)),
+    # #         make_claims_check(config.authz_claim, grants),
+    # #     )
+    # mcp.add_middleware(AuthMiddleware(auth=check))
 {% endif %}
     register_tools(mcp)
     register_resources(mcp)

@@ -41,9 +41,7 @@ mapping each claim value to the scopes it grants:
 {"app-writers": ["read", "write"], "app-admins": ["*"]}
 ```
 
-`"*"` grants every scope. It is honoured **only** here, in this
-operator-supplied map — a literal `"*"` arriving in a caller's claim is
-never treated as the wildcard.
+In this map, `"*"` grants every scope.
 
 ## The ACL file (subject → scope)
 
