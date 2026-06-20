@@ -81,6 +81,15 @@ jobs:
           [ "$end" = "3" ] || { echo "::error::expected 3 DOMAIN-END fences, found $end"; exit 1; }
           grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED opening fence"; exit 1; }
           grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED closing fence"; exit 1; }
+          # TEMPLATE-TRACKING marker pairs (2): one around the bot-reviewer
+          # paragraph, one around Shared Infrastructure + Contributing fixes
+          # upstream. FORKING.md's detach scrub deletes them as a sed range — a
+          # dropped marker would make the scrub delete the wrong span, so the
+          # count must stay exact.
+          ttstart=$(grep -cE '^<!-- TEMPLATE-TRACKING-START -->$' CLAUDE.md || true)
+          ttend=$(grep -cE '^<!-- TEMPLATE-TRACKING-END -->$' CLAUDE.md || true)
+          [ "$ttstart" = "2" ] || { echo "::error::expected 2 TEMPLATE-TRACKING-START markers, found $ttstart"; exit 1; }
+          [ "$ttend" = "2" ] || { echo "::error::expected 2 TEMPLATE-TRACKING-END markers, found $ttend"; exit 1; }
 
       - name: shared docs render with consumer env_prefix
         working-directory: /tmp/smoke
@@ -198,6 +207,100 @@ jobs:
           PC_NORM=$(echo "${PC_EXCL#^}" | sed 's|/\*\*$||;s|/$||')
           [ "$CI_NORM" = "$PC_NORM" ] \
             || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL pre-commit=$PC_EXCL"; exit 1; }
+
+      - name: detach smoke (FORKING.md commands produce a clean standalone state)
+        working-directory: /tmp/smoke
+        run: |
+          # Mirrors the documented detach in the rendered FORKING.md. Runs LAST
+          # because it mutates the tree in place; idempotence + gate already ran
+          # on the pristine render. Asserts issue #182's Verification block.
+
+          # --- Step 1: stop tracking ---
+          rm -f .copier-answers.yml
+          # --- Step 2: prune template-origin CI + fleet review wiring ---
+          rm -f .github/workflows/copier-update.yml \
+                .github/workflows/claude.yml \
+                .github/workflows/claude-code-review.yml
+          rm -rf .gemini
+          rm -f scripts/copier_update_aggregator.py
+          rm -rf scripts/copier_update_prompts
+          # --- Step 3: scrub CLAUDE.md template-tracking blocks ---
+          # -i.bak + rm mirrors FORKING.md's portable form (GNU + BSD sed).
+          sed -i.bak '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md && rm -f CLAUDE.md.bak
+          # --- Closing ("You are now standalone"): remove the detach guide.
+          #     FORKING.md's numbered Step 4 (README cleanup) is intentionally
+          #     NOT mirrored here — it mutates README prose this smoke does not
+          #     assert (a documented spec non-goal).
+          rm -f FORKING.md
+
+          # --- assert the detached state ---
+          [ ! -f .copier-answers.yml ] \
+            || { echo "::error::.copier-answers.yml still present after detach"; exit 1; }
+          [ ! -f FORKING.md ] \
+            || { echo "::error::FORKING.md not removed by detach"; exit 1; }
+          ! grep -rn "copier" .github/ \
+            || { echo "::error::copier reference remains under .github/ after detach"; exit 1; }
+          # The first three tokens are issue #182's literal Verification block;
+          # the last two ("lives upstream", "propagate here via copier update")
+          # are actual prose inside the scrubbed TEMPLATE-TRACKING range, so this
+          # grep bites on a regressed scrub rather than passing vacuously.
+          ! grep -rniE "fleet|downstream conforms|shape lives in pvl-core|lives upstream|propagate here via .?copier update" CLAUDE.md \
+            || { echo "::error::template-tracking language remains in CLAUDE.md after scrub"; exit 1; }
+          grep -qE '^## Shared Infrastructure$' CLAUDE.md \
+            && { echo "::error::Shared Infrastructure section survived the scrub"; exit 1; } || true
+          grep -qE '^## Contributing fixes upstream$' CLAUDE.md \
+            && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
+          grep -qF 'claude-review, gemini-code-assist' CLAUDE.md \
+            && { echo "::error::bot-reviewer paragraph survived the scrub"; exit 1; } || true
+          # Neutral guidance must remain. The scrub is a sed range-delete, so the
+          # only "deleted too much" failure mode (given the pristine-render
+          # marker-count guard already holds 2 balanced pairs) is a misplaced
+          # marker that swallows a section adjacent to one of the FOUR marker
+          # boundaries. Every boundary is bracketed by a must-survive assertion:
+          #   pair 1 START → ## PR Discipline (above)
+          #   pair 1 END   → ## GitHub Review Types (below)
+          #   pair 2 START → ## Server Info Tool (above)
+          #   pair 2 END   → TEMPLATE-OWNED END fence + ## Key Design Decisions (below)
+          # The remaining entries are the other sections FORKING.md promises survive.
+          for kept_section in \
+              '^## Conventions$' \
+              '^## Hard PR Acceptance Gates$' \
+              '^## PR Discipline$' \
+              '^## Logging Standard$' \
+              '^## Config & Customization Contract$' \
+              '^## Server Info Tool' \
+              '^## GitHub Review Types$' \
+              '^## Key Design Decisions$'; do
+            grep -qE "$kept_section" CLAUDE.md \
+              || { echo "::error::neutral section '$kept_section' lost — scrub deleted too much"; exit 1; }
+          done
+          # Structural bottom boundary: pair 2 END is the last TEMPLATE-TRACKING
+          # marker, so a misplaced END would run the range delete to EOF past
+          # this fence. Assert it survives.
+          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' CLAUDE.md \
+            || { echo "::error::TEMPLATE-OWNED END fence lost — scrub over-ran past pair 2"; exit 1; }
+          # stripped files gone:
+          for gone in \
+              .github/workflows/copier-update.yml \
+              .github/workflows/claude.yml \
+              .github/workflows/claude-code-review.yml \
+              .gemini \
+              scripts/copier_update_aggregator.py \
+              scripts/copier_update_prompts; do
+            [ ! -e "$gone" ] \
+              || { echo "::error::$gone not removed by detach"; exit 1; }
+          done
+          # kept files present:
+          for kept in \
+              .github/workflows/ci.yml \
+              .github/workflows/codeql.yml \
+              .github/workflows/coverage-status.yml \
+              .github/workflows/docs.yml \
+              .github/workflows/release.yml; do
+            [ -f "$kept" ] \
+              || { echo "::error::$kept was removed but should be kept"; exit 1; }
+          done
+          echo "detach smoke passed"
 
   # Runs the two downstream workflow shapes that generated projects invoke
   # on their own CI — `mkdocs build --strict` (docs.yml) and `nfpm package`
