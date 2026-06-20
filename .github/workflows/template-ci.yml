@@ -225,7 +225,10 @@ jobs:
           rm -rf scripts/copier_update_aggregator.py scripts/copier_update_prompts
           # --- Step 3: scrub CLAUDE.md template-tracking blocks ---
           sed -i '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md
-          # --- Step 4 (closing): remove the now-obsolete detach guide ---
+          # --- Closing ("You are now standalone"): remove the detach guide.
+          #     FORKING.md's numbered Step 4 (README cleanup) is intentionally
+          #     NOT mirrored here — it mutates README prose this smoke does not
+          #     assert (a documented spec non-goal).
           rm -f FORKING.md
 
           # --- assert the detached state ---
@@ -247,11 +250,16 @@ jobs:
             && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
           grep -qF 'claude-review, gemini-code-assist' CLAUDE.md \
             && { echo "::error::bot-reviewer paragraph survived the scrub"; exit 1; } || true
-          # neutral guidance must remain. Includes the five sections FORKING.md
-          # promises survive, plus the two sections physically adjacent to the
-          # marker starts (## PR Discipline above pair 1, ## Server Info Tool
-          # above pair 2) — those are exactly what a balanced-but-misplaced
-          # marker pair would swallow first, so they must be asserted too.
+          # Neutral guidance must remain. The scrub is a sed range-delete, so the
+          # only "deleted too much" failure mode (given the pristine-render
+          # marker-count guard already holds 2 balanced pairs) is a misplaced
+          # marker that swallows a section adjacent to one of the FOUR marker
+          # boundaries. Every boundary is bracketed by a must-survive assertion:
+          #   pair 1 START → ## PR Discipline (above)
+          #   pair 1 END   → ## GitHub Review Types (below)
+          #   pair 2 START → ## Server Info Tool (above)
+          #   pair 2 END   → TEMPLATE-OWNED END fence + ## Key Design Decisions (below)
+          # The remaining entries are the other sections FORKING.md promises survive.
           for kept_section in \
               '^## Conventions$' \
               '^## Hard PR Acceptance Gates$' \
@@ -259,10 +267,16 @@ jobs:
               '^## Logging Standard$' \
               '^## Config & Customization Contract$' \
               '^## Server Info Tool' \
-              '^## GitHub Review Types$'; do
+              '^## GitHub Review Types$' \
+              '^## Key Design Decisions$'; do
             grep -qE "$kept_section" CLAUDE.md \
               || { echo "::error::neutral section '$kept_section' lost — scrub deleted too much"; exit 1; }
           done
+          # Structural bottom boundary: pair 2 END is the last TEMPLATE-TRACKING
+          # marker, so a misplaced END would run the range delete to EOF past
+          # this fence. Assert it survives.
+          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' CLAUDE.md \
+            || { echo "::error::TEMPLATE-OWNED END fence lost — scrub over-ran past pair 2"; exit 1; }
           # stripped files gone:
           for gone in \
               .github/workflows/copier-update.yml \
