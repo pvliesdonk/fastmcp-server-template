@@ -225,7 +225,8 @@ jobs:
           rm -f scripts/copier_update_aggregator.py
           rm -rf scripts/copier_update_prompts
           # --- Step 3: scrub CLAUDE.md template-tracking blocks ---
-          sed -i '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md
+          # -i.bak + rm mirrors FORKING.md's portable form (GNU + BSD sed).
+          sed -i.bak '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md && rm -f CLAUDE.md.bak
           # --- Closing ("You are now standalone"): remove the detach guide.
           #     FORKING.md's numbered Step 4 (README cleanup) is intentionally
           #     NOT mirrored here — it mutates README prose this smoke does not

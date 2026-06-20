@@ -50,7 +50,9 @@ the `RELEASE_TOKEN` secret; only its `copier-update` justification is gone.)
 ## Step 3 — Scrub template-tracking guidance from `CLAUDE.md`
 
 ```bash
-sed -i '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md
+# -i.bak + rm keeps this portable across GNU sed (Linux) and BSD sed (macOS),
+# which disagree on the in-place flag's syntax.
+sed -i.bak '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md && rm -f CLAUDE.md.bak
 ```
 
 This deletes the template-coupled sections — the bot-reviewer merge-gate
