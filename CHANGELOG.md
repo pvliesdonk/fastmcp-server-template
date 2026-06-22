@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.5.2 (2026-06-22)
+
+- #186 fix(config-wizard): skip smoke tests on a stale site/ instead of false-failing
+
+
 ## v2.5.1 (2026-06-20)
 
 - #183 feat(scaffold): document and enable clean detach from the template (closes #182)
