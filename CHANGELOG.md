@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.5.3 (2026-06-22)
+
+- #189 ci: bump pinned GitHub Actions (checkout v7, cache v5, setup-uv v8.2)
+- #187 fix(docs): replace spaced em-dash in authentication guide to satisfy Vale
+
+
 ## v2.5.2 (2026-06-22)
 
 - #186 fix(config-wizard): skip smoke tests on a stale site/ instead of false-failing
