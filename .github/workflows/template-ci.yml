@@ -13,10 +13,10 @@ jobs:
         python: ["3.11", "3.12", "3.13", "3.14"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "0.6"
 
@@ -312,10 +312,10 @@ jobs:
     name: Downstream workflow gate (docs + packaging)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "0.6"
 
@@ -381,10 +381,10 @@ jobs:
     name: Aggregator script unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "0.6"
 
