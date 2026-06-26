@@ -21,7 +21,7 @@ jobs:
           version: "latest"
 
       - name: Cache Python interpreter
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/uv/python
           key: uv-python-3.12-{% raw %}${{ runner.os }}{% endraw %}
@@ -51,7 +51,7 @@ jobs:
           version: "latest"
 
       - name: Cache Python interpreter
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/uv/python
           key: uv-python-3.12-{% raw %}${{ runner.os }}{% endraw %}
@@ -97,7 +97,7 @@ jobs:
           version: "latest"
 
       - name: Cache Python interpreter
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           # `uv python install` writes to UV_PYTHON_INSTALL_DIR, which is
           # separate from the uv package cache and not covered by setup-uv's
@@ -117,7 +117,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
@@ -219,7 +219,7 @@ jobs:
           version: "latest"
 
       - name: Cache Python interpreter
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/uv/python
           key: uv-python-3.12-{% raw %}${{ runner.os }}{% endraw %}
@@ -256,7 +256,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e  # v3.0.0
         env:
           GITHUB_TOKEN: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
 
@@ -283,7 +283,7 @@ jobs:
         # Pack list mirrors the Packages = line in .vale.ini; if you add or
         # remove a pack, update both. Bump the v1- prefix to evict all cached
         # packs if Vale changes pack format backward-incompatibly.
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             .vale/styles/Google
