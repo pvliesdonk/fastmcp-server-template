@@ -53,7 +53,13 @@ def test_register_apps_logs_when_app_domain_set(
     monkeypatch.setenv("{{ env_prefix }}_APP_DOMAIN", "example.com")
     with caplog.at_level("INFO", logger="{{ python_module }}._server_apps"):
         register_apps(make_server())
-    assert any("example.com" in r.message for r in caplog.records)
+    # Assert on the structured log argument by exact equality rather than a
+    # substring test of the formatted message.  ``"example.com" in r.message``
+    # trips CodeQL's ``py/incomplete-url-substring-sanitization`` rule on the
+    # host-shaped literal, even though this is a log assertion and not URL
+    # sanitization; ``==`` is not a substring-membership pattern, so it does
+    # not.  The branch logs the configured domain as its sole ``%s`` arg.
+    assert any(r.args == ("example.com",) for r in caplog.records)
 
 
 {% endif -%}
