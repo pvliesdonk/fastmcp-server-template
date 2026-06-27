@@ -8,9 +8,17 @@ effects.
 
 from __future__ import annotations
 
-from typer.testing import CliRunner
+from typing import TYPE_CHECKING
+from unittest.mock import MagicMock, patch
+
+from typer.testing import CliRunner, Result
 
 from {{ python_module }}.cli import app
+
+if TYPE_CHECKING:
+    import pytest
+
+_ENV_PREFIX = "{{ env_prefix }}"
 
 
 def test_help_exits_zero() -> None:
@@ -38,3 +46,55 @@ def test_no_args_shows_help() -> None:
     result = CliRunner().invoke(app, [])
     assert result.exit_code == 2
     assert "serve" in result.output
+
+
+def _invoke_http_serve(
+    extra_args: list[str] | None = None,
+) -> tuple[Result, dict[str, object]]:
+    """Invoke ``serve --transport http`` with all blocking side effects patched.
+
+    Patches ``make_server``, ``build_event_store``, and ``uvicorn.run`` so the
+    test never tries to start a server or write to ``/data``.  Returns the
+    CliRunner result and the kwargs captured by the fake ``uvicorn.run``.
+    """
+    captured: dict[str, object] = {}
+
+    def fake_uvicorn_run(_asgi_app: object, **kwargs: object) -> None:
+        captured.update(kwargs)
+
+    fake_server = MagicMock()
+    fake_server.http_app.return_value = MagicMock()
+
+    with (
+        patch("uvicorn.run", side_effect=fake_uvicorn_run),
+        patch("{{ python_module }}.server.make_server", return_value=fake_server),
+        patch("{{ python_module }}.cli.build_event_store", return_value=MagicMock()),
+    ):
+        args = ["serve", "--transport", "http"] + (extra_args or [])
+        result = CliRunner().invoke(app, args)
+
+    return result, captured
+
+
+def test_serve_http_reads_host_port_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``serve --transport http`` uses HOST/PORT from env when no CLI flags given."""
+    monkeypatch.setenv(f"{_ENV_PREFIX}_HOST", "192.168.1.50")
+    monkeypatch.setenv(f"{_ENV_PREFIX}_PORT", "9090")
+
+    result, captured = _invoke_http_serve()
+
+    assert result.exit_code == 0, result.output
+    assert captured.get("host") == "192.168.1.50"
+    assert captured.get("port") == 9090
+
+
+def test_serve_http_cli_flags_override_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit ``--host``/``--port`` CLI flags override env-var defaults."""
+    monkeypatch.setenv(f"{_ENV_PREFIX}_HOST", "192.168.1.50")
+    monkeypatch.setenv(f"{_ENV_PREFIX}_PORT", "9090")
+
+    result, captured = _invoke_http_serve(["--host", "10.0.0.1", "--port", "7777"])
+
+    assert result.exit_code == 0, result.output
+    assert captured.get("host") == "10.0.0.1"
+    assert captured.get("port") == 7777
