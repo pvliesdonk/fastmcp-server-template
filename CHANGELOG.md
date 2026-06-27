@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.5.4 (2026-06-27)
+
+- #198 fix(scaffold): neutralize copier-update wording in CLAUDE.md on detach
+- #197 docs(scaffold): add MCP Registry mcp-name marker to README header
+- #196 test(scaffold): assert app_domain log by arg equality, not URL substring
+- #195 ci(scaffold): bump pinned actions and seed dependencies label
+
+
 ## v2.5.3 (2026-06-22)
 
 - #189 ci: bump pinned GitHub Actions (checkout v7, cache v5, setup-uv v8.2)
