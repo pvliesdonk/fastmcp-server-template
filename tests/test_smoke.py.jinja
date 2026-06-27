@@ -107,6 +107,73 @@ async def test_get_server_info_tool_registered(client: Client[Any]) -> None:
     assert "upstream" not in payload
 
 
+def test_server_name_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``{{ env_prefix }}_SERVER_NAME`` overrides the FastMCP server name.
+
+    Unset, the name defaults to ``{{ project_name }}`` (locked by the
+    ``get_server_info`` test above). Set, ``make_server()`` must honor it so an
+    operator can rename an instance without editing template-owned code.
+    """
+    monkeypatch.setenv("{{ env_prefix }}_SERVER_NAME", "renamed-instance")
+    assert make_server().name == "renamed-instance"
+
+
+async def test_server_name_env_override_reaches_server_info(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The overridden name also flows through to ``get_server_info``.
+
+    ``register_server_info_tool`` is wired separately from the FastMCP ``name``,
+    so this pins that both surfaces honor the same resolved name.
+    """
+    monkeypatch.setenv("{{ env_prefix }}_SERVER_NAME", "renamed-instance")
+    server = make_server()
+    async with Client(server) as smoke_client:
+        result = await smoke_client.call_tool("get_server_info", {})
+    first = result.content[0]
+    assert hasattr(first, "text"), (
+        f"expected text tool content, got {type(first).__name__}"
+    )
+    assert json.loads(first.text)["server_name"] == "renamed-instance"
+
+
+def test_instructions_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``{{ env_prefix }}_INSTRUCTIONS`` replaces the built-in instructions.
+
+    ``build_instructions`` advertises this override in its hint line; honoring
+    it here makes that advertisement true instead of a dead hint.
+    """
+    monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS", "Custom operator text.")
+    assert make_server().instructions == "Custom operator text."
+
+
+def test_instructions_default_falls_back_to_build_instructions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unset, instructions fall back to ``build_instructions`` (whose hint
+    advertises the override var). Guards the fallback arm of the override."""
+    monkeypatch.delenv("{{ env_prefix }}_INSTRUCTIONS", raising=False)
+    assert "{{ env_prefix }}_INSTRUCTIONS" in (make_server().instructions or "")
+
+
+def test_blank_overrides_fall_back_to_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Whitespace-only overrides fall back, honoring the "unset/empty" contract.
+
+    ``env`` strips and treats a blank value as unset, so a blank SERVER_NAME
+    must revert to ``{{ project_name }}`` rather than rename the instance to
+    whitespace, and a blank INSTRUCTIONS must revert to ``build_instructions``.
+    Guards against a future refactor (e.g. raw ``os.environ.get``) that would
+    pass the blank value through.
+    """
+    monkeypatch.setenv("{{ env_prefix }}_SERVER_NAME", "   ")
+    monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS", "   ")
+    server = make_server()
+    assert server.name == "{{ project_name }}"
+    assert "{{ env_prefix }}_INSTRUCTIONS" in (server.instructions or "")
+
+
 async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
     """The example ``summarize`` prompt round-trips its ``context`` argument."""
     result = await client.get_prompt("summarize", {"context": "hello world"})
