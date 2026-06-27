@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import re
 import textwrap
 from pathlib import Path
 from typing import Any, cast
@@ -121,11 +122,17 @@ def _read_in_src(suffix: str, src_text: str) -> bool:
 
     Matches the two scaffold read idioms: ``env(_ENV_PREFIX, "SUFFIX")`` (the
     quoted literal ``"SUFFIX"``) and ``os.environ.get(f"{_ENV_PREFIX}_SUFFIX")``
-    (the ``_SUFFIX`` fragment). Requiring one of these — rather than a bare
-    ``suffix in src_text`` substring — avoids clearing a real orphan just
-    because its suffix happens to appear in an unrelated comment or identifier.
+    (the ``_SUFFIX`` fragment). The fragment arm anchors a trailing
+    word-boundary so a short suffix does not match inside a longer fragment
+    (``_HOST`` must not clear via ``_HOSTNAME``). Requiring one of these — rather
+    than a bare ``suffix in src_text`` substring — avoids clearing a real orphan
+    just because its suffix happens to appear in an unrelated comment or
+    identifier.
     """
-    return f'"{suffix}"' in src_text or f"_{suffix}" in src_text
+    return (
+        f'"{suffix}"' in src_text
+        or re.search(rf"_{re.escape(suffix)}(?![A-Z0-9_])", src_text) is not None
+    )
 
 
 def _orphan_vars(spec: dict[str, Any]) -> list[str]:
@@ -242,3 +249,16 @@ def test_orphan_guard_accepts_scaffold_direct_read() -> None:
     # The token match does not clear a suffix that is merely a coincidental
     # substring (no ``"ZZZNONSENSE"`` literal or ``_ZZZNONSENSE`` fragment).
     assert not _read_in_src("ZZZNONSENSE", _src_text())
+
+
+def test_read_in_src_quoted_literal_arm() -> None:
+    """The quoted-literal arm matches an ``env(prefix, "SUFFIX")`` read."""
+    assert _read_in_src("WIDGET", 'x = env(_ENV_PREFIX, "WIDGET")\n')
+    assert not _read_in_src("WIDGET", "x = widget_count  # WIDGET in a comment\n")
+
+
+def test_read_in_src_fragment_arm_anchors_word_boundary() -> None:
+    """The ``_SUFFIX`` arm matches an f-string read but not a longer fragment."""
+    assert _read_in_src("HOST", 'os.environ.get(f"{_ENV_PREFIX}_HOST")\n')
+    # ``_HOST`` inside ``_HOSTNAME`` must NOT clear HOST as read.
+    assert not _read_in_src("HOST", 'os.environ.get(f"{_ENV_PREFIX}_HOSTNAME")\n')
