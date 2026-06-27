@@ -224,9 +224,17 @@ jobs:
           rm -rf .gemini
           rm -f scripts/copier_update_aggregator.py
           rm -rf scripts/copier_update_prompts
-          # --- Step 3: scrub CLAUDE.md template-tracking blocks ---
+          # --- Step 3: scrub CLAUDE.md template-tracking + copier-update wording ---
           # -i.bak + rm mirrors FORKING.md's portable form (GNU + BSD sed).
-          sed -i.bak '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' CLAUDE.md && rm -f CLAUDE.md.bak
+          sed -i.bak \
+            -e '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' \
+            -e '/<!-- ===== TEMPLATE-OWNED SECTIONS BELOW/d' \
+            -e '/<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->/d' \
+            -e 's/ Kept across copier update\.//' \
+            -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
+            -e 's/ are preserved across `copier update`\./ are domain-owned./' \
+            -e 's/The block is preserved across `copier update`\./The block is domain-owned./' \
+            CLAUDE.md && rm -f CLAUDE.md.bak
           # --- Closing ("You are now standalone"): remove the detach guide.
           #     FORKING.md's numbered Step 4 (README cleanup) is intentionally
           #     NOT mirrored here — it mutates README prose this smoke does not
@@ -246,6 +254,12 @@ jobs:
           # grep bites on a regressed scrub rather than passing vacuously.
           ! grep -rniE "fleet|downstream conforms|shape lives in pvl-core|lives upstream|propagate here via .?copier update" CLAUDE.md \
             || { echo "::error::template-tracking language remains in CLAUDE.md after scrub"; exit 1; }
+          # A detached fork's CLAUDE.md must not claim its sections are
+          # overwritten or preserved by copier update (issue #184). The scrub
+          # strips every such mention (banner fences, DOMAIN "Kept across" notes,
+          # "preserved/survive across copier update" prose), so none may remain.
+          ! grep -niF 'copier update' CLAUDE.md \
+            || { echo "::error::copier-update wording remains in CLAUDE.md after detach scrub"; exit 1; }
           grep -qE '^## Shared Infrastructure$' CLAUDE.md \
             && { echo "::error::Shared Infrastructure section survived the scrub"; exit 1; } || true
           grep -qE '^## Contributing fixes upstream$' CLAUDE.md \
@@ -260,7 +274,10 @@ jobs:
           #   pair 1 START → ## PR Discipline (above)
           #   pair 1 END   → ## GitHub Review Types (below)
           #   pair 2 START → ## Server Info Tool (above)
-          #   pair 2 END   → TEMPLATE-OWNED END fence + ## Key Design Decisions (below)
+          #   pair 2 END   → ## Key Design Decisions (below; the TEMPLATE-OWNED
+          #                  END fence that used to sit here is removed by the
+          #                  scrub, so ## Key Design Decisions is now the sole
+          #                  below-the-boundary over-run guard)
           # The remaining entries are the other sections FORKING.md promises survive.
           for kept_section in \
               '^## Conventions$' \
@@ -274,11 +291,14 @@ jobs:
             grep -qE "$kept_section" CLAUDE.md \
               || { echo "::error::neutral section '$kept_section' lost — scrub deleted too much"; exit 1; }
           done
-          # Structural bottom boundary: pair 2 END is the last TEMPLATE-TRACKING
-          # marker, so a misplaced END would run the range delete to EOF past
-          # this fence. Assert it survives.
-          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' CLAUDE.md \
-            || { echo "::error::TEMPLATE-OWNED END fence lost — scrub over-ran past pair 2"; exit 1; }
+          # The TEMPLATE-OWNED banner fences are intentionally removed by the
+          # scrub (a detached fork owns every section), so assert both are gone.
+          # The range-delete's bottom-boundary over-run guard is now
+          # '## Key Design Decisions' (asserted in the kept-section loop above):
+          # it sits below where the END fence was, so a range delete that ran to
+          # EOF past pair 2 would drop it too.
+          ! grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS (BELOW|END)' CLAUDE.md \
+            || { echo "::error::TEMPLATE-OWNED banner fence survived the detach scrub"; exit 1; }
           # stripped files gone:
           for gone in \
               .github/workflows/copier-update.yml \
