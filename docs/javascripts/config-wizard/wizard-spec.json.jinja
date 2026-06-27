@@ -32,6 +32,7 @@
     {
       "id": "http_path",
       "label": "HTTP endpoint path",
+      "help": "Mount path for the MCP endpoint, e.g. /mcp. Defaults to /mcp when unset.",
       "type": "text",
       "var": "{{ env_prefix }}_HTTP_PATH",
       "showIf": { "deployment": ["server"] },
@@ -55,7 +56,7 @@
       "help": "Any non-empty string enables bearer auth. Browser-only.",
       "type": "text",
       "var": "{{ env_prefix }}_BEARER_TOKEN",
-      "showIf": { "auth": ["bearer", "both"] }
+      "showIf": { "deployment": ["server"], "auth": ["bearer", "both"] }
     },
     {
       "id": "oidc_config_url",
@@ -63,14 +64,14 @@
       "help": "e.g. https://auth.example.com/.well-known/openid-configuration",
       "type": "text",
       "var": "{{ env_prefix }}_OIDC_CONFIG_URL",
-      "showIf": { "auth": ["oidc", "both"] }
+      "showIf": { "deployment": ["server"], "auth": ["oidc", "both"] }
     },
     {
       "id": "oidc_client_id",
       "label": "OIDC client ID",
       "type": "text",
       "var": "{{ env_prefix }}_OIDC_CLIENT_ID",
-      "showIf": { "auth": ["oidc", "both"] }
+      "showIf": { "deployment": ["server"], "auth": ["oidc", "both"] }
     },
     {
       "id": "oidc_client_secret",
@@ -78,7 +79,7 @@
       "help": "Browser-only; never in the shareable link.",
       "type": "text",
       "var": "{{ env_prefix }}_OIDC_CLIENT_SECRET",
-      "showIf": { "auth": ["oidc", "both"] }
+      "showIf": { "deployment": ["server"], "auth": ["oidc", "both"] }
     },
     {
       "id": "oidc_jwt_signing_key",
@@ -86,14 +87,14 @@
       "help": "Required on Linux/Docker — the default is ephemeral and invalidates tokens on restart. Generate: openssl rand -hex 32.",
       "type": "text",
       "var": "{{ env_prefix }}_OIDC_JWT_SIGNING_KEY",
-      "showIf": { "auth": ["oidc", "both"] }
+      "showIf": { "deployment": ["server"], "auth": ["oidc", "both"] }
     },
     {
       "id": "oidc_audience",
       "label": "OIDC audience",
       "type": "text",
       "var": "{{ env_prefix }}_OIDC_AUDIENCE",
-      "showIf": { "auth": ["oidc", "both"] },
+      "showIf": { "deployment": ["server"], "auth": ["oidc", "both"] },
       "advancedGroup": "Auth"
     },
     {
@@ -101,7 +102,7 @@
       "label": "OIDC required scopes (CSV)",
       "type": "text",
       "var": "{{ env_prefix }}_OIDC_REQUIRED_SCOPES",
-      "showIf": { "auth": ["oidc", "both"] },
+      "showIf": { "deployment": ["server"], "auth": ["oidc", "both"] },
       "advancedGroup": "Auth"
     },
     {
@@ -109,7 +110,7 @@
       "label": "Verify access token (not id token)",
       "type": "bool",
       "var": "{{ env_prefix }}_OIDC_VERIFY_ACCESS_TOKEN",
-      "showIf": { "auth": ["oidc", "both"] },
+      "showIf": { "deployment": ["server"], "auth": ["oidc", "both"] },
       "advancedGroup": "Auth"
     },
     {
