@@ -10,6 +10,18 @@ variables (`{{ env_prefix }}_TRANSPORT`, `{{ env_prefix }}_HOST`,
 `{{ env_prefix }}_PORT`, `{{ env_prefix }}_HTTP_PATH`,
 `{{ env_prefix }}_BASE_URL`, auth vars, etc.).
 
+## Server identity
+
+These two are read by the scaffold's `make_server()` (not by
+`ServerConfig`), so an operator can rename an instance or override its
+instructions without editing template-owned code:
+
+- `{{ env_prefix }}_SERVER_NAME`: the server name reported to clients and
+  by `get_server_info`. Defaults to `{{ project_name }}`.
+- `{{ env_prefix }}_INSTRUCTIONS`: replaces the default MCP instructions
+  text. Unset, the scaffold builds the default (which advertises this
+  override).
+
 <!-- DOMAIN-CONFIG-VARS-START -->
 ## Domain variables
 
