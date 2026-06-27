@@ -107,16 +107,25 @@ def _surface() -> set[str]:
 def _src_text() -> str:
     """Concatenated text of the project's ``src/**/*.py``.
 
-    Used to accept wizard vars read directly in the scaffold (e.g. ``HTTP_PATH``
-    in ``cli.py``) that are not ``ServerConfig``/``ProjectConfig`` fields and
-    would otherwise be flagged as orphans. Membership is a substring test, so it
-    can MISS a real orphan whose suffix appears elsewhere in src (a false
-    negative). That is the accepted trade-off here — keep suffixes long/unique;
-    tighten the match in a follow-up rather than risk false positives blocking
-    legitimate vars.
+    Used by :func:`_read_in_src` to accept wizard vars read directly in the
+    scaffold (e.g. ``HTTP_PATH`` in ``cli.py``) that are not
+    ``ServerConfig``/``ProjectConfig`` fields and would otherwise be flagged as
+    orphans.
     """
     src = Path(__file__).resolve().parent.parent / "src"
     return "\n".join(p.read_text(encoding="utf-8") for p in sorted(src.rglob("*.py")))
+
+
+def _read_in_src(suffix: str, src_text: str) -> bool:
+    """True if ``suffix`` appears as an env-read *token* in src, not a bare match.
+
+    Matches the two scaffold read idioms: ``env(_ENV_PREFIX, "SUFFIX")`` (the
+    quoted literal ``"SUFFIX"``) and ``os.environ.get(f"{_ENV_PREFIX}_SUFFIX")``
+    (the ``_SUFFIX`` fragment). Requiring one of these — rather than a bare
+    ``suffix in src_text`` substring — avoids clearing a real orphan just
+    because its suffix happens to appear in an unrelated comment or identifier.
+    """
+    return f'"{suffix}"' in src_text or f"_{suffix}" in src_text
 
 
 def _orphan_vars(spec: dict[str, Any]) -> list[str]:
@@ -130,7 +139,7 @@ def _orphan_vars(spec: dict[str, Any]) -> list[str]:
         suffix = _suffix(var)
         if suffix is None:
             out.append(f"{var} (not {_ENV_PREFIX}_-prefixed and not FASTMCP_*)")
-        elif suffix not in core_domain and suffix not in src_text:
+        elif suffix not in core_domain and not _read_in_src(suffix, src_text):
             out.append(f"{var} (no read site consumes {suffix})")
     return out
 
@@ -221,3 +230,15 @@ def test_transport_covered_via_option_emit() -> None:
 def test_orphan_guard_exempts_fastmcp_native() -> None:
     """A FASTMCP_* wizard var is exempt from the orphan check (read by FastMCP)."""
     assert _orphan_vars({"questions": [{"id": "x", "var": "FASTMCP_LOG_LEVEL"}]}) == []
+
+
+def test_orphan_guard_accepts_scaffold_direct_read() -> None:
+    """A wizard var read directly in src (not a ServerConfig/domain field) is not
+    an orphan. HTTP_PATH is the case: read in cli.py, absent from the core/domain
+    surface, cleared only by the ``_read_in_src`` token match.
+    """
+    assert "HTTP_PATH" not in _surface()
+    assert _read_in_src("HTTP_PATH", _src_text())
+    # The token match does not clear a suffix that is merely a coincidental
+    # substring (no ``"ZZZNONSENSE"`` literal or ``_ZZZNONSENSE`` fragment).
+    assert not _read_in_src("ZZZNONSENSE", _src_text())
