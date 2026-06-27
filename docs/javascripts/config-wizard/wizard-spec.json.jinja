@@ -6,7 +6,9 @@
     "envPrefix": "{{ env_prefix }}"
   },
   "secretKeys": [
-    "{{ env_prefix }}_BEARER_TOKEN"
+    "{{ env_prefix }}_BEARER_TOKEN",
+    "{{ env_prefix }}_OIDC_CLIENT_SECRET",
+    "{{ env_prefix }}_OIDC_JWT_SIGNING_KEY"
   ],
   "questions": [
     {
@@ -20,12 +22,103 @@
       ]
     },
     {
+      "id": "base_url",
+      "label": "Public base URL",
+      "help": "e.g. https://mcp.example.com — required for OIDC and MCP Apps.",
+      "type": "text",
+      "var": "{{ env_prefix }}_BASE_URL",
+      "showIf": { "deployment": ["server"] }
+    },
+    {
+      "id": "http_path",
+      "label": "HTTP endpoint path",
+      "type": "text",
+      "var": "{{ env_prefix }}_HTTP_PATH",
+      "showIf": { "deployment": ["server"] },
+      "advancedGroup": "Server"
+    },
+    {
+      "id": "auth",
+      "label": "Authentication",
+      "type": "select",
+      "showIf": { "deployment": ["server"] },
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "bearer", "label": "Bearer token" },
+        { "value": "oidc", "label": "OIDC" },
+        { "value": "both", "label": "Bearer + OIDC" }
+      ]
+    },
+    {
       "id": "bearer_token",
       "label": "Bearer token",
       "help": "Any non-empty string enables bearer auth. Browser-only.",
       "type": "text",
       "var": "{{ env_prefix }}_BEARER_TOKEN",
-      "showIf": { "deployment": ["server"] }
+      "showIf": { "auth": ["bearer", "both"] }
+    },
+    {
+      "id": "oidc_config_url",
+      "label": "OIDC discovery URL",
+      "help": "e.g. https://auth.example.com/.well-known/openid-configuration",
+      "type": "text",
+      "var": "{{ env_prefix }}_OIDC_CONFIG_URL",
+      "showIf": { "auth": ["oidc", "both"] }
+    },
+    {
+      "id": "oidc_client_id",
+      "label": "OIDC client ID",
+      "type": "text",
+      "var": "{{ env_prefix }}_OIDC_CLIENT_ID",
+      "showIf": { "auth": ["oidc", "both"] }
+    },
+    {
+      "id": "oidc_client_secret",
+      "label": "OIDC client secret",
+      "help": "Browser-only; never in the shareable link.",
+      "type": "text",
+      "var": "{{ env_prefix }}_OIDC_CLIENT_SECRET",
+      "showIf": { "auth": ["oidc", "both"] }
+    },
+    {
+      "id": "oidc_jwt_signing_key",
+      "label": "OIDC JWT signing key",
+      "help": "Required on Linux/Docker — the default is ephemeral and invalidates tokens on restart. Generate: openssl rand -hex 32.",
+      "type": "text",
+      "var": "{{ env_prefix }}_OIDC_JWT_SIGNING_KEY",
+      "showIf": { "auth": ["oidc", "both"] }
+    },
+    {
+      "id": "oidc_audience",
+      "label": "OIDC audience",
+      "type": "text",
+      "var": "{{ env_prefix }}_OIDC_AUDIENCE",
+      "showIf": { "auth": ["oidc", "both"] },
+      "advancedGroup": "Auth"
+    },
+    {
+      "id": "oidc_required_scopes",
+      "label": "OIDC required scopes (CSV)",
+      "type": "text",
+      "var": "{{ env_prefix }}_OIDC_REQUIRED_SCOPES",
+      "showIf": { "auth": ["oidc", "both"] },
+      "advancedGroup": "Auth"
+    },
+    {
+      "id": "oidc_verify_access_token",
+      "label": "Verify access token (not id token)",
+      "type": "bool",
+      "var": "{{ env_prefix }}_OIDC_VERIFY_ACCESS_TOKEN",
+      "showIf": { "auth": ["oidc", "both"] },
+      "advancedGroup": "Auth"
+    },
+    {
+      "id": "kv_store_url",
+      "label": "KV store URL (HTTP session persistence)",
+      "type": "text",
+      "var": "{{ env_prefix }}_KV_STORE_URL",
+      "showIf": { "deployment": ["server"] },
+      "advancedGroup": "Persistence"
     },
     {
       "id": "log_level",
@@ -42,5 +135,11 @@
       "advancedGroup": "Logging"
     }
   ],
-  "guards": []
+  "guards": [
+    {
+      "when": { "deployment": ["server"], "auth": ["oidc", "both"] },
+      "level": "warning",
+      "message": "OIDC needs BASE_URL set and (on Linux/Docker) OIDC_JWT_SIGNING_KEY — the default key is ephemeral and invalidates tokens on restart."
+    }
+  ]
 }

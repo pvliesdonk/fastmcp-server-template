@@ -131,6 +131,15 @@ Domain configuration composes `fastmcp_pvl_core.ServerConfig` inside your domain
 
 Env var prefix is `{{ env_prefix }}_` — all env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent.
 
+### Config wizard
+
+`docs/javascripts/config-wizard/wizard-spec.json` drives the guided-setup page. It is **domain-owned and write-once** (`_skip_if_exists`): the runtime (`wizard.js`, `generators.js`, `wizard-spec-schema.json`, the generic tests) is template-owned and re-rendered, but the spec itself is never re-rendered, so it does **not** auto-update when you add config or when the template grows new questions. Reconcile it by hand.
+
+Two rules keep the spec honest:
+
+- **Cover the `ServerConfig` surface.** The seed ships the upstream questions (`auth` select → none/bearer/oidc/both, the OIDC suite, `base_url`, `http_path`, `kv_store_url`) plus logging. When you add a domain setting that an operator would plausibly configure, add a question for it. When you adopt a new upstream setting, surface it too.
+- **Only offer vars the server actually consumes.** Every `var` must resolve to a real read site (`ServerConfig.from_env`, your `ProjectConfig.from_env`, the CLI, or a native `FASTMCP_*` var) — *advertised but unread* env vars (e.g. a hint that mentions `{{ env_prefix }}_SERVER_NAME` while the scaffold hardcodes the name) must not appear. List secret-bearing vars in `secretKeys` so the wizard masks them and keeps them out of the shareable link. Gate `showIf`/`guards` on the questions that are actually visible (e.g. an OIDC guard should require `deployment=server` too, not just `auth=oidc`).
+
 ### Tool icons
 
 Drop SVG / PNG / ICO / JPEG files into `src/{{ python_module }}/static/icons/` and bulk-attach them to registered tools via `fastmcp_pvl_core.register_tool_icons(mcp, {"tool_name": "filename.svg"}, static_dir=...)` at the end of `register_tools()` — or attach at decoration time with `@mcp.tool(icons=[make_icon(STATIC / "x.svg")])` (where `STATIC = Path(__file__).parent / "static" / "icons"` is a shorthand you define at module level). The scaffold ships an empty `static/icons/` directory; commented-out wiring lives in `tools.py`.
