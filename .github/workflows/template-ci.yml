@@ -46,6 +46,43 @@ jobs:
             exit 1
           fi
 
+      - name: structural gate toggle-off render
+        # The smoke project rendered in the first step has the gate ON, so the
+        # install/lint/test steps that follow exercise the gate's artifacts and
+        # its own test suite. This step renders a SECOND project with the gate
+        # OFF and asserts every gated artifact is absent — the generated suite
+        # cannot cover this (test_structural_gate.py does not render when the
+        # gate is off), so a jinja edit that leaks an artifact past its
+        # {% raw %}{% if %}{% endraw %} guard would otherwise pass CI silently.
+        # One assertion per independently-gated block (pyproject has two: the
+        # mccabe/pylint thresholds AND the tests/** S-ignore).
+        run: |
+          rm -rf /tmp/smoke-gate-off
+          uv run --no-project --with copier \
+            copier copy --trust --defaults \
+            --data-file tests/fixtures/smoke-answers.yml \
+            --data enable_structural_gate=false \
+            . /tmp/smoke-gate-off
+          cd /tmp/smoke-gate-off
+          test ! -f tests/test_structural_gate.py \
+            || { echo "::error::structural test rendered with gate off"; exit 1; }
+          test ! -f tests/.jinja \
+            || { echo "::error::conditional filename left a stray tests/.jinja"; exit 1; }
+          ! grep -q 'structural-diff-gate' .pre-commit-config.yaml \
+            || { echo "::error::pre-push hook rendered with gate off"; exit 1; }
+          ! grep -q 'default_install_hook_types' .pre-commit-config.yaml \
+            || { echo "::error::default_install_hook_types rendered with gate off"; exit 1; }
+          ! grep -qE '^  structure:' .github/workflows/ci.yml \
+            || { echo "::error::structure CI job rendered with gate off"; exit 1; }
+          ! grep -q 'tool.ruff.lint.mccabe' pyproject.toml \
+            || { echo "::error::structural thresholds rendered with gate off"; exit 1; }
+          ! grep -qF '"tests/**"' pyproject.toml \
+            || { echo "::error::structural tests/** S-ignore rendered with gate off"; exit 1; }
+          ! grep -q '## Structural health' CLAUDE.md \
+            || { echo "::error::structural-health section rendered with gate off"; exit 1; }
+          ! grep -qF 'Structural quality (diff) passes' CLAUDE.md \
+            || { echo "::error::structural acceptance-gate item rendered with gate off"; exit 1; }
+
       - name: Install rendered project
         working-directory: /tmp/smoke
         run: uv sync --all-extras --all-groups

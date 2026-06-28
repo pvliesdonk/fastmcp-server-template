@@ -182,3 +182,8 @@ enable_authorization:
   type: bool
   default: false
   help: "Scaffold the opt-in per-subject authorization surface: the commented ACL middleware stubs in config.py/server.py, the brief README 'Authorization' pointer, the docs/guides/authorization.md guide and its nav entry, the *_ACL_PATH line in .env.example, and the cross-link in the authentication guide. Leave off unless this server needs per-caller scope gating (runtime enablement is still via the *_ACL_PATH env var)."
+
+enable_structural_gate:
+  type: bool
+  default: true
+  help: "Scaffold the diff-scoped structural-health gate: strict ruff structural rules (complexity, god-class, too-many-*, security) enforced on changed lines only via diff-quality, as a pre-push hook and a CI 'structure' job, plus the CLAUDE.md structural-health guidance (local-shape rules, advisory radon/vulture audit, decay-issue template). New code is held to the bar; pre-existing code is never blocked. Leave on unless a project deliberately opts out of structural enforcement."
