@@ -109,12 +109,18 @@ ignore = ["E501"]
 # for your project's real source/test paths (split _server_apps.py into
 # per-domain modules, rename tests, add per-file overrides as needed); kept
 # across copier update.
-"src/{{ python_module }}/cli.py" = ["B008"]
-"src/{{ python_module }}/_server_deps.py" = ["B008", "TC002", "TC003"]
-"src/{{ python_module }}/_server_apps.py" = ["B008", "TC001", "TC002"]
-"src/{{ python_module }}/tools.py" = ["B008", "TC001", "TC002"]
-"src/{{ python_module }}/resources.py" = ["B008", "TC001", "TC002"]
-"src/{{ python_module }}/prompts.py" = ["B008", "TC002"]
+# PLR0913 (too-many-args) is ignored on the DI/wiring modules below: FastMCP
+# inflates their arg counts with `Context` + `Depends()` injections, so the
+# structural diff-gate would flag every new tool/resource/prompt and make
+# `# noqa: PLR0913` routine. It only bites when enable_structural_gate is on
+# (PLR0913 isn't in the base select); domain modules keep the check, and
+# C901/PLR0912/PLR0915 still catch a genuinely complex tool here.
+"src/{{ python_module }}/cli.py" = ["B008", "PLR0913"]
+"src/{{ python_module }}/_server_deps.py" = ["B008", "TC002", "TC003", "PLR0913"]
+"src/{{ python_module }}/_server_apps.py" = ["B008", "TC001", "TC002", "PLR0913"]
+"src/{{ python_module }}/tools.py" = ["B008", "TC001", "TC002", "PLR0913"]
+"src/{{ python_module }}/resources.py" = ["B008", "TC001", "TC002", "PLR0913"]
+"src/{{ python_module }}/prompts.py" = ["B008", "TC002", "PLR0913"]
 "tests/conftest.py" = ["TC002", "TC003"]
 "tests/test_smoke.py" = ["TC002", "TC003"]
 "tests/test_tools.py" = ["TC002"]

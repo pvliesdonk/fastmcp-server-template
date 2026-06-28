@@ -80,6 +80,8 @@ jobs:
             || { echo "::error::structural tests/** S-ignore rendered with gate off"; exit 1; }
           ! grep -q '## Structural health' CLAUDE.md \
             || { echo "::error::structural-health section rendered with gate off"; exit 1; }
+          ! grep -qF 'Structural quality (diff) passes' CLAUDE.md \
+            || { echo "::error::structural acceptance-gate item rendered with gate off"; exit 1; }
 
       - name: Install rendered project
         working-directory: /tmp/smoke
