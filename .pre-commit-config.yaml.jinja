@@ -89,10 +89,12 @@ repos:
         # declaration order; if vale precedes vale-sync on a fresh clone
         # the packs aren't populated, Vale prints E201 config errors and
         # exits 0 — silent pass.
-        # Upstream hook has `types: [text]`; this `files:` scopes to docs/.
-        # Together: any text file under docs/ except the working-specs
-        # subtree. Matches the CI step's `vale ... --glob='!docs/superpowers/**' docs/`
-        # scope exactly (both lint markdown + asciidoc + rst + plain
-        # text — every format Vale supports — under docs/).
-        files: ^docs/
-        exclude: ^docs/superpowers/
+        # Upstream hook has `types: [text]`; this `files:` scopes to the
+        # user-facing docs site plus the README. Net scope: any text file
+        # under docs/ (minus the dev-reference subtrees — working specs,
+        # design notes, ADRs) plus README.md. Matches the CI step's
+        # `vale ... --glob='!docs/{superpowers,design,decisions}/**'
+        # docs README.md` exactly. Keep the dev-reference subtree set in
+        # sync with the CI vale_flags glob; template-ci asserts they match.
+        files: ^(docs/|README\.md$)
+        exclude: ^docs/(superpowers|design|decisions)/

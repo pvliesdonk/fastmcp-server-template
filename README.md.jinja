@@ -13,11 +13,11 @@
 <!-- DOMAIN-START -->
 <!-- Replace with 3-7 bullets describing what this MCP server does. Kept across copier update. -->
 
-- **[Capability 1]** — one-sentence description of a user-visible feature.
-- **[Capability 2]** — one-sentence description of another capability.
-- **MCP tools** — N LLM-visible tools exposed; see `src/{{ python_module }}/tools.py`.
-- **MCP resources** — M resources exposing domain state; see `src/{{ python_module }}/resources.py`.
-- **MCP prompts** — K prompt templates; see `src/{{ python_module }}/prompts.py`.
+- **[Capability 1]:** one-sentence description of a user-visible feature.
+- **[Capability 2]:** one-sentence description of another capability.
+- **MCP tools:** N LLM-visible tools exposed; see `src/{{ python_module }}/tools.py`.
+- **MCP resources:** M resources exposing domain state; see `src/{{ python_module }}/resources.py`.
+- **MCP prompts:** K prompt templates; see `src/{{ python_module }}/prompts.py`.
 <!-- DOMAIN-END -->
 
 ## What you can do with it
@@ -27,11 +27,11 @@
 
 With this server mounted in an MCP client (Claude, etc.), you can:
 
-- **[Task 1]** — "[example user request]." Composes tools `[tool_a]` + `[tool_b]`.
-- **[Task 2]** — "[another example request]." Uses resource `[resource_x]`.
-- **[Task 3]** — "[third example]."
+- **[Task 1]:** "[example user request]." Composes tools `[tool_a]` + `[tool_b]`.
+- **[Task 2]:** "[another example request]." Uses resource `[resource_x]`.
+- **[Task 3]:** "[third example]."
 
-Short, concrete prompts beat abstract feature lists — replace the
+Short, concrete prompts beat abstract feature lists. Replace the
 `[Task N]` placeholders with prompts that actually work against your
 server's tool surface.
 <!-- DOMAIN-END -->
@@ -66,9 +66,9 @@ uv sync --all-extras --all-groups
 docker pull ghcr.io/{{ github_org }}/{{ project_name }}:latest
 ```
 
-A `compose.yml` ships at the repo root as a starting point — copy `.env.example` to `.env`, edit, and `docker compose up -d`.
+A `compose.yml` ships at the repo root as a starting point. Copy `.env.example` to `.env`, edit, and `docker compose up -d`.
 
-To attach a remote Python debugger (development only — the protocol is unauthenticated), see [Remote debugging](docs/deployment/docker.md#remote-debugging).
+To attach a remote Python debugger (development only; the protocol is unauthenticated), see [Remote debugging](docs/deployment/docker.md#remote-debugging).
 
 ### Linux packages (.deb / .rpm)
 
@@ -82,7 +82,7 @@ Download the `.mcpb` bundle from the [GitHub Releases](https://github.com/{{ git
 mcpb install {{ project_name }}-<version>.mcpb
 ```
 
-Claude Desktop prompts for required env vars via a GUI wizard — no manual JSON editing needed.
+Claude Desktop prompts for required env vars via a GUI wizard, with no manual JSON editing needed.
 
 For manual Claude Desktop configuration and setup options, see [Claude Desktop deployment](docs/deployment/claude-desktop.md).
 
@@ -93,11 +93,11 @@ For manual Claude Desktop configuration and setup options, see [Claude Desktop d
 {{ project_name }} serve --transport http --port 8000   # streamable HTTP
 ```
 
-For library usage (embedding the domain logic without the MCP transport), import from the `{{ python_module }}` package directly — see the project's domain modules under `src/{{ python_module }}/` for entry points.
+For library usage (embedding the domain logic without the MCP transport), import from the `{{ python_module }}` package directly. See the project's domain modules under `src/{{ python_module }}/` for entry points.
 
 ### Server info
 
-The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream version reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/{{ python_module }}/server.py` — see [`CLAUDE.md`](CLAUDE.md#server-info-tool-get_server_info) for the wiring pattern.
+The server registers a built-in `get_server_info` tool (via `fastmcp_pvl_core.register_server_info_tool`) so operators can confirm the deployed version with a single MCP call. The default response carries `server_name`, `server_version`, and `core_version`. Servers that talk to a remote upstream wire upstream version reporting inside the `DOMAIN-UPSTREAM-START` / `DOMAIN-UPSTREAM-END` sentinel in `src/{{ python_module }}/server.py`; see [`CLAUDE.md`](CLAUDE.md#server-info-tool-get_server_info) for the wiring pattern.
 
 ## Configuration
 
@@ -107,7 +107,7 @@ Core environment variables shared across all `fastmcp-pvl-core`-based services:
 |---|---|---|
 | `FASTMCP_LOG_LEVEL` | `INFO` | Log level for FastMCP internals and app loggers (`DEBUG` / `INFO` / `WARNING` / `ERROR`). The `-v` CLI flag overrides to `DEBUG`. |
 | `FASTMCP_ENABLE_RICH_LOGGING` | `true` | Set to `false` for plain / structured JSON log output. |
-| `{{ env_prefix }}_KV_STORE_URL` | `file:///data/state` | Persistent-state backend URL for pvl-core subsystems — `file:///path` (survives restarts), `memory://` (dev/ephemeral). |
+| `{{ env_prefix }}_KV_STORE_URL` | `file:///data/state` | Persistent-state backend URL for pvl-core subsystems: `file:///path` (survives restarts), `memory://` (dev/ephemeral). |
 
 Domain-specific variables go below under [Domain configuration](#domain-configuration).
 
@@ -118,19 +118,19 @@ Callers authenticate via a bearer token or OIDC (mutually exclusive). See the [A
 {% if enable_authorization -%}
 ## Authorization (opt-in)
 
-Authorization gates individual tools by scope and is **off by default** — every authenticated caller can use everything. Decide a caller's scopes from a subject ACL file (`{{ env_prefix }}_ACL_PATH`, for bearer) or an OIDC identity claim (`{{ env_prefix }}_AUTHZ_CLAIM`). See the [Authorization guide](docs/guides/authorization.md).
+Authorization gates individual tools by scope and is **off by default** (every authenticated caller can use everything). Decide a caller's scopes from a subject ACL file (`{{ env_prefix }}_ACL_PATH`, for bearer) or an OIDC identity claim (`{{ env_prefix }}_AUTHZ_CLAIM`). See the [Authorization guide](docs/guides/authorization.md).
 
 {% endif -%}
 ## Post-scaffold checklist
 
 After `copier copy` and `gh repo create --push`:
 
-1. **Fill in the DOMAIN blocks** in this README (Features, What you can do with it, Domain configuration, Key design decisions) and in `CLAUDE.md`.
-2. Configure GitHub secrets — see below.
+1. **Fill in the DOMAIN blocks** (every section marked with a `DOMAIN` sentinel comment) in this README and in `CLAUDE.md`.
+2. Configure GitHub secrets (see below).
 3. Install dev + docs tooling: `uv sync --all-extras --all-groups`.
 4. Install pre-commit hooks: `uv run pre-commit install`.
 5. Run the gate locally: `uv run pytest -x -q && uv run ruff check --fix . && uv run ruff format . && uv run mypy src/ tests/`.
-6. Push the first commit — CI should be green.
+6. Push the first commit. CI should be green.
 
 ## GitHub secrets
 
@@ -139,7 +139,7 @@ CI workflows reference three repository secrets. Configure them via **Settings �
 | Secret | Used by | How to generate |
 |---|---|---|
 | `RELEASE_TOKEN` | `release.yml`, `copier-update.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write` and `pull_requests: write` (the `copier-update` cron opens PRs). Scoped to this repo. |
-| `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io> — sign in with GitHub, add the repo, copy the upload token from the repo settings page. |
+| `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io>: sign in with GitHub, add the repo, copy the upload token from the repo settings page. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
 
 ```bash
@@ -148,7 +148,7 @@ gh secret set CODECOV_TOKEN
 gh secret set CLAUDE_CODE_OAUTH_TOKEN
 ```
 
-`GITHUB_TOKEN` is auto-provided — no action needed.
+`GITHUB_TOKEN` is auto-provided; no action needed.
 
 ## Local development
 
@@ -179,7 +179,7 @@ uv sync --all-extras --all-groups
 
 ### `uv.lock` refresh after `copier update`
 
-When `copier update` introduces new dependencies (e.g. a new extra added to `pyproject.toml.jinja`), CI runs `uv sync --frozen` which fails against a stale lockfile. Run `uv lock` locally and commit the refreshed `uv.lock` alongside accepting the copier-update PR.
+When `copier update` introduces new dependencies (such as a new extra added to `pyproject.toml.jinja`), CI runs `uv sync --frozen` which fails against a stale lockfile. Run `uv lock` locally and commit the refreshed `uv.lock` alongside accepting the copier-update PR.
 
 ## Links
 
@@ -199,7 +199,7 @@ Domain environment variables use the `{{ env_prefix }}_` prefix:
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `{{ env_prefix }}_EXAMPLE_VAR` | — | **Yes** | Replace this row with your first required setting. |
+| `{{ env_prefix }}_EXAMPLE_VAR` | (none) | **Yes** | Replace this row with your first required setting. |
 | `{{ env_prefix }}_ANOTHER_VAR` | `default` | No | Replace with an optional setting. |
 
 Domain-config fields are composed inside `src/{{ python_module }}/config.py` between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels; env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent.
@@ -210,5 +210,5 @@ Domain-config fields are composed inside `src/{{ python_module }}/config.py` bet
 <!-- DOMAIN-START -->
 <!-- Replace with 3-6 bullets describing non-obvious architectural decisions. Kept across copier update. -->
 
-_Replace this placeholder with a short list of the non-obvious design calls this service makes — e.g. "writes are append-only", "embeddings cached in SQLite", "auth uses OIDC bearer tokens". Three to six bullets is typically enough; link out to longer ADRs under `docs/decisions/` if you maintain any._
+_Replace this placeholder with a short list of the non-obvious design calls this service makes, such as "writes are append-only," "embeddings cached in SQLite," or "auth uses OIDC bearer tokens." Three to six bullets is typically enough; link out to longer ADRs under `docs/decisions/` if you maintain any._
 <!-- DOMAIN-END -->
