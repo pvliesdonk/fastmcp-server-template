@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # A function whose cyclomatic complexity exceeds the mccabe default (10): a
 # long if/elif chain. Written to a temp file and linted via subprocess so this
 # test module itself stays simple (and never trips the gate it is testing).
-OVER_COMPLEX = '''
+OVER_COMPLEX = """
 def tangled(n):
     if n == 1:
         return 1
@@ -46,7 +46,7 @@ def tangled(n):
     elif n == 11:
         return 11
     return 0
-'''
+"""
 
 
 def _ruff(args: list[str], target: Path) -> subprocess.CompletedProcess[str]:
@@ -56,9 +56,16 @@ def _ruff(args: list[str], target: Path) -> subprocess.CompletedProcess[str]:
     # assertion below must reflect the project's real selection.
     return subprocess.run(
         [
-            sys.executable, "-m", "ruff", "check",
-            "--config", str(REPO_ROOT / "pyproject.toml"),
-            "--output-format", "concise", *args, str(target),
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--config",
+            str(REPO_ROOT / "pyproject.toml"),
+            "--output-format",
+            "concise",
+            *args,
+            str(target),
         ],
         capture_output=True,
         text=True,
@@ -156,3 +163,24 @@ def test_ci_has_structure_job() -> None:
     assert f"--extend-select={STRUCTURAL}" in text
     # PR-only, like the diff-cover patch-coverage steps.
     assert "github.event_name == 'pull_request'" in text
+
+
+def test_claudemd_documents_the_gate_command() -> None:
+    text = (REPO_ROOT / "CLAUDE.md").read_text()
+    assert "diff-quality" in text
+    assert f"--extend-select={STRUCTURAL}" in text
+    # Advisory audit + eyes content present.
+    assert "radon" in text and "vulture" in text
+    assert "Why it compounds" in text  # decay-issue template marker
+
+
+def test_structural_select_string_is_identical_across_surfaces() -> None:
+    """The select string lives in three rendered files; drift between them is a
+    silent gate weakening. Assert all three carry the canonical string verbatim.
+    """
+    needle = f"--extend-select={STRUCTURAL}"
+    precommit = (REPO_ROOT / ".pre-commit-config.yaml").read_text()
+    ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    claudemd = (REPO_ROOT / "CLAUDE.md").read_text()
+    for name, text in [("pre-commit", precommit), ("ci", ci), ("CLAUDE.md", claudemd)]:
+        assert needle in text, f"{name} missing canonical structural select"
