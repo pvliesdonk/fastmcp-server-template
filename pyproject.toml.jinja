@@ -95,10 +95,12 @@ ignore = ["E501"]
 # DI resolution — TC001/TC002/TC003.
 {% if enable_structural_gate %}
 # Template-managed: the structural diff-gate adds `S` (security) on the diff
-# pass; assert-based tests would trip S101. Scoped to tests/ so production code
-# is still security-linted on the diff. No-op for the base whole-repo select
-# (which excludes S).
-"tests/**" = ["S101"]
+# pass; assert-based tests would trip S101. S603/S607 cover the shipped
+# structural-gate test, which legitimately shells out via subprocess (S603) with
+# partial executable paths like git/ruff/diff-quality (S607) — both are safe in
+# test code and would otherwise cause the gate to self-block on its own test
+# module. No-op for the base whole-repo select (which excludes S).
+"tests/**" = ["S101", "S603", "S607"]
 {% endif %}
 # PROJECT-RUFF-IGNORES-START — replace, extend, or override the entries below
 # for your project's real source/test paths (split _server_apps.py into

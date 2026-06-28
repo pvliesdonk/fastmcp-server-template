@@ -77,16 +77,16 @@ dependency, no new tooling.
 from the whole-repo `[tool.ruff.lint] select`:
 
 - `C901` — mccabe cyclomatic complexity
-- `PLR0904` — too-many-public-methods (god-class by shape; radon's per-block score
-  misses it)
-- `PLR0911` / `PLR0912` / `PLR0913` / `PLR0914` / `PLR0915` — too-many
-  returns / branches / args / locals / statements
+- `PLR0911` / `PLR0912` / `PLR0913` / `PLR0915` — too-many
+  returns / branches / args / statements
 - `S` — security (bandit-equivalent)
 
-Diff attribution is by line: a `C901`/`PLR0904` violation is reported at the
-function/class `def` line, so a **new** complex function or god-class (its `def`
-is in the diff) blocks, while adding one line inside an existing complex function
-(its `def` unchanged) does not. This is the intended "don't grow worse" semantics.
+> `PLR0904` (god-class) and `PLR0914` (too-many-locals) were dropped: both are ruff preview-only rules and enabling them requires the global `--preview` flag, which would ship all of ruff's unstable preview behaviour to downstream — god-class detection stays with the CLAUDE.md eyes and the deferred full-repo audit.
+
+Diff attribution is by line: a `C901` violation is reported at the function `def`
+line, so a **new** complex function (its `def` is in the diff) blocks, while
+adding one line inside an existing complex function (its `def` unchanged) does
+not. This is the intended "don't grow worse" semantics.
 
 **Thresholds** (`max-complexity`, `max-args`, `max-statements`, …) live as
 commented policy constants in the rendered `pyproject.toml` under

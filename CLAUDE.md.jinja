@@ -34,10 +34,10 @@ Every PR must pass **all** of the following before merge. Do not open or push a 
 3. **Type-check passes** — `uv run mypy src/ tests/` reports no errors
 4. **Patch coverage ≥ 80%** — Codecov measures only lines added/changed in the PR diff. Run `uv run pytest --cov=<changed_module> --cov-report=term-missing` and verify new code is exercised. Add tests for every uncovered branch before pushing.
 {% if enable_structural_gate %}
-5. **Structural quality (diff) passes** — new/changed code must introduce no new structural violations (complexity, god-class, too-many-*, security). Enforced on the diff only, so pre-existing code is never blocked. Run before pushing:
+5. **Structural quality (diff) passes** — new/changed code must introduce no new structural violations (complexity, too-many-*, security). Enforced on the diff only, so pre-existing code is never blocked. Run before pushing:
    ```bash
    uv run diff-quality --violations=ruff.check \
-     --options="--extend-select=C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S" \
+     --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
      --compare-branch=origin/main --fail-under=100
    ```
    `# noqa: C901` (etc.) with a one-line justification is the escape hatch for genuinely irreducible new code.

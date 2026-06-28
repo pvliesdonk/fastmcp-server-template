@@ -37,7 +37,7 @@ repos:
       # compare and may be partial; pre-push sees the full branch range CI checks.
       - id: structural-diff-gate
         name: structural quality (diff vs origin/main)
-        entry: bash -c 'uv run diff-quality --violations=ruff.check --options="--extend-select=C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S" --compare-branch=origin/main --fail-under=100'
+        entry: bash -c 'uv run diff-quality --violations=ruff.check --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" --compare-branch=origin/main --fail-under=100'
         language: system
         pass_filenames: false
         stages: [pre-push]

@@ -376,6 +376,6 @@ jobs:
             exit 0
           fi
           uv run diff-quality --violations=ruff.check \
-            --options="--extend-select=C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S" \
+            --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
             --compare-branch="origin/${BASE_REF}" --fail-under=100
 {% endif %}

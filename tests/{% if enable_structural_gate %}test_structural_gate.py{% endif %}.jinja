@@ -14,7 +14,7 @@ from pathlib import Path
 # Canonical structural ruff selection — MUST stay byte-identical to the string
 # in .pre-commit-config.yaml, .github/workflows/ci.yml, and CLAUDE.md. The
 # anti-drift test in this module enforces that.
-STRUCTURAL = "C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S"
+STRUCTURAL = "C901,PLR0911,PLR0912,PLR0913,PLR0915,S"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -184,3 +184,30 @@ def test_structural_select_string_is_identical_across_surfaces() -> None:
     claudemd = (REPO_ROOT / "CLAUDE.md").read_text()
     for name, text in [("pre-commit", precommit), ("ci", ci), ("CLAUDE.md", claudemd)]:
         assert needle in text, f"{name} missing canonical structural select"
+
+
+def test_shipped_code_passes_the_structural_overlay_cleanly() -> None:
+    """The scaffold must itself pass the structural gate it ships. Runs the
+    exact overlay (--extend-select=STRUCTURAL) over src/ and tests/ and asserts
+    zero violations AND zero inert-rule warnings. Catches two failure classes a
+    string-only check cannot: a preview-only rule silently disabled (ruff prints
+    'has no effect'), and the gate self-blocking on its own shipped code.
+    """
+    proc = subprocess.run(
+        [
+            sys.executable, "-m", "ruff", "check",
+            "--config", str(REPO_ROOT / "pyproject.toml"),
+            f"--extend-select={STRUCTURAL}",
+            "--output-format", "concise",
+            str(REPO_ROOT / "src"), str(REPO_ROOT / "tests"),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    assert "has no effect" not in proc.stderr, (
+        f"a STRUCTURAL rule is inert (preview-only?):\n{proc.stderr}"
+    )
+    assert proc.returncode == 0, (
+        f"shipped code fails its own structural overlay:\n{proc.stdout}"
+    )
