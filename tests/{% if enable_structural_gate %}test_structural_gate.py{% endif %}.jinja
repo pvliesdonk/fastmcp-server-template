@@ -1,0 +1,83 @@
+"""Structural-health gate: behavioural, wiring, and anti-drift tests.
+
+These run inside the generated project's suite (and every downstream's CI),
+continuously verifying the diff-scoped structural gate actually enforces what
+the template intends. Only rendered when ``enable_structural_gate`` is true.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+# Canonical structural ruff selection — MUST stay byte-identical to the string
+# in .pre-commit-config.yaml, .github/workflows/ci.yml, and CLAUDE.md. The
+# anti-drift test in this module enforces that.
+STRUCTURAL = "C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S"
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# A function whose cyclomatic complexity exceeds the mccabe default (10): a
+# long if/elif chain. Written to a temp file and linted via subprocess so this
+# test module itself stays simple (and never trips the gate it is testing).
+OVER_COMPLEX = '''
+def tangled(n):
+    if n == 1:
+        return 1
+    elif n == 2:
+        return 2
+    elif n == 3:
+        return 3
+    elif n == 4:
+        return 4
+    elif n == 5:
+        return 5
+    elif n == 6:
+        return 6
+    elif n == 7:
+        return 7
+    elif n == 8:
+        return 8
+    elif n == 9:
+        return 9
+    elif n == 10:
+        return 10
+    elif n == 11:
+        return 11
+    return 0
+'''
+
+
+def _ruff(args: list[str], target: Path) -> subprocess.CompletedProcess[str]:
+    # --config pins THIS project's pyproject.toml. ruff otherwise discovers
+    # config from the target file's directory (tmp_path here), which would test
+    # ruff's defaults instead of the project's `select` — the base-config
+    # assertion below must reflect the project's real selection.
+    return subprocess.run(
+        [
+            sys.executable, "-m", "ruff", "check",
+            "--config", str(REPO_ROOT / "pyproject.toml"),
+            "--output-format", "concise", *args, str(target),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+
+
+def test_structural_rule_fires_only_as_overlay(tmp_path: Path) -> None:
+    """C901 fires under --extend-select but NOT under the base project config.
+
+    Guards the core invariant: strict-on-diff, lenient-on-repo. If someone
+    promotes these rules into the whole-repo `select`, the base run starts
+    reporting C901 and this test fails.
+    """
+    target = tmp_path / "snippet.py"
+    target.write_text(OVER_COMPLEX)
+
+    overlay = _ruff([f"--extend-select={STRUCTURAL}"], target)
+    base = _ruff([], target)
+
+    assert "C901" in overlay.stdout, f"overlay should flag C901:\n{overlay.stdout}"
+    assert "C901" not in base.stdout, f"base config must NOT flag C901:\n{base.stdout}"

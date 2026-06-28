@@ -93,6 +93,13 @@ ignore = ["E501"]
 # FastMCP dependency injection pattern — B008 is a false positive here.
 # Context/FastMCP/Service imports must stay runtime (not TYPE_CHECKING) for
 # DI resolution — TC001/TC002/TC003.
+{% if enable_structural_gate %}
+# Template-managed: the structural diff-gate adds `S` (security) on the diff
+# pass; assert-based tests would trip S101. Scoped to tests/ so production code
+# is still security-linted on the diff. No-op for the base whole-repo select
+# (which excludes S).
+"tests/**" = ["S101"]
+{% endif %}
 # PROJECT-RUFF-IGNORES-START — replace, extend, or override the entries below
 # for your project's real source/test paths (split _server_apps.py into
 # per-domain modules, rename tests, add per-file overrides as needed); kept
@@ -114,6 +121,21 @@ known-first-party = ["{{ python_module }}"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+{% if enable_structural_gate %}
+# Structural-gate thresholds. These rules are NOT in the whole-repo `select`
+# above — they apply only on the diff via the structural gate's
+# `--extend-select` (see .pre-commit-config.yaml / ci.yml). Values are ruff
+# defaults, surfaced here as editable policy constants.
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 12
+max-returns = 6
+max-statements = 50
+{% endif %}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
