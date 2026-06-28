@@ -95,13 +95,14 @@ ignore = ["E501"]
 # DI resolution — TC001/TC002/TC003.
 {% if enable_structural_gate %}
 # Template-managed: the structural diff-gate adds `S` (security) on the diff
-# pass; assert-based tests would trip S101. The shipped structural-gate test
-# legitimately shells out via subprocess (S603), invoking `git` by bare name
-# (S607, a partial executable path); the ruff/diff-quality calls go through
-# `sys.executable -m ...` (an absolute path) so they are S603-only. Ignoring
-# S101/S603/S607 in tests keeps the gate from self-blocking on its own test
+# pass, so the shipped structural-gate test would self-block: its asserts trip
+# S101, and its bare-name `git` call trips S607 (a partial executable path —
+# the `sys.executable -m ...` calls are NOT flagged). S603 (subprocess use) is
+# included defensively: inert in current ruff but emitted by some versions.
+# Ignoring all three in tests keeps the gate from self-blocking on its own test
 # module; all three are safe in test code. No-op for the base whole-repo select
-# (which excludes S).
+# (which excludes S). If your project needs its own tests/** ignores, EXTEND
+# this list in place — do not add a second "tests/**" key (duplicate TOML key).
 "tests/**" = ["S101", "S603", "S607"]
 {% endif %}
 # PROJECT-RUFF-IGNORES-START — replace, extend, or override the entries below

@@ -1,6 +1,7 @@
 """Structural-health gate: behavioural, wiring, and anti-drift tests.
 
-These run inside the generated project's suite (and every downstream's CI),
+These run inside the generated project's suite (and any downstream's CI that
+keeps the structural gate enabled),
 continuously verifying the diff-scoped structural gate actually enforces what
 the template intends. Only rendered when ``enable_structural_gate`` is true.
 """
@@ -153,6 +154,11 @@ def test_precommit_config_wires_pre_push_hook() -> None:
     assert "default_install_hook_types: [pre-commit, pre-push]" in text
     assert "id: structural-diff-gate" in text
     assert "stages: [pre-push]" in text
+    # The bash -c wrapper is load-bearing: it makes the shell (not pre-commit's
+    # arg splitter) own the --options quoting verified by the end-to-end test.
+    # Assert it so a refactor that drops it can't pass silently.
+    assert "language: system" in text
+    assert "entry: bash -c " in text
     assert f"--extend-select={STRUCTURAL}" in text
 
 
