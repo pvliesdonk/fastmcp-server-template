@@ -121,7 +121,7 @@ _exclude:
   # get spurious re-creations every week.  The `.jinja` files stay in
   # this repo as maintainer-facing reference content.
   - "tests/test_tools.py"
-  - "docs/design.md"
+  - "docs/design/index.md"
 
 # --- Variables ---
 
