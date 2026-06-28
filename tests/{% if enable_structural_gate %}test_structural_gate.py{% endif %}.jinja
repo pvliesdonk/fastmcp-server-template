@@ -81,3 +81,69 @@ def test_structural_rule_fires_only_as_overlay(tmp_path: Path) -> None:
 
     assert "C901" in overlay.stdout, f"overlay should flag C901:\n{overlay.stdout}"
     assert "C901" not in base.stdout, f"base config must NOT flag C901:\n{base.stdout}"
+
+
+def _git(args: list[str], cwd: Path) -> None:
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _diff_quality(repo: Path, extend: bool) -> subprocess.CompletedProcess[str]:
+    cmd = [
+        sys.executable,
+        "-m",
+        "diff_cover.diff_quality_tool",
+        "--violations=ruff.check",
+        "--compare-branch=main",
+        "--fail-under=100",
+    ]
+    if extend:
+        # EXACTLY the argv element a shell produces from the hook's
+        # --options="--extend-select=..." — this is the splitting under test.
+        cmd.append(f"--options=--extend-select={STRUCTURAL}")
+    return subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
+
+
+def test_options_reach_ruff_and_gate_is_diff_scoped(tmp_path: Path) -> None:
+    """A new over-complex function fails the gate ONLY with the structural
+    overlay passed through diff-quality --options; a clean base run passes.
+
+    Proves three things at once: (1) --options actually reaches ruff,
+    (2) the diff scoping works, (3) without the overlay the same diff passes.
+    """
+    repo = tmp_path / "proj"
+    repo.mkdir()
+    _git(["init", "-b", "main"], repo)
+    (repo / "base.py").write_text("x = 1\n")
+    _git(["add", "."], repo)
+    _git(["commit", "-m", "base"], repo)
+
+    _git(["checkout", "-b", "feature"], repo)
+    (repo / "tangled.py").write_text(OVER_COMPLEX)
+    _git(["add", "."], repo)
+    _git(["commit", "-m", "add tangled"], repo)
+
+    with_overlay = _diff_quality(repo, extend=True)
+    without_overlay = _diff_quality(repo, extend=False)
+
+    assert with_overlay.returncode != 0, (
+        "structural overlay must fail the diff gate:\n"
+        f"{with_overlay.stdout}\n{with_overlay.stderr}"
+    )
+    assert without_overlay.returncode == 0, (
+        "base ruff (no structural overlay) must pass the same diff:\n"
+        f"{without_overlay.stdout}\n{without_overlay.stderr}"
+    )
+
+
+def test_precommit_config_wires_pre_push_hook() -> None:
+    text = (REPO_ROOT / ".pre-commit-config.yaml").read_text()
+    assert "default_install_hook_types: [pre-commit, pre-push]" in text
+    assert "id: structural-diff-gate" in text
+    assert "stages: [pre-push]" in text
+    assert f"--extend-select={STRUCTURAL}" in text
