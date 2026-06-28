@@ -69,13 +69,35 @@ Always fetch both before declaring a review round complete.
 
 Every issue, PR, and code change must consider documentation impact. Before closing any issue or creating any PR, check whether the following need updating:
 
-- **`docs/design.md`** — the authoritative spec. Any new feature, changed behavior, or architectural decision must be reflected here.
+- **`docs/design/`** — internal design specs and architecture decisions (the authoritative dev reference). Any new feature, changed behavior, or architectural decision must be reflected here. Not part of the published site.
 - **`README.md`** — user-facing documentation. New env vars, tools, resources, prompts, CLI flags, or configuration options must be documented here.
 - **`docs/` site pages** — the published documentation site. New or changed MCP tools/resources/prompts, new env vars, new installation methods or deployment options.
 - **`CHANGELOG.md`** — managed by semantic-release from conventional commits.
 - **Inline docstrings** — new or changed public API methods need accurate Google-style docstrings.
 
 **Rule: code without matching docs is incomplete.**
+
+## Documentation Conventions (user-facing vs internal)
+
+`docs/` is the **published, user-facing documentation site** (mkdocs + mike).
+Everything under `docs/`, plus **`README.md`**, is operator-facing prose and is
+**Vale-linted** in CI and pre-commit — keep it clean.
+
+**Internal / developer docs are not user-facing and are not linted.** They live
+under a fixed set of subtrees, excluded from both the published site and Vale:
+
+- `docs/design/` — design specs and architecture notes
+- `docs/decisions/` — architecture decision records (ADRs)
+- `docs/superpowers/` — agent working specs and plans (also gitignored)
+
+This boundary is declared in three places that **must stay in lockstep** (the
+`template-ci` "vale exclusion-scope lockstep" job asserts the CI glob and the
+pre-commit exclude match): the mkdocs `exclude_docs:` block, the `vale` CI
+step's `vale_flags` glob (`--glob=!docs/{superpowers,design,decisions}/**` — one
+glob with brace alternation, because Vale honors only a single `--glob`), and
+the `- id: vale` pre-commit hook's `exclude:` regex
+(`^docs/(superpowers|design|decisions)/`). The set is fixed by convention — do
+not add per-project exclusions; put internal docs in one of the subtrees above.
 
 ## Logging Standard
 

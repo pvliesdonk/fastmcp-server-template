@@ -184,8 +184,14 @@ jobs:
         working-directory: /tmp/smoke
         run: |
           # CI's vale_flags glob and pre-commit's exclude regex must scope to
-          # the same subtree. Drift means CI and pre-commit lint different file
+          # the same subtrees. Drift means CI and pre-commit lint different file
           # sets — a finding visible to one is silent to the other.
+          #
+          # The two use different syntaxes for the same intent: the CI glob lists
+          # subtrees as `{a,b,c}` (brace alternation, since Vale honors only one
+          # --glob), while the pre-commit exclude is a regex `(a|b|c)`. So we
+          # canonicalize each to a sorted set of subtree names under docs/ and
+          # compare the sets, not the raw strings.
           #
           # CI extraction is scoped to the vale: job (same awk anchor as the
           # version check above) to avoid false matches on other vale_flags
@@ -202,11 +208,21 @@ jobs:
             | grep -oE 'docs/[^[:space:]]*' || true)
           [ -n "$CI_EXCL" ] || { echo "::error::vale exclusion glob not found in ci.yml vale_flags"; exit 1; }
           [ -n "$PC_EXCL" ] || { echo "::error::vale exclude not found in .pre-commit-config.yaml vale hook"; exit 1; }
-          # Normalize: strip leading ! / ^ and trailing /** / before comparing.
-          CI_NORM=$(echo "${CI_EXCL#!}" | sed 's|/\*\*$||;s|/$||')
-          PC_NORM=$(echo "${PC_EXCL#^}" | sed 's|/\*\*$||;s|/$||')
+          # Canonicalize to a sorted, comma-separated set of subtree names:
+          # strip a leading ! / ^, the docs/ prefix, and a trailing /** or /;
+          # drop {}/() grouping; split on , or | ; sort. Handles both a single
+          # subtree (docs/superpowers) and a multi-subtree set identically.
+          canon() {
+            echo "$1" \
+              | sed -E 's|^!||; s|^\^||; s|^docs/||; s|/\*\*$||; s|/$||' \
+              | tr -d '{}()' \
+              | tr '|,' '\n' \
+              | sort | paste -sd, -
+          }
+          CI_NORM=$(canon "$CI_EXCL")
+          PC_NORM=$(canon "$PC_EXCL")
           [ "$CI_NORM" = "$PC_NORM" ] \
-            || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL pre-commit=$PC_EXCL"; exit 1; }
+            || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) pre-commit=$PC_EXCL ($PC_NORM)"; exit 1; }
 
       - name: detach smoke (FORKING.md commands produce a clean standalone state)
         working-directory: /tmp/smoke
