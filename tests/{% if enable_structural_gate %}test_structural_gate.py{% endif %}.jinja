@@ -195,11 +195,17 @@ def test_shipped_code_passes_the_structural_overlay_cleanly() -> None:
     """
     proc = subprocess.run(
         [
-            sys.executable, "-m", "ruff", "check",
-            "--config", str(REPO_ROOT / "pyproject.toml"),
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--config",
+            str(REPO_ROOT / "pyproject.toml"),
             f"--extend-select={STRUCTURAL}",
-            "--output-format", "concise",
-            str(REPO_ROOT / "src"), str(REPO_ROOT / "tests"),
+            "--output-format",
+            "concise",
+            str(REPO_ROOT / "src"),
+            str(REPO_ROOT / "tests"),
         ],
         capture_output=True,
         text=True,
