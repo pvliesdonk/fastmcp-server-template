@@ -17,8 +17,8 @@
       "help": "Local stdio for Claude Desktop/Code, or an HTTP server for Docker/systemd.",
       "type": "select",
       "options": [
-        { "value": "local", "label": "Local (Claude Desktop / Claude Code, stdio)" },
-        { "value": "server", "label": "Server (HTTP — Docker / Compose / systemd)" }
+        { "value": "local", "label": "Local (Claude Desktop / Claude Code, stdio)", "emit": { "{{ env_prefix }}_TRANSPORT": "stdio" } },
+        { "value": "server", "label": "Server (HTTP — Docker / Compose / systemd)", "emit": { "{{ env_prefix }}_TRANSPORT": "http" } }
       ]
     },
     {
@@ -35,6 +35,24 @@
       "help": "Mount path for the MCP endpoint, e.g. /mcp. Defaults to /mcp when unset.",
       "type": "text",
       "var": "{{ env_prefix }}_HTTP_PATH",
+      "showIf": { "deployment": ["server"] },
+      "advancedGroup": "Server"
+    },
+    {
+      "id": "host",
+      "label": "Bind host",
+      "help": "Interface the HTTP server binds to. Default 127.0.0.1.",
+      "type": "text",
+      "var": "{{ env_prefix }}_HOST",
+      "showIf": { "deployment": ["server"] },
+      "advancedGroup": "Server"
+    },
+    {
+      "id": "port",
+      "label": "Port",
+      "help": "TCP port for the HTTP server. Default 8000.",
+      "type": "text",
+      "var": "{{ env_prefix }}_PORT",
       "showIf": { "deployment": ["server"] },
       "advancedGroup": "Server"
     },
@@ -114,12 +132,48 @@
       "advancedGroup": "Auth"
     },
     {
+      "id": "bearer_tokens_file",
+      "label": "Bearer tokens file (TOML)",
+      "help": "Path to a TOML file of per-token subjects; overrides the single BEARER_TOKEN.",
+      "type": "text",
+      "var": "{{ env_prefix }}_BEARER_TOKENS_FILE",
+      "showIf": { "deployment": ["server"], "auth": ["bearer", "both"] },
+      "advancedGroup": "Auth"
+    },
+    {
+      "id": "bearer_default_subject",
+      "label": "Bearer default subject",
+      "help": "Subject assigned to the single bearer token. Default bearer-anon.",
+      "type": "text",
+      "var": "{{ env_prefix }}_BEARER_DEFAULT_SUBJECT",
+      "showIf": { "deployment": ["server"], "auth": ["bearer", "both"] },
+      "advancedGroup": "Auth"
+    },
+    {
       "id": "kv_store_url",
       "label": "KV store URL (HTTP session persistence)",
       "type": "text",
       "var": "{{ env_prefix }}_KV_STORE_URL",
       "showIf": { "deployment": ["server"] },
       "advancedGroup": "Persistence"
+    },
+    {
+      "id": "event_store_url",
+      "label": "Event store URL (HTTP resumability)",
+      "help": "Alternative event-store URL for HTTP resumability; prefer KV_STORE_URL for new deployments.",
+      "type": "text",
+      "var": "{{ env_prefix }}_EVENT_STORE_URL",
+      "showIf": { "deployment": ["server"] },
+      "advancedGroup": "Persistence"
+    },
+    {
+      "id": "app_domain",
+      "label": "MCP Apps domain",
+      "help": "Public domain that serves MCP Apps UI resources.",
+      "type": "text",
+      "var": "{{ env_prefix }}_APP_DOMAIN",
+      "showIf": { "deployment": ["server"] },
+      "advancedGroup": "MCP Apps"
     },
     {
       "id": "log_level",
