@@ -147,3 +147,12 @@ def test_precommit_config_wires_pre_push_hook() -> None:
     assert "id: structural-diff-gate" in text
     assert "stages: [pre-push]" in text
     assert f"--extend-select={STRUCTURAL}" in text
+
+
+def test_ci_has_structure_job() -> None:
+    text = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert "structure:" in text
+    assert "diff-quality" in text
+    assert f"--extend-select={STRUCTURAL}" in text
+    # PR-only, like the diff-cover patch-coverage steps.
+    assert "github.event_name == 'pull_request'" in text
