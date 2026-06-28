@@ -4,7 +4,7 @@
 
 **Goal:** Ship a diff-scoped structural-health layer into generated projects — a blocking structural diff-gate (pre-push hook + CI backstop), a documented local advisory audit, and CLAUDE.md agent "eyes" — so agent-authored code can't grow structural debt and the agent reproduces every gate locally before CI.
 
-**Architecture:** Strict structural ruff rules (`C901`, `PLR0904`, `PLR0911-0915`, `S`) are applied **only to the diff** via `diff-quality --violations=ruff.check --options=--extend-select=...`, never added to the whole-repo `ruff check` (so existing downstream code stays green). The same one command runs as a pre-push `pre-commit` hook (local-first) and a PR-only CI `structure` job (backstop). The whole feature is gated behind a `copier.yml` toggle `enable_structural_gate`.
+**Architecture:** Strict structural ruff rules (`C901`, `PLR0911`-`PLR0915` excl. preview-only `PLR0904`/`PLR0914`, `S`) are applied **only to the diff** via `diff-quality --violations=ruff.check --options=--extend-select=...`, never added to the whole-repo `ruff check` (so existing downstream code stays green). The same one command runs as a pre-push `pre-commit` hook (local-first) and a PR-only CI `structure` job (backstop). The whole feature is gated behind a `copier.yml` toggle `enable_structural_gate`.
 
 **Tech Stack:** copier/jinja templating; `diff_cover`'s `diff-quality` (already in the generated project's `dev` group); ruff; pre-commit; GitHub Actions; pytest. Advisory analyzers (`radon`, `vulture`) are invoked on-demand via `uv run --with`, not added as dependencies.
 
@@ -16,7 +16,7 @@
 - **Python floor `>=3.11`**; jinja workflow files MUST wrap every `${{ ... }}` GitHub expression in `{% raw %}...{% endraw %}` (existing `ci.yml.jinja` convention).
 - **Copier reads the git index, not the working tree.** To test a change you MUST commit it first (or `git commit --amend --no-edit`) and render with `--vcs-ref=HEAD`. Uncommitted edits render as empty.
 - **Everything new is gated behind `enable_structural_gate`** (`bool`, default `true`). When `false`: no hook, no CI job, no gate command in CLAUDE.md, and `tests/test_structural_gate.py` is not rendered (conditional filename).
-- **Canonical structural select string — byte-identical in all three sites** (pre-commit hook, CI job, CLAUDE.md command): `C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S`
+- **Canonical structural select string — byte-identical in all three sites** (pre-commit hook, CI job, CLAUDE.md command): `C901,PLR0911,PLR0912,PLR0913,PLR0915,S`
 - **Gate policy:** `--fail-under=100`, non-zero-exit hard-fail. `# noqa` is the escape hatch.
 - **THE RENDER+TEST LOOP** (referenced as "run the loop" in steps below). Run from this repo root after committing your jinja edits:
   ```bash
@@ -58,7 +58,7 @@ Establishes the toggle, the ruff threshold config the diff-pass reads, and prove
 - Create: `tests/{% raw %}{% if enable_structural_gate %}{% endraw %}test_structural_gate.py{% raw %}{% endif %}{% endraw %}.jinja`
 
 **Interfaces:**
-- Produces: the rendered `tests/test_structural_gate.py` module (later tasks add tests to the **same** file); the canonical select string constant `STRUCTURAL = "C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S"` defined at module top and reused by later tasks.
+- Produces: the rendered `tests/test_structural_gate.py` module (later tasks add tests to the **same** file); the canonical select string constant `STRUCTURAL = "C901,PLR0911,PLR0912,PLR0913,PLR0915,S"` defined at module top and reused by later tasks.
 
 - [ ] **Step 1: Add the copier toggle**
 
@@ -100,7 +100,7 @@ from pathlib import Path
 # Canonical structural ruff selection — MUST stay byte-identical to the string
 # in .pre-commit-config.yaml, .github/workflows/ci.yml, and CLAUDE.md. The
 # anti-drift test in this module enforces that.
-STRUCTURAL = "C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S"
+STRUCTURAL = "C901,PLR0911,PLR0912,PLR0913,PLR0915,S"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -194,7 +194,7 @@ In `pyproject.toml.jinja`, inside `[tool.ruff.lint.per-file-ignores]`, immediate
 # pass; assert-based tests would trip S101. Scoped to tests/ so production code
 # is still security-linted on the diff. No-op for the base whole-repo select
 # (which excludes S).
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S603", "S607"]
 {% endif %}
 ```
 
@@ -368,7 +368,7 @@ Then, inside the first `- repo: local` block's `hooks:` list (after the `mypy` h
       # compare and may be partial; pre-push sees the full branch range CI checks.
       - id: structural-diff-gate
         name: structural quality (diff vs origin/main)
-        entry: bash -c 'uv run diff-quality --violations=ruff.check --options="--extend-select=C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S" --compare-branch=origin/main --fail-under=100'
+        entry: bash -c 'uv run diff-quality --violations=ruff.check --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" --compare-branch=origin/main --fail-under=100'
         language: system
         pass_filenames: false
         stages: [pre-push]
@@ -515,7 +515,7 @@ In `.github/workflows/ci.yml.jinja`, append at the end of the `jobs:` block (aft
             exit 0
           fi
           uv run diff-quality --violations=ruff.check \
-            --options="--extend-select=C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S" \
+            --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
             --compare-branch="origin/${BASE_REF}" --fail-under=100
 {% endif %}
 ```
@@ -621,7 +621,7 @@ In `CLAUDE.md.jinja`, in the `## Hard PR Acceptance Gates` list, add a new numbe
 5. **Structural quality (diff) passes** — new/changed code must introduce no new structural violations (complexity, god-class, too-many-*, security). Enforced on the diff only, so pre-existing code is never blocked. Run before pushing:
    ```bash
    uv run diff-quality --violations=ruff.check \
-     --options="--extend-select=C901,PLR0904,PLR0911,PLR0912,PLR0913,PLR0914,PLR0915,S" \
+     --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
      --compare-branch=origin/main --fail-under=100
    ```
    `# noqa: C901` (etc.) with a one-line justification is the escape hatch for genuinely irreducible new code.
