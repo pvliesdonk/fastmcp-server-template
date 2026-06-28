@@ -43,6 +43,10 @@ repos:
         entry: bash -c 'uv run diff-quality --violations=ruff.check --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" --compare-branch=origin/main --fail-under=100'
         language: system
         pass_filenames: false
+        # Skip the hook when the push has no Python (with pass_filenames: false,
+        # pre-commit still uses `types` to decide whether to run at all). Mirrors
+        # the CI structure job's `HAS_PY` docs-only skip.
+        types: [python]
         stages: [pre-push]
 {% endif %}
 
