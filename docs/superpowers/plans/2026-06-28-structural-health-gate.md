@@ -136,8 +136,16 @@ def tangled(n):
 
 
 def _ruff(args: list[str], target: Path) -> subprocess.CompletedProcess[str]:
+    # --config pins THIS project's pyproject.toml. ruff otherwise discovers
+    # config from the target file's directory (tmp_path here), which would test
+    # ruff's defaults instead of the project's `select` — the base-config
+    # assertion below must reflect the project's real selection.
     return subprocess.run(
-        [sys.executable, "-m", "ruff", "check", "--output-format", "concise", *args, str(target)],
+        [
+            sys.executable, "-m", "ruff", "check",
+            "--config", str(REPO_ROOT / "pyproject.toml"),
+            "--output-format", "concise", *args, str(target),
+        ],
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
