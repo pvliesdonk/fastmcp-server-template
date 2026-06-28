@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.6.0 (2026-06-28)
+
+- #207 feat(scaffold): CI-enforced config-wizard env-surface coverage
+- #206 feat(scaffold): honor {PREFIX}_SERVER_NAME and {PREFIX}_INSTRUCTIONS
+- #205 feat(wizard): seed the upstream ServerConfig questions; document coverage
+- #204 docs(claude-md): add Tool Registration Checklist section
+
+
 ## v2.5.4 (2026-06-27)
 
 - #198 fix(scaffold): neutralize copier-update wording in CLAUDE.md on detach
