@@ -116,6 +116,10 @@ def _inline_script(html: str, name: str, cfg: dict[str, str], js: str) -> str:
 def _inline_module(html: str, _name: str, cfg: dict[str, str], js: str) -> str:
     """Replace an ES module CDN import with an import-map + data-URI."""
     specifier = cfg["import_specifier"]
+    if '<script type="module">' not in html:
+        raise ValueError(
+            'No <script type="module"> tag found — cannot insert import map'
+        )
     b64 = base64.b64encode(js.encode()).decode("ascii")
     data_uri = f"data:text/javascript;base64,{b64}"
 

@@ -20,7 +20,7 @@ def _load_module():
     spec = importlib.util.spec_from_file_location("vendor_spa", _VENDOR_SPA)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
-    # Discovery runs at import; give it a tree to find.
+    # Discovery is deferred to main(); import is safe without a project tree.
     spec.loader.exec_module(mod)
     return mod
 
