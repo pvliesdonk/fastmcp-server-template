@@ -5,8 +5,8 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
-
-{% endraw %}{% if include_mcp_apps_scaffold %}{% raw %}
+{% endraw %}
+{% if include_mcp_apps_scaffold %}{% raw %}
 import {% endraw %}{{ python_module }}{% raw %}._server_apps as apps
 
 
