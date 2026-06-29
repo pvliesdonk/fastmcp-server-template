@@ -6,8 +6,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 {% endraw %}{% if include_mcp_apps_scaffold %}{% raw %}
 import {% endraw %}{{ python_module }}{% raw %}._server_apps as apps
 
@@ -30,7 +28,7 @@ def test_vendor_check_is_clean():
     assert result.returncode == 0, result.stderr
 
 
-def test_vendor_check_detects_drift(tmp_path: Path):
+def test_vendor_check_detects_drift():
     """Mutating app.src.html makes --check fail (anti-drift gate works)."""
     repo = Path(__file__).resolve().parent.parent
     src = repo / "src" / "{% endraw %}{{ python_module }}{% raw %}" / "static" / "app.src.html"
@@ -45,6 +43,8 @@ def test_vendor_check_detects_drift(tmp_path: Path):
     finally:
         src.write_text(original, encoding="utf-8")
 {% endraw %}{% else %}{% raw %}
+import pytest
+
 
 def test_apps_scaffold_disabled():
     pytest.skip("MCP Apps scaffold not enabled for this project")
