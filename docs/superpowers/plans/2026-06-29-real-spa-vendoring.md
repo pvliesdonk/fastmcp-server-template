@@ -210,7 +210,11 @@ _SOURCE_HASH_RE = re.compile(r"<!-- vendor-spa-source-sha256:([0-9a-f]{64}) -->"
 
 
 def _discover_static_dir() -> Path:
-    """Locate the single ``src/<module>/static`` dir containing app.src.html."""
+    """Locate the single ``src/<module>/static`` dir containing app.src.html.
+
+    Called lazily from main() (never at import) so the module stays importable
+    for unit tests without a project tree present.
+    """
     src_root = Path(__file__).resolve().parent.parent / "src"
     candidates = sorted(src_root.glob("*/static/app.src.html"))
     if not candidates:
@@ -219,11 +223,6 @@ def _discover_static_dir() -> Path:
         found = ", ".join(str(c) for c in candidates)
         raise SystemExit(f"ERROR: multiple app.src.html found: {found}")
     return candidates[0].parent
-
-
-_STATIC_DIR = _discover_static_dir()
-_SRC_HTML = _STATIC_DIR / "app.src.html"
-_OUT_HTML = _STATIC_DIR / "app.html"
 
 
 # ---------------------------------------------------------------------------
@@ -307,22 +306,26 @@ def main() -> int:
     """Entry point.  Returns 0 on success, 1 on failure."""
     check_mode = "--check" in sys.argv
 
-    if not _SRC_HTML.exists():
-        print(f"ERROR: source template not found: {_SRC_HTML}", file=sys.stderr)
+    static_dir = _discover_static_dir()
+    src_html_path = static_dir / "app.src.html"
+    out_html_path = static_dir / "app.html"
+
+    if not src_html_path.exists():
+        print(f"ERROR: source template not found: {src_html_path}", file=sys.stderr)
         return 1
 
-    src_text = _SRC_HTML.read_text(encoding="utf-8")
+    src_text = src_html_path.read_text(encoding="utf-8")
 
     # --check: offline validation via embedded source hash
     if check_mode:
-        if not _OUT_HTML.exists():
+        if not out_html_path.exists():
             print(
-                f"ERROR: {_OUT_HTML} does not exist — "
+                f"ERROR: {out_html_path} does not exist — "
                 "run  python scripts/vendor_spa.py  to generate it.",
                 file=sys.stderr,
             )
             return 1
-        current = _OUT_HTML.read_text(encoding="utf-8")
+        current = out_html_path.read_text(encoding="utf-8")
         m = _SOURCE_HASH_RE.search(current)
         if not m:
             print(
@@ -387,8 +390,8 @@ def main() -> int:
     if not html.endswith("\n"):
         html += "\n"
 
-    _OUT_HTML.write_text(html, encoding="utf-8")
-    print(f"\nWrote {_OUT_HTML} ({len(html):,} bytes)")
+    out_html_path.write_text(html, encoding="utf-8")
+    print(f"\nWrote {out_html_path} ({len(html):,} bytes)")
     return 0
 
 
