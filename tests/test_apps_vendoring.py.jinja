@@ -9,7 +9,7 @@ from pathlib import Path
 import {{ python_module }}._server_apps as apps
 
 
-def test_app_html_is_served_with_tools_rewritten():
+def test_app_html_is_served_with_tools_rewritten() -> None:
     """_SPA_SHELL_HTML loads from static/app.html and the app___ source
     literals are rewritten away to the fastmcp hash form at import."""
     html = apps._SPA_SHELL_HTML
@@ -17,7 +17,7 @@ def test_app_html_is_served_with_tools_rewritten():
     assert "app___" not in html  # every literal rewritten
 
 
-def test_vendor_check_is_clean():
+def test_vendor_check_is_clean() -> None:
     """The committed app.html matches app.src.html (offline --check)."""
     repo = Path(__file__).resolve().parent.parent
     result = subprocess.run(
@@ -29,7 +29,7 @@ def test_vendor_check_is_clean():
     assert result.returncode == 0, result.stderr
 
 
-def test_vendor_check_detects_drift():
+def test_vendor_check_detects_drift() -> None:
     """Mutating app.src.html makes --check fail (anti-drift gate works)."""
     repo = Path(__file__).resolve().parent.parent
     src = repo / "src" / "{{ python_module }}" / "static" / "app.src.html"
@@ -49,6 +49,6 @@ def test_vendor_check_detects_drift():
 import pytest
 
 
-def test_apps_scaffold_disabled():
+def test_apps_scaffold_disabled() -> None:
     pytest.skip("MCP Apps scaffold not enabled for this project")
 {% endif -%}
