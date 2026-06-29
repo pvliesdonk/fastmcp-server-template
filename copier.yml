@@ -7,6 +7,14 @@ _min_copier_version: "9.0"
 _answers_file: .copier-answers.yml
 _templates_suffix: .jinja
 
+# Post-generation: vendor the MCP Apps SDK into static/app.html.  The task value
+# is Jinja-rendered; it collapses to an empty string (skipped) for non-apps
+# projects.  Runs on `copier copy` AND `copier update` — regenerates app.html
+# from the project's (possibly customized) app.src.html.  Requires network
+# (downloads @modelcontextprotocol/ext-apps).  Both CI paths pass --trust.
+_tasks:
+  - "{% if include_mcp_apps_scaffold %}python scripts/vendor_spa.py{% endif %}"
+
 # Starter files: written once on first `copier copy`, protected from
 # `copier update`.  Domain-owned — users customise these and keep their
 # edits across template updates.
@@ -68,6 +76,10 @@ _skip_if_exists:
   # owned downstream.  Generic framework tests stay in
   # test_config_wizard_smoke.py (template-owned).
   - "tests/test_config_wizard_domain.py"
+  # MCP Apps SPA source — domain-owned (the project's UI). vendor_spa.py
+  # regenerates app.html from it on every copier update; app.html itself is
+  # generated, never template-owned.
+  - "src/{{ python_module }}/static/app.src.html"
 # Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is

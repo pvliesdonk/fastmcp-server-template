@@ -87,6 +87,12 @@ jobs:
         working-directory: /tmp/smoke
         run: uv sync --all-extras --all-groups
 
+      - name: Assert MCP Apps SPA was vendored
+        working-directory: /tmp/smoke
+        run: |
+          test -f src/smoke_mcp/static/app.html
+          uv run python scripts/vendor_spa.py --check
+
       - name: ruff check
         working-directory: /tmp/smoke
         run: uv run ruff check .

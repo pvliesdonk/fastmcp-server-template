@@ -32,6 +32,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --all-groups
 
+{% if include_mcp_apps_scaffold %}
+      - name: Verify vendored SPA is up-to-date
+        run: uv run python scripts/vendor_spa.py --check
+{% endif %}
       - name: Run ruff check
         run: uv run ruff check src/ tests/
 
