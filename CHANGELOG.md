@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.8.0 (2026-06-29)
+
+- #224 feat: drift gate measures decomposed configs via domain_env_suffixes
+- #222 fix(scaffold): point pre-commit mypy at scripts/, not unrendered Jinja src/
+
+
 ## v2.7.0 (2026-06-29)
 
 - #220 feat(scaffold): real SPA SDK vendoring pipeline (closes #216, #218, #219)
