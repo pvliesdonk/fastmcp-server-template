@@ -76,6 +76,10 @@ _skip_if_exists:
   # owned downstream.  Generic framework tests stay in
   # test_config_wizard_smoke.py (template-owned).
   - "tests/test_config_wizard_domain.py"
+  # MCP Apps SPA source — domain-owned (the project's UI). vendor_spa.py
+  # regenerates app.html from it on every copier update; app.html itself is
+  # generated, never template-owned.
+  - "src/{{ python_module }}/static/app.src.html"
 # Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is

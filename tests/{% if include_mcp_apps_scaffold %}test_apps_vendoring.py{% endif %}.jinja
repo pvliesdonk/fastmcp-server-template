@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
-{% if include_mcp_apps_scaffold %}
+
 import {{ python_module }}._server_apps as apps
 
 
@@ -45,10 +45,3 @@ def test_vendor_check_detects_drift() -> None:
         assert result.returncode == 1
     finally:
         src.write_text(original, encoding="utf-8")
-{% else %}
-import pytest
-
-
-def test_apps_scaffold_disabled() -> None:
-    pytest.skip("MCP Apps scaffold not enabled for this project")
-{% endif -%}
