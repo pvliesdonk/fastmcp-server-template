@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.9.0 (2026-06-29)
+
+- #226 feat(scaffold): DOMAIN-COMMANDS sentinel in cli.py for domain subcommands
+
+
 ## v2.8.0 (2026-06-29)
 
 - #224 feat: drift gate measures decomposed configs via domain_env_suffixes
