@@ -200,7 +200,7 @@ Domain configuration composes `fastmcp_pvl_core.ServerConfig` inside your domain
 
 Env var prefix is `{{ env_prefix }}_` — all env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent.
 
-- **Domain CLI subcommands** go in the `# DOMAIN-COMMANDS-START` / `-END` block in `cli.py` (preserved across copier update, like `CONFIG-FIELDS`). Register them as `@app.command()` and use function-local imports for domain modules.
+- **Domain CLI subcommands** go in the `# DOMAIN-COMMANDS-START` / `-END` block in `cli.py` (like `CONFIG-FIELDS` in `config.py`). Register them as `@app.command()` and use function-local imports for domain modules. The block is preserved across `copier update`.
 
 ### Config wizard
 
