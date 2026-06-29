@@ -7,6 +7,14 @@ _min_copier_version: "9.0"
 _answers_file: .copier-answers.yml
 _templates_suffix: .jinja
 
+# Post-generation: vendor the MCP Apps SDK into static/app.html.  The task value
+# is Jinja-rendered; it collapses to an empty string (skipped) for non-apps
+# projects.  Runs on `copier copy` AND `copier update` — regenerates app.html
+# from the project's (possibly customized) app.src.html.  Requires network
+# (downloads @modelcontextprotocol/ext-apps).  Both CI paths pass --trust.
+_tasks:
+  - "{% if include_mcp_apps_scaffold %}python scripts/vendor_spa.py{% endif %}"
+
 # Starter files: written once on first `copier copy`, protected from
 # `copier update`.  Domain-owned — users customise these and keep their
 # edits across template updates.
