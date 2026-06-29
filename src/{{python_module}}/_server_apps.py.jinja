@@ -115,7 +115,7 @@ def _rewrite_spa_app_tool_calls(html: str) -> str:
     if unexpected:
         raise RuntimeError(
             f"SPA references unknown tools: {sorted(unexpected)}. "
-            "Fix the typo in _SPA_SHELL_HTML or add the name to _APP_TOOL_NAMES."
+            "Fix the typo in static/app.src.html or add the name to _APP_TOOL_NAMES."
         )
     missing = _APP_TOOL_NAMES - captured
     if missing:
