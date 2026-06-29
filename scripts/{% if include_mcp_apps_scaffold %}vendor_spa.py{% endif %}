@@ -223,14 +223,27 @@ def main() -> int:
                 f"ERROR: {name} download is not valid UTF-8: {exc}"
             ) from exc
 
-        if cfg["type"] == "script":
-            html = _inline_script(html, name, cfg, js)
-        elif cfg["type"] == "module":
-            html = _inline_module(html, name, cfg, js)
-        else:
-            raise ValueError(f"Unknown dependency type '{cfg['type']}' for '{name}'")
+        try:
+            if cfg["type"] == "script":
+                html = _inline_script(html, name, cfg, js)
+            elif cfg["type"] == "module":
+                html = _inline_module(html, name, cfg, js)
+            else:
+                raise ValueError(
+                    f"Unknown dependency type '{cfg['type']}' for '{name}'"
+                )
+        except ValueError as exc:
+            # Inlining failures are usually a malformed DOMAIN-VENDOR-LIBS entry
+            # (e.g. a <script src> the HTML doesn't reference); report cleanly
+            # rather than dumping a traceback.
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
 
-    _verify_no_cdn_urls(html)
+    try:
+        _verify_no_cdn_urls(html)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
     # Embed source hash for offline --check (rfind targets the real </head>,
     # not occurrences inside inlined JS).
@@ -243,7 +256,12 @@ def main() -> int:
     if not html.endswith("\n"):
         html += "\n"
 
-    out_html_path.write_text(html, encoding="utf-8")
+    # Atomic write: a SIGKILL/disk-full mid-write would otherwise leave a
+    # truncated app.html that --check reports as "missing marker" rather than
+    # "corrupt". write-then-rename is atomic on POSIX/NTFS.
+    tmp_path = out_html_path.with_suffix(".html.tmp")
+    tmp_path.write_text(html, encoding="utf-8")
+    tmp_path.replace(out_html_path)
     print(f"\nWrote {out_html_path} ({len(html):,} bytes)")
     return 0
 

@@ -15,7 +15,14 @@ from pathlib import Path
 # The script ships gated behind a conditional-path filename
 # (scripts/{% if include_mcp_apps_scaffold %}vendor_spa.py{% endif %}), so glob
 # for it rather than hard-coding the brace-laden name.
-_VENDOR_SPA = next((Path(__file__).resolve().parent.parent).glob("*vendor_spa.py*"))
+_vendor_spa_matches = sorted(
+    (Path(__file__).resolve().parent.parent).glob("*vendor_spa.py*")
+)
+if not _vendor_spa_matches:
+    raise FileNotFoundError(
+        "vendor_spa.py (conditional-path filename) not found under scripts/"
+    )
+_VENDOR_SPA = _vendor_spa_matches[0]
 
 
 def _load_module():
@@ -94,10 +101,12 @@ def test_starter_src_html_is_inlineable():
     """The shipped app.src.html must carry exactly the ext-apps module import
     that _inline_module rewrites, and the app___ tool literals."""
     # app.src.html ships gated behind a conditional-path filename, so glob for it.
-    starter = next(
+    matches = sorted(
         (Path(__file__).resolve().parents[2] / "src").glob("*/static/*app.src.html*")
     )
-    text = starter.read_text(encoding="utf-8")
+    if not matches:
+        raise FileNotFoundError("app.src.html not found under src/*/static/")
+    text = matches[0].read_text(encoding="utf-8")
     assert "import { App }" in text
     assert "@modelcontextprotocol/ext-apps@1.3.1/app-with-deps" in text
     assert "app___get_status" in text
