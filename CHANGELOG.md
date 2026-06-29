@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.7.0 (2026-06-29)
+
+- #220 feat(scaffold): real SPA SDK vendoring pipeline (closes #216, #218, #219)
+- #215 fix(scaffold): make vendor_spa.py starter self-contained
+- #213 fix(scaffold): drop inert git.py CodeQL filter; ship benign config seam
+- #211 feat(scaffold): diff-scoped structural-health gate (Spec 1)
+- #209 feat(docs): lint user-facing docs + README; exclude internal dev-doc subtrees (#208)
+
+
 ## v2.6.0 (2026-06-28)
 
 - #207 feat(scaffold): CI-enforced config-wizard env-surface coverage
