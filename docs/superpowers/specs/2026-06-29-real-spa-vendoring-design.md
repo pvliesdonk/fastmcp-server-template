@@ -3,9 +3,9 @@
 - **Date:** 2026-06-29
 - **Status:** approved (brainstorming) — pending implementation plan
 - **Related issues:** #216 (contradictory SPA-vendoring guidance + dangling
-  `app.src.html` reference); a new "SPA scaffold leaks into non-apps projects"
-  issue to be filed; deferred downstream-convergence follow-ups (markdown-vault,
-  image-generation).
+  `app.src.html` reference); the SPA-scaffold leak
+  issue #218; CI `--check` wiring #219; deferred downstream-convergence
+  follow-ups markdown-vault #765 and image-generation #292.
 
 ## Problem
 
@@ -170,8 +170,8 @@ Active (template):
 2. **Gate the SPA scaffold + fix the leak** — gate `vendor_spa.py`,
    `app.src.html`, `.gitattributes`, and the `_task` behind
    `include_mcp_apps_scaffold`; `app.src.html` → `_skip_if_exists`. Apps-OFF
-   projects receive none of it. **Closes the new leak issue (to be filed).**
-3. **CI `--check` wiring** — generated project's CI gate runs
+   projects receive none of it. **Closes #218** (the SPA-scaffold leak).
+3. **CI `--check` wiring** (#219) — generated project's CI gate runs
    `vendor_spa.py --check`; template-ci self-test asserts `app.html` exists and
    is check-clean.
 
@@ -180,10 +180,10 @@ plan time if cleaner).
 
 Deferred (filed, tracked):
 
-4. **markdown-vault convergence** (light) — adopt the template-owned
+4. **markdown-vault convergence** (#765, light) — adopt the template-owned
    `vendor_spa.py`, keep domain libs (vis-network/marked/dompurify) in the
    `DOMAIN-VENDOR-LIBS` block.
-5. **image-generation migration** (heavy) — switch `_server_apps.py` to
+5. **image-generation migration** (#292, heavy) — switch `_server_apps.py` to
    HTML-inline static serving, adopt the two-file scaffold, **delete**
    `_vendored_sdk.py` and `vendor_sdk.py` (removal-discipline verification).
 
