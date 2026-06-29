@@ -7,21 +7,28 @@ exercise it against a temp project tree — never the network. Generate-mode
 
 from __future__ import annotations
 
-import importlib.util
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 
-_VENDOR_SPA = Path(__file__).resolve().parent.parent / "vendor_spa.py"
+# The script ships gated behind a conditional-path filename
+# (scripts/{% if include_mcp_apps_scaffold %}vendor_spa.py{% endif %}), so glob
+# for it rather than hard-coding the brace-laden name.
+_VENDOR_SPA = next((Path(__file__).resolve().parent.parent).glob("*vendor_spa.py*"))
 
 
 def _load_module():
-    spec = importlib.util.spec_from_file_location("vendor_spa", _VENDOR_SPA)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    # Discovery is deferred to main(); import is safe without a project tree.
-    spec.loader.exec_module(mod)
+    # The script ships under a brace-laden, non-.py filename (conditional-path
+    # gating), so importlib's suffix-based loader can't infer it; exec the source
+    # directly. Discovery is deferred to main(), so this is safe with no tree.
+    mod = types.ModuleType("vendor_spa")
+    mod.__file__ = str(_VENDOR_SPA)
+    exec(
+        compile(_VENDOR_SPA.read_text(encoding="utf-8"), str(_VENDOR_SPA), "exec"),
+        mod.__dict__,
+    )
     return mod
 
 
@@ -84,15 +91,12 @@ def test_check_passes_then_fails_on_source_drift(tmp_path: Path):
     assert "out of date" in drift.stderr
 
 
-def test_starter_src_html_is_inlineable(tmp_path: Path):
+def test_starter_src_html_is_inlineable():
     """The shipped app.src.html must carry exactly the ext-apps module import
     that _inline_module rewrites, and the app___ tool literals."""
-    starter = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "{{python_module}}"
-        / "static"
-        / "app.src.html"
+    # app.src.html ships gated behind a conditional-path filename, so glob for it.
+    starter = next(
+        (Path(__file__).resolve().parents[2] / "src").glob("*/static/*app.src.html*")
     )
     text = starter.read_text(encoding="utf-8")
     assert "import { App }" in text
