@@ -15,13 +15,16 @@ repos:
         types: [python]
         pass_filenames: true
 
+      # Type-check the template's OWN Python (scripts/).  The generated
+      # project's src/ is unrendered Jinja here and cannot be mypy'd locally;
+      # template-ci.yml renders the template and runs mypy on the output.
       - id: mypy
         name: mypy
         language: system
         entry: uv run mypy
-        files: ^src/
+        files: ^scripts/
         pass_filenames: false
-        args: [src/]
+        args: [scripts/]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
