@@ -115,7 +115,11 @@ def _inline_script(html: str, name: str, cfg: dict[str, str], js: str) -> str:
 
 def _inline_module(html: str, _name: str, cfg: dict[str, str], js: str) -> str:
     """Replace an ES module CDN import with an import-map + data-URI."""
-    specifier = cfg["import_specifier"]
+    specifier = cfg.get("import_specifier")
+    if not specifier:
+        raise ValueError(
+            f"Module-type dependency '{_name}' requires an 'import_specifier' key"
+        )
     if '<script type="module">' not in html:
         raise ValueError(
             'No <script type="module"> tag found — cannot insert import map'
