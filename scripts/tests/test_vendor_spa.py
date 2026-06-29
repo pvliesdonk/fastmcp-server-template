@@ -12,7 +12,6 @@ import sys
 import types
 from pathlib import Path
 
-
 # The script ships gated behind a conditional-path filename
 # (scripts/{% if include_mcp_apps_scaffold %}vendor_spa.py{% endif %}), so glob
 # for it rather than hard-coding the brace-laden name.
