@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MCP App</title>
+<style>
+  body { font-family: sans-serif; padding: 1rem; }
+  pre { background: #f5f5f5; padding: .5rem; border-radius: 4px; }
+  button { margin: .25rem 0; padding: .25rem .75rem; cursor: pointer; }
+</style>
+</head>
+<body>
+<h2>MCP App</h2>
+<button id="btn-status">Get status</button>
+<button id="btn-info">Get info</button>
+<pre id="out">(click a button)</pre>
+<script type="module">
+// Static import (Android webview compatibility); the SDK is vendored inline
+// via an import map by scripts/vendor_spa.py. The CDN URL below is the
+// vendoring source and is rewritten to the bare specifier at vendor time.
+import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@1.3.1/app-with-deps";
+
+const app = new App(
+  { name: "MCP App", version: "0.0.0" },
+  {},
+  { autoResize: false }
+);
+
+async function call(tool, params) {
+  try {
+    const result = await app.callServerTool({ name: tool, arguments: params });
+    document.getElementById("out").textContent = JSON.stringify(result, null, 2);
+  } catch (e) {
+    document.getElementById("out").textContent = "Error: " + e.message;
+  }
+}
+document.getElementById("btn-status").onclick = () => call("app___get_status", {});
+document.getElementById("btn-info").onclick = () => call("app___get_info", {});
+</script>
+</body>
+</html>

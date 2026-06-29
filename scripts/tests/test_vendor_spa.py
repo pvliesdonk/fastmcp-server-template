@@ -82,3 +82,21 @@ def test_check_passes_then_fails_on_source_drift(tmp_path: Path):
     )
     assert drift.returncode == 1
     assert "out of date" in drift.stderr
+
+
+def test_starter_src_html_is_inlineable(tmp_path: Path):
+    """The shipped app.src.html must carry exactly the ext-apps module import
+    that _inline_module rewrites, and the app___ tool literals."""
+    starter = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "{{python_module}}"
+        / "static"
+        / "app.src.html"
+    )
+    text = starter.read_text(encoding="utf-8")
+    assert "import { App }" in text
+    assert "@modelcontextprotocol/ext-apps@1.3.1/app-with-deps" in text
+    assert "app___get_status" in text
+    assert "app___get_info" in text
+    assert "{{" not in text and "{%" not in text  # no Jinja in static body
