@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.10.0 (2026-06-30)
+
+- #231 feat(scaffold): brownfield opt-out for the structural gate's whole-tree clean assertion
+
+
 ## v2.9.1 (2026-06-30)
 
 - #228 fix(config-wizard): orphan check accepts non-prefixed vars read in src
