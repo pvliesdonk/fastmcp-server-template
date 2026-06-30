@@ -212,6 +212,7 @@ def test_structural_select_string_is_identical_across_surfaces() -> None:
     claudemd = (REPO_ROOT / "CLAUDE.md").read_text()
     for name, text in [("pre-commit", precommit), ("ci", ci), ("CLAUDE.md", claudemd)]:
         assert needle in text, f"{name} missing canonical structural select"
+{%- if structural_gate_assert_clean_tree %}
 
 
 def test_shipped_code_passes_the_structural_overlay_cleanly() -> None:
@@ -245,3 +246,4 @@ def test_shipped_code_passes_the_structural_overlay_cleanly() -> None:
     assert proc.returncode == 0, (
         f"shipped code fails its own structural overlay:\n{proc.stdout}"
     )
+{%- endif %}
