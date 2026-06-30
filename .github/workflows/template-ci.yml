@@ -83,6 +83,69 @@ jobs:
           ! grep -qF 'Structural quality (diff) passes' CLAUDE.md \
             || { echo "::error::structural acceptance-gate item rendered with gate off"; exit 1; }
 
+      - name: structural gate clean-tree assertion present (default) / dropped (opt-out)
+        # structural_gate_assert_clean_tree gates ONLY the whole-tree clean
+        # assertion (test_shipped_code_passes_…): default true keeps it; false
+        # drops it so a brownfield repo with pre-existing structural debt can
+        # adopt the gate while the diff-scoped gate, pre-push hook, CI 'structure'
+        # job, and behavioural tests all remain. A test cannot assert its own
+        # absence, and a missing test passes pytest vacuously, so assert the
+        # rendered file directly — BOTH halves: present under the default render,
+        # absent under the opt-out (an inverted condition would otherwise drop the
+        # self-check from every downstream and still go green).
+        #
+        # --vcs-ref=HEAD renders the working-tree commit. Without it copier
+        # defaults to the latest git tag, which predates this variable: a clone
+        # that HAS tags (a normal local checkout) then renders the old template,
+        # ignores the --data, and these assertions break. CI's default checkout
+        # fetches no tags, so copier falls through to HEAD and the assertions pass
+        # even unpinned — i.e. an omitted pin slips through CI and breaks only on a
+        # local full clone. Pin it so behaviour is identical everywhere. (The
+        # sibling render steps omit the pin too; their assertions still pass
+        # because they toggle only tag-existing vars, but in a tag-bearing local
+        # clone they render the tagged template, not the working tree — a
+        # pre-existing gap, not fixed here.)
+        #
+        # Both rendered variants of the gate's own test file are then linted: the
+        # opt-out trim must leave no unused import, and the jinja if/endif
+        # whitespace seam must stay format-clean in both the present and absent
+        # branches.
+        run: |
+          rm -rf /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off
+          # default render (flag true): the whole-tree self-check MUST be present.
+          uv run --no-project --with copier \
+            copier copy --trust --defaults --vcs-ref=HEAD \
+            --data-file tests/fixtures/smoke-answers.yml \
+            . /tmp/smoke-cleantree-on
+          grep -q 'def test_shipped_code_passes_the_structural_overlay_cleanly' /tmp/smoke-cleantree-on/tests/test_structural_gate.py \
+            || { echo "::error::clean-tree assertion missing from the default render"; exit 1; }
+          # opt-out render (flag false): the whole-tree self-check MUST be dropped,
+          # everything else MUST remain.
+          uv run --no-project --with copier \
+            copier copy --trust --defaults --vcs-ref=HEAD \
+            --data-file tests/fixtures/smoke-answers.yml \
+            --data structural_gate_assert_clean_tree=false \
+            . /tmp/smoke-cleantree-off
+          off=/tmp/smoke-cleantree-off
+          test -f "$off/tests/test_structural_gate.py" \
+            || { echo "::error::structural test file missing — gate should still render"; exit 1; }
+          ! grep -q 'def test_shipped_code_passes_the_structural_overlay_cleanly' "$off/tests/test_structural_gate.py" \
+            || { echo "::error::clean-tree assertion rendered despite opt-out"; exit 1; }
+          grep -q 'def test_options_reach_ruff_and_gate_is_diff_scoped' "$off/tests/test_structural_gate.py" \
+            || { echo "::error::diff-scope behavioural test dropped by clean-tree opt-out"; exit 1; }
+          grep -q 'structural-diff-gate' "$off/.pre-commit-config.yaml" \
+            || { echo "::error::pre-push hook dropped by clean-tree opt-out"; exit 1; }
+          grep -qE '^  structure:' "$off/.github/workflows/ci.yml" \
+            || { echo "::error::structure CI job dropped by clean-tree opt-out"; exit 1; }
+          # both branches of the conditional must lint + format clean (catches an
+          # unused import left by the trim and any if/endif whitespace regression).
+          for d in /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off; do
+            ( cd "$d" \
+              && uv run --no-project --with ruff ruff check --config pyproject.toml tests/test_structural_gate.py \
+              && uv run --no-project --with ruff ruff format --check --config pyproject.toml tests/test_structural_gate.py ) \
+              || { echo "::error::rendered structural test ($d) is not lint/format-clean"; exit 1; }
+          done
+
       - name: Install rendered project
         working-directory: /tmp/smoke
         run: uv sync --all-extras --all-groups

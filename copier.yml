@@ -199,3 +199,9 @@ enable_structural_gate:
   type: bool
   default: true
   help: "Scaffold the diff-scoped structural-health gate: strict ruff structural rules (complexity, god-class, too-many-*, security) enforced on changed lines only via diff-quality, as a pre-push hook and a CI 'structure' job, plus the CLAUDE.md structural-health guidance (local-shape rules, advisory radon/vulture audit, decay-issue template). New code is held to the bar; pre-existing code is never blocked. Leave on unless a project deliberately opts out of structural enforcement."
+
+structural_gate_assert_clean_tree:
+  type: bool
+  default: true
+  when: "{{ enable_structural_gate }}"
+  help: "Also assert the project's EXISTING src/ + tests/ tree is already clean under the structural overlay (the test_shipped_code_passes_the_structural_overlay_cleanly check). True is correct for new projects and the template's own CI. Set to false when ADOPTING the gate onto a brownfield codebase that already carries structural debt: you still get the diff-scoped gate, pre-push hook, CI 'structure' job, and the behavioural tests — only the whole-tree clean assertion is dropped, so enabling the gate does not force refactoring or blanket-noqa of all legacy debt first (the diff-scoped gate still grandfathers it and blocks new debt). Only asked when the structural gate is on."

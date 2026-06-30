@@ -208,6 +208,28 @@ A new `tests/test_structural_gate.py.jinja` (skipped/absent when
 5. **Doc/hook anti-drift** — rendered `CLAUDE.md` local-gate routine contains the
    structural command, so the documented command and the hook command cannot
    silently diverge.
+6. **Shipped-code self-check** — `test_shipped_code_passes_the_structural_overlay_cleanly`
+   runs the overlay over the whole rendered `src/` + `tests/` tree and asserts zero
+   violations (and zero inert/preview-only rules). This is gated by
+   `structural_gate_assert_clean_tree` (see below); template-ci asserts the test is
+   present in the default render and absent under the opt-out.
+
+### Brownfield opt-out (`structural_gate_assert_clean_tree`)
+
+The whole-tree self-check in test 6 holds for a freshly-rendered project and for
+this template's own CI, but it is **whole-repo**, not diff-scoped — so a downstream
+repo adopting the gate onto an **existing** codebase that already carries
+structural debt would see it fail, which contradicts the gate's "never block on
+pre-existing debt" principle (every other artifact that holds repo code to the
+bar — the pre-push hook and the CI `structure` job — is diff-scoped; only this
+self-check lints the whole `src/` + `tests/` tree). The
+`structural_gate_assert_clean_tree` copier question (`bool`, default `true`, asked
+only `when enable_structural_gate`) lets such an adopter render the gate, the
+pre-push hook, the CI `structure` job, and the behavioural tests **without** test 6.
+New code is still held to the bar by the diff-scoped gate; the existing debt is
+grandfathered. Default `true` preserves the self-check for new projects. This is a
+stopgap for the brownfield case until Spec 2's committed baseline (below) lets the
+self-check assert "no new violations outside the baseline" instead of "none at all".
 
 ## Failure modes tracked
 
