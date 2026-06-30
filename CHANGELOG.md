@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.9.1 (2026-06-30)
+
+- #228 fix(config-wizard): orphan check accepts non-prefixed vars read in src
+
+
 ## v2.9.0 (2026-06-29)
 
 - #226 feat(scaffold): DOMAIN-COMMANDS sentinel in cli.py for domain subcommands
