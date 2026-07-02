@@ -343,7 +343,6 @@ jobs:
           rm -f .github/workflows/copier-update.yml \
                 .github/workflows/claude.yml \
                 .github/workflows/claude-code-review.yml
-          rm -rf .gemini
           rm -f scripts/copier_update_aggregator.py
           rm -rf scripts/copier_update_prompts
           # --- Step 3: scrub CLAUDE.md template-tracking + copier-update wording ---
@@ -386,7 +385,7 @@ jobs:
             && { echo "::error::Shared Infrastructure section survived the scrub"; exit 1; } || true
           grep -qE '^## Contributing fixes upstream$' CLAUDE.md \
             && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
-          grep -qF 'claude-review, gemini-code-assist' CLAUDE.md \
+          grep -qF 'bot reviewer (claude-review)' CLAUDE.md \
             && { echo "::error::bot-reviewer paragraph survived the scrub"; exit 1; } || true
           # Neutral guidance must remain. The scrub is a sed range-delete, so the
           # only "deleted too much" failure mode (given the pristine-render
@@ -426,7 +425,6 @@ jobs:
               .github/workflows/copier-update.yml \
               .github/workflows/claude.yml \
               .github/workflows/claude-code-review.yml \
-              .gemini \
               scripts/copier_update_aggregator.py \
               scripts/copier_update_prompts; do
             [ ! -e "$gone" ] \
