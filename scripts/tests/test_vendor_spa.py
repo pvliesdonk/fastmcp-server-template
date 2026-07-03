@@ -52,7 +52,7 @@ def _make_tree(tmp_path: Path, src_html: str) -> Path:
 def test_vendored_versions_has_ext_apps_only():
     mod = _load_module()
     assert set(mod.VENDORED_VERSIONS) == {"ext-apps"}
-    assert mod.VENDORED_VERSIONS["ext-apps"]["version"] == "1.3.1"
+    assert mod.VENDORED_VERSIONS["ext-apps"]["version"] == "1.7.4"
 
 
 def test_check_fails_when_app_html_absent(tmp_path: Path):
@@ -108,7 +108,7 @@ def test_starter_src_html_is_inlineable():
         raise FileNotFoundError("app.src.html not found under src/*/static/")
     text = matches[0].read_text(encoding="utf-8")
     assert "import { App }" in text
-    assert "@modelcontextprotocol/ext-apps@1.3.1/app-with-deps" in text
+    assert "@modelcontextprotocol/ext-apps@1.7.4/app-with-deps" in text
     assert "app___get_status" in text
     assert "app___get_info" in text
     assert "{{" not in text and "{%" not in text  # no Jinja in static body
