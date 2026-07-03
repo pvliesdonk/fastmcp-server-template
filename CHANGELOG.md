@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.10.2 (2026-07-03)
+
+- #238 fix: bump vendored ext-apps SDK 1.3.1 → 1.7.4
+
+
 ## v2.10.1 (2026-07-03)
 
 - #236 fix(release): gate detect-rc on the latest stable release
