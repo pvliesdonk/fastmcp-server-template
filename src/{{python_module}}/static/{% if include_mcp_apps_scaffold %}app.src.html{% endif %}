@@ -19,7 +19,7 @@
 // Static import (Android webview compatibility); the SDK is vendored inline
 // via an import map by scripts/vendor_spa.py. The CDN URL below is the
 // vendoring source and is rewritten to the bare specifier at vendor time.
-import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@1.3.1/app-with-deps";
+import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@1.7.4/app-with-deps";
 
 const app = new App(
   { name: "MCP App", version: "0.0.0" },
