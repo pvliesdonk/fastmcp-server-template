@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.10.1 (2026-07-03)
+
+- #236 fix(release): gate detect-rc on the latest stable release
+- #233 chore: purge dead gemini-code-assist wiring
+
+
 ## v2.10.0 (2026-06-30)
 
 - #231 feat(scaffold): brownfield opt-out for the structural gate's whole-tree clean assertion
