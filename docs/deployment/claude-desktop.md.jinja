@@ -36,9 +36,7 @@ Otherwise, add the server to your Claude Desktop configuration file. The path va
     "{{ project_name }}": {
       "command": "{{ project_name }}",
       "args": ["serve"],
-      "env": {
-        "{{ env_prefix }}_READ_ONLY": "true"
-      }
+      "env": {}
     }
   }
 }
@@ -76,9 +74,7 @@ macOS/Linux:
     "{{ project_name }}": {
       "command": "/Users/me/.venvs/mcp/bin/{{ project_name }}",
       "args": ["serve"],
-      "env": {
-        "{{ env_prefix }}_READ_ONLY": "true"
-      }
+      "env": {}
     }
   }
 }
@@ -92,9 +88,7 @@ Windows (`Scripts\` not `bin\`, `.exe` suffix):
     "{{ project_name }}": {
       "command": "C:\\Users\\me\\.venvs\\mcp\\Scripts\\{{ project_name }}.exe",
       "args": ["serve"],
-      "env": {
-        "{{ env_prefix }}_READ_ONLY": "true"
-      }
+      "env": {}
     }
   }
 }
