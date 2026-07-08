@@ -172,13 +172,25 @@ sentence, in the template-owned CI/workflow area (not a `DOMAIN` block).
 
 ### copier.yml wiring
 
-- Register `REVIEW.md.jinja` following the `CLAUDE.md` precedent (the block of
-  comments around line 83/107 that documents why root `.md` files are
-  template-owned and appear in `_exclude` for the self-test). Add `REVIEW.md` to
-  the same named-file `_exclude` note so the template's own copy isn't rendered
-  into itself.
+- **No `copier.yml` change is required.** Per the existing comment (~line 107),
+  named root `.md` files render via `.jinja` precedence automatically:
+  `REVIEW.md.jinja` renders to `REVIEW.md` in generated projects, while a plain
+  `REVIEW.md` in the template repo stays template-only. Like `CLAUDE.md`,
+  `REVIEW.md` is template-owned (NOT `_skip_if_exists`) with a `DOMAIN-REVIEW`
+  sentinel block, so no `_skip_if_exists` / `_exclude` entry is needed.
 - No new copier variable is required; `REVIEW.md` content is static plus the
   `DOMAIN-REVIEW` sentinel.
+
+### Fix the class, not the instance
+
+The template's **own** non-`.jinja` `.github/workflows/claude.yml` and
+`claude-code-review.yml` carry the identical defects (the reviewer has no
+`claude_args`, so the same inline-comment tool is missing). They are fixed in the
+same PR — the `.jinja` (downstream) and non-`.jinja` (this repo's own) copies
+move together. The only divergence: the wait-for-CI target is the `CI` workflow
+downstream and the `template-ci` workflow here. A plain `REVIEW.md` is added at
+the template root alongside `REVIEW.md.jinja` so this repo's own reviewer is
+scoped too.
 
 ## Testing & verification plan
 
