@@ -69,26 +69,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
-        with:
-          version: "latest"
-
-      - name: Cache Python interpreter
-        uses: actions/cache@v6
-        with:
-          path: ~/.local/share/uv/python
-          key: uv-python-3.12-${{ runner.os }}
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        # Gives the reviewer a working venv so its targeted `uv run` checks
-        # (freedom to investigate one finding) actually execute. REVIEW.md
-        # tells it not to re-run the full gate.
-        run: uv sync --all-extras --all-groups
-
+      # NB: unlike the rendered .jinja twin, this repo's own reviewer has NO uv
+      # env — the template has no root pyproject.toml (its Python lives in
+      # scripts/ and runs via `uv run --no-project`), so `uv sync` would fail.
+      # This reviewer reviews template files and reads template-ci results via
+      # `gh run view` rather than re-running a gate.
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
@@ -103,8 +88,9 @@ jobs:
           track_progress: true
           display_report: true
           # Grant the inline-comment tool (NOT in the default allow-set — this is
-          # what lets the reviewer post inline), gh read tools to read CI results,
-          # and scoped `uv run` for targeted investigation (REVIEW.md sets norms).
+          # what lets the reviewer post inline) and gh read tools to read CI
+          # results. No `uv run` here (no root pyproject to sync); the .jinja
+          # twin keeps the uv-investigation allow-list for generated projects.
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh run view:*),Bash(gh run list:*),Bash(uv run pytest:*),Bash(uv run mypy:*),Bash(uv run ruff:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh run view:*),Bash(gh run list:*)"
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
