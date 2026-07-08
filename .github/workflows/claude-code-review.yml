@@ -2,35 +2,78 @@ name: Claude Code Review
 
 on:
   pull_request:
+    # No branches filter here (unlike the rendered .jinja twin): this repo's
+    # template-ci runs on all PRs, so the wait-for-ci poll always finds a run.
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
 
 jobs:
-  claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+  wait-for-ci:
+    # Skip PRs from forks: GitHub does not expose repository secrets
+    # (including CLAUDE_CODE_OAUTH_TOKEN) to workflows running in fork-PR
+    # context, regardless of maintainer approval. Running anyway produces
+    # a hard-failing check on every external contribution.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+    outputs:
+      ci_passed: ${{ steps.wait.outputs.ci_passed }}
+    steps:
+      - name: Wait for CI to conclude on this PR head
+        id: wait
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Gate the review on the CI workflow: only review code the gate
+          # accepted. Poll the CI run for THIS PR head SHA (not github.sha,
+          # which is the merge commit) until it completes; tolerate the
+          # not-yet-created race by looping. Gate on the run *conclusion*
+          # so CI's continue-on-error 3.14 matrix job never blocks.
+          deadline=$(( SECONDS + 25 * 60 ))
+          conclusion=""
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            runs=$(gh api "repos/${REPO}/actions/workflows/template-ci.yml/runs?head_sha=${HEAD_SHA}&per_page=1" 2>/dev/null || echo '{}')
+            status=$(echo "$runs" | jq -r '.workflow_runs[0].status // empty')
+            conclusion=$(echo "$runs" | jq -r '.workflow_runs[0].conclusion // empty')
+            if [ "$status" = "completed" ]; then
+              break
+            fi
+            echo "CI status: ${status:-not-found-yet}; waiting 20s..."
+            sleep 20
+          done
+          if [ "$conclusion" = "success" ]; then
+            echo "ci_passed=true" >> "$GITHUB_OUTPUT"
+            echo "CI passed — review will run."
+          else
+            echo "ci_passed=false" >> "$GITHUB_OUTPUT"
+            echo "CI did not pass (conclusion=${conclusion:-timeout}) — skipping review."
+          fi
 
+  claude-review:
+    needs: wait-for-ci
+    if: ${{ needs.wait-for-ci.outputs.ci_passed == 'true' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: write  # Required so the review action can post inline comments
+      contents: read          # Reviewer reads code; it must never commit
+      pull-requests: write     # Post inline review comments
       issues: read
       id-token: write
-
+      actions: read            # Read CI results instead of re-running them
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
+      # NB: unlike the rendered .jinja twin, this repo's own reviewer has NO uv
+      # env — the template has no root pyproject.toml (its Python lives in
+      # scripts/ and runs via `uv run --no-project`), so `uv sync` would fail.
+      # This reviewer reviews template files and reads template-ci results via
+      # `gh run view` rather than re-running a gate.
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
@@ -41,10 +84,13 @@ jobs:
           # `--comment` tells the plugin to actually post (without it, the plugin
           # runs the full review and stops silently — burning ~$3/PR for no output).
           prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          # Surface progress so a silent failure is visible: a sticky tracking
-          # comment updates during the run, and the Claude Code Report appears
-          # in the job's GitHub Step Summary.
+          # Surface progress so a silent failure is visible.
           track_progress: true
           display_report: true
+          # Grant the inline-comment tool (NOT in the default allow-set — this is
+          # what lets the reviewer post inline) and gh read tools to read CI
+          # results. No `uv run` here (no root pyproject to sync); the .jinja
+          # twin keeps the uv-investigation allow-list for generated projects.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh run view:*),Bash(gh run list:*)"
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
