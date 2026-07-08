@@ -187,10 +187,14 @@ The template's **own** non-`.jinja` `.github/workflows/claude.yml` and
 `claude-code-review.yml` carry the identical defects (the reviewer has no
 `claude_args`, so the same inline-comment tool is missing). They are fixed in the
 same PR — the `.jinja` (downstream) and non-`.jinja` (this repo's own) copies
-move together. The only divergence: the wait-for-CI target is the `CI` workflow
-downstream and the `template-ci` workflow here. A plain `REVIEW.md` is added at
-the template root alongside `REVIEW.md.jinja` so this repo's own reviewer is
-scoped too.
+move together. Two justified divergences between the twins: (1) the wait-for-CI
+target is the `CI` workflow downstream and the `template-ci` workflow here; (2)
+the reviewer's `pull_request` trigger matches each repo's CI trigger — the
+downstream `.jinja` reviewer adds `branches: [main]` (downstream `ci.yml` is
+main-only, so firing elsewhere would only idle the poll to timeout), while this
+repo's reviewer keeps all-PR triggering (its `template-ci` runs on every PR).
+A plain `REVIEW.md` is added at the template root alongside `REVIEW.md.jinja` so
+this repo's own reviewer is scoped too.
 
 ## Testing & verification plan
 
