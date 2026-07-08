@@ -2,6 +2,8 @@ name: Claude Code Review
 
 on:
   pull_request:
+    # No branches filter here (unlike the rendered .jinja twin): this repo's
+    # template-ci runs on all PRs, so the wait-for-ci poll always finds a run.
     types: [opened, synchronize, ready_for_review, reopened]
 
 jobs:
