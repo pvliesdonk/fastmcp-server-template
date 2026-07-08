@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.10.3 (2026-07-08)
+
+- #243 fix: harden Claude review workflows (inline comments, write perms, REVIEW.md scoping, CI-gated review)
+- #240 fix(docs): remove dead env vars and mcp-server hardcodes from shared deployment docs
+
+
 ## v2.10.2 (2026-07-03)
 
 - #238 fix: bump vendored ext-apps SDK 1.3.1 → 1.7.4
