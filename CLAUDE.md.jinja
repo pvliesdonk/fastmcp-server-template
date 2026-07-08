@@ -26,7 +26,9 @@
 - Tests: `pytest` with fixtures in `tests/fixtures/`
 
 The automated Claude review runs **only after CI passes** — if CI is red, no
-review is posted. Fix CI and push; the review runs on the next green run.
+review is posted. Fix CI and push; the review runs on the next green run. To
+tune what the reviewer flags for this repo, add rules to the `DOMAIN-REVIEW`
+block in `REVIEW.md`.
 
 ## Hard PR Acceptance Gates
 
