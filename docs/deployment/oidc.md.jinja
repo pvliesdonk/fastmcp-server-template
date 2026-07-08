@@ -72,7 +72,7 @@ identity_providers:
 ### 3. Start with HTTP transport
 
 ```bash
-mcp-server serve --transport http --port 8000
+{{ project_name }} serve --transport http --port 8000
 ```
 
 ## Architecture
@@ -80,7 +80,7 @@ mcp-server serve --transport http --port 8000
 The server uses FastMCP's built-in `OIDCProxy` auth provider (not the external `mcp-auth-proxy` sidecar). The authentication flow:
 
 ```
-Client → mcp-server (with OIDCProxy) → OIDC Provider (Authelia/Keycloak)
+Client → {{ project_name }} (with OIDCProxy) → OIDC Provider (Authelia/Keycloak)
 ```
 
 1. Client connects to the MCP server
@@ -93,7 +93,7 @@ Client → mcp-server (with OIDCProxy) → OIDC Provider (Authelia/Keycloak)
 
 ```yaml
 services:
-  mcp-server:
+  {{ project_name }}:
     image: {{ docker_registry }}/{{ project_name }}:latest
     env_file: .env
     volumes:
@@ -103,9 +103,9 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mcp-server.rule=Host(`mcp.example.com`)"
-      - "traefik.http.routers.mcp-server.tls.certresolver=letsencrypt"
-      - "traefik.http.services.mcp-server.loadbalancer.server.port=8000"
+      - "traefik.http.routers.{{ project_name }}.rule=Host(`mcp.example.com`)"
+      - "traefik.http.routers.{{ project_name }}.tls.certresolver=letsencrypt"
+      - "traefik.http.services.{{ project_name }}.loadbalancer.server.port=8000"
     networks:
       - traefik
 
@@ -120,7 +120,6 @@ networks:
 With the corresponding `.env`:
 
 ```bash
-{{ env_prefix }}_READ_ONLY=true
 {{ env_prefix }}_BASE_URL=https://mcp.example.com
 {{ env_prefix }}_OIDC_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
 {{ env_prefix }}_OIDC_CLIENT_ID=my-mcp-server
