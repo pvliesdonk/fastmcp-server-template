@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.10.4 (2026-07-13)
+
+- (no PRs merged since v2.10.3)
+
+
 ## v2.10.3 (2026-07-08)
 
 - #243 fix: harden Claude review workflows (inline comments, write perms, REVIEW.md scoping, CI-gated review)
