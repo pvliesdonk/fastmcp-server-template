@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.10.5 (2026-07-15)
+
+- #248 feat(apps): DOMAIN-APP-RESOURCE seam for the app-shell resource's AppConfig
+
+
 ## v2.10.4 (2026-07-13)
 
 - (no PRs merged since v2.10.3)
