@@ -48,6 +48,9 @@ upstream side needs a scanner that can match arbitrary files.
   upstream to the template, propagated by template release + `copier update`.
 - Do it with **one** tool, not Dependabot and Renovate side-by-side, and with
   the **least** bespoke workflow code to own long-term.
+- **Self-configure the repo prerequisites** for safe auto-merge ("Allow
+  auto-merge" + branch protection requiring CI) from `bootstrap`, so a new
+  scaffold needs no manual GitHub-settings clicks.
 
 ## Non-goals
 
@@ -78,8 +81,10 @@ Chosen over "Dependabot downstream / Renovate upstream" for two reasons:
    code to maintain. Smaller surface than even the original "run `uv sync` and
    PR" idea.
 
-**Fallback (documented, not chosen):** if the Renovate `[dependency-groups]`
-bug (below) proves blocking, revert to Dependabot downstream (pip only,
+**Fallback (documented, not expected):** the `[dependency-groups]` blocker that
+motivated this fallback is **already fixed** in Renovate `43.59.0` (see
+Validation), so the fallback is now a deep contingency only. If Renovate's uv
+support regresses in some future way, revert to Dependabot downstream (pip only,
 `github-actions` ecosystem dropped) + custom lock-refresh and auto-merge
 workflows, with Renovate only upstream for Piece D.
 
@@ -127,11 +132,28 @@ Renovate docs at implementation):
 ```
 
 **New — `renovate.yml.jinja`** — scheduled workflow + `workflow_dispatch`
-running `renovatebot/github-action`, authenticated with `RELEASE_TOKEN`
-(`contents:write` + `pull_requests:write` already suffice; the `github-actions`
-manager is disabled so no `workflows:write` is needed downstream).
+running `renovatebot/github-action`, authenticated with `RELEASE_TOKEN`.
+Pin the runner's `renovate-version` input to a floor **`>= 43.59.0`** (the
+release that fixes the `[dependency-groups]` bug — see Validation). Token scope:
+`contents:write` + `pull_requests:write` suffice for Renovate itself (actions
+manager disabled ⇒ no `workflows:write` needed for the *Renovate* run
+downstream); the separate bootstrap job needs more (see Auto-merge safety).
+
+**Edit — `bootstrap.yml.jinja`** — see the Auto-merge safety section: retarget
+its `paths:` trigger from `.github/dependabot.yml` to `.github/renovate.json`,
+keep seeding the `dependencies` label (Renovate applies it too), and add a job
+that self-configures "Allow auto-merge" + branch protection.
 
 **Delete — `.github/dependabot.yml.jinja`.** Renovate replaces it entirely.
+
+**New — `ci.yml.jinja` aggregate gate job.** Add a single `ci-success` job
+(`name: CI Success`) with `needs: [lint, typecheck, test, audit, secrets, vale,
+structure]` and `if: {% raw %}${{ always() }}{% endraw %}` that fails if any
+needed job's result is `failure`/`cancelled` (treating `skipped` as pass). This
+gives branch protection **one drift-proof required context** to gate auto-merge
+on, instead of enumerating seven check names that break whenever a job is
+renamed or a path-filtered job is skipped. This is a deliberate scope addition
+in service of item 3 (safe auto-merge).
 
 ### Upstream (this template repo)
 
@@ -177,12 +199,16 @@ vale-cli/vale-action@8
 
 ## Tokens & secrets
 
-- **Downstream:** reuse `RELEASE_TOKEN` — **no new secret**, no permission
-  change (actions manager disabled ⇒ `contents:write` + `pull_requests:write`
-  is enough). `README.md.jinja`'s GitHub-secrets table (currently three rows)
-  stays as-is; optionally note Renovate reuses `RELEASE_TOKEN`.
-- **Upstream (this repo):** the runner needs `workflows:write` in addition;
-  extend `RELEASE_TOKEN`'s scope here.
+- **Downstream:** reuse `RELEASE_TOKEN` — **no new secret**. Renovate itself
+  needs only `contents:write` + `pull_requests:write` (already granted). The
+  bootstrap self-config job (item 3) additionally needs **`administration:write`**
+  to set repo settings + branch protection — so `RELEASE_TOKEN`'s scope gains
+  `administration:write` fleet-wide (maintainer confirmed permissions are easy
+  to add). `README.md.jinja`'s GitHub-secrets table gains a note that
+  `RELEASE_TOKEN` now also powers Renovate + bootstrap and lists the added
+  scope; row count stays at three.
+- **Upstream (this repo):** the Renovate runner needs `workflows:write` in
+  addition (it edits workflow files); extend `RELEASE_TOKEN`'s scope here too.
 - **Rejected alternative:** a dedicated `RENOVATE_TOKEN` per repo. Cleaner for
   attribution/least-privilege, but adds a secret to every existing downstream
   repo and to the scaffold token list (release_token / codecov / pypi / claude)
@@ -196,60 +222,129 @@ vale-cli/vale-action@8
   is within-floor by construction). Majors never auto-merge, either tool.
 - `chore(deps):` commit type ⇒ **PSR cuts no release**, so auto-merges to `main`
   never trigger a surprise version bump downstream.
-- **Repo-setting prerequisites** (per repo, cannot be set by a rendered file):
-  "Allow auto-merge" enabled **and** branch protection with required status
-  checks. Without required checks, `automerge` merges immediately on open. The
-  spec's rollout step must verify/enable these; consider having
-  `bootstrap.yml(.jinja)` set them via the GitHub API as a follow-up so new
-  scaffolds self-configure (future enhancement, not blocking).
+- **Repo-setting prerequisites, now self-configured by `bootstrap.yml.jinja`
+  (item 3, in scope):** GitHub auto-merge requires "Allow auto-merge" enabled
+  **and** branch protection with ≥1 required status check — without a required
+  check, `automerge` merges immediately on open (defeating the gate). A rendered
+  file cannot set these (they're repo settings, not repo contents), so bootstrap
+  does it via the API on push-to-`main` + `workflow_dispatch`, idempotently:
+  - `gh api -X PATCH /repos/{% raw %}${{ github.repository }}{% endraw %}
+    -F allow_auto_merge=true`
+  - `gh api -X PUT /repos/.../branches/main/protection` requiring the single
+    **`CI Success`** context (the aggregate gate job), with
+    `required_status_checks.strict=true` (PR must be up to date),
+    **no** required approving reviews (a solo account has no second reviewer;
+    requiring reviews would deadlock patch/minor auto-merge), and
+    `enforce_admins=false` (so the owner can still push hotfixes).
+  - Auth: the elevated `RELEASE_TOKEN` (`administration:write`), **not**
+    `github.token` — `GITHUB_TOKEN` cannot change settings or branch protection.
+  - The branch-protection context string is anchored to the gate job's exact
+    `name:` (`CI Success`); if that job is renamed, bootstrap's required-check
+    name must change in lockstep. Called out so the two never drift.
+- **Renovate side of the gate:** `renovate.json` sets `automerge: true` only for
+  `matchUpdateTypes: [patch, minor]` (and `lockFileMaintenance`); it relies on
+  the branch protection above to hold the merge until `CI Success` is green.
 
 ## Validation strategy
 
-- **`[dependency-groups]` smoke test (blocking gate before fleet rollout).**
-  The fleet uses PEP 735 `[dependency-groups]` (`dev` group). Renovate has a
-  known bug updating deps inside `[dependency-groups]`
-  (renovatebot/renovate discussion #41716, "No depName found after updating").
-  Before rolling to the fleet, run Renovate (dry-run or against one throwaway
-  repo/render) and confirm it updates a `dev`-group dependency **and** the
-  `uv.lock` cleanly. If it fails and no config workaround exists, take the
-  Dependabot fallback for the downstream side.
-- **Upstream `renovate.json` can't ride `template-ci.yml`.** The render gate
-  produces a `/tmp` project; Renovate runs against a live GitHub repo. Validate
-  Piece D with `renovate --dry-run` (a CI job or local run with `LOG_LEVEL=debug`)
-  asserting the customManager *detects* the known pins, plus a manual review of
-  the first real Renovate run on this repo.
-- Known-narrow Renovate-uv bugs that **do not** apply here: custom PyPI index
-  (#40201) — fleet uses none; Docker-sidecar quoting (#40660) — runner uses the
-  default binary source, not `binarySource: docker`.
+### The `[dependency-groups]` bug — already fixed (no longer a blocking gate)
+
+The fleet uses PEP 735 `[dependency-groups]` (a `dev` group). Renovate had a bug
+updating deps inside `[dependency-groups]` under uv (discussion #41716, "No
+depName found after updating" — Renovate ran `uv lock --upgrade-package`, then
+failed post-update verification with `depName: undefined`). **Full detail for
+the record:**
+
+- **Introduced-visible in:** Renovate `43.58.0` (the version the reporter hit).
+- **Root cause:** post-update verification assumed every extracted dep carries a
+  `depName`; for a `[dependency-groups]` entry only `packageName` is present, so
+  the lookup returned `undefined` and aborted the commit. (It only bit when
+  Renovate actually committed — repos where the same update sat behind
+  `minimumReleaseAge` never reached the failing step.)
+- **Fix:** PR **#41720** (merged 2026-03-06) — falls back to `packageName` when
+  `depName` is absent.
+- **Released in:** Renovate **`43.59.0`** (2026-03-06).
+- **The "workaround" is therefore just a version floor.** Pin the runner's
+  `renovate-version >= 43.59.0`. Since 43.59.0 shipped four months before this
+  design, any current `renovatebot/github-action` already bundles a Renovate far
+  past it; the explicit floor is belt-and-suspenders against someone pinning an
+  old action.
+- **PEP 735 support itself is mature** — `[dependency-groups]` handling landed in
+  PR #32148 well before this; #41716 was a narrow regression, not missing
+  support.
+
+The former "blocking smoke test" is downgraded to a **confirmation**: on the
+first downstream Renovate run, verify one `dev`-group dependency updates and
+`uv.lock` regenerates cleanly. If (unexpectedly) it regresses, the documented
+Dependabot fallback still stands.
+
+### Adjacent Renovate-uv bugs — verified NOT applicable
+
+- **#41719** (uv.lock `lockedVersion` contaminates unrelated `pyproject.toml`,
+  causing downgrades) — **requires multiple `pyproject.toml` files** in one
+  repo (monorepo/workspace with `rangeStrategy: update-lockfile`). Every fleet
+  repo is **single-pyproject**, so this cannot trigger. (Corollary: do not adopt
+  a multi-package layout without revisiting this.)
+- **#40201** (lockFileMaintenance uses wrong index) — fleet uses **no** custom
+  PyPI index.
+- **#40660** (bash not quoted running `uv lock` in Docker sidecar) — runner uses
+  the **default** binary source, not `binarySource: docker`.
+
+### Upstream `renovate.json` can't ride `template-ci.yml`
+
+The render gate produces a `/tmp` project; Renovate runs against a live GitHub
+repo. Validate Piece D with `renovate --dry-run` (a CI job or local run with
+`LOG_LEVEL=debug`) asserting the `customManagers` regex *detects* the known
+`@vN` pins (including the two `codeql-action` subpaths dedup to one), plus a
+manual review of the first real Renovate run on this repo.
 
 ## Migration / rollout
 
-1. **This template PR:** add upstream `renovate.json` + `renovate.yml`; add
-   `renovate.json.jinja` + `renovate.yml.jinja`; delete `dependabot.yml.jinja`;
-   update docs (README secrets note, CLAUDE.md/guides as needed). Render gate
-   green.
-2. Run the `[dependency-groups]` smoke test. Proceed only if it passes (else
-   fallback).
+1. **Prep the `RELEASE_TOKEN` scope** on every fleet repo + this one:
+   add `administration:write` (all repos, for bootstrap) and `workflows:write`
+   (this repo, for the upstream runner). One-time, out-of-band.
+2. **This template PR:** add upstream `renovate.json` + `renovate.yml`; add
+   `renovate.json.jinja` + `renovate.yml.jinja` (pin `renovate-version >=
+   43.59.0`); add the `CI Success` aggregate gate job to `ci.yml.jinja`; edit
+   `bootstrap.yml.jinja` (retarget `paths:`, add the auto-merge + branch-
+   protection self-config job); delete `dependabot.yml.jinja`; update docs
+   (README secrets note, CLAUDE.md/guides as needed). Render gate green +
+   upstream `renovate --dry-run` detects the pins.
 3. **Template release** (`workflow_dispatch`, manual — never autonomous).
 4. **Fleet convergence** via `copier update` per downstream repo (own PRs).
-   Per-repo checklist: confirm "Allow auto-merge" + branch protection required
-   checks; confirm `RELEASE_TOKEN` present; delete the now-removed
-   `dependabot.yml`.
-5. Watch the first downstream Renovate run; tune `packageRules`/schedule.
+   Per-repo: `copier update` renders the new workflows + gate job and removes
+   `dependabot.yml`; the first push to `main` runs bootstrap, which enables
+   auto-merge + branch protection automatically. Confirm `RELEASE_TOKEN` scope
+   was updated (step 1) before relying on auto-merge.
+5. **Confirm** on the first downstream Renovate run: a `dev`-group dep updates +
+   `uv.lock` regenerates cleanly; a patch/minor PR auto-merges once `CI Success`
+   is green; a major PR stays open. Tune `packageRules`/schedule.
 
 ## Risks
 
-- **`[dependency-groups]` bug** — mitigated by the blocking smoke test +
-  documented Dependabot fallback.
-- **Auto-merge without required checks** merges immediately — mitigated by the
-  rollout prerequisite check.
+- **`[dependency-groups]` bug** — **already fixed** in `43.59.0`; mitigated by
+  the `renovate-version` floor. Dependabot fallback documented but not expected.
+- **Auto-merge with no required check merges immediately** — mitigated because
+  bootstrap installs branch protection requiring `CI Success` before any
+  Renovate PR can merge. If bootstrap hasn't run yet (or `RELEASE_TOKEN` lacks
+  `administration:write`), branch protection is absent → auto-merge would fire
+  early; step 1 + the bootstrap-before-first-PR ordering guard against it.
+- **Gate-job ↔ required-check name drift** — the branch-protection context is
+  the literal string `CI Success`; renaming the job without updating bootstrap
+  silently disables the gate. Kept in one place, called out in both files.
+- **`enforce_admins=false`** means the owner can push directly to `main` — this
+  is intentional (hotfix path) but means protection is not absolute.
 - **Renovate noise** (onboarding PR, dependency dashboard) — tune `extends` /
   schedule; acceptable one-time cost.
-- **Upstream token scope** — needs `workflows:write`; easy to add.
+- **Token scope creep** — `RELEASE_TOKEN` now spans release + copier-update +
+  Renovate + repo-administration. Broader blast radius if leaked; accepted in
+  favour of not proliferating secrets (see Tokens § rejected alternative).
 
 ## Out of scope / future
 
 - Template-side Python base-floor sweep (notch onto upstream `renovate.json`).
-- `bootstrap`-time auto-enable of "Allow auto-merge" + branch protection.
 - Dedicated `RENOVATE_TOKEN` bot identity for attribution.
 - SHA-pinning Actions for supply-chain hardening.
+
+_(Note: `bootstrap`-time auto-enable of "Allow auto-merge" + branch protection
+was moved **into** scope — see Auto-merge safety.)_
