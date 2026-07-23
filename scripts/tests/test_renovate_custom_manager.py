@@ -52,3 +52,16 @@ def test_known_pins_captured() -> None:
     assert ("astral-sh/setup-uv", "v8.2.0") in pairs  # exact pin captured whole
     assert ("actions/checkout", "v7") in pairs  # major-float pin captured
     assert len({d for d, _ in pairs}) >= 15  # sanity: most actions found
+
+
+def test_no_sha_or_digest_captured() -> None:
+    # Every captured version starts with a literal 'v' + digit; a 40-hex commit
+    # SHA (e.g. a digest-pinned action) must NOT be captured as a version.
+    for dep_name, current_value in _captures():
+        assert current_value.startswith("v") and current_value[1:2].isdigit(), (
+            f"{dep_name} captured non-version {current_value!r}"
+        )
+    dep_names = {d for d, _ in _captures()}
+    assert "vale-cli/vale-action" not in dep_names, (
+        "SHA-pinned vale-action must not be captured"
+    )
