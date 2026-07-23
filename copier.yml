@@ -123,6 +123,8 @@ _exclude:
   - "tests/fixtures"
   - ".github/workflows/template-ci.yml"       # self-test — template-repo only
   - ".github/workflows/template-release.yml"  # template's own release — template-repo only
+  - ".github/renovate.json"                    # upstream detector config — template-repo only
+  - ".github/workflows/template-renovate.yml"  # upstream Renovate runner — template-repo only
   - "docs/superpowers"
   - "uv.lock"                                 # generated projects create their own
   - "scripts/tests"                            # aggregator unit tests — template-only

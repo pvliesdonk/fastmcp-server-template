@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "labels": ["dependencies"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Bump GitHub Action pins inside Jinja-templated workflow files. Dependabot and Renovate's native github-actions manager cannot read *.jinja, so the template's Action pins — the single source of truth for the whole fleet — are invisible to them. This scans them; downstream inherits bumps via template release + copier update.",
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.jinja$/"],
+      "matchStrings": [
+        "uses:\\s+(?<depName>[\\w.-]+/[\\w.-]+)(?:/[\\w./-]+)?@(?<currentValue>v?\\d[^\\s\"']*)"
+      ],
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "The template NEVER auto-merges: Action majors are breaking and downstream inherits them via a reviewed template release. Native github-actions manager covers the template's own real workflows.",
+      "matchManagers": ["github-actions", "custom.regex"],
+      "automerge": false
+    }
+  ]
+}
