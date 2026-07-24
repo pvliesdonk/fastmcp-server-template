@@ -1,0 +1,33 @@
+name: Renovate (template)
+
+# Self-hosted Renovate for THIS template repo. Scans the real workflows via the
+# native github-actions manager AND the Jinja-templated workflows via the
+# custom.regex manager in .github/renovate.json — catching GitHub Action MAJOR
+# updates that Dependabot cannot see (Dependabot can't parse *.jinja). Opens PRs
+# for human review; never auto-merges. Downstream inherits Action bumps through
+# a template release + copier update, not through per-repo Dependabot.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run Renovate
+        # @v46 bundles a Renovate CLI well past the >=43.59.0 floor (fixes the
+        # PEP 735 [dependency-groups] depName bug); do not pin an older renovate-version.
+        uses: renovatebot/github-action@v46
+        with:
+          configurationFile: .github/renovate.json
+          token: ${{ secrets.RELEASE_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}

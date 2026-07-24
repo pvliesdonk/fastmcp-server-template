@@ -138,7 +138,7 @@ CI workflows reference three repository secrets. Configure them via **Settings â
 
 | Secret | Used by | How to generate |
 |---|---|---|
-| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write` and `pull_requests: write` (the `copier-update` cron opens PRs). Scoped to this repo. |
+| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap sets branch protection + auto-merge). Scoped to this repo. |
 | `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io>: sign in with GitHub, add the repo, copy the upload token from the repo settings page. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
 
@@ -147,6 +147,12 @@ gh secret set RELEASE_TOKEN
 gh secret set CODECOV_TOKEN
 gh secret set CLAUDE_CODE_OAUTH_TOKEN
 ```
+
+> Dependency updates are handled by **Renovate** (`renovate.yml`), which reuses
+> `RELEASE_TOKEN`. It maintains `uv.lock` and auto-merges patch/minor bumps once
+> the `CI Success` check is green; `bootstrap.yml` enables auto-merge and branch
+> protection on first push. GitHub Actions are updated in the copier template
+> and arrive via `copier update`, not per-repo.
 
 `GITHUB_TOKEN` is auto-provided; no action needed.
 

@@ -395,3 +395,36 @@ jobs:
             --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
             --compare-branch="origin/${BASE_REF}" --fail-under=100
 {% endif %}
+
+  ci-success:
+    name: CI Success
+    # Single aggregate gate for branch protection / Renovate auto-merge to
+    # require. Succeeds only if every upstream job succeeded or was skipped;
+    # fails if any failed or was cancelled. Requiring this ONE context is
+    # drift-proof — renaming an individual job never silently disables the gate.
+    needs:
+      - lint
+      - typecheck
+      - test
+      - audit
+      - secrets
+      - vale
+{% if enable_structural_gate %}
+      - structure
+{% endif %}
+    if: {% raw %}${{ always() }}{% endraw %}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify all required jobs passed
+        env:
+          RESULTS: {% raw %}${{ join(needs.*.result, ' ') }}{% endraw %}
+        run: |
+          echo "Upstream job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "::error::A required job did not pass (result: $result)"
+              exit 1
+            fi
+          done
+          echo "All required jobs passed."
