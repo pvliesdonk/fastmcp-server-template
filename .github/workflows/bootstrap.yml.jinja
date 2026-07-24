@@ -21,7 +21,6 @@ on:
     branches: [main]
     paths:
       - .github/workflows/bootstrap.yml
-      - .github/renovate.json
       - renovate.json
   workflow_dispatch:
 
@@ -59,6 +58,13 @@ jobs:
           # reviews (a solo account has no second reviewer — requiring one would
           # deadlock patch/minor auto-merge). enforce_admins=false keeps a
           # direct-push hotfix path for the owner.
+          #
+          # DESTRUCTIVE-IDEMPOTENT: this is a full PUT of the desired protection
+          # state, not a read-merge-write. Bootstrap declaratively OWNS main's
+          # branch protection — any protections added by hand via the GitHub UI
+          # (extra required checks, required reviewers, push restrictions) are
+          # reset to exactly the state below on the next run. Add such settings
+          # here, not in the UI, or they will not stick.
           gh api -X PUT "repos/${REPO}/branches/main/protection" \
             --input - <<'JSON'
           {
