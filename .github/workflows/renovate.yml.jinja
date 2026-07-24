@@ -3,7 +3,8 @@ name: Renovate
 # Self-hosted Renovate for this project. Keeps uv.lock current within the
 # pyproject.toml floors (lockFileMaintenance) and auto-merges patch/minor
 # updates once CI is green. GitHub Actions are intentionally NOT managed here —
-# their pins live in the copier template and arrive via `copier update`.
+# their pins are maintained upstream in the template and arrive via template
+# updates, not per-repo.
 
 on:
   schedule:
