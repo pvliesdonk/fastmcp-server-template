@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.11.0 (2026-07-24)
+
+- #250 feat(deps): switch fleet dependency automation from Dependabot to Renovate
+
+
 ## v2.10.5 (2026-07-15)
 
 - #248 feat(apps): DOMAIN-APP-RESOURCE seam for the app-shell resource's AppConfig
