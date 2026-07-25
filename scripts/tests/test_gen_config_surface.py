@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -59,6 +60,55 @@ def domain_project(fake_project):
         encoding="utf-8",
     )
     return fake_project
+
+
+@pytest.fixture
+def runnable_project(fake_project, template_root):
+    """A fixture project that can run its own copy of the generator.
+
+    `main()`'s `_project_root()` is derived from the generator module's own
+    ``__file__``, not from any argument — that is deliberate (a rendered
+    project's copy ships byte-identical and must discover its own root at
+    runtime), but it also means calling `g.main(...)` in-process from this
+    test module would resolve `_project_root()` to *this repo*, not the
+    fixture — since `g.__file__` here is the real, tracked
+    `scripts/gen_config_surface.py`. Exercising `main()` against a fixture
+    therefore requires the fixture to hold its own copy of the script (so
+    ``__file__`` resolves inside it) plus its own copies of both
+    presentation files, and to run as a genuine subprocess.
+    """
+    import shutil
+
+    scripts_dir = fake_project / "scripts"
+    scripts_dir.mkdir()
+    shutil.copy(Path(g.__file__), scripts_dir / "gen_config_surface.py")
+    shutil.copy(
+        template_root / "config-presentation.yml",
+        fake_project / "config-presentation.yml",
+    )
+    shutil.copy(
+        template_root / "config-presentation.domain.yml",
+        fake_project / "config-presentation.domain.yml",
+    )
+    return fake_project
+
+
+def _run_main(project_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run *project_root*'s own copy of the generator as a subprocess.
+
+    Uses `sys.executable` (the same interpreter/venv running pytest, which
+    already has ``fastmcp-pvl-core``/``pyyaml`` installed) so
+    `ensure_core_available` returns immediately instead of trying to
+    re-exec under `uv run`.
+    """
+    script = project_root / "scripts" / "gen_config_surface.py"
+    return subprocess.run(
+        [sys.executable, str(script), *args],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 class TestLoadAnswers:
@@ -470,3 +520,39 @@ class TestWriteArtifacts:
 
     def test_check_reports_a_missing_file(self, fake_project):
         assert ".env.example" in g.write_artifacts(fake_project, check=True)
+
+
+class TestMain:
+    def test_main_writes_both_artifacts_and_returns_zero(self, runnable_project):
+        result = _run_main(runnable_project)
+        assert result.returncode == 0, result.stderr
+        assert (runnable_project / ".env.example").exists()
+        assert (runnable_project / "packaging" / "env.example").exists()
+
+    def test_check_returns_one_when_artifacts_are_missing_and_writes_nothing(
+        self, runnable_project
+    ):
+        result = _run_main(runnable_project, "--check")
+        assert result.returncode == 1
+        assert not (runnable_project / ".env.example").exists()
+        assert not (runnable_project / "packaging" / "env.example").exists()
+
+    def test_check_returns_zero_after_a_successful_write(self, runnable_project):
+        write_result = _run_main(runnable_project)
+        assert write_result.returncode == 0, write_result.stderr
+
+        check_result = _run_main(runnable_project, "--check")
+        assert check_result.returncode == 0
+
+    def test_check_returns_one_when_tampered_and_leaves_it_untouched(
+        self, runnable_project
+    ):
+        write_result = _run_main(runnable_project)
+        assert write_result.returncode == 0, write_result.stderr
+
+        target = runnable_project / ".env.example"
+        target.write_text("tampered\n", encoding="utf-8")
+
+        check_result = _run_main(runnable_project, "--check")
+        assert check_result.returncode == 1
+        assert target.read_text(encoding="utf-8") == "tampered\n"

@@ -718,7 +718,16 @@ def _project_root() -> Path:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Entry point. Returns 0 on success."""
+    """Entry point. Returns 0 on success.
+
+    Without ``--check``, renders and writes every artifact `write_artifacts`
+    knows about, then reports which paths were written (nothing, if they
+    were already current). With ``--check``, compares only — nothing is ever
+    written on this path — and returns 1 if any artifact is missing or
+    stale, after printing each such path to stderr with a pointer to the
+    command that fixes it; this is what a copier ``_tasks`` entry and CI both
+    rely on to fail loudly instead of silently shipping stale files.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check",
@@ -730,18 +739,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     project_root = _project_root()
     ensure_core_available(project_root, argv)
 
-    if args.check:
-        print(
-            "ERROR: --check is not available in this version of the script.",
-            file=sys.stderr,
-        )
-        return 1
-
     answers = load_answers(project_root)
     variables = collect_vars(project_root, answers)
     print(
         f"Collected {len(variables)} config variables for {answers.get('env_prefix')}."
     )
+
+    if args.check:
+        stale = write_artifacts(project_root, check=True)
+        if not stale:
+            return 0
+        for path in stale:
+            print(
+                f"STALE: {path} is missing or out of date — run: "
+                "python scripts/gen_config_surface.py",
+                file=sys.stderr,
+            )
+        return 1
+
+    written = write_artifacts(project_root, check=False)
+    if written:
+        for path in written:
+            print(f"Wrote {path}.")
+    else:
+        print("All config artifacts already up to date.")
     return 0
 
 
