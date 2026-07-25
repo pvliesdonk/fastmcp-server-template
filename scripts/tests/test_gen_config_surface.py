@@ -522,6 +522,126 @@ class TestWriteArtifacts:
         assert ".env.example" in g.write_artifacts(fake_project, check=True)
 
 
+class TestRenderWizardSpec:
+    def _spec(self, fake_project, template_root):
+        import json
+
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(fake_project, answers)
+        return json.loads(g.render_wizard_spec(pres, vars_, answers))
+
+    def test_meta_comes_from_copier_answers(self, fake_project, template_root):
+        meta = self._spec(fake_project, template_root)["meta"]
+        assert meta["projectName"] == "demo-mcp"
+        assert meta["envPrefix"] == "DEMO_MCP"
+        assert meta["dockerImage"] == "ghcr.io/demo/demo-mcp:latest"
+
+    def test_secret_keys_come_from_the_secret_hint(self, fake_project, template_root):
+        assert set(self._spec(fake_project, template_root)["secretKeys"]) == {
+            "DEMO_MCP_BEARER_TOKEN",
+            "DEMO_MCP_OIDC_CLIENT_SECRET",
+            "DEMO_MCP_OIDC_JWT_SIGNING_KEY",
+        }
+
+    def test_routing_questions_come_first(self, fake_project, template_root):
+        ids = [q["id"] for q in self._spec(fake_project, template_root)["questions"]]
+        assert ids[:1] == ["deployment"]
+        assert "auth" in ids
+
+    def test_inferred_vars_get_no_question(self, fake_project, template_root):
+        """AUTH_MODE is documented in env files but offered no wizard control."""
+        spec = self._spec(fake_project, template_root)
+        emitted = {q.get("var") for q in spec["questions"]}
+        assert "DEMO_MCP_AUTH_MODE" not in emitted
+
+    def test_transport_is_emitted_by_the_routing_select_not_a_question(
+        self, fake_project, template_root
+    ):
+        spec = self._spec(fake_project, template_root)
+        assert "DEMO_MCP_TRANSPORT" not in {q.get("var") for q in spec["questions"]}
+        emits = [
+            k
+            for q in spec["questions"]
+            for o in q.get("options", [])
+            for k in (o.get("emit") or {})
+        ]
+        assert "DEMO_MCP_TRANSPORT" in emits
+
+    def test_group_hint_becomes_advanced_group(self, fake_project, template_root):
+        q = next(
+            q
+            for q in self._spec(fake_project, template_root)["questions"]
+            if q.get("var") == "DEMO_MCP_HOST"
+        )
+        assert q["advancedGroup"] == "Server"
+
+    def test_when_oidc_becomes_a_two_dimensional_show_if(
+        self, fake_project, template_root
+    ):
+        q = next(
+            q
+            for q in self._spec(fake_project, template_root)["questions"]
+            if q.get("var") == "DEMO_MCP_OIDC_CLIENT_ID"
+        )
+        assert q["showIf"] == {"deployment": ["server"], "auth": ["oidc", "both"]}
+
+    def test_guard_message_no_longer_claims_an_ephemeral_key(
+        self, fake_project, template_root
+    ):
+        """#260: the old wording was false — the key is derived deterministically."""
+        text = " ".join(
+            gd["message"] for gd in self._spec(fake_project, template_root)["guards"]
+        )
+        assert "ephemeral" not in text.lower()
+
+    def test_output_ends_with_exactly_one_newline(self, fake_project, template_root):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        text = g.render_wizard_spec(
+            pres, g.collect_vars(fake_project, answers), answers
+        )
+        assert text.endswith("\n") and not text.endswith("\n\n")
+
+
+class TestExampleEnvFiles:
+    def test_bearer_example_carries_only_bearer_tagged_vars(self, fake_project):
+        g.write_artifacts(fake_project, check=False)
+        text = (fake_project / "examples" / "bearer-auth.env").read_text(
+            encoding="utf-8"
+        )
+        assert "DEMO_MCP_BEARER_TOKEN" in text
+        assert "DEMO_MCP_OIDC_CLIENT_ID" not in text
+
+    def test_no_placeholder_read_only_var_survives(self, fake_project):
+        """The hand-written examples shipped READ_ONLY, which exists nowhere."""
+        g.write_artifacts(fake_project, check=False)
+        for name in ("bearer-auth.env", "oidc.env"):
+            text = (fake_project / "examples" / name).read_text(encoding="utf-8")
+            assert "READ_ONLY" not in text
+
+
+class TestGeneratedSpecMatchesShippedSchema:
+    def test_generated_spec_validates(self, fake_project, template_root):
+        import json
+
+        jsonschema = pytest.importorskip("jsonschema")
+        schema_path = (
+            template_root
+            / "docs"
+            / "javascripts"
+            / "config-wizard"
+            / "wizard-spec-schema.json"
+        )
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        spec = json.loads(
+            g.render_wizard_spec(pres, g.collect_vars(fake_project, answers), answers)
+        )
+        jsonschema.validate(instance=spec, schema=schema)
+
+
 class TestMain:
     def test_main_writes_both_artifacts_and_returns_zero(self, runnable_project):
         result = _run_main(runnable_project)

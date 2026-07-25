@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import importlib
+import json
 import os
 import re
 import sys
@@ -576,11 +577,186 @@ def render_env_file(
     return f"{text}\n" if text else ""
 
 
-# Whole-file env artifacts this generator writes today. `config-presentation
-# .yml` also declares `examples/*.env` (kind: env) and a `wizard-spec.json`
-# (kind: wizard) — those are a later task's responsibility, so this list is
-# deliberately narrower than "every kind: env file spec".
-_ENV_ARTIFACT_PATHS = (".env.example", "packaging/env.example")
+# `when: <token>` wizard hints (a var's own `wizard` mapping, and a
+# `wizard_routing` entry's top-level `when`) expand to the same two-
+# dimensional `showIf` the schema expects — `server` alone gates on the
+# routing "deployment" choice; `oidc`/`bearer` additionally gate on the
+# routing "auth" choice, since OIDC/bearer-specific vars only make sense once
+# both a server deployment *and* that auth mode are selected.
+_WIZARD_SHOW_IF: dict[str, dict[str, list[str]]] = {
+    "server": {"deployment": ["server"]},
+    "oidc": {"deployment": ["server"], "auth": ["oidc", "both"]},
+    "bearer": {"deployment": ["server"], "auth": ["bearer", "both"]},
+}
+
+_TYPE_NAME_CLASS_RE = re.compile(r"<class '(?:[\w.]+\.)?(\w+)'>$")
+
+
+def _wizard_show_if(when: object) -> dict[str, list[str]] | None:
+    """Map a scalar ``when`` hint to the spec's `showIf`, or ``None`` for no hint."""
+    if not when:
+        return None
+    return _WIZARD_SHOW_IF.get(str(when))
+
+
+def _wizard_question_type(type_name: str) -> str:
+    """Normalise a `Var.type_name` down to one of the spec's four question types.
+
+    `type_name` is annotation-form dependent: a core/template field (declared
+    under ``from __future__ import annotations``) carries the literal
+    annotation string (``"str | None"``, ``"Path"``), but a domain field
+    discovered from a project *without* that import carries
+    ``repr(field.type)`` instead (``"<class 'pathlib.Path'>"``). Both forms
+    are reduced to their base token before matching, rather than matching
+    either exact string — a union (``"str | None"``) or generic
+    (``"tuple[str, ...]"``) is reduced to its first/outer name the same way.
+    Anything that isn't recognisably ``bool``/``int``/``float`` renders as a
+    plain text question — including `Path`, which has no dedicated wizard
+    control in this spec.
+    """
+    match = _TYPE_NAME_CLASS_RE.match(type_name)
+    normalized = match.group(1) if match else type_name
+    normalized = normalized.split("|", 1)[0].split("[", 1)[0].strip()
+    base = normalized.lower()
+    if base == "bool":
+        return "bool"
+    if base in ("int", "float"):
+        return "number"
+    return "text"
+
+
+def _wizard_label(var: Var) -> str:
+    """A human-readable label derived from the var's suffix (full name if unprefixed)."""
+    token = var.suffix or var.name
+    return token.replace("_", " ").title()
+
+
+def _routing_question(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Render one already-`{PREFIX}`-substituted `wizard_routing` entry as a question."""
+    question: dict[str, Any] = {"id": raw["id"], "label": raw["label"]}
+    help_text = raw.get("help")
+    if help_text:
+        question["help"] = help_text
+    question["type"] = raw["type"]
+    show_if = _wizard_show_if(raw.get("when"))
+    if show_if is not None:
+        question["showIf"] = show_if
+    options = raw.get("options")
+    if options:
+        rendered_options: list[dict[str, Any]] = []
+        for option in options:
+            rendered: dict[str, Any] = {
+                "value": option["value"],
+                "label": option["label"],
+            }
+            emit = option.get("emit")
+            if emit:
+                rendered["emit"] = dict(emit)
+            rendered_options.append(rendered)
+        question["options"] = rendered_options
+    return question
+
+
+def _var_question(var: Var) -> dict[str, Any] | None:
+    """Render one `Var`'s wizard hint as a question, or ``None`` to emit nothing.
+
+    ``inferred=True`` means "no wizard control offered" — the var still
+    appears in the env artifacts (`collect_vars`/`render_env_file` never
+    filter on it), only the wizard spec skips it. A `control: emit` hint
+    (``TRANSPORT``) means a `wizard_routing` option already emits the var as
+    a side effect of the routing choice — a second, independent question for
+    it would let a user pick a value that contradicts that routing choice.
+    """
+    if var.inferred:
+        return None
+    if var.wizard.get("control") == "emit":
+        return None
+
+    question: dict[str, Any] = {
+        "id": (var.suffix or var.name).lower(),
+        "label": _wizard_label(var),
+        "type": _wizard_question_type(var.type_name),
+        "var": var.name,
+    }
+    if var.help:
+        question["help"] = var.help
+    group = var.wizard.get("group")
+    if group:
+        question["advancedGroup"] = str(group)
+    show_if = _wizard_show_if(var.wizard.get("when"))
+    if show_if is not None:
+        question["showIf"] = show_if
+    return question
+
+
+def render_wizard_spec(
+    pres: Mapping[str, Any], vars_: Sequence[Var], answers: Mapping[str, object]
+) -> str:
+    """Render the config-wizard spec (`docs/javascripts/config-wizard/wizard-spec.json`).
+
+    ``pres`` is the loaded, already `{PREFIX}`-substituted
+    `config-presentation.yml` (the same value `write_artifacts` already loads
+    for the env artifacts) — its ``wizard_routing`` and ``wizard_guards``
+    keys drive the routing questions and guard list; ``examples`` is not
+    used here (it feeds env-file value rendering only, via `_format_value`).
+
+    Key order within every emitted object is fixed by this function's own
+    dict-literal construction, never by iterating a `set`/`frozenset` or by
+    passing through whatever order an external mapping happened to iterate
+    in — `template-ci` renders the template twice and diffs the results, so
+    the JSON text must be byte-identical across processes regardless of
+    `PYTHONHASHSEED`.
+    """
+    project_name = str(answers.get("project_name", ""))
+    docker_registry = str(answers.get("docker_registry", ""))
+    env_prefix = str(answers.get("env_prefix", ""))
+
+    questions: list[dict[str, Any]] = [
+        _routing_question(raw) for raw in pres.get("wizard_routing", ())
+    ]
+    for var in vars_:
+        question = _var_question(var)
+        if question is not None:
+            questions.append(question)
+
+    secret_keys = [var.name for var in vars_ if var.wizard.get("secret")]
+
+    guards = [
+        {
+            "level": raw["level"],
+            "message": raw["message"],
+            "when": {k: list(v) for k, v in raw["when"].items()},
+        }
+        for raw in pres.get("wizard_guards", ())
+    ]
+
+    spec = {
+        "version": 1,
+        "meta": {
+            "projectName": project_name,
+            "dockerImage": f"{docker_registry}/{project_name}:latest",
+            "envPrefix": env_prefix,
+        },
+        "secretKeys": secret_keys,
+        "questions": questions,
+        "guards": guards,
+    }
+    text = json.dumps(spec, indent=2)
+    return f"{text}\n"
+
+
+# Whole-file env artifacts (all rendered by `render_env_file`) plus the
+# config-wizard spec (rendered by `render_wizard_spec`, `kind: wizard` in
+# `config-presentation.yml` — its `files` entry carries no other content, so
+# it is not looked up via `presentation["files"][...]` the way the env
+# artifacts are).
+_ENV_ARTIFACT_PATHS = (
+    ".env.example",
+    "packaging/env.example",
+    "examples/bearer-auth.env",
+    "examples/oidc.env",
+)
+_WIZARD_ARTIFACT_PATH = "docs/javascripts/config-wizard/wizard-spec.json"
 
 
 def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
@@ -597,10 +773,16 @@ def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
     presentation = load_presentation(_presentation_root(project_root), env_prefix)
     vars_ = collect_vars(project_root, answers)
 
+    artifacts: list[tuple[str, str]] = [
+        (rel_path, render_env_file(presentation["files"][rel_path], vars_, answers))
+        for rel_path in _ENV_ARTIFACT_PATHS
+    ]
+    artifacts.append(
+        (_WIZARD_ARTIFACT_PATH, render_wizard_spec(presentation, vars_, answers))
+    )
+
     changed: list[str] = []
-    for rel_path in _ENV_ARTIFACT_PATHS:
-        spec = presentation["files"][rel_path]
-        text = render_env_file(spec, vars_, answers)
+    for rel_path, text in artifacts:
         target = project_root / rel_path
         current = target.read_text(encoding="utf-8") if target.exists() else None
         if current == text:
