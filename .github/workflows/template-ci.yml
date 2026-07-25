@@ -367,6 +367,46 @@ jobs:
                 .github/workflows/claude-code-review.yml
           rm -f scripts/copier_update_aggregator.py
           rm -rf scripts/copier_update_prompts
+          # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
+          #     count the scrub expects (issue #199).
+          #
+          #     Without this the whole step passes VACUOUSLY whenever
+          #     CLAUDE.md.jinja is reworded and the scrub is not: the `sed`
+          #     matches nothing, and the post-scrub "wording is gone"
+          #     assertions still pass — because the wording is gone from the
+          #     SOURCE, not because the scrub removed it. Source and scrub
+          #     drift out of coupling in lockstep and CI stays green, so a real
+          #     detach regression ships to forks undetected.
+          #
+          #     Asserting counts (not mere presence) also catches the reverse
+          #     drift: a new section that adds a fourth ` Kept across copier
+          #     update.` the scrub was never told about.
+          #
+          #     Counts must be bumped deliberately when CLAUDE.md.jinja gains or
+          #     loses one of these strings — that edit is exactly the moment to
+          #     check FORKING.md's scrub still covers it.
+          preflight_fail=0
+          check_anchor() {
+            # `|| true` keeps bash -e from aborting the command substitution
+            # when grep finds zero matches (exit 1) — zero is the failure this
+            # function exists to REPORT, not a reason to die without context.
+            actual=$(grep -cF "$2" CLAUDE.md || true)
+            if [ "$actual" != "$1" ]; then
+              echo "::error::scrub-anchor drift: expected $1 occurrence(s) of '$2' in the rendered CLAUDE.md, found $actual. CLAUDE.md.jinja was reworded without updating the detach scrub (FORKING.md + this workflow) — fix the scrub, or bump the expected count here if the change is intentional."
+              preflight_fail=1
+            fi
+          }
+          check_anchor 2 '<!-- TEMPLATE-TRACKING-START -->'
+          check_anchor 2 '<!-- TEMPLATE-TRACKING-END -->'
+          check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS BELOW'
+          check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->'
+          check_anchor 3 ' Kept across copier update.'
+          check_anchor 1 ' on top of the shipped defaults survive `copier update`.'
+          check_anchor 1 ' are preserved across `copier update`.'
+          check_anchor 2 'The block is preserved across `copier update`.'
+          [ "$preflight_fail" = "0" ] \
+            || { echo "::error::detach scrub is no longer coupled to CLAUDE.md.jinja — see the scrub-anchor drift errors above"; exit 1; }
+
           # --- Step 3: scrub CLAUDE.md template-tracking + copier-update wording ---
           # -i.bak + rm mirrors FORKING.md's portable form (GNU + BSD sed).
           sed -i.bak \
@@ -440,8 +480,32 @@ jobs:
           # '## Key Design Decisions' (asserted in the kept-section loop above):
           # it sits below where the END fence was, so a range delete that ran to
           # EOF past pair 2 would drop it too.
-          ! grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS (BELOW|END)' CLAUDE.md \
-            || { echo "::error::TEMPLATE-OWNED banner fence survived the detach scrub"; exit 1; }
+          #
+          # Asserted as TWO independent fixed-string checks, each using the same
+          # literal its own `sed` -e deletes (issue #199). The previous single
+          # alternation '^<!-- ===== TEMPLATE-OWNED SECTIONS (BELOW|END)' shared a
+          # prefix with both fences, so it could not distinguish "the END fence
+          # was deleted" from "the END fence was renamed and now neither the sed
+          # nor this regex matches it" — the delete and its check failed
+          # together instead of independently.
+          ! grep -qF '<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md \
+            || { echo "::error::TEMPLATE-OWNED BELOW banner fence survived the detach scrub"; exit 1; }
+          ! grep -qF '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->' CLAUDE.md \
+            || { echo "::error::TEMPLATE-OWNED END banner fence survived the detach scrub"; exit 1; }
+
+          # --- the substitutions PRODUCED their replacement text ---
+          # Absence of the old wording is not proof the scrub ran — the wording
+          # could simply never have been there (issue #199, vector 2). Assert the
+          # REPLACEMENT text the s/// commands emit, which can only appear if the
+          # substitution actually fired. Counts mirror the preflight anchors.
+          check_replacement() {
+            actual=$(grep -cF "$2" CLAUDE.md || true)
+            [ "$actual" = "$1" ] \
+              || { echo "::error::detach scrub substitution did not fire: expected $1 occurrence(s) of '$2' after the scrub, found $actual"; exit 1; }
+          }
+          check_replacement 1 ' on top of the shipped defaults are yours to maintain.'
+          check_replacement 1 ' are domain-owned.'
+          check_replacement 2 'The block is domain-owned.'
           # stripped files gone:
           for gone in \
               .github/workflows/copier-update.yml \
