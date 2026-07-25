@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.11.2 (2026-07-25)
+
+- #256 ci: make detach-smoke fail loudly when CLAUDE.md drifts from the scrub
+- #255 feat(config): add CONFIG-VALIDATE seam for domain field validation
+- #253 fix: transport docstring accuracy + seven template-owned tidies
+
+
 ## v2.11.1 (2026-07-25)
 
 - #252 ci: guard that a pristine render already satisfies the shipped pre-commit hooks
