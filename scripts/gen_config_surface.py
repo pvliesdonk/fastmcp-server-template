@@ -31,6 +31,8 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import importlib
 import os
 import re
 import sys
@@ -121,8 +123,157 @@ def load_presentation(project_root: Path | str, env_prefix: str) -> dict[str, An
 
 
 # ---------------------------------------------------------------------------
+# Domain discovery
+# ---------------------------------------------------------------------------
+
+
+def _load_domain_presentation(
+    presentation_root: Path, env_prefix: str
+) -> dict[str, Any]:
+    """Load `config-presentation.domain.yml`, tolerating its absence.
+
+    Unlike `load_presentation`'s template-owned file (mandatory in every
+    render), this one is *seeded* — a downstream project owns and edits it,
+    and it is not wired into every render yet. A missing file means
+    "nothing manually declared" rather than a configuration error.
+    """
+    import yaml
+
+    domain_path = presentation_root / "config-presentation.domain.yml"
+    if not domain_path.exists():
+        return {"vars": []}
+    raw = yaml.safe_load(domain_path.read_text(encoding="utf-8")) or {}
+    return _substitute_prefix(raw, env_prefix)
+
+
+def _import_project_config(project_root: Path, python_module: str) -> type | None:
+    """Import ``{python_module}.config.ProjectConfig``, or ``None`` if it can't be.
+
+    A freshly rendered project has no dependencies installed yet, and this
+    generator's own unit tests use fixture projects with no config module at
+    all — both are legitimate "nothing to discover" cases, not errors.
+
+    Only ``sys.path`` is restored before returning. ``sys.modules`` is
+    deliberately left alone here: `typing.get_type_hints` (used inside
+    `fastmcp_pvl_core.domain_env_suffixes`, which the caller runs against the
+    returned class right after this) resolves a class's annotations via
+    ``sys.modules[cls.__module__]``, so popping the module before that scan
+    runs would turn every annotation lookup into a `NameError`. The caller
+    owns popping ``sys.modules`` once it is done using the returned class.
+    """
+    src_dir = project_root / "src"
+    if not src_dir.is_dir():
+        return None
+
+    added_to_path = str(src_dir) not in sys.path
+    if added_to_path:
+        sys.path.insert(0, str(src_dir))
+    try:
+        module = importlib.import_module(f"{python_module}.config")
+        return module.ProjectConfig
+    except (ImportError, AttributeError):
+        return None
+    finally:
+        if added_to_path:
+            sys.path.remove(str(src_dir))
+
+
+def _discover_domain_vars(
+    project_root: Path, env_prefix: str, answers: Mapping[str, object]
+) -> tuple[Var, ...]:
+    """Auto-discover domain vars from the project's own ``ProjectConfig``.
+
+    AST-scans ``ProjectConfig.from_env`` via
+    ``fastmcp_pvl_core.domain_env_suffixes`` and pulls each field's
+    ``help``/``tags`` from its dataclass ``metadata``. This is best-effort
+    enrichment, not a required provenance source: a fresh render has no
+    domain fields (and often no venv yet to even import its own package),
+    so any failure to import or introspect is treated as "nothing to
+    discover" rather than an error.
+
+    Every discovered var is tagged ``domain`` (in addition to whatever tags
+    its field metadata declares) so it always lands in a file spec's
+    ``tags: [domain]`` section regardless of the field author's own tag
+    choices.
+
+    ``sys.modules`` entries for the imported module are popped before
+    returning, once every use of the class (the `domain_env_suffixes` scan
+    and the `dataclasses.fields` walk below) is finished — so repeated calls
+    against different fixture projects sharing a module name (as the test
+    suite does) never see a stale cached module from an earlier call.
+    """
+    python_module = answers.get("python_module")
+    if not python_module:
+        return ()
+    python_module = str(python_module)
+    project_config_cls = _import_project_config(project_root, python_module)
+    if project_config_cls is None:
+        return ()
+
+    try:
+        from fastmcp_pvl_core import domain_env_suffixes
+
+        try:
+            suffixes = domain_env_suffixes(project_config_cls)
+        except Exception:
+            return ()
+
+        fields_by_suffix = {
+            f.name.upper(): f for f in dataclasses.fields(project_config_cls)
+        }
+        discovered: list[Var] = []
+        for suffix in sorted(suffixes):
+            field_info = fields_by_suffix.get(suffix)
+            metadata = field_info.metadata if field_info is not None else {}
+            if field_info is None:
+                default = None
+            elif field_info.default is not dataclasses.MISSING:
+                default = field_info.default
+            elif field_info.default_factory is not dataclasses.MISSING:
+                default = field_info.default_factory()
+            else:
+                default = None
+            tags = tuple(dict.fromkeys((*metadata.get("tags", ()), "domain")))
+            discovered.append(
+                Var(
+                    name=f"{env_prefix}_{suffix}",
+                    suffix=suffix,
+                    provenance="domain",
+                    type_name=(
+                        str(field_info.type) if field_info is not None else "str"
+                    ),
+                    default=default,
+                    help=str(metadata.get("help", "")),
+                    tags=tags,
+                    inferred=False,
+                    wizard=dict(metadata.get("wizard", {})),
+                )
+            )
+        return tuple(discovered)
+    finally:
+        sys.modules.pop(f"{python_module}.config", None)
+        sys.modules.pop(python_module, None)
+
+
+# ---------------------------------------------------------------------------
 # Provenance merge
 # ---------------------------------------------------------------------------
+
+
+def _presentation_root(project_root: Path) -> Path:
+    """Where `config-presentation*.yml` live for *project_root*.
+
+    Both presentation files ship byte-identical, so they live at
+    *project_root* in a real rendered project. Fall back to the copy
+    co-located with this script (the template repo root, when running the
+    template's own tests) so callers work against a project_root that only
+    has the parts a caller actually needs — e.g. a bare `.copier-answers.yml`
+    in unit tests.
+    """
+    project_root = Path(project_root)
+    if (project_root / "config-presentation.yml").exists():
+        return project_root
+    return _project_root()
 
 
 def collect_vars(
@@ -145,16 +296,7 @@ def collect_vars(
             "rendered by this template always answers that question."
         )
     env_prefix = str(answers["env_prefix"])
-    # config-presentation.yml ships byte-identical, so it lives at *project_root*
-    # in a real rendered project. Fall back to the copy co-located with this
-    # script (the template repo root, when running the template's own tests)
-    # so collect_vars works against a project_root that only has the parts a
-    # caller actually needs — e.g. a bare .copier-answers.yml in unit tests.
-    presentation_root = (
-        project_root
-        if (project_root / "config-presentation.yml").exists()
-        else _project_root()
-    )
+    presentation_root = _presentation_root(project_root)
     presentation = load_presentation(presentation_root, env_prefix)
 
     collected: list[Var] = [
@@ -193,6 +335,29 @@ def collect_vars(
             )
         )
 
+    domain_presentation = _load_domain_presentation(presentation_root, env_prefix)
+    for raw in domain_presentation.get("vars", ()):
+        when_answer = raw.get("when_answer")
+        if when_answer is not None and not answers.get(when_answer):
+            continue
+        name = raw["name"]
+        suffix = name[len(prefix_marker) :] if name.startswith(prefix_marker) else None
+        collected.append(
+            Var(
+                name=name,
+                suffix=suffix,
+                provenance=raw.get("provenance", "domain"),
+                type_name=raw["type_name"],
+                default=raw.get("default"),
+                help=raw["help"],
+                tags=tuple(raw.get("tags", ())),
+                inferred=bool(raw.get("inferred", False)),
+                wizard=dict(raw.get("wizard", {})),
+            )
+        )
+
+    collected.extend(_discover_domain_vars(project_root, env_prefix, answers))
+
     seen_names: dict[str, str] = {}
     for var in collected:
         prior_provenance = seen_names.get(var.name)
@@ -206,6 +371,134 @@ def collect_vars(
         seen_names[var.name] = var.provenance
 
     return tuple(sorted(collected, key=lambda v: _PROVENANCE_ORDER.index(v.provenance)))
+
+
+# ---------------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------------
+
+
+def _format_default(default: object) -> str:
+    """Render a var's default as the text after ``=`` in an env file.
+
+    ``None`` and an empty sequence both render as an empty value — an env
+    file leaves "no default" blank for the reader to fill in, rather than
+    spelling out ``None`` or ``()``. Booleans render lower-case, matching
+    shell/env convention.
+    """
+    if default is None:
+        return ""
+    if isinstance(default, bool):
+        return "true" if default else "false"
+    if isinstance(default, (list, tuple)):
+        return ",".join(str(item) for item in default)
+    return str(default)
+
+
+def render_env_file(
+    spec: Mapping[str, Any], vars_: Sequence[Var], answers: Mapping[str, object]
+) -> str:
+    """Render one whole-file env artifact's full text.
+
+    ``spec`` is one entry from ``config-presentation.yml``'s ``files``
+    mapping (already ``{PREFIX}``-substituted by `load_presentation`).
+    ``{HUMAN_NAME}`` / ``{PROJECT_NAME}`` header tokens are substituted here
+    from *answers*, since `load_presentation` only replaces ``{PREFIX}``.
+
+    Each section claims the first-declared, not-yet-claimed vars whose tags
+    intersect its own — so a var whose tags span multiple sections (e.g. a
+    core field tagged both ``server`` and ``apps``) appears exactly once,
+    under whichever section is declared first. A section with no matching
+    vars (its tags matched nothing, or its ``when_answer`` gate is false)
+    emits no header at all — a dangling header with nothing under it would
+    fail render-hygiene review and confuse a reader.
+    """
+    human_name = str(answers.get("human_name", ""))
+    project_name = str(answers.get("project_name", ""))
+
+    def _sub(text: str) -> str:
+        return text.replace("{HUMAN_NAME}", human_name).replace(
+            "{PROJECT_NAME}", project_name
+        )
+
+    lines: list[str] = []
+
+    def _blank() -> None:
+        if lines and lines[-1] != "":
+            lines.append("")
+
+    header = spec.get("header")
+    if header:
+        for header_line in _sub(str(header)).rstrip("\n").split("\n"):
+            lines.append(f"# {header_line}".rstrip())
+
+    commented = bool(spec.get("commented", False))
+    value_prefix = "# " if commented else ""
+    placed: set[str] = set()
+
+    for section in spec.get("sections", ()):
+        when_answer = section.get("when_answer")
+        if when_answer is not None and not answers.get(when_answer):
+            continue
+        section_tags = set(section.get("tags", ()))
+        section_vars = [
+            v for v in vars_ if v.name not in placed and section_tags & set(v.tags)
+        ]
+        if not section_vars:
+            continue
+        placed.update(v.name for v in section_vars)
+
+        _blank()
+        title = section.get("title")
+        if title is not None:
+            lines.append(f"# --- {title} ---")
+        note = section.get("note")
+        if note is not None:
+            lines.append(f"# {_sub(str(note))}".rstrip())
+
+        for var in section_vars:
+            for help_line in var.help.splitlines():
+                lines.append(f"# {help_line}".rstrip())
+            lines.append(f"{value_prefix}{var.name}={_format_default(var.default)}")
+
+    text = "\n".join(lines).rstrip("\n")
+    return f"{text}\n" if text else ""
+
+
+# Whole-file env artifacts this generator writes today. `config-presentation
+# .yml` also declares `examples/*.env` (kind: env) and a `wizard-spec.json`
+# (kind: wizard) — those are a later task's responsibility, so this list is
+# deliberately narrower than "every kind: env file spec".
+_ENV_ARTIFACT_PATHS = (".env.example", "packaging/env.example")
+
+
+def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
+    """Render and write (or, with ``check=True``, just compare) the artifacts.
+
+    Returns the relative paths that are missing or whose on-disk content
+    differs from the freshly rendered text — with ``check=False`` those are
+    the paths actually written; an already-current file is left untouched
+    (not even its mtime is bumped) and omitted from the result either way.
+    """
+    project_root = Path(project_root)
+    answers = load_answers(project_root)
+    env_prefix = str(answers["env_prefix"])
+    presentation = load_presentation(_presentation_root(project_root), env_prefix)
+    vars_ = collect_vars(project_root, answers)
+
+    changed: list[str] = []
+    for rel_path in _ENV_ARTIFACT_PATHS:
+        spec = presentation["files"][rel_path]
+        text = render_env_file(spec, vars_, answers)
+        target = project_root / rel_path
+        current = target.read_text(encoding="utf-8") if target.exists() else None
+        if current == text:
+            continue
+        changed.append(rel_path)
+        if not check:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8")
+    return changed
 
 
 # ---------------------------------------------------------------------------

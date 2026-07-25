@@ -305,3 +305,78 @@ class TestEnsureCoreAvailable:
 
         with pytest.raises(SystemExit, match="uv"):
             g.ensure_core_available(tmp_path)
+
+
+class TestRenderEnvFile:
+    def _env_text(self, fake_project, template_root, path=".env.example"):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(fake_project, answers)
+        return g.render_env_file(pres["files"][path], vars_, answers)
+
+    def test_includes_all_eighteen_core_vars(self, fake_project, template_root):
+        """The hand-written .env.example was missing six of them."""
+        text = self._env_text(fake_project, template_root)
+        for suffix in (
+            "APP_DOMAIN",
+            "AUTH_MODE",
+            "BEARER_DEFAULT_SUBJECT",
+            "EVENT_STORE_URL",
+            "KV_STORE_URL",
+            "OIDC_VERIFY_ACCESS_TOKEN",
+        ):
+            assert f"DEMO_MCP_{suffix}" in text
+
+    def test_env_example_lines_are_commented_out(self, fake_project, template_root):
+        text = self._env_text(fake_project, template_root)
+        for line in text.splitlines():
+            if "DEMO_MCP_" in line:
+                assert line.lstrip().startswith("#")
+
+    def test_packaging_env_lines_are_not_commented(self, fake_project, template_root):
+        text = self._env_text(fake_project, template_root, "packaging/env.example")
+        assert any(line.startswith("FASTMCP_LOG_LEVEL=") for line in text.splitlines())
+
+    def test_section_titles_appear_in_declared_order(self, fake_project, template_root):
+        text = self._env_text(fake_project, template_root)
+        positions = [
+            text.index(t)
+            for t in ("--- Server ---", "--- Authentication ---", "--- Logging ---")
+        ]
+        assert positions == sorted(positions)
+
+    def test_authz_section_absent_when_answer_false(self, fake_project, template_root):
+        assert "Authorization" not in self._env_text(fake_project, template_root)
+
+    def test_help_text_appears_as_a_comment(self, fake_project, template_root):
+        text = self._env_text(fake_project, template_root)
+        assert "Interface the HTTP server binds to." in text
+
+    def test_render_hygiene_no_trailing_whitespace_single_final_newline(
+        self, fake_project, template_root
+    ):
+        text = self._env_text(fake_project, template_root)
+        assert not any(line != line.rstrip() for line in text.splitlines())
+        assert text.endswith("\n") and not text.endswith("\n\n")
+
+    def test_output_is_stable_across_calls(self, fake_project, template_root):
+        assert self._env_text(fake_project, template_root) == self._env_text(
+            fake_project, template_root
+        )
+
+
+class TestWriteArtifacts:
+    def test_writes_then_reports_clean(self, fake_project):
+        g.write_artifacts(fake_project, check=False)
+        assert (fake_project / ".env.example").exists()
+        assert g.write_artifacts(fake_project, check=True) == []
+
+    def test_check_reports_a_stale_file_without_writing(self, fake_project):
+        g.write_artifacts(fake_project, check=False)
+        target = fake_project / ".env.example"
+        target.write_text("tampered\n", encoding="utf-8")
+        assert ".env.example" in g.write_artifacts(fake_project, check=True)
+        assert target.read_text(encoding="utf-8") == "tampered\n"
+
+    def test_check_reports_a_missing_file(self, fake_project):
+        assert ".env.example" in g.write_artifacts(fake_project, check=True)
