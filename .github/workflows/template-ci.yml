@@ -435,6 +435,7 @@ jobs:
             -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
             -e 's/ are preserved across `copier update`\./ are domain-owned./' \
             -e 's/The block is preserved across `copier update`\./The block is domain-owned./' \
+            -e 's| on every `copier copy`/`copier update` and re-verified by| whenever config fields change, and re-verified by|' \
             CLAUDE.md && rm -f CLAUDE.md.bak
           # --- Closing ("You are now standalone"): remove the detach guide.
           #     FORKING.md's numbered Step 4 (README cleanup) is intentionally
