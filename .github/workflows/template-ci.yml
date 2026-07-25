@@ -392,11 +392,20 @@ jobs:
           # means what a maintainer thinks it means — a future anchor twice on
           # one line would otherwise silently undercount and the drift guard
           # would pass. wc's leading padding is stripped so the string compare
-          # below is exact. A zero-match grep exits 1, but the pipe means wc
-          # still prints 0 and the command substitution succeeds, so bash -e
-          # has nothing to abort on.
+          # below is exact.
+          #
+          # The trailing `|| true` is defensive, not currently load-bearing.
+          # A zero-match grep exits 1, but this step has no `shell:` key, so
+          # Actions runs it as `bash -e {0}` — WITHOUT pipefail, which is only
+          # added for an explicit `shell: bash` — and the pipeline takes tr's
+          # status (0). Should anyone add `shell: bash` or a `defaults.run`
+          # shell later, pipefail would abort the step at the FIRST missing
+          # anchor, killing the ::error:: diagnostics and the
+          # accumulate-don't-stop behaviour both helpers rely on — precisely in
+          # the drift case this step exists to report. `|| true` costs nothing
+          # and makes the behaviour independent of that setting.
           count_occurrences() {
-            grep -oF "$1" CLAUDE.md | wc -l | tr -d '[:space:]'
+            grep -oF "$1" CLAUDE.md | wc -l | tr -d '[:space:]' || true
           }
           check_anchor() {
             actual=$(count_occurrences "$2")
