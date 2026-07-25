@@ -18,13 +18,20 @@ repos:
       # Type-check the template's OWN Python (scripts/).  The generated
       # project's src/ is unrendered Jinja here and cannot be mypy'd locally;
       # template-ci.yml renders the template and runs mypy on the output.
+      #
+      # --ignore-missing-imports: gen_config_surface.py imports PyYAML and
+      # fastmcp-pvl-core — real runtime dependencies of every *generated*
+      # project, but not of this template repo's own tooling environment
+      # (which has no pyproject.toml of its own). The rendered project's
+      # mypy run (template-ci.yml) has both installed for real and checks
+      # them fully; this flag only widens what's locally uncheckable here.
       - id: mypy
         name: mypy
         language: system
         entry: uv run mypy
         files: ^scripts/
         pass_filenames: false
-        args: [scripts/]
+        args: [--ignore-missing-imports, scripts/]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

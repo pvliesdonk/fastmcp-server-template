@@ -1,0 +1,165 @@
+# Presentation layer for generated config artifacts.  Template-owned.
+#
+# Ships byte-identical to every project: `{PREFIX}` is replaced with the
+# project's env_prefix at generation time.  Core `ServerConfig` vars are NOT
+# listed here — they come from fastmcp_pvl_core.server_config_surface(), which
+# owns their help text and tags.  This file declares only the vars core does
+# not know about, plus how every var is laid out in each artifact.
+
+# Vars read outside ServerConfig.  Same metadata shape core uses.
+vars:
+  - name: "{PREFIX}_SERVER_NAME"
+    provenance: template
+    type_name: "str"
+    default: null
+    help: "Rename this server instance; defaults to the project name."
+    tags: [server]
+    wizard: {group: Server, when: server}
+
+  - name: "{PREFIX}_INSTRUCTIONS"
+    provenance: template
+    type_name: "str"
+    default: null
+    help: "Replaces the default MCP instructions text sent to clients."
+    tags: [server]
+    wizard: {group: Server, when: server}
+
+  - name: "{PREFIX}_HTTP_PATH"
+    provenance: template
+    type_name: "str"
+    default: "/mcp"
+    help: "Mount path for the MCP endpoint."
+    tags: [server]
+    wizard: {group: Server, when: server}
+
+  - name: "{PREFIX}_DEBUG_PORT"
+    provenance: template
+    type_name: "int"
+    default: 5678
+    help: "debugpy listen port; the image must be built with --build-arg DEBUG=true."
+    tags: [debug]
+    wizard: {}
+
+  - name: "{PREFIX}_DEBUG_WAIT"
+    provenance: template
+    type_name: "bool"
+    default: false
+    help: "Block startup until a debugger attaches."
+    tags: [debug]
+    wizard: {}
+
+  - name: "FASTMCP_LOG_LEVEL"
+    provenance: external
+    type_name: "str"
+    default: "INFO"
+    help: "Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR). The -v CLI flag overrides to DEBUG."
+    tags: [observability, readme]
+    wizard: {group: Logging}
+
+  - name: "FASTMCP_ENABLE_RICH_LOGGING"
+    provenance: external
+    type_name: "bool"
+    default: true
+    help: "Set false for plain or structured JSON log output."
+    tags: [observability, readme]
+    wizard: {group: Logging}
+
+  - name: "{PREFIX}_ACL_PATH"
+    provenance: template
+    when_answer: enable_authorization
+    type_name: "Path"
+    default: null
+    help: "Subject-to-scope ACL file (TOML), for bearer and any auth mode."
+    tags: [authz]
+    wizard: {}
+
+  - name: "{PREFIX}_AUTHZ_CLAIM"
+    provenance: template
+    when_answer: enable_authorization
+    type_name: "str"
+    default: null
+    help: "OIDC claim to read scopes from, e.g. groups. Identity mapping when IdP group names already match scope names."
+    tags: [authz]
+    wizard: {}
+
+  - name: "{PREFIX}_AUTHZ_GRANTS"
+    provenance: template
+    when_answer: enable_authorization
+    type_name: "str"
+    default: null
+    help: "Inline-JSON translation map for when group names differ from scope names."
+    tags: [authz]
+    wizard: {}
+
+# Wizard routing questions that emit a var rather than mapping 1:1 to one.
+wizard_routing:
+  - id: deployment
+    label: "Where will the server run?"
+    help: "Local stdio for Claude Desktop/Code, or an HTTP server for Docker/systemd."
+    type: select
+    options:
+      - {value: local, label: "Local (Claude Desktop / Claude Code, stdio)", emit: {"{PREFIX}_TRANSPORT": stdio}}
+      - {value: server, label: "Server (HTTP — Docker / Compose / systemd)", emit: {"{PREFIX}_TRANSPORT": http}}
+  - id: auth
+    label: "Authentication"
+    type: select
+    when: server
+    options:
+      - {value: none, label: "None"}
+      - {value: bearer, label: "Bearer token"}
+      - {value: oidc, label: "OIDC"}
+      - {value: both, label: "Bearer + OIDC"}
+
+wizard_guards:
+  - when: {deployment: [server], auth: [oidc, both]}
+    level: warning
+    message: "OIDC needs BASE_URL set. Leaving OIDC_JWT_SIGNING_KEY unset derives the key from the client secret, so rotating that secret invalidates every issued token."
+
+# Whole-file artifacts.  `tags: []` selects every var.
+files:
+  .env.example:
+    kind: env
+    header: "{HUMAN_NAME} environment variables (copy to .env and fill in)."
+    commented: true
+    sections:
+      - {title: Server, tags: [server]}
+      - {title: Authentication, tags: [auth]}
+      - {title: Persistence, tags: [persistence]}
+      - {title: "MCP Apps", tags: [apps]}
+      - {title: Authorization, tags: [authz], when_answer: enable_authorization}
+      - {title: Logging, tags: [observability]}
+      - {title: "Remote debugger (development only)", tags: [debug]}
+      - {title: Domain, tags: [domain], note: "Populated from your ProjectConfig CONFIG-FIELDS block."}
+
+  packaging/env.example:
+    kind: env
+    header: |
+      {HUMAN_NAME} environment configuration
+
+      Installed to /etc/{PROJECT_NAME}/env.example.
+      Copy to /etc/{PROJECT_NAME}/env and edit for your deployment; the systemd
+      unit (/usr/lib/systemd/system/{PROJECT_NAME}.service) sources
+      /etc/{PROJECT_NAME}/env via EnvironmentFile=.
+    commented: false
+    sections:
+      - {title: Logging, tags: [observability]}
+      - {title: Domain, tags: [domain], note: "All domain vars use the {PREFIX}_ prefix."}
+
+  examples/bearer-auth.env:
+    kind: env
+    header: "Bearer token authentication example. Generate a token: openssl rand -hex 32"
+    commented: false
+    sections:
+      - {title: null, tags: [bearer]}
+      - {title: null, tags: [domain]}
+
+  examples/oidc.env:
+    kind: env
+    header: "OIDC authentication example. See docs/guides/authentication.md for setup."
+    commented: false
+    sections:
+      - {title: null, tags: [oidc]}
+      - {title: null, tags: [domain]}
+
+  docs/javascripts/config-wizard/wizard-spec.json:
+    kind: wizard
