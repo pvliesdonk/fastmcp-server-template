@@ -38,7 +38,11 @@ vars:
     default: 5678
     help: "debugpy listen port; the image must be built with --build-arg DEBUG=true."
     tags: [debug]
-    wizard: {}
+    # Development-only; read inside core's maybe_start_debugpy, not project
+    # src/. Documented in the env artifacts but offered no wizard control —
+    # `control: none`, not `inferred`, since the value is not derived from
+    # anything else.
+    wizard: {control: none}
 
   - name: "{PREFIX}_DEBUG_WAIT"
     provenance: template
@@ -46,7 +50,7 @@ vars:
     default: false
     help: "Block startup until a debugger attaches."
     tags: [debug]
-    wizard: {}
+    wizard: {control: none}
 
   - name: "FASTMCP_LOG_LEVEL"
     provenance: external
@@ -71,7 +75,7 @@ vars:
     default: null
     help: "Subject-to-scope ACL file (TOML), for bearer and any auth mode."
     tags: [authz]
-    wizard: {}
+    wizard: {group: Authorization, when: server}
 
   - name: "{PREFIX}_AUTHZ_CLAIM"
     provenance: template
@@ -80,7 +84,7 @@ vars:
     default: null
     help: "OIDC claim to read scopes from, e.g. groups. Identity mapping when IdP group names already match scope names."
     tags: [authz]
-    wizard: {}
+    wizard: {group: Authorization, when: server}
 
   - name: "{PREFIX}_AUTHZ_GRANTS"
     provenance: template
@@ -89,7 +93,7 @@ vars:
     default: null
     help: "Inline-JSON translation map for when group names differ from scope names."
     tags: [authz]
-    wizard: {}
+    wizard: {group: Authorization, when: server}
 
 # Placeholder example values, shown as the `=` value only for a var whose
 # real `default` is null — so a reader sees the expected *shape* of the
@@ -103,6 +107,58 @@ examples:
   "{PREFIX}_BEARER_TOKENS_FILE": "/etc/{PROJECT_NAME}/tokens.toml"
   "{PREFIX}_ACL_PATH": "/etc/{PROJECT_NAME}/acl.toml"
   "{PREFIX}_AUTHZ_GRANTS": '{"app-writers": ["read", "write"], "app-admins": ["*"]}'
+  # #260 follow-up: without the first four, examples/oidc.env rendered every
+  # OIDC var required to actually enable OIDC as blank — core's env() treats
+  # empty-after-strip as unset, so an operator copying that file got
+  # auth_mode=None (no authentication) with no error at all. Those four
+  # reuse the values the old hand-written oidc.env.jinja shipped. AUDIENCE is
+  # a new addition (the old file omitted it); its default is null too, so
+  # the fuller, generated oidc.env would otherwise render it blank alongside
+  # the four. REQUIRED_SCOPES needs no entry — its real default is `()`, an
+  # empty-but-non-null "no restriction" value that always wins over any
+  # example (see `_format_value`), so declaring one here would be dead YAML.
+  "{PREFIX}_OIDC_CONFIG_URL": "https://auth.example.com/.well-known/openid-configuration"
+  "{PREFIX}_OIDC_CLIENT_ID": "mcp-client"
+  "{PREFIX}_OIDC_CLIENT_SECRET": "your-client-secret"
+  "{PREFIX}_OIDC_JWT_SIGNING_KEY": "your-signing-key"
+  "{PREFIX}_OIDC_AUDIENCE": "mcp-api"
+
+# Wizard-question label overrides, keyed by full var name — same lookup
+# shape as `examples`. `_wizard_label`'s mechanical suffix-derived fallback
+# (`OIDC_CLIENT_ID` -> "Oidc Client Id") reads as env-file prose, not UI
+# copy; override it wherever the mechanical form mangles an acronym or loses
+# meaning (e.g. a bool label that needs to name the contrasting case).
+wizard_labels:
+  "{PREFIX}_BASE_URL": "Public base URL"
+  "{PREFIX}_HTTP_PATH": "HTTP endpoint path"
+  "{PREFIX}_HOST": "Bind host"
+  "{PREFIX}_BEARER_TOKEN": "Bearer token"
+  "{PREFIX}_BEARER_TOKENS_FILE": "Bearer tokens file (TOML)"
+  "{PREFIX}_BEARER_DEFAULT_SUBJECT": "Bearer default subject"
+  "{PREFIX}_OIDC_CONFIG_URL": "OIDC discovery URL"
+  "{PREFIX}_OIDC_CLIENT_ID": "OIDC client ID"
+  "{PREFIX}_OIDC_CLIENT_SECRET": "OIDC client secret"
+  "{PREFIX}_OIDC_JWT_SIGNING_KEY": "OIDC JWT signing key"
+  "{PREFIX}_OIDC_AUDIENCE": "OIDC audience"
+  "{PREFIX}_OIDC_REQUIRED_SCOPES": "OIDC required scopes (CSV)"
+  "{PREFIX}_OIDC_VERIFY_ACCESS_TOKEN": "Verify access token (not id token)"
+  "{PREFIX}_KV_STORE_URL": "KV store URL (HTTP session persistence)"
+  "{PREFIX}_EVENT_STORE_URL": "Event store URL (HTTP resumability)"
+  "{PREFIX}_APP_DOMAIN": "MCP Apps domain"
+  "{PREFIX}_ACL_PATH": "ACL path"
+  "{PREFIX}_AUTHZ_CLAIM": "Authorization claim"
+  "{PREFIX}_AUTHZ_GRANTS": "Authorization grants (JSON)"
+  "FASTMCP_LOG_LEVEL": "Log level"
+  "FASTMCP_ENABLE_RICH_LOGGING": "Rich logging"
+
+# Wizard-question help-text overrides, keyed by full var name. `wizard.js`
+# renders `question.help` verbatim as `help.textContent` — core's env-file
+# help is written as file-comment prose (markdown backticks, 300+ character
+# paragraphs) and is wrong for a UI hint. Override wherever the core help
+# text is too long or carries markup the wizard can't render.
+wizard_help:
+  "{PREFIX}_KV_STORE_URL": "Persistent-state backend URL: memory://, file:///path, redis://, dynamodb://, or mongodb://. Defaults to file:///data/state when unset."
+  "{PREFIX}_OIDC_JWT_SIGNING_KEY": "Optional signing key for issued JWTs. When unset it is derived from the client secret; set explicitly to keep tokens valid across a secret rotation. Generate: openssl rand -hex 32."
 
 # Wizard routing questions that emit a var rather than mapping 1:1 to one.
 wizard_routing:
@@ -170,7 +226,12 @@ files:
     header: "Bearer token authentication example. Generate a token: openssl rand -hex 32"
     commented: false
     sections:
-      - {title: null, tags: [bearer]}
+      # #260 follow-up: BEARER_TOKENS_FILE is excluded — its placeholder
+      # example path doesn't exist, and core prefers a tokens file over
+      # BEARER_TOKEN whenever both are set, so shipping both here produced a
+      # server that refuses to start (ConfigurationError: tokens file not
+      # found). The single-token BEARER_TOKEN below is the whole example.
+      - {title: null, tags: [bearer], exclude: ["{PREFIX}_BEARER_TOKENS_FILE"]}
       - {title: null, tags: [domain]}
 
   examples/oidc.env:

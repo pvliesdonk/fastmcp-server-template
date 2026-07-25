@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
 
+import jsonschema
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -620,12 +622,46 @@ class TestExampleEnvFiles:
             text = (fake_project / "examples" / name).read_text(encoding="utf-8")
             assert "READ_ONLY" not in text
 
+    def test_bearer_example_excludes_the_tokens_file_var(self, fake_project):
+        """#260 fix-round: shipping both BEARER_TOKEN and BEARER_TOKENS_FILE
+        makes core prefer the (non-existent) tokens file and refuse to start."""
+        g.write_artifacts(fake_project, check=False)
+        text = (fake_project / "examples" / "bearer-auth.env").read_text(
+            encoding="utf-8"
+        )
+        assert "BEARER_TOKENS_FILE" not in text
+
+    def test_oidc_example_has_no_bare_value_lines(self, fake_project):
+        """#260 fix-round: an unset OIDC var silently yields auth_mode=None.
+        Every var whose real default is null (so it would otherwise render
+        blank) must render a non-empty value in this file. `REQUIRED_SCOPES`
+        is deliberately excluded: its real default is `()`, an empty-but-
+        non-null "no restriction" value that always wins over an example —
+        rendering blank there is correct, not the #260 defect."""
+        g.write_artifacts(fake_project, check=False)
+        text = (fake_project / "examples" / "oidc.env").read_text(encoding="utf-8")
+        must_be_set = (
+            "DEMO_MCP_BASE_URL",
+            "DEMO_MCP_OIDC_CONFIG_URL",
+            "DEMO_MCP_OIDC_CLIENT_ID",
+            "DEMO_MCP_OIDC_CLIENT_SECRET",
+            "DEMO_MCP_OIDC_JWT_SIGNING_KEY",
+            "DEMO_MCP_OIDC_AUDIENCE",
+        )
+        lines_by_var = {
+            line.split("=", 1)[0]: line
+            for line in text.splitlines()
+            if not line.lstrip().startswith("#")
+        }
+        for name in must_be_set:
+            assert name in lines_by_var, f"{name} missing from oidc.env"
+            assert not lines_by_var[name].endswith("="), (
+                f"bare value line: {lines_by_var[name]!r}"
+            )
+
 
 class TestGeneratedSpecMatchesShippedSchema:
     def test_generated_spec_validates(self, fake_project, template_root):
-        import json
-
-        jsonschema = pytest.importorskip("jsonschema")
         schema_path = (
             template_root
             / "docs"
@@ -640,6 +676,142 @@ class TestGeneratedSpecMatchesShippedSchema:
             g.render_wizard_spec(pres, g.collect_vars(fake_project, answers), answers)
         )
         jsonschema.validate(instance=spec, schema=schema)
+
+
+class TestWizardSpecProminence:
+    """The gap that let Group-1 findings through: nothing asserted which
+    questions are primary (no `showIf`, no `advancedGroup`) — a var with an
+    unrecognised or missing hint silently became one."""
+
+    def test_only_deployment_is_primary(self, fake_project, template_root):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        spec = json.loads(
+            g.render_wizard_spec(pres, g.collect_vars(fake_project, answers), answers)
+        )
+        primary = {
+            q["id"]
+            for q in spec["questions"]
+            if not q.get("showIf") and not q.get("advancedGroup")
+        }
+        assert primary == {"deployment"}
+
+
+class TestWizardControlNone:
+    def test_control_none_var_gets_no_question_but_stays_in_env_example(
+        self, fake_project, template_root
+    ):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(fake_project, answers)
+        spec = json.loads(g.render_wizard_spec(pres, vars_, answers))
+        assert "DEMO_MCP_DEBUG_PORT" not in {q.get("var") for q in spec["questions"]}
+
+        g.write_artifacts(fake_project, check=False)
+        env_text = (fake_project / ".env.example").read_text(encoding="utf-8")
+        assert "DEMO_MCP_DEBUG_PORT" in env_text
+
+
+class TestWizardHintValidation:
+    def _var(self, **wizard):
+        return g.Var(
+            name="DEMO_MCP_WIDGET",
+            suffix="WIDGET",
+            provenance="domain",
+            type_name="str",
+            default=None,
+            help="A widget.",
+            tags=("domain",),
+            inferred=False,
+            wizard=wizard,
+        )
+
+    def test_unknown_hint_key_raises_naming_the_var(self):
+        with pytest.raises(SystemExit, match="DEMO_MCP_WIDGET"):
+            g._validate_wizard_hint(self._var(bogus_key="x"))
+
+    def test_unknown_when_token_raises_naming_the_var(self):
+        with pytest.raises(SystemExit, match="DEMO_MCP_WIDGET"):
+            g._validate_wizard_hint(self._var(when="servr"))
+
+    def test_unknown_control_value_raises_naming_the_var(self):
+        with pytest.raises(SystemExit, match="DEMO_MCP_WIDGET"):
+            g._validate_wizard_hint(self._var(control="delete"))
+
+
+class TestSecretKeysSubsetOfQuestions:
+    def test_secret_keys_are_a_subset_of_emitted_question_vars(
+        self, fake_project, template_root
+    ):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        spec = json.loads(
+            g.render_wizard_spec(pres, g.collect_vars(fake_project, answers), answers)
+        )
+        question_vars = {q["var"] for q in spec["questions"] if "var" in q}
+        assert set(spec["secretKeys"]) <= question_vars
+
+
+class TestQuestionIdCollision:
+    def test_colliding_question_id_raises(self, fake_project, template_root):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(fake_project, answers)
+        colliding = g.Var(
+            name="DEMO_MCP_AUTH",
+            suffix="AUTH",
+            provenance="domain",
+            type_name="str",
+            default=None,
+            help="Collides with the routing question id.",
+            tags=("domain",),
+            inferred=False,
+            wizard={},
+        )
+        with pytest.raises(SystemExit, match="auth"):
+            g.render_wizard_spec(pres, (*vars_, colliding), answers)
+
+
+class TestUnknownFileKind:
+    def test_unknown_kind_in_files_raises(self, fake_project, monkeypatch):
+        def _fake_load_presentation(project_root, env_prefix):  # noqa: ARG001
+            return {
+                "files": {
+                    "mystery.txt": {"kind": "mystery"},
+                },
+                "wizard_routing": [],
+                "wizard_guards": [],
+            }
+
+        monkeypatch.setattr(g, "load_presentation", _fake_load_presentation)
+        with pytest.raises(SystemExit, match="mystery"):
+            g.write_artifacts(fake_project, check=False)
+
+
+class TestWizardLabelOverrides:
+    def test_label_comes_from_override_map_where_declared(
+        self, fake_project, template_root
+    ):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        spec = json.loads(
+            g.render_wizard_spec(pres, g.collect_vars(fake_project, answers), answers)
+        )
+        q = next(
+            q for q in spec["questions"] if q.get("var") == "DEMO_MCP_OIDC_CLIENT_ID"
+        )
+        assert q["label"] == "OIDC client ID"
+
+    def test_label_falls_back_to_the_mechanical_derivation_otherwise(
+        self, fake_project, template_root
+    ):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        spec = json.loads(
+            g.render_wizard_spec(pres, g.collect_vars(fake_project, answers), answers)
+        )
+        q = next(q for q in spec["questions"] if q.get("var") == "DEMO_MCP_SERVER_NAME")
+        assert q["label"] == "Server Name"
 
 
 class TestMain:

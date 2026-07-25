@@ -522,7 +522,12 @@ def render_env_file(
     signpost (e.g. "domain vars are discovered from your ProjectConfig") that
     must survive even when the project using it happens to have none yet —
     otherwise a project with no domain fields gives its reader no hint that
-    domain vars exist as a concept at all.
+    domain vars exist as a concept at all. A section's own ``exclude`` list
+    (full var names) drops specific vars even though their tags match — used
+    when a var's tag-based inclusion would be actively wrong for one
+    artifact (e.g. `examples/bearer-auth.env` excludes `BEARER_TOKENS_FILE`,
+    since shipping both it and `BEARER_TOKEN` together makes core prefer the
+    non-existent tokens file and refuse to start).
     """
     human_name = str(answers.get("human_name", ""))
     project_name = str(answers.get("project_name", ""))
@@ -552,8 +557,13 @@ def render_env_file(
         if when_answer is not None and not answers.get(when_answer):
             continue
         section_tags = set(section.get("tags", ()))
+        excluded = set(section.get("exclude", ()))
         section_vars = [
-            v for v in vars_ if v.name not in placed and section_tags & set(v.tags)
+            v
+            for v in vars_
+            if v.name not in placed
+            and v.name not in excluded
+            and section_tags & set(v.tags)
         ]
         note = section.get("note")
         if not section_vars and note is None:
@@ -589,14 +599,72 @@ _WIZARD_SHOW_IF: dict[str, dict[str, list[str]]] = {
     "bearer": {"deployment": ["server"], "auth": ["bearer", "both"]},
 }
 
+# The full vocabulary a `Var.wizard` hint mapping is allowed to use.
+# `_validate_wizard_hint` rejects anything outside this — an unrecognised key
+# or value used to be silently ignored (`_wizard_show_if` returned `None` for
+# an unknown `when`, and only `control: emit` was ever checked), which let a
+# typo silently promote a var to a primary, always-visible wizard question
+# instead of failing loudly.
+_KNOWN_WIZARD_HINT_KEYS = frozenset({"group", "when", "secret", "control"})
+# `emit`: a `wizard_routing` option already emits this var (no question of
+# its own). `none`: documented in the env artifacts, no wizard control at
+# all — the parallel of `emit` for a var nothing routes for (e.g. a
+# development-only var). Neither implies `inferred`, which means something
+# different: "this value is derived from other settings", not "unrouted".
+_KNOWN_WIZARD_CONTROL_VALUES = frozenset({"emit", "none"})
+
 _TYPE_NAME_CLASS_RE = re.compile(r"<class '(?:[\w.]+\.)?(\w+)'>$")
+_QUESTION_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-def _wizard_show_if(when: object) -> dict[str, list[str]] | None:
-    """Map a scalar ``when`` hint to the spec's `showIf`, or ``None`` for no hint."""
+def _wizard_show_if(when: object, *, source: str) -> dict[str, list[str]] | None:
+    """Map a scalar ``when`` hint to the spec's `showIf`.
+
+    Returns ``None`` for no hint at all (``when`` is falsy). Raises loudly
+    for a non-empty ``when`` that doesn't match a known token — *source*
+    names the offending var or `wizard_routing` question in the message, so
+    a typo (e.g. ``when: servr``) fails the generation run instead of
+    silently rendering as if `when` had never been set (which would make the
+    var/question a primary, always-visible one — never the intended
+    behaviour for a hint author who bothered to write a `when` at all).
+    """
     if not when:
         return None
-    return _WIZARD_SHOW_IF.get(str(when))
+    token = str(when)
+    show_if = _WIZARD_SHOW_IF.get(token)
+    if show_if is None:
+        raise SystemExit(
+            f"ERROR: {source} has unknown wizard 'when' token {token!r} — "
+            f"known tokens are {sorted(_WIZARD_SHOW_IF)!r}."
+        )
+    return show_if
+
+
+def _validate_wizard_hint(var: Var) -> None:
+    """Reject any `Var.wizard` hint outside the known vocabulary, loudly.
+
+    Checked once per var, regardless of whether that var ends up producing a
+    question — a bad hint on an `inferred`/`control`-skipped var is still a
+    bug in `config-presentation.yml` worth catching, not just a bug in
+    whichever var happens to reach the wizard. Mirrors this file's existing
+    loud-failure style (`_format_default`'s dict rejection, `collect_vars`'s
+    duplicate-name guard).
+    """
+    unknown_keys = set(var.wizard) - _KNOWN_WIZARD_HINT_KEYS
+    if unknown_keys:
+        raise SystemExit(
+            f"ERROR: {var.name} has unknown wizard hint key(s) "
+            f"{sorted(unknown_keys)!r} — known keys are "
+            f"{sorted(_KNOWN_WIZARD_HINT_KEYS)!r}."
+        )
+    _wizard_show_if(var.wizard.get("when"), source=var.name)
+    control = var.wizard.get("control")
+    if control is not None and control not in _KNOWN_WIZARD_CONTROL_VALUES:
+        raise SystemExit(
+            f"ERROR: {var.name} has unknown wizard 'control' value "
+            f"{control!r} — known values are "
+            f"{sorted(_KNOWN_WIZARD_CONTROL_VALUES)!r}."
+        )
 
 
 def _wizard_question_type(type_name: str) -> str:
@@ -638,7 +706,7 @@ def _routing_question(raw: Mapping[str, Any]) -> dict[str, Any]:
     if help_text:
         question["help"] = help_text
     question["type"] = raw["type"]
-    show_if = _wizard_show_if(raw.get("when"))
+    show_if = _wizard_show_if(raw.get("when"), source=f"wizard_routing[{raw['id']!r}]")
     if show_if is not None:
         question["showIf"] = show_if
     options = raw.get("options")
@@ -657,7 +725,9 @@ def _routing_question(raw: Mapping[str, Any]) -> dict[str, Any]:
     return question
 
 
-def _var_question(var: Var) -> dict[str, Any] | None:
+def _var_question(
+    var: Var, labels: Mapping[str, str], help_overrides: Mapping[str, str]
+) -> dict[str, Any] | None:
     """Render one `Var`'s wizard hint as a question, or ``None`` to emit nothing.
 
     ``inferred=True`` means "no wizard control offered" — the var still
@@ -666,27 +736,84 @@ def _var_question(var: Var) -> dict[str, Any] | None:
     (``TRANSPORT``) means a `wizard_routing` option already emits the var as
     a side effect of the routing choice — a second, independent question for
     it would let a user pick a value that contradicts that routing choice.
+    A `control: none` hint (``DEBUG_PORT``, ``DEBUG_WAIT``) means the var is
+    documented in the env artifacts but has no wizard-appropriate control at
+    all — unlike `inferred`, nothing about its value is derived from another
+    setting; it is just out of scope for the wizard.
+
+    *labels*/*help_overrides* are the `wizard_labels`/`wizard_help` override
+    maps from `config-presentation.yml`, keyed by full var name — checked
+    before falling back to `_wizard_label`/`var.help`, since the mechanical
+    fallbacks read as env-file prose (`"Oidc Client Id"`) or carry markup
+    and paragraph-length text the wizard UI renders verbatim and unstyled.
     """
+    _validate_wizard_hint(var)
     if var.inferred:
         return None
-    if var.wizard.get("control") == "emit":
+    if var.wizard.get("control") in ("emit", "none"):
         return None
 
     question: dict[str, Any] = {
         "id": (var.suffix or var.name).lower(),
-        "label": _wizard_label(var),
+        "label": labels.get(var.name, _wizard_label(var)),
         "type": _wizard_question_type(var.type_name),
         "var": var.name,
     }
-    if var.help:
-        question["help"] = var.help
+    help_text = help_overrides.get(var.name, var.help)
+    if help_text:
+        question["help"] = help_text
     group = var.wizard.get("group")
     if group:
         question["advancedGroup"] = str(group)
-    show_if = _wizard_show_if(var.wizard.get("when"))
+    show_if = _wizard_show_if(var.wizard.get("when"), source=var.name)
     if show_if is not None:
         question["showIf"] = show_if
     return question
+
+
+def _register_question_id(question_id: str, seen: dict[str, str], source: str) -> None:
+    """Reserve *question_id* for *source*, raising loudly on a collision or a bad shape.
+
+    `wizard.js` keys all wizard state by `answers[question.id]`, so two
+    questions sharing an id — e.g. a domain field literally named ``auth`` or
+    ``deployment`` colliding with a `wizard_routing` id — would silently
+    corrupt every `showIf` evaluation rather than raise. Also rejects an id
+    that doesn't match the schema's own `^[a-z][a-z0-9_]*$` (e.g. a
+    dataclass field with a leading underscore), since that would fail
+    schema validation with a far less useful error message.
+    """
+    if not _QUESTION_ID_RE.match(question_id):
+        raise SystemExit(
+            f"ERROR: {source} produced an invalid wizard question id "
+            f"{question_id!r} — must match ^[a-z][a-z0-9_]*$."
+        )
+    prior = seen.get(question_id)
+    if prior is not None:
+        raise SystemExit(
+            f"ERROR: duplicate wizard question id {question_id!r} — produced "
+            f"by both {prior} and {source}. Every question id must be unique."
+        )
+    seen[question_id] = source
+
+
+def _wizard_guard(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
+    """Render one `wizard_guards` entry, rejecting a non-list `when` value.
+
+    ``list(scalar_string)`` silently explodes a scalar into one list entry
+    per character (`when: {deployment: server}` → `["s", "e", ...]`) instead
+    of raising — a guard's `when` must already be a list in YAML (e.g.
+    `[server]`), so this checks that rather than coercing.
+    """
+    when_raw = raw["when"]
+    when: dict[str, list[str]] = {}
+    for key, value in when_raw.items():
+        if not isinstance(value, list):
+            raise SystemExit(
+                f"ERROR: wizard_guards[{index}] has a non-list 'when[{key!r}]' "
+                f"value {value!r} — expected a list of strings, e.g. [server]."
+            )
+        when[key] = list(value)
+    return {"level": raw["level"], "message": raw["message"], "when": when}
 
 
 def render_wizard_spec(
@@ -696,9 +823,18 @@ def render_wizard_spec(
 
     ``pres`` is the loaded, already `{PREFIX}`-substituted
     `config-presentation.yml` (the same value `write_artifacts` already loads
-    for the env artifacts) — its ``wizard_routing`` and ``wizard_guards``
-    keys drive the routing questions and guard list; ``examples`` is not
-    used here (it feeds env-file value rendering only, via `_format_value`).
+    for the env artifacts) — its ``wizard_routing``, ``wizard_guards``,
+    ``wizard_labels``, and ``wizard_help`` keys drive the questions, guards,
+    and label/help overrides; ``examples`` is not used here (it feeds
+    env-file value rendering only, via `_format_value`).
+
+    ``secretKeys`` is derived from the *emitted questions*, not from
+    `vars_` independently — a secret var that later gains `inferred`,
+    `control: emit`, or `control: none` (and so stops producing a question)
+    must drop out of `secretKeys` too, rather than leaving the rendered
+    project's own schema-conformance check (`secretKeys` must be a subset of
+    every question's ``var``) to fail downstream instead of this generator
+    catching it.
 
     Key order within every emitted object is fixed by this function's own
     dict-literal construction, never by iterating a `set`/`frozenset` or by
@@ -710,24 +846,33 @@ def render_wizard_spec(
     project_name = str(answers.get("project_name", ""))
     docker_registry = str(answers.get("docker_registry", ""))
     env_prefix = str(answers.get("env_prefix", ""))
+    labels: Mapping[str, str] = pres.get("wizard_labels") or {}
+    help_overrides: Mapping[str, str] = pres.get("wizard_help") or {}
 
-    questions: list[dict[str, Any]] = [
-        _routing_question(raw) for raw in pres.get("wizard_routing", ())
-    ]
+    seen_ids: dict[str, str] = {}
+    questions: list[dict[str, Any]] = []
+    for raw in pres.get("wizard_routing", ()):
+        question = _routing_question(raw)
+        _register_question_id(
+            question["id"], seen_ids, f"wizard_routing[{raw['id']!r}]"
+        )
+        questions.append(question)
     for var in vars_:
-        question = _var_question(var)
-        if question is not None:
-            questions.append(question)
+        var_question = _var_question(var, labels, help_overrides)
+        if var_question is not None:
+            _register_question_id(var_question["id"], seen_ids, var.name)
+            questions.append(var_question)
 
-    secret_keys = [var.name for var in vars_ if var.wizard.get("secret")]
+    question_vars = {q["var"] for q in questions if "var" in q}
+    secret_keys = [
+        var.name
+        for var in vars_
+        if var.wizard.get("secret") and var.name in question_vars
+    ]
 
     guards = [
-        {
-            "level": raw["level"],
-            "message": raw["message"],
-            "when": {k: list(v) for k, v in raw["when"].items()},
-        }
-        for raw in pres.get("wizard_guards", ())
+        _wizard_guard(raw, index)
+        for index, raw in enumerate(pres.get("wizard_guards", ()))
     ]
 
     spec = {
@@ -741,26 +886,30 @@ def render_wizard_spec(
         "questions": questions,
         "guards": guards,
     }
-    text = json.dumps(spec, indent=2)
+    text = json.dumps(spec, indent=2, ensure_ascii=False)
     return f"{text}\n"
 
 
-# Whole-file env artifacts (all rendered by `render_env_file`) plus the
-# config-wizard spec (rendered by `render_wizard_spec`, `kind: wizard` in
-# `config-presentation.yml` — its `files` entry carries no other content, so
-# it is not looked up via `presentation["files"][...]` the way the env
-# artifacts are).
-_ENV_ARTIFACT_PATHS = (
-    ".env.example",
-    "packaging/env.example",
-    "examples/bearer-auth.env",
-    "examples/oidc.env",
-)
-_WIZARD_ARTIFACT_PATH = "docs/javascripts/config-wizard/wizard-spec.json"
+# `kind` -> renderer, dispatched per `config-presentation.yml` `files` entry.
+# `env` renderers take that entry's own file spec; `wizard` takes the whole
+# presentation (it has no per-file content of its own — see `files:` in
+# `config-presentation.yml`, where `docs/javascripts/config-wizard/wizard-
+# spec.json` declares only `kind: wizard` and nothing else).
+_ENV_KIND = "env"
+_WIZARD_KIND = "wizard"
+_KNOWN_FILE_KINDS = frozenset({_ENV_KIND, _WIZARD_KIND})
 
 
 def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
     """Render and write (or, with ``check=True``, just compare) the artifacts.
+
+    Every artifact this generator produces is driven off `config-
+    presentation.yml`'s ``files`` mapping — adding or removing a `files:`
+    entry there changes what gets generated, with no second list to keep in
+    sync (YAML mapping order is insertion order, so iterating ``files``
+    directly is as deterministic as the fixed tuple it replaces). An
+    unrecognised ``kind`` fails loudly instead of either silently producing
+    nothing or raising a bare `KeyError`.
 
     Returns the relative paths that are missing or whose on-disk content
     differs from the freshly rendered text — with ``check=False`` those are
@@ -773,13 +922,20 @@ def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
     presentation = load_presentation(_presentation_root(project_root), env_prefix)
     vars_ = collect_vars(project_root, answers)
 
-    artifacts: list[tuple[str, str]] = [
-        (rel_path, render_env_file(presentation["files"][rel_path], vars_, answers))
-        for rel_path in _ENV_ARTIFACT_PATHS
-    ]
-    artifacts.append(
-        (_WIZARD_ARTIFACT_PATH, render_wizard_spec(presentation, vars_, answers))
-    )
+    artifacts: list[tuple[str, str]] = []
+    for rel_path, file_spec in presentation.get("files", {}).items():
+        kind = file_spec.get("kind")
+        if kind == _ENV_KIND:
+            text = render_env_file(file_spec, vars_, answers)
+        elif kind == _WIZARD_KIND:
+            text = render_wizard_spec(presentation, vars_, answers)
+        else:
+            raise SystemExit(
+                f"ERROR: config-presentation.yml files[{rel_path!r}] has "
+                f"unknown kind {kind!r} — expected one of "
+                f"{sorted(_KNOWN_FILE_KINDS)!r}."
+            )
+        artifacts.append((rel_path, text))
 
     changed: list[str] = []
     for rel_path, text in artifacts:
