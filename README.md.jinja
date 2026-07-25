@@ -208,7 +208,7 @@ Domain environment variables use the `{{ env_prefix }}_` prefix:
 | `{{ env_prefix }}_EXAMPLE_VAR` | (none) | **Yes** | Replace this row with your first required setting. |
 | `{{ env_prefix }}_ANOTHER_VAR` | `default` | No | Replace with an optional setting. |
 
-Domain-config fields are composed inside `src/{{ python_module }}/config.py` between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels; env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent.
+Domain-config fields are composed inside `src/{{ python_module }}/config.py` between the `CONFIG-FIELDS-START` / `CONFIG-FIELDS-END` sentinels; env reads go through `fastmcp_pvl_core.env(_ENV_PREFIX, "SUFFIX", default)` so naming stays consistent, and field invariants go in `__post_init__` between the `CONFIG-VALIDATE-START` / `CONFIG-VALIDATE-END` sentinels.
 <!-- DOMAIN-END -->
 
 ## Key design decisions
