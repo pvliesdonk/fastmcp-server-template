@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,7 @@ class Var:
     tags: tuple[str, ...]
     inferred: bool
     wizard: Mapping[str, object]
+    example: str | None = None  # shown as the value when `default` is null
 
 
 # Rank order for the provenance merge; vars are ordered by this rank first,
@@ -69,6 +70,34 @@ class Var:
 _PROVENANCE_ORDER = ("core", "template", "external", "domain")
 
 _CORE_FLOOR_RE = re.compile(r"fastmcp-pvl-core\s*>=\s*([0-9]+\.[0-9]+\.[0-9]+)")
+
+
+def _clean_help(help_text: str) -> str:
+    """Strip RST inline-literal markup (````word````) down to a single backtick.
+
+    Core's help text is RST-flavoured prose; a double-backtick reads as noise
+    in a plain-text env file comment. Applied once, here, at the point every
+    Var's ``help`` is set — so every consumer (both env files here and
+    whatever Task 3's wizard spec does with ``var.help``) inherits already-
+    clean text instead of each needing to remember to clean it again.
+    """
+    return help_text.replace("``", "`")
+
+
+def _require_env_prefix(answers: Mapping[str, object]) -> str:
+    """Return ``answers["env_prefix"]``, or raise the same `SystemExit` every caller expects.
+
+    Both `collect_vars` and `write_artifacts` need this value before they can
+    do anything else; sharing one guard means a malformed answers file always
+    fails the same deliberate way, never with a bare `KeyError` from whichever
+    caller forgot to check first.
+    """
+    if "env_prefix" not in answers:
+        raise SystemExit(
+            "ERROR: 'env_prefix' missing from .copier-answers.yml — a project "
+            "rendered by this template always answers that question."
+        )
+    return str(answers["env_prefix"])
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +180,13 @@ def _import_project_config(project_root: Path, python_module: str) -> type | Non
 
     A freshly rendered project has no dependencies installed yet, and this
     generator's own unit tests use fixture projects with no config module at
-    all — both are legitimate "nothing to discover" cases, not errors.
+    all — both are legitimate "nothing to discover" cases, not errors. Any
+    exception raised while resolving it — the module doesn't exist, it lacks
+    a ``ProjectConfig`` attribute, or its own top level raises (a missing env
+    var, a broken third-party import, a mid-edit ``SyntaxError``) — is
+    treated the same way, since domain discovery is best-effort enrichment
+    that must never turn an unrelated project's problem into a hard failure
+    of this generator.
 
     Only ``sys.path`` is restored before returning. ``sys.modules`` is
     deliberately left alone here: `typing.get_type_hints` (used inside
@@ -171,7 +206,7 @@ def _import_project_config(project_root: Path, python_module: str) -> type | Non
     try:
         module = importlib.import_module(f"{python_module}.config")
         return module.ProjectConfig
-    except (ImportError, AttributeError):
+    except Exception:
         return None
     finally:
         if added_to_path:
@@ -187,42 +222,67 @@ def _discover_domain_vars(
     ``fastmcp_pvl_core.domain_env_suffixes`` and pulls each field's
     ``help``/``tags`` from its dataclass ``metadata``. This is best-effort
     enrichment, not a required provenance source: a fresh render has no
-    domain fields (and often no venv yet to even import its own package),
-    so any failure to import or introspect is treated as "nothing to
-    discover" rather than an error.
+    domain fields (and often no venv yet to even import its own package), so
+    a failure to *import* the project's config module is silently treated as
+    "nothing to discover". A failure *during the scan itself* (the module
+    imported fine but `domain_env_suffixes` couldn't resolve it — e.g. a type
+    hint referencing something not importable at module scope) is not
+    swallowed silently: `domain_env_suffixes`'s own contract is that such a
+    failure must propagate rather than yield a silently-incomplete set, so
+    this prints a warning naming the exception and returns no domain vars,
+    rather than letting `--check` (Task 4) report "up to date" while every
+    domain var is actually missing.
 
     Every discovered var is tagged ``domain`` (in addition to whatever tags
     its field metadata declares) so it always lands in a file spec's
     ``tags: [domain]`` section regardless of the field author's own tag
-    choices.
+    choices. Declaration order is contractual for every other provenance;
+    suffixes with a matching dataclass field are ordered the same way the
+    field is declared, and any suffix `domain_env_suffixes` found with no
+    matching field (e.g. read directly rather than through a field) is
+    appended afterwards, sorted, so the whole result stays deterministic.
 
-    ``sys.modules`` entries for the imported module are popped before
-    returning, once every use of the class (the `domain_env_suffixes` scan
-    and the `dataclasses.fields` walk below) is finished — so repeated calls
-    against different fixture projects sharing a module name (as the test
-    suite does) never see a stale cached module from an earlier call.
+    Every ``sys.modules`` entry gained while importing and introspecting the
+    project's config module — including any side-effect submodules it pulls
+    in along the way — is removed before returning, once every use of the
+    class (the `domain_env_suffixes` scan and the `dataclasses.fields` walk)
+    is finished. That cleanup runs on every exit path, including the early
+    returns above, so a later call against a different project that happens
+    to share the same module name never resolves against a stale cached
+    package from an earlier call in the same process.
     """
     python_module = answers.get("python_module")
     if not python_module:
         return ()
     python_module = str(python_module)
-    project_config_cls = _import_project_config(project_root, python_module)
-    if project_config_cls is None:
-        return ()
 
+    modules_before = frozenset(sys.modules)
     try:
+        project_config_cls = _import_project_config(project_root, python_module)
+        if project_config_cls is None:
+            return ()
+
         from fastmcp_pvl_core import domain_env_suffixes
 
         try:
             suffixes = domain_env_suffixes(project_config_cls)
-        except Exception:
+        except Exception as exc:
+            print(
+                f"WARNING: domain env-var discovery failed for "
+                f"{python_module}.config: {exc.__class__.__name__}: {exc}",
+                file=sys.stderr,
+            )
             return ()
 
-        fields_by_suffix = {
-            f.name.upper(): f for f in dataclasses.fields(project_config_cls)
-        }
+        fields = dataclasses.fields(project_config_cls)
+        fields_by_suffix = {f.name.upper(): f for f in fields}
+        ordered_suffixes = [
+            f.name.upper() for f in fields if f.name.upper() in suffixes
+        ]
+        ordered_suffixes.extend(sorted(suffixes.difference(ordered_suffixes)))
+
         discovered: list[Var] = []
-        for suffix in sorted(suffixes):
+        for suffix in ordered_suffixes:
             field_info = fields_by_suffix.get(suffix)
             metadata = field_info.metadata if field_info is not None else {}
             if field_info is None:
@@ -243,7 +303,7 @@ def _discover_domain_vars(
                         str(field_info.type) if field_info is not None else "str"
                     ),
                     default=default,
-                    help=str(metadata.get("help", "")),
+                    help=_clean_help(str(metadata.get("help", ""))),
                     tags=tags,
                     inferred=False,
                     wizard=dict(metadata.get("wizard", {})),
@@ -251,8 +311,8 @@ def _discover_domain_vars(
             )
         return tuple(discovered)
     finally:
-        sys.modules.pop(f"{python_module}.config", None)
-        sys.modules.pop(python_module, None)
+        for name in set(sys.modules) - modules_before:
+            del sys.modules[name]
 
 
 # ---------------------------------------------------------------------------
@@ -290,12 +350,7 @@ def collect_vars(
     from fastmcp_pvl_core import server_config_surface
 
     project_root = Path(project_root)
-    if "env_prefix" not in answers:
-        raise SystemExit(
-            "ERROR: 'env_prefix' missing from .copier-answers.yml — a project "
-            "rendered by this template always answers that question."
-        )
-    env_prefix = str(answers["env_prefix"])
+    env_prefix = _require_env_prefix(answers)
     presentation_root = _presentation_root(project_root)
     presentation = load_presentation(presentation_root, env_prefix)
 
@@ -306,7 +361,7 @@ def collect_vars(
             provenance="core",
             type_name=field.type_name,
             default=field.default,
-            help=field.help,
+            help=_clean_help(field.help),
             tags=tuple(field.tags),
             inferred=field.inferred,
             wizard=dict(field.wizard),
@@ -328,7 +383,7 @@ def collect_vars(
                 provenance=raw["provenance"],
                 type_name=raw["type_name"],
                 default=raw.get("default"),
-                help=raw["help"],
+                help=_clean_help(raw["help"]),
                 tags=tuple(raw.get("tags", ())),
                 inferred=bool(raw.get("inferred", False)),
                 wizard=dict(raw.get("wizard", {})),
@@ -349,7 +404,7 @@ def collect_vars(
                 provenance=raw.get("provenance", "domain"),
                 type_name=raw["type_name"],
                 default=raw.get("default"),
-                help=raw["help"],
+                help=_clean_help(raw["help"]),
                 tags=tuple(raw.get("tags", ())),
                 inferred=bool(raw.get("inferred", False)),
                 wizard=dict(raw.get("wizard", {})),
@@ -357,6 +412,18 @@ def collect_vars(
         )
 
     collected.extend(_discover_domain_vars(project_root, env_prefix, answers))
+
+    # Placeholder examples for vars whose real `default` is null — keyed by
+    # full var name so a core var (whose help/tags/default this template does
+    # not own) can still get one, without redeclaring the whole var.
+    examples_map: dict[str, str] = presentation.get("examples", {}) or {}
+    if examples_map:
+        collected = [
+            dataclasses.replace(v, example=examples_map[v.name])
+            if v.name in examples_map
+            else v
+            for v in collected
+        ]
 
     seen_names: dict[str, str] = {}
     for var in collected:
@@ -385,14 +452,52 @@ def _format_default(default: object) -> str:
     file leaves "no default" blank for the reader to fill in, rather than
     spelling out ``None`` or ``()``. Booleans render lower-case, matching
     shell/env convention.
+
+    ``set``/``frozenset`` are sorted before joining: unlike ``list``/``tuple``
+    (whose declared order is meaningful and preserved as-is), a set's
+    iteration order is not stable across processes, and template-ci renders
+    the template twice and diffs the results — an unsorted join would make
+    that diff flaky. A ``dict`` default has no defined env-file rendering, so
+    it is rejected loudly rather than silently rendered as whatever
+    ``str()``/``repr()`` would print (also order-unstable, pre-3.7 dict
+    ordering guarantees aside — the point is there is no *sensible* rendering,
+    not just an unstable one).
     """
     if default is None:
         return ""
     if isinstance(default, bool):
         return "true" if default else "false"
+    if isinstance(default, dict):
+        raise SystemExit(
+            f"ERROR: a var default of type dict ({default!r}) has no defined "
+            "env-file rendering — give it a scalar or sequence default, or "
+            "an `example` string, instead."
+        )
+    if isinstance(default, (set, frozenset)):
+        return ",".join(sorted(str(item) for item in default))
     if isinstance(default, (list, tuple)):
         return ",".join(str(item) for item in default)
     return str(default)
+
+
+def _format_value(var: Var, sub: Callable[[str], str]) -> str:
+    """The text after ``=`` for one var: its real default, else its example.
+
+    A ``None`` default (no real default at all) falls back to `var.example`
+    — a presentation-declared placeholder shown so a reader knows the
+    expected *shape* of the value (a JSON blob, a file path, a URL), not just
+    that the field exists. A real default, even a falsy one (``False``,
+    ``0``, an empty sequence), always wins over an example: only "no default
+    at all" is ambiguous enough to need one. *sub* applies the same
+    ``{HUMAN_NAME}``/``{PROJECT_NAME}`` substitution the header and section
+    notes get, since an example like ``/etc/{PROJECT_NAME}/tokens.toml`` is
+    only useful once ``{PROJECT_NAME}`` is a real project name.
+    """
+    if var.default is not None:
+        return _format_default(var.default)
+    if var.example:
+        return sub(var.example)
+    return ""
 
 
 def render_env_file(
@@ -408,10 +513,15 @@ def render_env_file(
     Each section claims the first-declared, not-yet-claimed vars whose tags
     intersect its own — so a var whose tags span multiple sections (e.g. a
     core field tagged both ``server`` and ``apps``) appears exactly once,
-    under whichever section is declared first. A section with no matching
-    vars (its tags matched nothing, or its ``when_answer`` gate is false)
-    emits no header at all — a dangling header with nothing under it would
-    fail render-hygiene review and confuse a reader.
+    under whichever section is declared first. A section gated off by a
+    false ``when_answer``, or with no matching vars *and* no ``note``, emits
+    nothing at all — a dangling header with nothing under it would fail
+    render-hygiene review and confuse a reader. A section with a ``note`` but
+    no matching vars still emits its header and note: that is a deliberate
+    signpost (e.g. "domain vars are discovered from your ProjectConfig") that
+    must survive even when the project using it happens to have none yet —
+    otherwise a project with no domain fields gives its reader no hint that
+    domain vars exist as a concept at all.
     """
     human_name = str(answers.get("human_name", ""))
     project_name = str(answers.get("project_name", ""))
@@ -444,7 +554,8 @@ def render_env_file(
         section_vars = [
             v for v in vars_ if v.name not in placed and section_tags & set(v.tags)
         ]
-        if not section_vars:
+        note = section.get("note")
+        if not section_vars and note is None:
             continue
         placed.update(v.name for v in section_vars)
 
@@ -452,14 +563,14 @@ def render_env_file(
         title = section.get("title")
         if title is not None:
             lines.append(f"# --- {title} ---")
-        note = section.get("note")
         if note is not None:
-            lines.append(f"# {_sub(str(note))}".rstrip())
+            for note_line in _sub(str(note)).rstrip("\n").split("\n"):
+                lines.append(f"# {note_line}".rstrip())
 
         for var in section_vars:
             for help_line in var.help.splitlines():
                 lines.append(f"# {help_line}".rstrip())
-            lines.append(f"{value_prefix}{var.name}={_format_default(var.default)}")
+            lines.append(f"{value_prefix}{var.name}={_format_value(var, _sub)}")
 
     text = "\n".join(lines).rstrip("\n")
     return f"{text}\n" if text else ""
@@ -482,7 +593,7 @@ def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
     """
     project_root = Path(project_root)
     answers = load_answers(project_root)
-    env_prefix = str(answers["env_prefix"])
+    env_prefix = _require_env_prefix(answers)
     presentation = load_presentation(_presentation_root(project_root), env_prefix)
     vars_ = collect_vars(project_root, answers)
 

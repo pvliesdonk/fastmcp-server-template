@@ -91,6 +91,19 @@ vars:
     tags: [authz]
     wizard: {}
 
+# Placeholder example values, shown as the `=` value only for a var whose
+# real `default` is null — so a reader sees the expected *shape* of the
+# value (a URL, a path, a JSON blob) instead of a bare, uninformative `=`.
+# Keyed by full var name (not just template/external ones — a core var's
+# default/help/tags are core's to own, but this template can still give it
+# an example) since core vars aren't declared in `vars:` above at all.
+examples:
+  "{PREFIX}_BASE_URL": "https://mcp.example.com"
+  "{PREFIX}_BEARER_TOKEN": "<secret>"
+  "{PREFIX}_BEARER_TOKENS_FILE": "/etc/{PROJECT_NAME}/tokens.toml"
+  "{PREFIX}_ACL_PATH": "/etc/{PROJECT_NAME}/acl.toml"
+  "{PREFIX}_AUTHZ_GRANTS": '{"app-writers": ["read", "write"], "app-admins": ["*"]}'
+
 # Wizard routing questions that emit a var rather than mapping 1:1 to one.
 wizard_routing:
   - id: deployment
@@ -143,7 +156,14 @@ files:
     commented: false
     sections:
       - {title: Logging, tags: [observability]}
-      - {title: Domain, tags: [domain], note: "All domain vars use the {PREFIX}_ prefix."}
+      - title: Domain
+        tags: [domain]
+        note: |
+          All domain env vars use the {PREFIX}_ prefix.
+          See the README and `{PROJECT_NAME} serve --help` for the full list.
+
+          Example:
+          {PREFIX}_EXAMPLE_VAR=value
 
   examples/bearer-auth.env:
     kind: env

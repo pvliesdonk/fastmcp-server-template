@@ -38,6 +38,29 @@ def template_root():
     return Path(g.__file__).resolve().parent.parent
 
 
+@pytest.fixture
+def domain_project(fake_project):
+    """A project whose ProjectConfig declares one tagged domain field."""
+    cfg = fake_project / "src" / "demo_mcp" / "config.py"
+    cfg.write_text(
+        "from __future__ import annotations\n\n"
+        "from dataclasses import dataclass, field\n\n"
+        "from fastmcp_pvl_core import ServerConfig, env\n\n\n"
+        "@dataclass(frozen=True)\n"
+        "class ProjectConfig:\n"
+        "    server: ServerConfig = field(default_factory=ServerConfig)\n"
+        "    vault_path: str = field(\n"
+        '        default="/data/vault",\n'
+        '        metadata={"help": "Vault root.", "tags": ("persistence",)},\n'
+        "    )\n\n"
+        "    @classmethod\n"
+        "    def from_env(cls) -> ProjectConfig:\n"
+        '        return cls(vault_path=env("DEMO_MCP", "VAULT_PATH") or "/data/vault")\n',
+        encoding="utf-8",
+    )
+    return fake_project
+
+
 class TestLoadAnswers:
     def test_reads_the_copier_answers_file(self, fake_project):
         answers = g.load_answers(fake_project)
@@ -363,6 +386,73 @@ class TestRenderEnvFile:
         assert self._env_text(fake_project, template_root) == self._env_text(
             fake_project, template_root
         )
+
+
+class TestDiscoverDomainVars:
+    def test_domain_var_is_discovered_with_the_right_name(self, domain_project):
+        answers = g.load_answers(domain_project)
+        vars_ = g.collect_vars(domain_project, answers)
+        assert "DEMO_MCP_VAULT_PATH" in {v.name for v in vars_}
+
+    def test_help_and_tags_come_from_field_metadata(self, domain_project):
+        answers = g.load_answers(domain_project)
+        vars_ = g.collect_vars(domain_project, answers)
+        vault = next(v for v in vars_ if v.suffix == "VAULT_PATH")
+        assert vault.help == "Vault root."
+        assert vault.tags == ("persistence", "domain")
+        assert vault.provenance == "domain"
+
+    def test_default_is_extracted_from_the_field(self, domain_project):
+        answers = g.load_answers(domain_project)
+        vars_ = g.collect_vars(domain_project, answers)
+        vault = next(v for v in vars_ if v.suffix == "VAULT_PATH")
+        assert vault.default == "/data/vault"
+
+    def test_domain_var_renders_into_env_examples_domain_section(
+        self, domain_project, template_root
+    ):
+        answers = g.load_answers(domain_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project, answers)
+        text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        assert "--- Domain ---" in text
+        assert "DEMO_MCP_VAULT_PATH=/data/vault" in text
+
+    def test_no_stale_sys_modules_leak_across_unrelated_projects(
+        self, domain_project, tmp_path_factory
+    ):
+        """Pins the Critical: importing one project's real ``ProjectConfig``
+        must never leak into `sys.modules` and poison a later,
+        unrelated call for a *different* project that happens to share the
+        same ``python_module`` name — including via a failed import attempt
+        that still registers the parent package as a side effect."""
+        other_project = tmp_path_factory.mktemp("other_project")
+        (other_project / ".copier-answers.yml").write_text(
+            "_commit: v2.11.2\n"
+            "_src_path: gh:pvliesdonk/fastmcp-server-template\n"
+            "project_name: other-mcp\n"
+            "python_module: demo_mcp\n"
+            "env_prefix: DEMO_MCP\n"
+            "human_name: Other MCP\n"
+            "docker_registry: ghcr.io/demo\n"
+            "enable_authorization: false\n",
+            encoding="utf-8",
+        )
+        other_src = other_project / "src" / "demo_mcp"
+        other_src.mkdir(parents=True)
+        (other_src / "__init__.py").write_text("", encoding="utf-8")
+
+        before = frozenset(sys.modules)
+
+        domain_answers = g.load_answers(domain_project)
+        domain_vars = g.collect_vars(domain_project, domain_answers)
+        assert any(v.suffix == "VAULT_PATH" for v in domain_vars)
+
+        other_answers = g.load_answers(other_project)
+        other_vars = g.collect_vars(other_project, other_answers)
+        assert not any(v.provenance == "domain" for v in other_vars)
+
+        assert frozenset(sys.modules) == before
 
 
 class TestWriteArtifacts:
