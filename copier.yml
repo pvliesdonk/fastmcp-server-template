@@ -128,6 +128,7 @@ _exclude:
   - "docs/superpowers"
   - "uv.lock"                                 # generated projects create their own
   - "scripts/tests"                            # aggregator unit tests — template-only
+  - "scripts/check_render_hygiene.py"          # template-ci render guard — template-only
   # Scaffold files that projects routinely have their own version of
   # (different docs layout, different test organisation).  Excluding
   # them here means they never render on copy OR update — fresh

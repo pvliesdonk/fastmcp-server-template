@@ -83,6 +83,28 @@ jobs:
           ! grep -qF 'Structural quality (diff) passes' CLAUDE.md \
             || { echo "::error::structural acceptance-gate item rendered with gate off"; exit 1; }
 
+      - name: render hygiene (pristine render already satisfies the shipped hooks)
+        # The template ships `trailing-whitespace` and `end-of-file-fixer`
+        # (.pre-commit-config.yaml.jinja). Both REWRITE files, so anything they
+        # would touch in a pristine render is a latent `copier update` conflict:
+        # the downstream commits the fixed-up form, so copier's 3-way merge sees
+        # `ours` != `base` in that region, and the first template version that
+        # also changes that region conflicts for EVERY downstream.
+        #
+        # Issue #251 is the real instance — ci.yml.jinja used to end with the
+        # endif closing the structural-gate block, and Jinja (no trim_blocks)
+        # keeps the newline after a block tag, so the render ended with a blank
+        # line. end-of-file-fixer stripped it downstream; the v2.11.0
+        # `ci-success` job then appended to that exact tail and every
+        # downstream's ci.yml conflicted. Latent for months because nothing had
+        # touched ci.yml's tail before.
+        #
+        # Runs BEFORE `uv sync` so the render is still pristine, and covers the
+        # gate-off render too — a Jinja tag at EOF only appears in one branch of
+        # a conditional, so checking a single variant would miss it.
+        run: |
+          python3 scripts/check_render_hygiene.py /tmp/smoke /tmp/smoke-gate-off
+
       - name: structural gate clean-tree assertion present (default) / dropped (opt-out)
         # structural_gate_assert_clean_tree gates ONLY the whole-tree clean
         # assertion (test_shipped_code_passes_…): default true keeps it; false
@@ -544,9 +566,9 @@ jobs:
             --select E,W,F,I,B,C4,UP,ARG,SIM,TC,PTH,RUF \
             --ignore E501 \
             --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/tests/
+            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/tests/
 
       - name: Format check aggregator (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/tests/
+            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/tests/

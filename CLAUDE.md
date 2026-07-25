@@ -44,8 +44,28 @@ create new projects.
    latest git tag (the default).  Without it, your edits render only
    after a release.  If you need to iterate, amend the commit or make
    follow-up commits — rendering from the working tree is not supported.
-4. Commit any fixes, push, open a PR.
-5. `template-ci.yml` runs the same gate on Python 3.11–3.14.
+4. Check the render is hygiene-clean (run it before `uv sync` pollutes
+   the tree, or on a second pristine render):
+   ```bash
+   python3 scripts/check_render_hygiene.py /tmp/smoke
+   ```
+5. Commit any fixes, push, open a PR.
+6. `template-ci.yml` runs the same gate on Python 3.11–3.14.
+
+### Render hygiene
+
+The template ships the `trailing-whitespace` and `end-of-file-fixer`
+pre-commit hooks, and both *rewrite* files.  Anything they would touch in
+a pristine render becomes a latent `copier update` conflict: the
+downstream commits the fixed-up form, so copier's 3-way merge sees `ours`
+differ from `base` in that region, and the first template version that
+also changes that region conflicts for **every** downstream.
+
+The classic trap (issue #251) is a Jinja block tag at EOF — Jinja has no
+`trim_blocks` here, so the newline after `{% endif %}` survives and the
+render ends with a blank line.  Use `{%- endif %}` or put real content
+after it.  `scripts/check_render_hygiene.py` is the guard; `template-ci`
+runs it over both the default and gate-off renders.
 
 ## Release
 
