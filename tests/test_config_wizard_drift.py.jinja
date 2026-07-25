@@ -96,16 +96,19 @@ def _read_in_src(suffix: str, src_text: str) -> bool:
 
     Matches the two scaffold read idioms: ``env(_ENV_PREFIX, "SUFFIX")`` (the
     quoted literal ``"SUFFIX"``) and ``os.environ.get(f"{_ENV_PREFIX}_SUFFIX")``
-    (the ``_SUFFIX`` fragment). The fragment arm anchors a trailing
-    word-boundary so a short suffix does not match inside a longer fragment
-    (``_HOST`` must not clear via ``_HOSTNAME``). Requiring one of these — rather
-    than a bare ``suffix in src_text`` substring — avoids clearing a real orphan
-    just because its suffix happens to appear in an unrelated comment or
-    identifier.
+    (the ``_SUFFIX`` fragment). The fragment arm anchors a word boundary on
+    BOTH sides so a short suffix does not match inside a longer fragment:
+    trailing so ``_HOST`` does not clear via ``_HOSTNAME``, leading so it does
+    not clear via ``_ANYHOST`` either (the leading guard excludes ``_`` as well,
+    so ``_HOST`` does not match inside ``_ANY_HOST`` — a different var, not a
+    longer spelling of this one). Requiring one of these — rather than a bare
+    ``suffix in src_text`` substring — avoids clearing a real orphan just
+    because its suffix happens to appear in an unrelated comment or identifier.
     """
     return (
         f'"{suffix}"' in src_text
-        or re.search(rf"_{re.escape(suffix)}(?![A-Z0-9_])", src_text) is not None
+        or re.search(rf"(?<![A-Z0-9_])_{re.escape(suffix)}(?![A-Z0-9_])", src_text)
+        is not None
     )
 
 
@@ -183,6 +186,26 @@ def test_read_in_src_matches_non_prefixed_external_var() -> None:
     src = 'host = os.environ.get("OLLAMA_HOST") or "http://localhost:11434"'
     assert _read_in_src("OLLAMA_HOST", src) is True
     assert _read_in_src("UNRELATED_EXTERNAL_VAR", src) is False
+
+
+def test_read_in_src_fragment_arm_is_bounded_on_both_sides() -> None:
+    """The ``_SUFFIX`` fragment arm must not clear a shorter, distinct suffix.
+
+    ``{PREFIX}_VAULT_PATH`` is a different setting from ``{PREFIX}_PATH``, so a
+    read site for the former must NOT clear the latter — otherwise a genuinely
+    orphaned ``PATH`` var silently passes the orphan guard. The trailing
+    boundary alone (``_PATH(?![A-Z0-9_])``) matched inside ``_VAULT_PATH``; the
+    leading one closes it. Both ``_`` and alphanumerics are excluded before the
+    fragment, so neither ``_ANY_HOST`` nor ``_ANYHOST`` clears ``HOST``.
+    """
+    read_site = 'os.environ.get(f"{_ENV_PREFIX}_VAULT_PATH")'
+    assert _read_in_src("VAULT_PATH", read_site) is True
+    assert _read_in_src("PATH", read_site) is False
+    assert _read_in_src("HOST", '"{_ENV_PREFIX}_ANY_HOST"') is False
+    assert _read_in_src("HOST", '"{_ENV_PREFIX}_ANYHOST"') is False
+    # The idiom the arm exists to match still clears: the char before the
+    # fragment is `}`, which is outside the leading exclusion class.
+    assert _read_in_src("HOST", 'os.environ.get(f"{_ENV_PREFIX}_HOST")') is True
 
 
 def _missing_suffixes(surface: set[str], emitted_suffixes: set[str]) -> list[str]:
