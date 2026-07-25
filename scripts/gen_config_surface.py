@@ -9,8 +9,7 @@ declaration-ordered variable list:
   the help text and tags for every ``ServerConfig`` field.
 - ``template`` / ``external`` — from ``config-presentation.yml``, the
   template-owned vars core does not know about.
-- ``domain`` — reserved for a project's own ``ProjectConfig`` fields (not
-  wired up yet).
+- ``domain`` — reserved for a project's own ``ProjectConfig`` fields.
 
 This script is template-owned and ships byte-identical to every project, so
 it discovers the project root and its dependency floor at runtime rather
@@ -75,7 +74,7 @@ _CORE_FLOOR_RE = re.compile(r"fastmcp-pvl-core\s*>=\s*([0-9]+\.[0-9]+\.[0-9]+)")
 # ---------------------------------------------------------------------------
 
 
-def load_answers(project_root: Path) -> dict[str, object]:
+def load_answers(project_root: Path | str) -> dict[str, object]:
     """Read `.copier-answers.yml` from a rendered project."""
     import yaml
 
@@ -109,7 +108,7 @@ def _substitute_prefix(obj: Any, env_prefix: str) -> Any:
     return obj
 
 
-def load_presentation(project_root: Path, env_prefix: str) -> dict[str, Any]:
+def load_presentation(project_root: Path | str, env_prefix: str) -> dict[str, Any]:
     """Load `config-presentation.yml` with `{PREFIX}` substituted."""
     import yaml
 
@@ -126,7 +125,9 @@ def load_presentation(project_root: Path, env_prefix: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def collect_vars(project_root: Path, answers: Mapping[str, object]) -> tuple[Var, ...]:
+def collect_vars(
+    project_root: Path | str, answers: Mapping[str, object]
+) -> tuple[Var, ...]:
     """Merge core + presentation-declared vars into one provenance-ordered tuple.
 
     Ordering is contractual: template-ci renders the template twice and diffs
@@ -138,6 +139,11 @@ def collect_vars(project_root: Path, answers: Mapping[str, object]) -> tuple[Var
     from fastmcp_pvl_core import server_config_surface
 
     project_root = Path(project_root)
+    if "env_prefix" not in answers:
+        raise SystemExit(
+            "ERROR: 'env_prefix' missing from .copier-answers.yml — a project "
+            "rendered by this template always answers that question."
+        )
     env_prefix = str(answers["env_prefix"])
     # config-presentation.yml ships byte-identical, so it lives at *project_root*
     # in a real rendered project. Fall back to the copy co-located with this
@@ -187,6 +193,18 @@ def collect_vars(project_root: Path, answers: Mapping[str, object]) -> tuple[Var
             )
         )
 
+    seen_names: dict[str, str] = {}
+    for var in collected:
+        prior_provenance = seen_names.get(var.name)
+        if prior_provenance is not None:
+            raise SystemExit(
+                f"ERROR: duplicate config var name {var.name!r} — declared by "
+                f"both the {prior_provenance!r} and {var.provenance!r} "
+                "provenance sources. Every var name must be unique across "
+                "core, template, external, and domain."
+            )
+        seen_names[var.name] = var.provenance
+
     return tuple(sorted(collected, key=lambda v: _PROVENANCE_ORDER.index(v.provenance)))
 
 
@@ -197,8 +215,9 @@ def collect_vars(project_root: Path, answers: Mapping[str, object]) -> tuple[Var
 
 def _core_floor(project_root: Path) -> str:
     """Parse the `fastmcp-pvl-core>=X.Y.Z` floor from the project's pyproject.toml."""
-    project_root = Path(project_root)
     pyproject_path = project_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        raise SystemExit(f"ERROR: {pyproject_path} not found.")
     text = pyproject_path.read_text(encoding="utf-8")
     match = _CORE_FLOOR_RE.search(text)
     if match is None:
@@ -217,32 +236,48 @@ def _core_importable() -> bool:
     return True
 
 
-def ensure_core_available(project_root: Path) -> None:
-    """Re-exec under `uv run` if fastmcp-pvl-core is not importable.
+def _yaml_importable() -> bool:
+    """Whether `yaml` (PyYAML) can be imported in the current interpreter."""
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def ensure_core_available(
+    project_root: Path, argv: Sequence[str] | None = None
+) -> None:
+    """Re-exec under `uv run` if fastmcp-pvl-core or PyYAML is not importable.
 
     copier's ``_tasks`` run before any virtualenv exists for the freshly
     rendered project, so this script cannot assume its dependencies are
-    installed. When the import fails, re-exec the whole process under
+    installed. When either import fails, re-exec the whole process under
     ``uv run --no-project`` with the core library and PyYAML pinned ad hoc —
     this must NOT create a persistent virtualenv, since template-ci renders
     the template twice and diffs the results.
 
-    Guarded by ``_GEN_CONFIG_BOOTSTRAPPED`` so a second failure (no `uv` on
-    PATH, no network, an unresolvable version, ...) raises a clear error
-    instead of looping forever.
+    ``_GEN_CONFIG_BOOTSTRAPPED`` guards against re-exec'ing more than once:
+    if the dependencies are still missing right after a re-exec, that is a
+    real, unrecoverable problem (not something a second re-exec would fix),
+    so this raises a clear error instead of looping forever.
+
+    *argv* is the script's own arguments (excluding argv[0]) to preserve
+    across the re-exec; defaults to ``sys.argv[1:]``.
     """
-    if _core_importable():
+    if _core_importable() and _yaml_importable():
         return
 
     if os.environ.get("_GEN_CONFIG_BOOTSTRAPPED") == "1":
         raise SystemExit(
-            "ERROR: fastmcp-pvl-core is still not importable after "
-            "re-executing under `uv run` — check that `uv` is on PATH and "
-            "that fastmcp-pvl-core is resolvable from this environment."
+            "ERROR: fastmcp-pvl-core and/or PyYAML are still not importable "
+            "after re-executing under `uv run` — check that `uv` is on PATH "
+            "and that both packages are resolvable from this environment."
         )
 
     floor = _core_floor(project_root)
     script = str(Path(__file__).resolve())
+    extra_argv = list(sys.argv[1:] if argv is None else argv)
     args = [
         "uv",
         "run",
@@ -253,11 +288,19 @@ def ensure_core_available(project_root: Path) -> None:
         "pyyaml",
         "python",
         script,
-        *sys.argv[1:],
+        *extra_argv,
     ]
     env = dict(os.environ)
     env["_GEN_CONFIG_BOOTSTRAPPED"] = "1"
-    os.execvpe("uv", args, env)
+    try:
+        os.execvpe("uv", args, env)
+    except OSError as exc:
+        raise SystemExit(
+            f"ERROR: could not re-exec under `uv run` ({exc}) — install `uv` "
+            "(https://docs.astral.sh/uv/) or run this script inside an "
+            "environment that already has fastmcp-pvl-core and PyYAML "
+            "installed."
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -276,21 +319,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help=(
-            "Verify generated artifacts are up-to-date without writing them. "
-            "Not yet implemented in this generator; wired up in a later task."
-        ),
+        help="Verify the generated artifacts are up to date without writing them.",
     )
     args = parser.parse_args(argv)
 
     project_root = _project_root()
-    ensure_core_available(project_root)
+    ensure_core_available(project_root, argv)
+
+    if args.check:
+        print(
+            "ERROR: --check is not available in this version of the script.",
+            file=sys.stderr,
+        )
+        return 1
 
     answers = load_answers(project_root)
     variables = collect_vars(project_root, answers)
-
-    if args.check:
-        print("NOTE: --check is not yet implemented; no artifacts are compared.")
     print(
         f"Collected {len(variables)} config variables for {answers.get('env_prefix')}."
     )

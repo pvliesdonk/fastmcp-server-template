@@ -17,14 +17,20 @@ repos:
 
       # Type-check the template's OWN Python (scripts/).  The generated
       # project's src/ is unrendered Jinja here and cannot be mypy'd locally;
-      # template-ci.yml renders the template and runs mypy on the output.
+      # template-ci.yml renders the template and runs `mypy src/ tests/` on
+      # the rendered output — that command never touches scripts/, so this
+      # hook is the ONLY mypy coverage gen_config_surface.py gets, anywhere.
       #
       # --ignore-missing-imports: gen_config_surface.py imports PyYAML and
-      # fastmcp-pvl-core — real runtime dependencies of every *generated*
-      # project, but not of this template repo's own tooling environment
-      # (which has no pyproject.toml of its own). The rendered project's
-      # mypy run (template-ci.yml) has both installed for real and checks
-      # them fully; this flag only widens what's locally uncheckable here.
+      # fastmcp-pvl-core, real runtime dependencies of every *generated*
+      # project but not of this template repo's own tooling environment
+      # (which has no pyproject.toml of its own to install them into). A
+      # per-module override (`[mypy-yaml]` / `[mypy-fastmcp_pvl_core]`) would
+      # be narrower, but this hook is invoked with CLI args only — no local
+      # mypy.ini/pyproject.toml backs it — and per-module ignores aren't
+      # expressible as mypy CLI flags, so the blanket flag is kept
+      # deliberately, scoped to just the `scripts/` directory this hook runs
+      # against.
       - id: mypy
         name: mypy
         language: system
