@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.11.1 (2026-07-25)
+
+- #252 ci: guard that a pristine render already satisfies the shipped pre-commit hooks
+
+
 ## v2.11.0 (2026-07-24)
 
 - #250 feat(deps): switch fleet dependency automation from Dependabot to Renovate
