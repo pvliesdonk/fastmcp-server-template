@@ -56,6 +56,37 @@ def test_multiple_blank_lines_at_eof_are_flagged(tmp_path: Path) -> None:
     assert "blank line(s) at EOF" in violation.message
 
 
+def test_crlf_blank_line_at_eof_is_flagged(tmp_path: Path) -> None:
+    """A CRLF file ends "\\r\\n\\r\\n", so a literal b"\\n\\n" test would miss it."""
+    path = _write(tmp_path, "ci.yml", b"jobs:\r\n\r\n")
+    (violation,) = check_file(path)
+    assert "blank line(s) at EOF" in violation.message
+
+
+def test_lone_cr_blank_line_at_eof_is_flagged(tmp_path: Path) -> None:
+    path = _write(tmp_path, "ci.yml", b"jobs:\r\r")
+    (violation,) = check_file(path)
+    assert "blank line(s) at EOF" in violation.message
+
+
+def test_mixed_terminators_at_eof_are_flagged(tmp_path: Path) -> None:
+    path = _write(tmp_path, "ci.yml", b"jobs:\n\r\n")
+    (violation,) = check_file(path)
+    assert "blank line(s) at EOF" in violation.message
+
+
+def test_file_of_only_terminators_is_flagged(tmp_path: Path) -> None:
+    """end-of-file-fixer truncates an all-newline file to empty."""
+    path = _write(tmp_path, "blank.txt", b"\n")
+    (violation,) = check_file(path)
+    assert "blank line(s) at EOF" in violation.message
+
+
+def test_single_crlf_terminator_is_clean(tmp_path: Path) -> None:
+    path = _write(tmp_path, "ci.yml", b"jobs:\r\n")
+    assert check_file(path) == []
+
+
 def test_missing_final_newline_is_flagged(tmp_path: Path) -> None:
     path = _write(tmp_path, "ci.yml", b"jobs:\n  lint: {}")
     (violation,) = check_file(path)

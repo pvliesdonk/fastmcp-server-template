@@ -63,6 +63,9 @@ _SKIP_DIRS = frozenset(
 # rendered docs are text and ARE checked; images are not).
 _BINARY_SNIFF_BYTES = 1024
 
+# Longest-first so ``\r\n`` is consumed as ONE terminator, not as ``\r`` + ``\n``.
+_LINE_ENDINGS = (b"\r\n", b"\n", b"\r")
+
 
 class Violation:
     """One hook finding: a file (and optionally line) a hook would rewrite."""
@@ -85,6 +88,14 @@ def _is_binary(data: bytes) -> bool:
     return b"\x00" in data[:_BINARY_SNIFF_BYTES]
 
 
+def _strip_one_line_ending(data: bytes) -> bytes | None:
+    """Drop exactly one trailing line terminator, or None if there isn't one."""
+    for ending in _LINE_ENDINGS:
+        if data.endswith(ending):
+            return data[: -len(ending)]
+    return None
+
+
 def check_file(path: Path) -> list[Violation]:
     """Return the violations `trailing-whitespace` / `end-of-file-fixer` would fix."""
     data = path.read_bytes()
@@ -94,12 +105,18 @@ def check_file(path: Path) -> list[Violation]:
 
     violations: list[Violation] = []
 
-    # end-of-file-fixer: exactly one trailing newline.
-    if not data.endswith(b"\n"):
+    # end-of-file-fixer: exactly one trailing line terminator.  Compare on
+    # terminators rather than a literal b"\n\n" so a CRLF file ending
+    # "\r\n\r\n" is caught too — the hook strips every trailing newline
+    # character regardless of flavour, so a bare b"\n\n" test would miss it.
+    # `body == b""` means the file is nothing but terminators, which the hook
+    # truncates to empty.
+    body = _strip_one_line_ending(data)
+    if body is None:
         violations.append(
             Violation(path, None, "missing final newline (end-of-file-fixer would add)")
         )
-    elif data.endswith(b"\n\n"):
+    elif body == b"" or body.endswith((b"\n", b"\r")):
         violations.append(
             Violation(
                 path,
