@@ -30,9 +30,15 @@ class ProjectConfig:
 
     # CONFIG-FIELDS-START — add domain fields below; kept across copier update
     # (uncommenting the Path-typed examples below also requires adding
-    #  ``from pathlib import Path`` to the imports at the top of this file.)
-    # (example)
-    # vault_path: Path = Path("/data/vault")
+    #  ``from pathlib import Path`` to the imports at the top of this file;
+    #  ``field`` is already imported from ``dataclasses`` above.)
+    # (example — domain env-var discovery reads a field's ``metadata={"help":
+    #  ..., "tags": ...}`` to populate the generated .env.example,
+    #  packaging/env.example, and config wizard, so give every real field both.)
+    # vault_path: Path = field(
+    #     default=Path("/data/vault"),
+    #     metadata={"help": "Filesystem root of the vault.", "tags": ("storage",)},
+    # )
     {%- if enable_authorization %}
     #
     # (example: opt-in authorization — see fastmcp-pvl-core's README

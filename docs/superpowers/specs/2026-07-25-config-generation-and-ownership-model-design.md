@@ -327,18 +327,36 @@ Tags make two things mandatory that a single category would not:
 
 ### 6.4 Generator invariants
 
-The deleted drift test's two checks survive as generator invariants over tags —
-same two directions, now unfalsifiable by construction:
+The deleted drift test's two checks were meant to survive as generator
+invariants over tags, same two directions, unfalsifiable by construction.
+**Correction, recorded during Stage 1 implementation:** only the coverage
+direction actually does. Every var the generator collects is, by
+construction, emitted into at least one destination — there is no code path
+that produces a `Var` and then fails to place it — so coverage cannot regress
+silently.
+
+The **orphan** direction — a var declared in `config-presentation.yml` or
+`config-presentation.domain.yml` that no read site actually consumes — is
+**not** guarded by generation. Generation only transforms whatever the
+presentation config declares; it has no way to know whether a declared var
+corresponds to a real `env()`/`os.environ` read anywhere in the project, core
+or domain. The deleted `tests/test_config_wizard_drift.py`'s
+`test_no_orphan_wizard_vars` covered exactly this and has no replacement in
+Stage 1. A stale or hand-added entry in either presentation file that nothing
+reads will happily generate into `.env.example` and the wizard spec forever,
+undetected. Building an orphan checker is out of scope for Stage 1; if this
+gap is worth closing, it needs its own design and issue, not a checker
+retrofitted here.
 
 - **Coverage** — every var matches ≥1 destination. A var documented nowhere is
   an error. This applies to `inferred` fields too: no wizard control does not
   mean no documentation (see Stage 0's note on `auth_mode`).
-- **Orphan** — every tag used in a selector matches ≥1 var. A dead selector is
-  an error (this is what catches an open-vocabulary typo: `oicd` matches
-  nothing).
+- ~~**Orphan** — every tag used in a selector matches ≥1 var.~~ Not
+  implemented in Stage 1; see the correction above.
 
-Both fail at **template CI**, attributable to the template maintainer — not as
-red CI in every downstream.
+Coverage fails at **generation time** (a `Var` is always placed) rather than
+at template CI as originally envisioned; there is no separate orphan check to
+run anywhere.
 
 ### 6.5 Outputs
 

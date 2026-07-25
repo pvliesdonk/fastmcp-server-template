@@ -1,0 +1,115 @@
+# Config migration
+
+This guide is for a project that ran `copier update` from a template version
+older than the config-surface generator. It covers moving from **hand-written**
+`.env.example`, `packaging/env.example`, `examples/*.env`, and
+`docs/javascripts/config-wizard/wizard-spec.json` to **generated** ones.
+
+If your project was created after the generator landed, there is nothing to
+migrate. Skip this guide.
+
+## Why this matters
+
+Three of those files used to be domain-owned (`_skip_if_exists` in
+`copier.yml`): `.env.example`, `packaging/env.example`, and
+`docs/javascripts/config-wizard/wizard-spec.json`. You edited them directly,
+and `copier update` left your edits alone. `examples/*.env` was never
+domain-owned; it was already re-rendered on every update, only its source
+is changing now.
+
+All four files are now `generated`, produced by
+`scripts/gen_config_surface.py` from
+`fastmcp_pvl_core.server_config_surface()` plus `config-presentation.yml`,
+and re-run on every `copier copy` and `copier update`. The first `copier
+update` that pulls this change **overwrites whatever you hand-wrote in those
+four files** with the generator's own output.
+
+If you customised the help text or example value of a **core** var (as
+opposed to adding a domain var), there is no preservation path at all:
+`config-presentation.yml` is template-owned and gets overwritten the same
+way, and step 2 below covers only domain fields. Re-apply that customisation
+upstream in `fastmcp-pvl-core` or `config-presentation.yml` in the template
+repo, not in the generated file.
+
+## Steps
+
+### 1. Copy out your hand-written help text before regenerating
+
+Before running `copier update` (or immediately after, using `git diff` against
+the pre-update commit), save the prose you wrote in `.env.example`,
+`packaging/env.example`, and `wizard-spec.json` for every domain-specific
+variable (the ones your project added beyond what the template shipped). That
+text is about to be replaced and is the only copy of it.
+
+### 2. Move each domain env var into `ProjectConfig`'s `CONFIG-FIELDS` block
+
+For every domain env var you found in step 1, add or update its field in
+`src/{{ python_module }}/config.py` between the `CONFIG-FIELDS-START` /
+`CONFIG-FIELDS-END` sentinels, carrying the help text you copied out as
+`metadata`:
+
+```python
+    vault_path: Path = field(
+        default=Path("/data/vault"),
+        metadata={"help": "Filesystem root of the vault.", "tags": ("storage",)},
+    )
+```
+
+**This step needs a human or a capable agent, not mechanical substitution.**
+Deciding which sentence in a paragraph holds the actual help text, as
+opposed to surrounding narrative that stays in prose docs, or a caveat that
+belongs elsewhere, is a judgment call. A field's `metadata["help"]` becomes
+the exact text shown in `.env.example` and the config wizard, so picking the
+wrong sentence ships the wrong documentation to every future reader of the
+generated files.
+
+Also update `from_env` (between `CONFIG-FROM-ENV-START` / `CONFIG-FROM-ENV-END`)
+to read the var if it doesn't already, and `__post_init__` (between
+`CONFIG-VALIDATE-START` / `CONFIG-VALIDATE-END`) for any invariant the old
+prose described.
+
+### 3. Declare only what the AST scan cannot see
+
+The generator discovers domain vars by AST-scanning `ProjectConfig.from_env`
+for `env(prefix, "SUFFIX")` reads whose suffix matches a dataclass field.
+See `scripts/gen_config_surface.py`'s `_discover_domain_vars`. That covers
+every var your project reads through a declared field. Add an entry to
+`config-presentation.domain.yml` only for a var the scan genuinely cannot
+see:
+
+- A deprecated alias for a var that no longer has its own field.
+- A var read directly via `os.environ` or a helper, outside
+  `ProjectConfig.from_env` entirely.
+
+Do not duplicate a var here that already has a `CONFIG-FIELDS` entry; that
+produces a duplicate-name error from the generator.
+
+### 4. Run the generator and diff
+
+```bash
+python scripts/gen_config_surface.py
+git diff
+```
+
+Confirm every domain var you moved in step 2 reappears in `.env.example`,
+`packaging/env.example`, and (if it should be wizard-visible)
+`docs/javascripts/config-wizard/wizard-spec.json`. A var that does not
+reappear means its field metadata, tags, or `config-presentation.domain.yml`
+entry is missing or misspelled. Fix that before continuing, not by
+hand-editing the generated file.
+
+### 5. Delete the now-duplicated hand-written tables
+
+Once the diff in step 4 confirms every var survived the move, delete the
+hand-written prose you copied out in step 1 from wherever it lived
+(`README.md`, `docs/configuration.md`, or similar). It now duplicates the
+generated artifact and would drift from it over time if kept.
+
+## Verifying you're done
+
+```bash
+python scripts/gen_config_surface.py --check
+```
+
+Exits 0 when every generated artifact matches what the generator would
+produce right now, the same check CI runs on every push.

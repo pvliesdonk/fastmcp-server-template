@@ -107,7 +107,7 @@ examples:
   "{PREFIX}_BEARER_TOKENS_FILE": "/etc/{PROJECT_NAME}/tokens.toml"
   "{PREFIX}_ACL_PATH": "/etc/{PROJECT_NAME}/acl.toml"
   "{PREFIX}_AUTHZ_GRANTS": '{"app-writers": ["read", "write"], "app-admins": ["*"]}'
-  # #260 follow-up: without the first four, examples/oidc.env rendered every
+  # Without the first four, examples/oidc.env rendered every
   # OIDC var required to actually enable OIDC as blank — core's env() treats
   # empty-after-strip as unset, so an operator copying that file got
   # auth_mode=None (no authentication) with no error at all. Those four
@@ -226,7 +226,7 @@ files:
     header: "Bearer token authentication example. Generate a token: openssl rand -hex 32"
     commented: false
     sections:
-      # #260 follow-up: BEARER_TOKENS_FILE is excluded — its placeholder
+      # BEARER_TOKENS_FILE is excluded — its placeholder
       # example path doesn't exist, and core prefers a tokens file over
       # BEARER_TOKEN whenever both are set, so shipping both here produced a
       # server that refuses to start (ConfigurationError: tokens file not

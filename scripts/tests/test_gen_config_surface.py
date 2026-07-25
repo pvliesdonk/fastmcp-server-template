@@ -286,6 +286,21 @@ class TestEnsureCoreAvailable:
         )
         assert g._core_floor(tmp_path) == "4.5.0"
 
+    def test_parses_the_floor_past_an_extras_marker(self, tmp_path):
+        """A KV backend answer renders `fastmcp-pvl-core[redis]>=4.5.0,<5` —
+        the extras marker must not defeat the floor match."""
+        (tmp_path / "pyproject.toml").write_text(
+            'dependencies = [\n  "fastmcp-pvl-core[redis]>=4.5.0,<5",\n]\n',
+            encoding="utf-8",
+        )
+        assert g._core_floor(tmp_path) == "4.5.0"
+
+    def test_parses_a_two_part_floor(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text(
+            'dependencies = [\n  "fastmcp-pvl-core>=4.5,<5",\n]\n', encoding="utf-8"
+        )
+        assert g._core_floor(tmp_path) == "4.5"
+
     def test_missing_floor_fails_loudly(self, tmp_path):
         (tmp_path / "pyproject.toml").write_text(
             "dependencies = []\n", encoding="utf-8"
@@ -297,7 +312,6 @@ class TestEnsureCoreAvailable:
         with pytest.raises(SystemExit, match=r"pyproject\.toml"):
             g._core_floor(tmp_path)
 
-    @pytest.mark.xfail(reason="floor bump lands in the wiring commit", strict=True)
     def test_matches_the_real_projects_declared_floor(self):
         """Pin against the repo's real pyproject.toml.jinja, not a fixture —
         a fabricated fixture can't notice the declared floor lagging behind
@@ -446,6 +460,20 @@ class TestDiscoverDomainVars:
         vars_ = g.collect_vars(domain_project, answers)
         assert "DEMO_MCP_VAULT_PATH" in {v.name for v in vars_}
 
+    def test_discovery_does_not_write_bytecode_cache(self, domain_project):
+        """Importing the project's own ``config`` module for domain discovery
+        must not leave a ``__pycache__`` directory in the rendered project's
+        ``src/`` tree. copier's `_tasks` run this generator on every render,
+        and template-ci renders the template twice and diffs the results —
+        a ``.pyc`` embeds the source file's mtime, so two otherwise-identical
+        renders (created at different wall-clock times) would produce
+        byte-different cache files and break that diff permanently, even
+        though nothing about the generator's own output actually changed.
+        """
+        answers = g.load_answers(domain_project)
+        g.collect_vars(domain_project, answers)
+        assert not list((domain_project / "src").rglob("__pycache__"))
+
     def test_help_and_tags_come_from_field_metadata(self, domain_project):
         answers = g.load_answers(domain_project)
         vars_ = g.collect_vars(domain_project, answers)
@@ -522,6 +550,189 @@ class TestWriteArtifacts:
 
     def test_check_reports_a_missing_file(self, fake_project):
         assert ".env.example" in g.write_artifacts(fake_project, check=True)
+
+
+class TestUnplacedVarGuard:
+    """C1: a var whose tags match no env-file section used to vanish from
+    every generated artifact with exit 0 and no warning. `write_artifacts`
+    must now catch that before writing anything."""
+
+    def _with_extra_template_var(self, extra_var):
+        real_load_presentation = g.load_presentation
+
+        def _fake_load_presentation(project_root, env_prefix):
+            pres = dict(real_load_presentation(project_root, env_prefix))
+            pres["vars"] = [*pres.get("vars", ()), extra_var(env_prefix)]
+            return pres
+
+        return _fake_load_presentation
+
+    def test_var_with_unmatched_tag_raises(self, fake_project, monkeypatch):
+        monkeypatch.setattr(
+            g,
+            "load_presentation",
+            self._with_extra_template_var(
+                lambda env_prefix: {
+                    "name": f"{env_prefix}_MYSTERY",
+                    "provenance": "template",
+                    "type_name": "str",
+                    "default": None,
+                    "help": "Matches no section tag.",
+                    "tags": ["no_such_tag"],
+                }
+            ),
+        )
+        with pytest.raises(SystemExit, match="MYSTERY"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_var_with_no_tags_at_all_raises(self, fake_project, monkeypatch):
+        """Omitting `tags:` entirely is the likelier author mistake than a typo."""
+        monkeypatch.setattr(
+            g,
+            "load_presentation",
+            self._with_extra_template_var(
+                lambda env_prefix: {
+                    "name": f"{env_prefix}_MYSTERY",
+                    "provenance": "template",
+                    "type_name": "str",
+                    "default": None,
+                    "help": "No tags key at all.",
+                }
+            ),
+        )
+        with pytest.raises(SystemExit, match="MYSTERY"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_error_names_the_known_section_tags(self, fake_project, monkeypatch):
+        monkeypatch.setattr(
+            g,
+            "load_presentation",
+            self._with_extra_template_var(
+                lambda env_prefix: {
+                    "name": f"{env_prefix}_MYSTERY",
+                    "provenance": "template",
+                    "type_name": "str",
+                    "default": None,
+                    "help": "Matches no section tag.",
+                    "tags": ["no_such_tag"],
+                }
+            ),
+        )
+        with pytest.raises(SystemExit, match="server"):
+            g.write_artifacts(fake_project, check=False)
+
+
+class TestDomainYamlTagging:
+    """C1: `config-presentation.domain.yml` vars must get the same implicit
+    `domain` tag `_discover_domain_vars` adds, so a var declared there always
+    matches the Domain section regardless of its own declared tags."""
+
+    def test_domain_yaml_var_gets_domain_tag_and_lands_in_env_example(
+        self, fake_project, template_root, monkeypatch
+    ):
+        def _fake_domain_presentation(presentation_root, env_prefix):  # noqa: ARG001
+            return {
+                "vars": [
+                    {
+                        "name": f"{env_prefix}_VAULT_PATH",
+                        "type_name": "Path",
+                        "default": None,
+                        "help": "Filesystem root of the vault.",
+                        "tags": ["storage"],
+                    }
+                ]
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _fake_domain_presentation)
+        answers = g.load_answers(fake_project)
+        vars_ = g.collect_vars(fake_project, answers)
+        var = next(v for v in vars_ if v.suffix == "VAULT_PATH")
+        assert var.tags == ("storage", "domain")
+
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        assert "DEMO_MCP_VAULT_PATH" in text
+
+    def test_domain_yaml_var_with_no_tags_still_lands_via_the_domain_tag(
+        self, fake_project, template_root, monkeypatch
+    ):
+        def _fake_domain_presentation(presentation_root, env_prefix):  # noqa: ARG001
+            return {
+                "vars": [
+                    {
+                        "name": f"{env_prefix}_UNTAGGED",
+                        "type_name": "str",
+                        "default": None,
+                        "help": "No tags declared at all.",
+                    }
+                ]
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _fake_domain_presentation)
+        answers = g.load_answers(fake_project)
+        vars_ = g.collect_vars(fake_project, answers)
+        var = next(v for v in vars_ if v.suffix == "UNTAGGED")
+        assert var.tags == ("domain",)
+
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        assert "DEMO_MCP_UNTAGGED" in text
+
+
+class TestImportProjectConfigWarnings:
+    """I3: `_import_project_config` used to swallow every exception silently,
+    so a broken `config.py` (a `SyntaxError`, a missing third-party import)
+    made every domain var vanish from the generated artifacts with no
+    diagnostic at all — most realistically during copier-update's bootstrap
+    re-exec, which has none of the project's own dependencies installed."""
+
+    def _import(self, project_root, python_module):
+        """Run `_import_project_config` and clean up any `sys.modules` entry
+        it leaves behind — mirrors `_discover_domain_vars`'s own cleanup, so
+        this test can't leak a stale module into a later test that happens
+        to share the same `python_module` name."""
+        before = frozenset(sys.modules)
+        try:
+            return g._import_project_config(project_root, python_module)
+        finally:
+            for name in set(sys.modules) - before:
+                del sys.modules[name]
+
+    def test_missing_config_module_is_silent(self, fake_project, capsys):
+        """`fake_project` has no `config.py` at all — a legitimate, silent
+        'nothing to discover', not a warning-worthy failure."""
+        result = self._import(fake_project, "demo_mcp")
+        assert result is None
+        assert capsys.readouterr().err == ""
+
+    def test_syntax_error_in_config_warns_and_returns_none(self, fake_project, capsys):
+        cfg = fake_project / "src" / "demo_mcp" / "config.py"
+        cfg.write_text("def broken(:\n    pass\n", encoding="utf-8")
+
+        result = self._import(fake_project, "demo_mcp")
+
+        assert result is None
+        err = capsys.readouterr().err
+        assert "WARNING" in err
+        assert "demo_mcp.config" in err
+        assert "SyntaxError" in err
+
+    def test_third_party_import_error_in_config_warns_and_returns_none(
+        self, fake_project, capsys
+    ):
+        """The realistic copier-update trigger: `_tasks` bootstraps into an
+        environment with none of the project's own dependencies, so any
+        third-party import in `config.py` raises here."""
+        cfg = fake_project / "src" / "demo_mcp" / "config.py"
+        cfg.write_text("import no_such_third_party_dependency_xyz\n", encoding="utf-8")
+
+        result = self._import(fake_project, "demo_mcp")
+
+        assert result is None
+        err = capsys.readouterr().err
+        assert "WARNING" in err
+        assert "demo_mcp.config" in err
+        assert "ModuleNotFoundError" in err
 
 
 class TestRenderWizardSpec:

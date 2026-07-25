@@ -7,13 +7,27 @@ _min_copier_version: "9.0"
 _answers_file: .copier-answers.yml
 _templates_suffix: .jinja
 
-# Post-generation: vendor the MCP Apps SDK into static/app.html.  The task value
-# is Jinja-rendered; it collapses to an empty string (skipped) for non-apps
-# projects.  Runs on `copier copy` AND `copier update` — regenerates app.html
-# from the project's (possibly customized) app.src.html.  Requires network
-# (downloads @modelcontextprotocol/ext-apps).  Both CI paths pass --trust.
+# Post-generation tasks. Both run on `copier copy` AND `copier update`.
+#
+# 1. Vendor the MCP Apps SDK into static/app.html.  The task value is
+#    Jinja-rendered; it collapses to an empty string (skipped) for non-apps
+#    projects — regenerates app.html from the project's (possibly customized)
+#    app.src.html.  Requires network (downloads @modelcontextprotocol/ext-apps).
+#    Both CI paths pass --trust.
+# 2. Generate the config-surface artifacts (.env.example, packaging/env.example,
+#    examples/*.env, docs/javascripts/config-wizard/wizard-spec.json) from
+#    fastmcp_pvl_core.server_config_surface() plus config-presentation.yml /
+#    config-presentation.domain.yml.  Plain `python` (not `uv run`) is correct
+#    here: copier's `_tasks` run before any virtualenv exists for a freshly
+#    rendered project, so `scripts/gen_config_surface.py` self-bootstraps under
+#    `uv run --no-project` (pinning fastmcp-pvl-core and PyYAML ad hoc) when
+#    those two aren't importable in the interpreter running this task — a
+#    version pin here would drift from the floor in pyproject.toml. That
+#    self-bootstrap must never create a persistent virtualenv, since
+#    template-ci renders the template twice and diffs the results.
 _tasks:
   - "{% if include_mcp_apps_scaffold %}python scripts/vendor_spa.py{% endif %}"
+  - "python scripts/gen_config_surface.py"
 
 # Starter files: written once on first `copier copy`, protected from
 # `copier update`.  Domain-owned — users customise these and keep their
@@ -42,18 +56,13 @@ _skip_if_exists:
   - "tests/test_cli.py"
   - "CHANGELOG.md"
   - "LICENSE"
-  - ".env.example"
+  # .env.example is NOT here — see the "generated, not skip-listed" note below.
   - "packaging/mcpb/manifest.json.in"
   - "packaging/mcpb/pyproject.toml.in"
   - "packaging/mcpb/src/server.py"
   - "packaging/mcpb/build.sh"
   - "scripts/bump_manifests.py"
   - ".gitignore"
-  # nfpm env template — users customise with domain-specific env vars; installs
-  # to /etc/{project}/env.example with config|noreplace so operators copy it to
-  # /etc/{project}/env locally anyway, but keep the source customisation across
-  # template updates.
-  - "packaging/env.example"
   # pre-commit hook config — users add domain-specific hooks (shellcheck,
   # yamllint, project-specific linters, etc.) on top of the shipped defaults;
   # preserve customisation across updates.
@@ -67,11 +76,16 @@ _skip_if_exists:
   # docs corpus grows; without _skip_if_exists, copier update would wipe
   # those additions on every weekly cron and reseed the template version.
   - ".vale/styles/config/vocabularies/Base/accept.txt"
-  # Config-wizard domain spec — the entire file is domain content (the project's
-  # questions, secrets, guards, and meta identity).  The wizard *runtime*
-  # (generators.js, wizard.js, config-wizard.css, wizard-spec-schema.json) is
-  # template-owned and overwritten on update; only this spec is domain-owned.
-  - "docs/javascripts/config-wizard/wizard-spec.json"
+  # docs/javascripts/config-wizard/wizard-spec.json is NOT here — see the
+  # "generated, not skip-listed" note below (the wizard *runtime* —
+  # generators.js, wizard.js, config-wizard.css, wizard-spec-schema.json —
+  # stays template-owned and overwritten on update, same as before).
+  #
+  # Domain presentation config — declares only the vars
+  # scripts/gen_config_surface.py's AST scan of ProjectConfig cannot see
+  # (deprecated aliases, vars read outside ProjectConfig.from_env).  Preserved
+  # across copier update; the template ships an empty seed on first render.
+  - "config-presentation.domain.yml"
   # Domain-specific wizard browser tests — seeded with one skipped placeholder,
   # owned downstream.  Generic framework tests stay in
   # test_config_wizard_smoke.py (template-owned).
@@ -80,6 +94,22 @@ _skip_if_exists:
   # regenerates app.html from it on every copier update; app.html itself is
   # generated, never template-owned.
   - "src/{{ python_module }}/static/app.src.html"
+#
+# Generated, not skip-listed: `.env.example`, `packaging/env.example`, and
+# `docs/javascripts/config-wizard/wizard-spec.json` used to live in
+# `_skip_if_exists` above (domain-owned, frozen at first render). They no
+# longer do — the `_tasks` entry above regenerates all three, and
+# `examples/*.env`, on every `copier copy` AND `copier update`, from
+# `fastmcp_pvl_core.server_config_surface()` plus `config-presentation.yml` /
+# `config-presentation.domain.yml`. Regeneration is unconditional: any local
+# edit to these files is overwritten the next time the task runs, and CI's
+# `scripts/gen_config_surface.py --check` step (ci.yml) fails the build if a
+# committed copy has drifted from what the generator would produce. Downstream
+# customisation of the config surface therefore does NOT belong in these
+# files — it belongs in `config.py`'s `CONFIG-FIELDS` field `metadata={"help":
+# ..., "tags": (...)}` (for a var read through `ProjectConfig.from_env`) or in
+# `config-presentation.domain.yml` (for a var the AST scan cannot see, e.g. a
+# deprecated alias, or a var read outside `from_env`).
 # Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is

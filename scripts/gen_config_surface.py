@@ -70,7 +70,9 @@ class Var:
 # then by declaration order within each provenance.
 _PROVENANCE_ORDER = ("core", "template", "external", "domain")
 
-_CORE_FLOOR_RE = re.compile(r"fastmcp-pvl-core\s*>=\s*([0-9]+\.[0-9]+\.[0-9]+)")
+_CORE_FLOOR_RE = re.compile(
+    r"fastmcp-pvl-core(?:\[[^\]]*\])?\s*>=\s*([0-9]+(?:\.[0-9]+)*)"
+)
 
 
 def _clean_help(help_text: str) -> str:
@@ -78,9 +80,9 @@ def _clean_help(help_text: str) -> str:
 
     Core's help text is RST-flavoured prose; a double-backtick reads as noise
     in a plain-text env file comment. Applied once, here, at the point every
-    Var's ``help`` is set — so every consumer (both env files here and
-    whatever Task 3's wizard spec does with ``var.help``) inherits already-
-    clean text instead of each needing to remember to clean it again.
+    Var's ``help`` is set — so every consumer (both env files here and the
+    wizard spec's use of ``var.help``) inherits already-clean text instead of
+    each needing to remember to clean it again.
     """
     return help_text.replace("``", "`")
 
@@ -181,13 +183,22 @@ def _import_project_config(project_root: Path, python_module: str) -> type | Non
 
     A freshly rendered project has no dependencies installed yet, and this
     generator's own unit tests use fixture projects with no config module at
-    all — both are legitimate "nothing to discover" cases, not errors. Any
-    exception raised while resolving it — the module doesn't exist, it lacks
-    a ``ProjectConfig`` attribute, or its own top level raises (a missing env
-    var, a broken third-party import, a mid-edit ``SyntaxError``) — is
-    treated the same way, since domain discovery is best-effort enrichment
-    that must never turn an unrelated project's problem into a hard failure
-    of this generator.
+    all — both are legitimate "nothing to discover" cases, not errors: the
+    module (or its parent package) genuinely does not exist, so importing it
+    raises a ``ModuleNotFoundError`` naming ``{python_module}.config`` or
+    ``{python_module}`` itself, and that specific case returns ``None``
+    silently. Domain discovery is best-effort enrichment that must never turn
+    an unrelated project's problem into a hard failure of this generator, so
+    every other exception — a ``ModuleNotFoundError`` for some *other*
+    missing module (a broken third-party import reached via ``config.py`` or
+    ``__init__.py``), a mid-edit ``SyntaxError``, an ``AttributeError`` from a
+    missing ``ProjectConfig``, or anything else the module's own top level
+    raises — also returns ``None``, but only after printing a warning naming
+    the exception class and message to stderr. Silently returning ``None``
+    for *every* exception (the previous behaviour) let a broken ``config.py``
+    make every domain var vanish from the generated artifacts with no
+    diagnostic at all, most realistically during copier-update's bootstrap
+    re-exec, which has none of the project's own dependencies installed.
 
     Only ``sys.path`` is restored before returning. ``sys.modules`` is
     deliberately left alone here: `typing.get_type_hints` (used inside
@@ -196,6 +207,17 @@ def _import_project_config(project_root: Path, python_module: str) -> type | Non
     ``sys.modules[cls.__module__]``, so popping the module before that scan
     runs would turn every annotation lookup into a `NameError`. The caller
     owns popping ``sys.modules`` once it is done using the returned class.
+
+    ``sys.dont_write_bytecode`` is forced ``True`` for the duration of the
+    import and restored afterwards (never left permanently changed, so a
+    caller that already runs with bytecode writing enabled for its own
+    reasons keeps that behaviour once this returns). Without it, importing
+    the project's own package writes ``__pycache__/*.pyc`` files into
+    ``project_root/src`` — timestamp-embedding, so two otherwise-identical
+    renders produce byte-different ``.pyc`` files and template-ci's
+    render-twice-and-diff idempotence check (this generator runs as a
+    copier `_tasks` entry, before any comparison) would fail on generated
+    cache files that have nothing to do with this generator's own output.
     """
     src_dir = project_root / "src"
     if not src_dir.is_dir():
@@ -204,12 +226,25 @@ def _import_project_config(project_root: Path, python_module: str) -> type | Non
     added_to_path = str(src_dir) not in sys.path
     if added_to_path:
         sys.path.insert(0, str(src_dir))
+    previous_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
     try:
         module = importlib.import_module(f"{python_module}.config")
         return module.ProjectConfig
-    except Exception:
+    except Exception as exc:
+        if isinstance(exc, ModuleNotFoundError) and exc.name in (
+            python_module,
+            f"{python_module}.config",
+        ):
+            return None
+        print(
+            f"WARNING: importing {python_module}.config failed: "
+            f"{exc.__class__.__name__}: {exc}",
+            file=sys.stderr,
+        )
         return None
     finally:
+        sys.dont_write_bytecode = previous_dont_write_bytecode
         if added_to_path:
             sys.path.remove(str(src_dir))
 
@@ -224,14 +259,16 @@ def _discover_domain_vars(
     ``help``/``tags`` from its dataclass ``metadata``. This is best-effort
     enrichment, not a required provenance source: a fresh render has no
     domain fields (and often no venv yet to even import its own package), so
-    a failure to *import* the project's config module is silently treated as
-    "nothing to discover". A failure *during the scan itself* (the module
-    imported fine but `domain_env_suffixes` couldn't resolve it — e.g. a type
-    hint referencing something not importable at module scope) is not
-    swallowed silently: `domain_env_suffixes`'s own contract is that such a
-    failure must propagate rather than yield a silently-incomplete set, so
-    this prints a warning naming the exception and returns no domain vars,
-    rather than letting `--check` (Task 4) report "up to date" while every
+    `_import_project_config` treats the module genuinely not existing as
+    silent "nothing to discover" — but any other import-time failure (a
+    broken third-party import, a mid-edit `SyntaxError`) prints a warning
+    there instead of vanishing. A failure *during the scan itself* (the
+    module imported fine but `domain_env_suffixes` couldn't resolve it — e.g.
+    a type hint referencing something not importable at module scope) is not
+    swallowed silently either: `domain_env_suffixes`'s own contract is that
+    such a failure must propagate rather than yield a silently-incomplete
+    set, so this prints a warning naming the exception and returns no domain
+    vars, rather than letting `--check` report "up to date" while every
     domain var is actually missing.
 
     Every discovered var is tagged ``domain`` (in addition to whatever tags
@@ -406,7 +443,13 @@ def collect_vars(
                 type_name=raw["type_name"],
                 default=raw.get("default"),
                 help=_clean_help(raw["help"]),
-                tags=tuple(raw.get("tags", ())),
+                # Same "domain" tag `_discover_domain_vars` adds to every
+                # AST-discovered var, so a var declared here — the "the AST
+                # scan can't see it" escape hatch documented in
+                # `config-migration.md.jinja` — always matches the Domain
+                # section too, regardless of what the author did or didn't
+                # list under `tags:`.
+                tags=tuple(dict.fromkeys((*raw.get("tags", ()), "domain"))),
                 inferred=bool(raw.get("inferred", False)),
                 wizard=dict(raw.get("wizard", {})),
             )
@@ -900,6 +943,73 @@ _WIZARD_KIND = "wizard"
 _KNOWN_FILE_KINDS = frozenset({_ENV_KIND, _WIZARD_KIND})
 
 
+def _env_destinations(
+    presentation: Mapping[str, Any], vars_: Sequence[Var], answers: Mapping[str, object]
+) -> dict[str, set[str]]:
+    """Map each var name to the set of `kind: env` sections that would place it.
+
+    Mirrors `render_env_file`'s own `when_answer` / `tags` / `exclude`
+    matching per section, but asks a different question: not "which section
+    claims this var first within one file" (render_env_file's job, since a
+    var must render exactly once per file), but "does *any* section in *any*
+    env file want this var at all" — the question `write_artifacts` needs to
+    catch a var that would be silently dropped from every env artifact.
+    Empty for a var with no `kind: env` destination anywhere.
+    """
+    destinations: dict[str, set[str]] = {v.name: set() for v in vars_}
+    for rel_path, file_spec in presentation.get("files", {}).items():
+        if file_spec.get("kind") != _ENV_KIND:
+            continue
+        for section in file_spec.get("sections", ()):
+            when_answer = section.get("when_answer")
+            if when_answer is not None and not answers.get(when_answer):
+                continue
+            section_tags = set(section.get("tags", ()))
+            excluded = set(section.get("exclude", ()))
+            for var in vars_:
+                if var.name in excluded or var.name not in destinations:
+                    continue
+                if section_tags & set(var.tags):
+                    destinations[var.name].add(rel_path)
+    return destinations
+
+
+def _assert_every_var_has_an_env_destination(
+    presentation: Mapping[str, Any], vars_: Sequence[Var], answers: Mapping[str, object]
+) -> None:
+    """Raise loudly for any collected `Var` that lands in zero env artifacts.
+
+    `render_env_file` only ever places a var whose tags intersect some
+    section's `tags` — nothing upstream of it ever verified that every
+    collected var actually matches *some* section, so a var whose tags (or
+    missing `tags:`) match no declared section is silently absent from every
+    env artifact with exit 0 and no warning. `--check` cannot catch this
+    either, since the generated-vs-on-disk comparison it runs is blind to a
+    var neither side ever mentions. This is that missing check, run once
+    after every var is collected and before any artifact is written.
+    """
+    destinations = _env_destinations(presentation, vars_, answers)
+    unplaced = [v for v in vars_ if not destinations[v.name]]
+    if not unplaced:
+        return
+    known_tags = sorted(
+        {
+            tag
+            for file_spec in presentation.get("files", {}).values()
+            if file_spec.get("kind") == _ENV_KIND
+            for section in file_spec.get("sections", ())
+            for tag in section.get("tags", ())
+        }
+    )
+    offenders = ", ".join(f"{v.name!r} (tags={list(v.tags)!r})" for v in unplaced)
+    raise SystemExit(
+        "ERROR: the following config vars match no env-file section tags "
+        f"and would be silently dropped from every env artifact: {offenders}. "
+        f"Known section tags: {known_tags!r} — add one of those to the var's "
+        "`tags`, or add a new section that covers it."
+    )
+
+
 def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
     """Render and write (or, with ``check=True``, just compare) the artifacts.
 
@@ -937,6 +1047,12 @@ def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
             )
         artifacts.append((rel_path, text))
 
+    # Checked after every file kind is known-good (so a genuinely malformed
+    # `files:` entry above still gets its own, more specific error) but
+    # before anything is written to disk — a var that would land nowhere is
+    # a config-presentation bug, not something partial output should mask.
+    _assert_every_var_has_an_env_destination(presentation, vars_, answers)
+
     changed: list[str] = []
     for rel_path, text in artifacts:
         target = project_root / rel_path
@@ -956,7 +1072,13 @@ def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
 
 
 def _core_floor(project_root: Path) -> str:
-    """Parse the `fastmcp-pvl-core>=X.Y.Z` floor from the project's pyproject.toml."""
+    """Parse the `fastmcp-pvl-core>=X.Y.Z` floor from the project's pyproject.toml.
+
+    Tolerates an extras marker (`fastmcp-pvl-core[redis]>=4.5.0,<5`) and a
+    floor with fewer than three components (`>=4.5`) — both appear in real
+    rendered `pyproject.toml`s, so a strict `X.Y.Z`-only, no-extras regex
+    would raise here and kill the `_tasks` bootstrap re-exec entirely.
+    """
     pyproject_path = project_root / "pyproject.toml"
     if not pyproject_path.exists():
         raise SystemExit(f"ERROR: {pyproject_path} not found.")
