@@ -44,5 +44,16 @@ site/
 .worktrees/
 docs/superpowers/
 .claude/
-.mcp.json/
+# No trailing slash: `.mcp.json/` would match a *directory* of that name and
+# leave the actual file tracked.
+.mcp.json
 .repowise/
+
+# Editor-local config. Deliberately just this one — a contributor's choice of
+# editor is theirs, and this list is not meant to grow into a catalogue of
+# every IDE. `.vscode/` earns its place because it is the common case and
+# because several tools (repowise among them) write into it unprompted, so it
+# reappears in `git status` for contributors who never opted in. A team that
+# does want to share workspace settings can track a specific file with
+# `git add -f .vscode/settings.json`.
+.vscode/
