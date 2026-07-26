@@ -36,6 +36,9 @@ jobs:
       - name: Verify vendored SPA is up-to-date
         run: uv run python scripts/vendor_spa.py --check
 {% endif %}
+      - name: Verify generated config artifacts are up-to-date
+        run: uv run python scripts/gen_config_surface.py --check
+
       - name: Run ruff check
         run: uv run ruff check src/ tests/
 

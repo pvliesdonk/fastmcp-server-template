@@ -435,6 +435,7 @@ jobs:
             -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
             -e 's/ are preserved across `copier update`\./ are domain-owned./' \
             -e 's/The block is preserved across `copier update`\./The block is domain-owned./' \
+            -e 's| on every `copier copy`/`copier update` and re-verified by| whenever config fields change, and re-verified by|' \
             CLAUDE.md && rm -f CLAUDE.md.bak
           # --- Closing ("You are now standalone"): remove the detach guide.
           #     FORKING.md's numbered Step 4 (README cleanup) is intentionally
@@ -645,7 +646,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Run aggregator tests
-        run: uv run --with pytest pytest scripts/tests/ -v
+        run: uv run --with pytest --with pyyaml --with jsonschema --with 'fastmcp-pvl-core>=4.5.0' pytest scripts/tests/ -v
 
       - name: Lint aggregator (ruff check matching downstream's config)
         # Mirror the rendered project's [tool.ruff.lint] block in
@@ -657,9 +658,9 @@ jobs:
             --select E,W,F,I,B,C4,UP,ARG,SIM,TC,PTH,RUF \
             --ignore E501 \
             --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/tests/
+            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/gen_config_surface.py scripts/tests/
 
       - name: Format check aggregator (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/tests/
+            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/gen_config_surface.py scripts/tests/
