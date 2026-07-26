@@ -1010,7 +1010,12 @@ def _assert_every_var_has_an_env_destination(
     )
 
 
-def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
+def write_artifacts(
+    project_root: Path,
+    *,
+    check: bool,
+    vars_: Sequence[Var] | None = None,
+) -> list[str]:
     """Render and write (or, with ``check=True``, just compare) the artifacts.
 
     Every artifact this generator produces is driven off `config-
@@ -1021,6 +1026,18 @@ def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
     unrecognised ``kind`` fails loudly instead of either silently producing
     nothing or raising a bare `KeyError`.
 
+    *vars_*, when given, is used as-is instead of calling `collect_vars`
+    internally — `collect_vars` re-imports `fastmcp_pvl_core`, reloads and
+    re-substitutes both presentation YAMLs, and re-runs
+    `_discover_domain_vars` (which imports the project's own `config` module
+    and can print a warning to stderr), so calling it twice in one process —
+    once by a caller that already needed the surface for its own reasons,
+    once again here — doubles that cost and, worse, duplicates any warning
+    `_discover_domain_vars` prints, making one problem read as two. Pass
+    ``None`` (the default) to keep collecting internally, unchanged from
+    before this parameter existed — every pre-existing call site still works
+    with no change.
+
     Returns the relative paths that are missing or whose on-disk content
     differs from the freshly rendered text — with ``check=False`` those are
     the paths actually written; an already-current file is left untouched
@@ -1030,7 +1047,8 @@ def write_artifacts(project_root: Path, *, check: bool) -> list[str]:
     answers = load_answers(project_root)
     env_prefix = _require_env_prefix(answers)
     presentation = load_presentation(_presentation_root(project_root), env_prefix)
-    vars_ = collect_vars(project_root, answers)
+    if vars_ is None:
+        vars_ = collect_vars(project_root, answers)
 
     artifacts: list[tuple[str, str]] = []
     for rel_path, file_spec in presentation.get("files", {}).items():
@@ -1187,6 +1205,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     stale, after printing each such path to stderr with a pointer to the
     command that fixes it; this is what a copier ``_tasks`` entry and CI both
     rely on to fail loudly instead of silently shipping stale files.
+
+    The config surface is collected exactly once here and threaded into
+    `write_artifacts` via its *vars_* parameter, so both the count line
+    below and the rendered artifacts share that one computation instead of
+    each calling `collect_vars` independently. `collect_vars` re-imports the
+    project's own `config` module as part of domain discovery, and that
+    import can print a warning to stderr on a broken `config.py`;
+    collecting twice per invocation used to print that warning twice for
+    one problem.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1206,7 +1233,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     if args.check:
-        stale = write_artifacts(project_root, check=True)
+        stale = write_artifacts(project_root, check=True, vars_=variables)
         if not stale:
             return 0
         for path in stale:
@@ -1217,7 +1244,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         return 1
 
-    written = write_artifacts(project_root, check=False)
+    written = write_artifacts(project_root, check=False, vars_=variables)
     if written:
         for path in written:
             print(f"Wrote {path}.")

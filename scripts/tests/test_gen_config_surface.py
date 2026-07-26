@@ -551,6 +551,45 @@ class TestWriteArtifacts:
     def test_check_reports_a_missing_file(self, fake_project):
         assert ".env.example" in g.write_artifacts(fake_project, check=True)
 
+    def test_omitting_vars_still_collects_internally(self, fake_project, monkeypatch):
+        """The default (no `vars_` argument) must behave exactly as before
+        this parameter existed: `write_artifacts` calls `collect_vars` itself
+        exactly once."""
+        calls: list[object] = []
+        real_collect_vars = g.collect_vars
+
+        def _counting_collect_vars(project_root, answers):
+            calls.append((project_root, answers))
+            return real_collect_vars(project_root, answers)
+
+        monkeypatch.setattr(g, "collect_vars", _counting_collect_vars)
+
+        g.write_artifacts(fake_project, check=False)
+
+        assert len(calls) == 1
+
+    def test_supplying_vars_skips_the_internal_collect_vars_call(
+        self, fake_project, monkeypatch
+    ):
+        """A caller that already collected the surface (e.g. `main()`) must
+        be able to pass it through without `write_artifacts` re-collecting —
+        `collect_vars` re-imports the project's own `config` module and can
+        print a warning to stderr, so a second, internal call would silently
+        duplicate that warning."""
+        answers = g.load_answers(fake_project)
+        vars_ = g.collect_vars(fake_project, answers)
+
+        def _raising_collect_vars(project_root, answers):  # noqa: ARG001
+            raise AssertionError(
+                "collect_vars must not be called when vars_ is supplied"
+            )
+
+        monkeypatch.setattr(g, "collect_vars", _raising_collect_vars)
+
+        written = g.write_artifacts(fake_project, check=False, vars_=vars_)
+
+        assert ".env.example" in written
+
 
 class TestUnplacedVarGuard:
     """C1: a var whose tags match no env-file section used to vanish from
@@ -1059,3 +1098,24 @@ class TestMain:
         check_result = _run_main(runnable_project, "--check")
         assert check_result.returncode == 1
         assert target.read_text(encoding="utf-8") == "tampered\n"
+
+    def test_broken_config_warns_exactly_once_per_invocation(self, runnable_project):
+        """C-double-collect: `main()` used to call `collect_vars` twice per
+        invocation (once directly, once again inside `write_artifacts`), and
+        `collect_vars` imports the project's own `config` module as part of
+        domain discovery. A project whose `config.py` fails to import (e.g.
+        it references a third-party package that is absent — exactly what
+        happens on the copier-update bootstrap path, which runs under
+        `uv run --no-project` with none of the project's own dependencies
+        installed) must print exactly one `WARNING:` line to stderr for one
+        `main()` invocation, not two identical ones for the same problem."""
+        cfg = runnable_project / "src" / "demo_mcp" / "config.py"
+        cfg.write_text("import nonexistent_third_party_pkg_xyz\n", encoding="utf-8")
+
+        result = _run_main(runnable_project)
+
+        assert result.returncode == 0, result.stderr
+        warning_lines = [
+            line for line in result.stderr.splitlines() if line.startswith("WARNING")
+        ]
+        assert len(warning_lines) == 1, result.stderr
