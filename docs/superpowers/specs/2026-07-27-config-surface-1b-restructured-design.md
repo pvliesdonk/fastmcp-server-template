@@ -137,9 +137,23 @@ rendered with `enable_authorization: true`, and those projects run Vale at
 fixes them; a baseline would have recorded a shipped bug as accepted, and
 would then have to be maintained and eventually retired.
 
-The 19 errors span 7 rules, all in one authored file: 6 `Google.EmDash`, 4
-`ai-tells.EmDashUsage`, 3 `Vale.Spelling`, 3 `Google.Latin`, and one each of
-`write-good.ThereIs`, `Google.OptionalPlurals`, `ai-tells.EmphaticCopula`.
+The errors span 8 rules across two authored files. `docs/guides/authorization.md`
+carries 19: 6 `Google.EmDash`, 4 `ai-tells.EmDashUsage`, 3 `Vale.Spelling`, 3
+`Google.Latin`, and one each of `write-good.ThereIs`,
+`Google.OptionalPlurals`, `ai-tells.EmphaticCopula`.
+`docs/guides/config-migration.md` carries 1, `ai-tells.OverusedVocabulary`.
+
+**The net covers the whole render, not only the generated regions, because
+the authored prose is agent-written too.** `ai-tells` is a rule pack built
+from the writing tics of Claude models, and every finding here is one:
+`git blame` attributes the authorization guide's flagged lines to a commit
+co-authored by Claude Opus 4.8. During the abandoned attempt, three further
+`ai-tells` errors were introduced by the agent doing the fixing — a spaced em
+dash and an italicised `*not*` in a README edit, and a normaliser that emitted
+"For example," while its own docstring said that phrase trips
+`FormalTransitions`. A gate scoped to generated output would have caught none
+of them. The author of this prose cannot self-review for these patterns; only
+the tool surfaces them.
 
 ### 4.2 Prose normalisation: minimal, verified against core
 
