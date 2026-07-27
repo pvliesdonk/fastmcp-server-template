@@ -1,12 +1,12 @@
 # Authorization
 
-This server supports opt-in **authorization** — gating individual tools,
+This server supports opt-in **authorization**, gating individual tools,
 resources, and prompts by *scope*. It is **off by default**: every
 authenticated caller can use everything. A component is gated only once
 it declares a required scope; one without is unrestricted regardless of
 caller.
 
-There are two ways to decide which scopes a caller holds — pick the one
+Two mechanisms decide which scopes a caller holds. Pick the one
 that matches how callers authenticate (see the
 [Authentication guide](authentication.md)):
 
@@ -16,23 +16,25 @@ that matches how callers authenticate (see the
 - **OIDC → an identity claim.** The server reads a claim the identity
   provider issues about the user (group or role membership) and treats
   its values as the caller's scopes. Set `{{ env_prefix }}_AUTHZ_CLAIM`
-  to that claim's name (e.g. `groups`).
+  to that claim's name, such as `groups`.
 
-To turn either on: set the relevant `{{ env_prefix }}_*` variable(s)
-and uncomment the matching block in `src/{{ python_module }}/server.py`
-(plus the config field it reads in `config.py`). Both may run together —
-e.g. an OIDC deployment that keeps a bearer break-glass account.
+To turn either on: set the relevant `{{ env_prefix }}_*` variables
+and build the matching `check` in `src/{{ python_module }}/server.py`,
+which ships commented out (plus the config field it reads in
+`config.py`). Install exactly one `AuthMiddleware`: to run both at once,
+such as an OIDC deployment that keeps a bearer break-glass account,
+combine the two checks with `any_check` rather than adding a second one.
 
 ## Gating by an OIDC claim
 
-Authorization reads OIDC **claims** — what the identity provider asserts
-about the *user* (their groups/roles) — not the OAuth scopes the client
-negotiated. Set `{{ env_prefix }}_AUTHZ_CLAIM` to the claim that carries
-the user's group/role list.
+Authorization reads OIDC **claims**, meaning what the identity provider
+asserts about the *user* (their groups/roles), not the OAuth scopes the
+client negotiated. Set `{{ env_prefix }}_AUTHZ_CLAIM` to the claim that
+carries the user's group/role list.
 
-**No mapping is needed when the names already match.** If your IdP's
+**No mapping is needed when the names already match.** If your identity provider's
 group names are the same strings as your tool scopes, a caller is
-granted exactly the values in their claim — there is nothing else to
+granted exactly the values in their claim, and there is nothing else to
 configure. Only when the two vocabularies differ do you supply a
 translation map in `{{ env_prefix }}_AUTHZ_GRANTS`, as inline JSON
 mapping each claim value to the scopes it grants:
@@ -56,21 +58,21 @@ Point `{{ env_prefix }}_ACL_PATH` at a TOML file shaped like:
 
 - **Subject strings are opaque.** The `<kind>:<id>` convention is
   documentation only; each subject is matched as a literal string.
-- **`*` is the only special scope** — it grants every required scope.
+- **`*` is the only special scope.** It grants every required scope.
   Subject-side wildcards (`*` as a subject key) are rejected at startup.
 - **Scope vocabulary is yours.** Per-project or per-folder gating is
-  encoded into the scope string itself (e.g. `read:project-foo`,
-  `write:vault/personal`).
+  encoded into the scope string itself, such as `read:project-foo` or
+  `write:vault/personal`.
 
 ### Aligning subjects with bearer tokens
 
-Subjects come from the authentication layer — see the
+Subjects come from the authentication layer. See the
 [Authentication guide](authentication.md) for how bearer tokens and OIDC
 map callers to subject strings. The subject keyed in this ACL is the
 same string used as a *value* in the bearer-tokens TOML
-(`{{ env_prefix }}_BEARER_TOKENS_FILE`) — keep the two consistent. In
+(`{{ env_prefix }}_BEARER_TOKENS_FILE`). Keep the two consistent. In
 single-token mode every caller shares one subject (the default
-`"bearer-anon"`, overridable via
+`"bearer-anon"`, which you can change with
 `{{ env_prefix }}_BEARER_DEFAULT_SUBJECT`).
 
 ## Operating notes
@@ -79,7 +81,7 @@ single-token mode every caller shares one subject (the default
   ACL file or the grants map.
 - **Fails fast on a structural error.** An unreadable or malformed file,
   the wrong shape, or a `*` subject key aborts startup rather than
-  running half-configured. A scope-*name* typo is **not** structural —
+  running half-configured. A scope-*name* typo is not structural:
   `"rite"` for `"write"` is valid and loads cleanly, then silently never
   matches, so those calls are denied. Double-check scope spelling
   against the table below.
@@ -103,7 +105,7 @@ single-token mode every caller shares one subject (the default
 
 ## See also
 
-- [Authentication guide](authentication.md) — how callers obtain the
+- [Authentication guide](authentication.md): how callers obtain the
   subject and claims this guide gates on.
 
 <!-- DOMAIN-AUTHZ-EXTRA-START -->
