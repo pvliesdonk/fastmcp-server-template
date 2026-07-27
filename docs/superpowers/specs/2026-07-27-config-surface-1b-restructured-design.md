@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-27
 **Status:** design approved, implementation not started
-**Supersedes:** `docs/superpowers/plans/2026-07-26-config-surface-generation-1b.md` (abandoned)
+**Supersedes:** `docs/superpowers/plans/2026-07-26-config-surface-generation-1b.md` (abandoned; exists only on the unpushed `feat/config-surface-splicing` spike at `283811e`, not on `main`)
 **Upstream spec:** `docs/superpowers/specs/2026-07-25-config-generation-and-ownership-model-design.md`, Stage 1
 **Closes (design-level):** #257, #260, plus four issues still to be filed (§8)
 
@@ -130,11 +130,20 @@ claims to verify". They belong together.
 with the same scope, version and flags the downstream `ci.yml` uses, and
 asserts **zero** errors.
 
-No baseline file. The 19 pre-existing errors are not acceptable noise — they
-are a live failure. `docs/guides/authorization.md` ships to every downstream
-rendered with `enable_authorization: true`, and those projects run Vale at
-`MinAlertLevel = error` with `fail_on_error: true`. They are red today. PR A
-fixes them; a baseline would have recorded a shipped bug as accepted, and
+No baseline file. The pre-existing errors are not acceptable noise.
+`docs/guides/authorization.md` ships to any downstream rendered with
+`enable_authorization: true`, and those projects run Vale at
+`MinAlertLevel = error` with `fail_on_error: true`, so such a project's build
+would be red.
+
+No current consumer is exposed: all seven sibling repos render with
+`enable_authorization` false or absent, so the blast radius today is zero.
+That makes this the cheapest possible moment to fix it rather than a reason to
+defer — the same reasoning applies to PR A's marker-adjacent edits, which
+would conflict on `copier update` for an authz-enabled downstream that had
+already populated its gated-tools table.
+
+PR A fixes the errors; a baseline would have recorded them as accepted, and
 would then have to be maintained and eventually retired.
 
 The errors span 8 rules across two authored files. `docs/guides/authorization.md`

@@ -17,7 +17,10 @@
 - **`ai-tells.EmDashUsage` flags an em dash at any spacing, and an en dash too.** `A—B` unspaced is an error.
 - **Marker tokens are load-bearing.** `DOMAIN-AUTHZ-SCOPES-START`, `DOMAIN-AUTHZ-SCOPES-END`, `DOMAIN-AUTHZ-EXTRA-START`, `DOMAIN-AUTHZ-EXTRA-END` must survive verbatim. Only the human-readable text *after* a marker token may change.
 - **The exit criterion is `vale` reporting zero, not "the 20 listed errors are fixed".** Vale's reported set shifts as edits land: only 6 of the file's 11 spaced em dashes are currently reported, for reasons not derivable from `.vale.ini`. Fix the whole class, then re-run until zero.
-- **`.vscode/` is untracked on this branch** (its ignore rule is PR G). Move it aside before any render, or `copier` mints a temp commit per render and `_commit` differs between two otherwise identical renders.
+- **`.vscode/` is untracked on this branch** (its ignore rule is PR G). Two consequences, and both bit during execution:
+  - Add it to `.git/info/exclude` **before starting**. That file is local-only and never committed. Without it, any `git add -A` sweeps `.vscode/` into a commit, which is how it landed in this PR's first attempt and had to be rewritten out.
+  - Move it aside before any render. Otherwise `copier` mints a temp commit per render and `_commit` differs between two otherwise identical renders. Once it is *tracked*, moving it aside dirties the tree and causes the same divergence — so do the exclude first.
+- **Run `check_render_hygiene.py` on a pristine render.** `vale sync` downloads style packages into the render tree, and `uv sync` writes a venv; either makes hygiene fail on files the change never touched. Render for hygiene, then copy the render before linting it.
 - Verification renders use `--vcs-ref=HEAD`, so **commit before rendering**.
 
 ---
@@ -29,6 +32,7 @@
 | `docs/guides/{% if enable_authorization %}authorization.md{% endif %}.jinja` | the authorization guide; 19 errors | Modify |
 | `docs/guides/config-migration.md.jinja` | the config migration guide; 1 error | Modify |
 | `docs/superpowers/specs/2026-07-27-config-surface-1b-restructured-design.md` | design spec | Already committed as `f4b5552`; rides along |
+| `docs/superpowers/plans/2026-07-27-pr-a-clear-vale-errors.md` | this plan | Rides along; it is in its own reviewed range |
 
 The authorization guide's filename contains a Jinja conditional, so it renders only when `enable_authorization` is true. Quote the path in every shell command.
 
@@ -54,6 +58,8 @@ Filing is outward-facing. Show this draft and wait for approval:
 > Fixes must be prose rewordings. `.vale.ini` and the Vocab accept list are both `_skip_if_exists`, so adding an accepted term would reach new renders only and leave existing downstreams red.
 >
 > **Verification:** render the template and run `vale --glob='!docs/{superpowers,design,decisions}/**' docs README.md`; it must report 0 errors.
+>
+> — 🤖 _Automated post by Claude Code (agent) via the account owner's GitHub token; agent analysis/proposal, not a personal directive from the account owner._
 
 - [ ] **Step 2: File it**
 
@@ -63,9 +69,21 @@ gh issue create --repo pvliesdonk/fastmcp-server-template \
   --body-file /tmp/pr-a-issue.md
 ```
 
-Write the approved body to `/tmp/pr-a-issue.md` first. Append the agent-attribution signature line required by the operator's global instructions.
+Write the approved body to `/tmp/pr-a-issue.md` first, including the signature line shown at the end of the draft above. It is required verbatim on every agent-authored GitHub post, the PR body included.
 
-- [ ] **Step 3: Rename the branch so it reflects the PR**
+- [ ] **Step 3: Stop `.vscode/` reaching a commit**
+
+```bash
+printf '.vscode/\n' >> .git/info/exclude
+git status --porcelain | grep -c vscode
+```
+
+Expected: `0`. `.git/info/exclude` is local-only and never committed. Do
+this **before** any `git add -A`, and before parking `.vscode/` for a
+render: once it is tracked, parking it dirties the tree and `_commit`
+diverges between two otherwise identical renders.
+
+- [ ] **Step 4: Rename the branch so it reflects the PR**
 
 ```bash
 git branch -m docs/config-surface-1b-redesign fix/docs-vale-errors
@@ -191,15 +209,28 @@ git add -A && git commit -q -m "wip" && mv .vscode /tmp/vscode-parked 2>/dev/nul
 rm -rf /tmp/pr-a && uv run --no-project --with copier copier copy --trust --defaults \
   --vcs-ref=HEAD --data-file tests/fixtures/smoke-answers.yml . /tmp/pr-a 2>&1 | tail -1
 mv /tmp/vscode-parked .vscode 2>/dev/null
-cd /tmp/pr-a && vale docs/guides/authorization.md 2>&1 | tail -2
+cd /tmp/pr-a && vale sync >/dev/null 2>&1
+vale docs/guides/authorization.md 2>&1 | tail -2
 ```
 
-Expected: `0 errors`. If any error remains, fix it and repeat this step — the reported set shifts as edits land.
+`vale sync` is required after **every** fresh render: the style packages live
+under the render's own `.vale/styles`, so a new render has none and `vale`
+exits with `E100 [loadStyles] Runtime error`.
+
+Expected: `0 errors`.
+
+If any error remains, apply **only** a substitution from the catalogue in
+Steps 2-4 (`e.g.` to `such as`; a spaced dash to `.`, `,` or `:`; a
+non-vocabulary word reworded away) and re-run. If the remaining error is
+not covered by that catalogue, **stop and report the `vale` output** rather
+than improvising a reword: the replacement has to be lint-clean itself, and
+the obvious substitutions are frequently not. Do not add a Vocab term.
 
 - [ ] **Step 7: Squash the wip commit and commit properly**
 
 ```bash
-git reset --soft HEAD~1
+git reset HEAD~1   # mixed, NOT --soft: --soft leaves the wip index staged,
+                   # so the selective add below would be a no-op
 git add 'docs/guides/{% if enable_authorization %}authorization.md{% endif %}.jinja'
 git commit -m "$(cat <<'EOF'
 fix(docs): clear the authorization guide's Vale errors
@@ -291,7 +322,7 @@ Expected: `0 errors`.
 - [ ] **Step 5: Squash and commit**
 
 ```bash
-git reset --soft HEAD~1
+git reset HEAD~1   # mixed, not --soft; see Task 1 Step 7
 git add docs/guides/config-migration.md.jinja
 git commit -m "$(cat <<'EOF'
 fix(docs): drop an overused adverb from the migration guide
@@ -355,11 +386,13 @@ Expected: `Documentation built in …` with no warnings.
 git diff --name-only 352c0c9..HEAD
 ```
 
-Expected exactly three paths — the two guides plus the design spec from `f4b5552`:
+Expected exactly four paths — the two guides, plus the design spec and this
+plan, both of which ride along in this PR:
 
 ```
 docs/guides/config-migration.md.jinja
 docs/guides/{% if enable_authorization %}authorization.md{% endif %}.jinja
+docs/superpowers/plans/2026-07-27-pr-a-clear-vale-errors.md
 docs/superpowers/specs/2026-07-27-config-surface-1b-restructured-design.md
 ```
 
