@@ -344,6 +344,16 @@ These must reach the release note and the rollout issue.
 | G | to file — `.vscode/` is untracked noise and `.mcp.json/` never matched the file |
 | H | to file — dead `READ_ONLY` in the `.mcpb` manifest (the remainder of #240) |
 
+Two pre-existing defects were found by PR A's review and filed rather than
+folded in, since neither belongs to a prose-linting change:
+
+- **#267** — the authorization guide's `See also` has no pvl-core reference.
+  Raised twice on #181 and unanswered. Belongs with C, which owns that
+  guide's prose.
+- **#268** — `config-migration.md` misdescribes the AST scan and steers a
+  reader into the duplicate-name `SystemExit`. The same wording appears in
+  five files, so it is a sweep. Belongs with E, which owns domain discovery.
+
 At merge time the **squashed commit message's** closing keywords are what
 GitHub acts on, not the PR body. A stale `Closes` line in Stage 1a's squashed
 commit auto-closed three issues that still had work outstanding.
