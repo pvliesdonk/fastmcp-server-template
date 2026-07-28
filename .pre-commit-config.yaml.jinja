@@ -69,10 +69,17 @@ repos:
   # First commit touching docs/ or .vale.ini auto-runs `vale sync` because
   # the style-pack dirs are missing; subsequent commits are no-ops. Adding a
   # new package to .vale.ini's `Packages =` line, or bumping a pinned URL
-  # version, does NOT re-sync automatically — the four hard-coded pack-dir
-  # checks below don't see the new package, and bumped-version dirs still
+  # version, does NOT re-sync automatically — the hard-coded pack-dir checks
+  # below don't see the new package, and bumped-version dirs still
   # exist on disk. After such .vale.ini edits, run `vale sync` manually
   # (or `rm -rf .vale/styles/<pack>` to force re-sync via the hook).
+  #
+  # `.vale.ini`'s `Packages =` is the source of truth, and THREE places in
+  # this project restate it by hand: the `for p in` list below, `BasedOnStyles`
+  # in .vale.ini, and the cache `path:` in .github/workflows/ci.yml. Change
+  # `Packages =` and all three must change with it — a pack missing from the
+  # list below leaves this hook blind to it, so `vale sync` never fires and
+  # the `vale` hook right after exits `E100 [loadStyles]`.
   - repo: local
     hooks:
       - id: vale-sync

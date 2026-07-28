@@ -25,8 +25,8 @@ jobs:
 
       - name: Render smoke project with copier
         # --vcs-ref=HEAD is not optional here; every render step in this file
-        # carries it. See the clean-tree assertion step below for why, and why
-        # removing it from one step alone breaks the job locally.
+        # carries it. See the `clean-tree toggle renders` step below for why,
+        # and why removing it from one step alone breaks the job locally.
         run: |
           uv run --no-project --with copier \
             copier copy --trust --defaults --vcs-ref=HEAD \
@@ -113,6 +113,47 @@ jobs:
             --data enable_authorization=false \
             . /tmp/smoke-authz-off
 
+      - name: clean-tree toggle renders
+        # Split out from the assertion step below and placed here for the same
+        # reason as the authorization render above: a variant rendered after the
+        # hygiene gate is a branch that gate never sees. The opt-out is a
+        # {%- if %} trim inside tests/test_structural_gate.py, which is exactly
+        # the "Jinja tag in one branch of a conditional" class of #251.
+        #
+        # --vcs-ref=HEAD renders the working-tree commit — the canonical
+        # explanation for every render step in this file. Without it copier
+        # defaults to the latest git tag, which predates this step's variable: a
+        # clone that HAS tags (a normal local checkout) then renders the old
+        # template, ignores the --data, and the assertions below break. CI's
+        # default checkout fetches no tags, so copier falls through to HEAD and
+        # they pass even unpinned — i.e. an omitted pin slips through CI and
+        # breaks only on a local full clone.
+        #
+        # EVERY render step here carries the pin for that reason; they are not
+        # independent choices. The Vale gate forced the issue: it lints rendered
+        # PROSE, so in a tag-bearing clone it reported 19 errors against docs the
+        # merged tree had already fixed, blaming the working tree for the last
+        # release's text. The assertion-only steps failed less loudly but the
+        # same way. Pin them together or the job means something different
+        # locally than it does in CI.
+        #
+        # The smoke/smoke2 idempotence pair in particular must stay pinned
+        # TOGETHER: pinning one and not the other makes them render different
+        # templates in a tag-bearing clone, and the diff reports a template
+        # idempotence failure that does not exist.
+        run: |
+          rm -rf /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off
+          # default render (flag true): the whole-tree self-check MUST be present.
+          uv run --no-project --with copier \
+            copier copy --trust --defaults --vcs-ref=HEAD \
+            --data-file tests/fixtures/smoke-answers.yml \
+            . /tmp/smoke-cleantree-on
+          uv run --no-project --with copier \
+            copier copy --trust --defaults --vcs-ref=HEAD \
+            --data-file tests/fixtures/smoke-answers.yml \
+            --data structural_gate_assert_clean_tree=false \
+            . /tmp/smoke-cleantree-off
+
       - name: render hygiene (pristine render already satisfies the shipped hooks)
         # The template ships `trailing-whitespace` and `end-of-file-fixer`
         # (.pre-commit-config.yaml.jinja). Both REWRITE files, so anything they
@@ -134,9 +175,13 @@ jobs:
         # of a conditional, so checking a single variant would miss it. Any new
         # render step belongs above this one and in the argument list below;
         # a variant rendered further down is a branch this guard never sees.
+        # /tmp/smoke2 is excluded deliberately: the idempotence step already
+        # asserts it is byte-identical to /tmp/smoke, so checking it again
+        # could not fail independently.
         run: |
           python3 scripts/check_render_hygiene.py \
-            /tmp/smoke /tmp/smoke-gate-off /tmp/smoke-authz-off
+            /tmp/smoke /tmp/smoke-gate-off /tmp/smoke-authz-off \
+            /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off
 
       - name: structural gate clean-tree assertion present (default) / dropped (opt-out)
         # structural_gate_assert_clean_tree gates ONLY the whole-tree clean
@@ -147,49 +192,19 @@ jobs:
         # absence, and a missing test passes pytest vacuously, so assert the
         # rendered file directly — BOTH halves: present under the default render,
         # absent under the opt-out (an inverted condition would otherwise drop the
-        # self-check from every downstream and still go green).
-        #
-        # --vcs-ref=HEAD renders the working-tree commit. Without it copier
-        # defaults to the latest git tag, which predates this variable: a clone
-        # that HAS tags (a normal local checkout) then renders the old template,
-        # ignores the --data, and these assertions break. CI's default checkout
-        # fetches no tags, so copier falls through to HEAD and the assertions pass
-        # even unpinned — i.e. an omitted pin slips through CI and breaks only on a
-        # local full clone.
-        #
-        # EVERY render step in this file carries the pin for that reason; they
-        # are not independent choices. The Vale gate is what forced the issue:
-        # it lints rendered PROSE, so in a tag-bearing clone it reported 19
-        # errors against docs the merged tree had already fixed, blaming the
-        # working tree for the last release's text. The assertion-only steps
-        # failed less loudly but the same way. Pin them together or the job
-        # means something different locally than it does in CI.
-        #
-        # The smoke/smoke2 idempotence pair in particular must stay pinned
-        # TOGETHER: pinning one and not the other makes them render different
-        # templates in a tag-bearing clone, and the diff reports a template
-        # idempotence failure that does not exist.
+        # self-check from every downstream and still go green). The two renders
+        # it asserts over are produced by the `clean-tree toggle renders` step
+        # above, which is also where the --vcs-ref=HEAD rationale lives.
         #
         # Both rendered variants of the gate's own test file are then linted: the
         # opt-out trim must leave no unused import, and the jinja if/endif
         # whitespace seam must stay format-clean in both the present and absent
         # branches.
         run: |
-          rm -rf /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off
-          # default render (flag true): the whole-tree self-check MUST be present.
-          uv run --no-project --with copier \
-            copier copy --trust --defaults --vcs-ref=HEAD \
-            --data-file tests/fixtures/smoke-answers.yml \
-            . /tmp/smoke-cleantree-on
           grep -q 'def test_shipped_code_passes_the_structural_overlay_cleanly' /tmp/smoke-cleantree-on/tests/test_structural_gate.py \
             || { echo "::error::clean-tree assertion missing from the default render"; exit 1; }
           # opt-out render (flag false): the whole-tree self-check MUST be dropped,
           # everything else MUST remain.
-          uv run --no-project --with copier \
-            copier copy --trust --defaults --vcs-ref=HEAD \
-            --data-file tests/fixtures/smoke-answers.yml \
-            --data structural_gate_assert_clean_tree=false \
-            . /tmp/smoke-cleantree-off
           off=/tmp/smoke-cleantree-off
           test -f "$off/tests/test_structural_gate.py" \
             || { echo "::error::structural test file missing — gate should still render"; exit 1; }
@@ -453,10 +468,14 @@ jobs:
           [ "$BASED" = "$PACKS" ] \
             || { echo "::error::.vale.ini pack drift — BasedOnStyles=[$BASED] but Packages=[$PACKS]. A style in BasedOnStyles that Packages never fetches makes vale exit E100 [loadStyles]; a fetched pack no style uses is dead weight."; exit 1; }
 
-          # This workflow's own cache path:. Bounded by the step name above and
-          # the `key:` below, and anchored to the start of the line, so the
-          # step's own prose mention of .vale/styles/config/ cannot match.
-          CACHED=$(awk '/- name: cache vale style packs/{f=1} f && /^ *key:/{exit} f' \
+          # This workflow's own cache path:, bounded to that step by an anchored
+          # step-name match and the `key:` that ends the path list. The step
+          # name is anchored at both ends (`^      - name: …$`) so this awk
+          # program's OWN line — which contains the same literal, but indented
+          # inside a run: block — cannot start the scan early. Pack names are
+          # matched only at line start, so the step's prose mention of
+          # .vale/styles/config/ cannot match either.
+          CACHED=$(awk '/^      - name: cache vale style packs$/{f=1} f && /^ *key:/{exit} f' \
               .github/workflows/template-ci.yml \
             | grep -oE '^[[:space:]]+/tmp/smoke/\.vale/styles/[A-Za-z0-9._-]+' \
             | sed -E 's#^.*/##' | sort -u | paste -sd' ' - || true)
@@ -466,7 +485,7 @@ jobs:
           # The same enumeration in the RENDERED ci.yml. It drifts identically
           # and nothing else checks it, so a pack change that reaches downstream
           # with a stale cache list would otherwise be invisible here.
-          DOWNSTREAM=$(awk '/- name: Cache Vale style packages/{f=1} f && /^ *key:/{exit} f' \
+          DOWNSTREAM=$(awk '/^      - name: Cache Vale style packages$/{f=1} f && /^ *key:/{exit} f' \
               /tmp/smoke/.github/workflows/ci.yml \
             | grep -oE '^[[:space:]]+\.vale/styles/[A-Za-z0-9._-]+' \
             | sed -E 's#^.*/##' | sort -u | paste -sd' ' - || true)
@@ -478,7 +497,16 @@ jobs:
           # does not know about is never seen as missing, so the hook stays
           # quiet and the `vale` hook right after it exits E100 on the
           # downstream's machine — the local mirror of the CI failure above.
-          PRECOMMIT=$(canon_packs "$(awk '/- id: vale-sync/{f=1} f && /^[[:space:]]*for p in /{print; exit}' \
+          #
+          # Anchored at BOTH ends and bounded by the next `- id:`, which is the
+          # posture #159 established for the sibling extraction ~100 lines up.
+          # Unanchored, `- id: vale-sync` also matches `- id: vale-sync-foo`;
+          # unbounded, awk scans to EOF when the loop is reworded and captures
+          # a later hook's `for p in`, reporting that hook's list as this one's.
+          PRECOMMIT=$(canon_packs "$(awk '
+              /^[[:space:]]*-[[:space:]]*id:[[:space:]]*vale-sync[[:space:]]*$/{f=1; next}
+              f && /^[[:space:]]*-[[:space:]]*id:/{exit}
+              f && /^[[:space:]]*for p in /{print; exit}' \
               /tmp/smoke/.pre-commit-config.yaml \
             | sed -E 's/^[[:space:]]*for p in //; s/;[[:space:]]*do[[:space:]]*$//' | tr ' ' ',')")
           [ "$PRECOMMIT" = "$PACKS" ] \
@@ -612,15 +640,29 @@ jobs:
           # inside its match span, so the gate above can pass prose that still
           # carries a flagged pattern. Reported, not enforced: a downstream's
           # own legitimate vocabulary additions must not break template CI.
+          #
+          # "Advisory" has to hold for the block's own failures too. It runs
+          # under this step's `set -euo pipefail`, so an unguarded `cp` here
+          # would abort the step with a bare `cp: cannot stat …` and no
+          # ::error::, AFTER the real gate has already passed — turning the
+          # advisory into a red build with no diagnostic, the exact
+          # diagnostic-loss shape #256 removed from this file. The accept.txt
+          # path is `_skip_if_exists` in copier.yml, so it is a rename-sensitive
+          # literal: check it, and trap so an abort between the emptying and the
+          # restore cannot leave the vocabulary gutted for later steps.
           ( cd /tmp/smoke
             ACC=.vale/styles/config/vocabularies/Base/accept.txt
+            if [ ! -f "$ACC" ]; then
+              echo "::warning::$ACC not found — skipping the suppressed-findings advisory"
+              exit 0
+            fi
             cp "$ACC" "$RUNNER_TEMP/accept.bak"
+            trap 'cp "$RUNNER_TEMP/accept.bak" "$ACC" 2>/dev/null || true' EXIT
             grep -E '^\s*(#|$)' "$RUNNER_TEMP/accept.bak" > "$ACC" || true
             STRICT=$(vale "${VALE_FLAGS[@]}" "${FILES[@]}" 2>&1 | grep -E '^ *[0-9]+:' | grep -vc 'Vale.Spelling' || true)
-            cp "$RUNNER_TEMP/accept.bak" "$ACC"
             if [ "$STRICT" != "0" ]; then
               echo "::warning::$STRICT non-spelling Vale finding(s) are suppressed by an accepted vocabulary term; re-run with an emptied accept.txt to see them"
-            fi )
+            fi ) || echo "::warning::the suppressed-findings advisory could not run; the gate above is unaffected"
 
       - name: detach smoke (FORKING.md commands produce a clean standalone state)
         working-directory: /tmp/smoke

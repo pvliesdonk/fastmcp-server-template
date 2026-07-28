@@ -287,8 +287,13 @@ jobs:
         # stay authoritative from checkout. Caching the whole .vale/styles tree
         # would let restore-keys overwrite a newly-added vocab term with the
         # stale snapshot on the exact PR that adds the term.
-        # Pack list mirrors the Packages = line in .vale.ini; if you add or
-        # remove a pack, update both. Bump the v1- prefix to evict all cached
+        # Pack list mirrors the Packages = line in .vale.ini. That line is the
+        # source of truth and THREE places restate it by hand: this path: list,
+        # BasedOnStyles in .vale.ini, and the `for p in` list in the vale-sync
+        # pre-commit hook. Adding or removing a pack means changing all three —
+        # a stale list here silently re-downloads the pack on every run, and a
+        # stale BasedOnStyles makes vale exit E100 [loadStyles].
+        # Bump the v1- prefix to evict all cached
         # packs if Vale changes pack format backward-incompatibly.
         uses: actions/cache@v6
         with:

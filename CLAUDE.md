@@ -30,27 +30,26 @@ create new projects.
 1. Edit the relevant `.jinja` file(s).
 2. Commit (copier reads from the git index — uncommitted changes are
    silently ignored without `--vcs-ref=HEAD`).
-3. Render locally and verify the gate passes:
+3. Render locally:
    ```bash
    rm -rf /tmp/smoke
    uv run --no-project --with copier copier copy --trust --defaults \
      --vcs-ref=HEAD --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
-   cd /tmp/smoke
-   uv sync --all-extras --all-groups
-   uv run ruff check . && uv run ruff format --check .
-   uv run mypy src/ tests/ && uv run pytest -x -q
    ```
    `--vcs-ref=HEAD` tells copier to use the latest commit instead of the
    latest git tag (the default).  Without it, your edits render only
    after a release.  If you need to iterate, amend the commit or make
    follow-up commits — rendering from the working tree is not supported.
-4. Check the render is hygiene-clean.  Run this **before** anything
-   writes into the tree, or on a second pristine render: both `uv sync`
-   (step 3) and `vale sync` (step 5) leave files behind, and the guard
-   reports them as violations the change never caused.
+4. Check the render is hygiene-clean, **before anything writes into the
+   tree**.  This is why it comes before steps 5 and 6 rather than after:
+   both `vale sync` and `uv sync` leave files behind, and the guard
+   reports those as violations the change never caused.  `template-ci`
+   runs it in this same position, ahead of its own `uv sync`.
    ```bash
    python3 scripts/check_render_hygiene.py /tmp/smoke
    ```
+   If you have already run step 5 or 6 in `/tmp/smoke`, re-render into a
+   fresh directory and check that instead — do not "clean up" the tree.
 5. Check the rendered prose is Vale-clean.  `template-ci` gates on this,
    and it is the only pre-push path: the template's own sources are
    `.md.jinja`, which Vale cannot usefully lint.
@@ -61,11 +60,21 @@ create new projects.
    ```
    Match the Vale version pinned in the rendered `.github/workflows/ci.yml`;
    a different local binary can report differently.  The file set and glob
-   above are a convenience copy — `template-ci` extracts both from that
-   rendered `ci.yml` rather than restating them, so the gate cannot drift
-   from what a downstream runs.
-6. Commit any fixes, push, open a PR.
-7. `template-ci.yml` runs the gate on Python 3.11–3.14.  The Vale step
+   above are a convenience copy — `template-ci` extracts the version, file
+   set and glob from that rendered `ci.yml` rather than restating them, so
+   those three cannot drift from what a downstream runs.  One divergence is
+   deliberate: a downstream's `ci.yml` sets `filter_mode: added`, failing
+   only on findings on lines its PR touched, while this gate lints the whole
+   set — the template owns this prose, so all of it must stay clean.
+6. Verify the generated project's own gate passes:
+   ```bash
+   cd /tmp/smoke
+   uv sync --all-extras --all-groups
+   uv run ruff check . && uv run ruff format --check .
+   uv run mypy src/ tests/ && uv run pytest -x -q
+   ```
+7. Commit any fixes, push, open a PR.
+8. `template-ci.yml` runs the gate on Python 3.11–3.14.  The Vale step
    runs on 3.11 alone: its result does not depend on the interpreter, and
    syncing style packs is a network fetch.
 
@@ -82,7 +91,10 @@ The classic trap (issue #251) is a Jinja block tag at EOF — Jinja has no
 `trim_blocks` here, so the newline after `{% endif %}` survives and the
 render ends with a blank line.  Use `{%- endif %}` or put real content
 after it.  `scripts/check_render_hygiene.py` is the guard; `template-ci`
-runs it over both the default and gate-off renders.
+runs it over every variant it renders — default, gate-off,
+authorization-off, and the two clean-tree toggle renders.  A variant is
+only covered if it is rendered *above* the hygiene step and named in its
+argument list, so a new render step belongs in both places.
 
 ## Release
 

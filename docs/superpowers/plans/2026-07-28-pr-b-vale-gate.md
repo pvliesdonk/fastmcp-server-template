@@ -10,7 +10,12 @@ This plan states decisions and how each is verified. Exact edits belong in the e
 
 ## Scope
 
-One file, `.github/workflows/template-ci.yml`. No template sources, no generator, no docs.
+Primarily `.github/workflows/template-ci.yml`. Review widened it to the
+documentation and comments the gate makes load-bearing: `CLAUDE.md` (the local
+routine, reordered so hygiene runs before anything writes), and the pack-list
+comments in `.github/workflows/ci.yml.jinja` and `.pre-commit-config.yaml.jinja`
+that told a maintainer to update fewer places than actually exist. No generator,
+no rendered prose.
 
 ## Decisions
 
@@ -20,7 +25,13 @@ One file, `.github/workflows/template-ci.yml`. No template sources, no generator
 
 **D3 — assert zero, no baseline.** `main` is clean, so there is nothing to baseline. A baseline would also have to be maintained and retired.
 
-**D4 — two variants, chosen for what they change in the linted set.** Corrected twice during review. The job's existing second render toggles `enable_structural_gate`, which nothing under `docs/` or `README.md` is conditioned on, so its prose is byte-identical and linting it buys nothing. `enable_authorization` is the flag that matters: off, it drops `docs/guides/authorization.md` entirely and changes both `README.md` and `docs/guides/authentication.md`. The gate renders that variant itself and lints both. The style packs are fetched once and copied, since the network fetch is the expensive part and both renders resolve the same `Packages` line.
+**D4 — two variants, chosen for what they change in the linted set.** Corrected twice during review. The job's existing second render toggles `enable_structural_gate`, which nothing under `docs/` or `README.md` is conditioned on, so its prose is byte-identical and linting it buys nothing. `enable_authorization` is the flag that matters: off, it drops `docs/guides/authorization.md` entirely and changes both `README.md` and `docs/guides/authentication.md`. The style packs are fetched once and copied, since the network fetch is the expensive part and both renders resolve the same `Packages` line.
+
+Corrected a third time in review: the gate does **not** render the variant itself. Rendering it inside the gate step put it after `uv sync` and after the gate's own pack copy, where the render-hygiene guard can never see it — and `enable_authorization=false` is exactly the "Jinja tag at EOF in one branch of a conditional" case #251 is about. Every variant is rendered above the hygiene step and named in its argument list; the gate consumes those trees.
+
+**D8 — the pack list is derived, not restated.** `.vale.ini`'s `Packages =` is the source of truth, and four places enumerated it by hand: this workflow's cache `path:`, the rendered `ci.yml`'s cache `path:`, the rendered pre-commit `vale-sync` hook's `for p in`, and `.vale.ini`'s own `BasedOnStyles`. None failed loudly on drift, and a `BasedOnStyles` entry `Packages` does not fetch makes vale exit `E100 [loadStyles]` — which the gate would report as "rendered prose must be clean", the packs-versus-prose misdiagnosis its `vale sync` guard exists to prevent. A `vale pack-list lockstep` step derives the set and asserts all four; the gate consumes it rather than becoming a fifth. `actions/cache` takes no shell variable, so the two cache lists stay literal and are asserted rather than generated.
+
+**D9 — the gate asserts it linted something.** A non-empty extraction does not prove the gate examined a file: `vale --glob='!**' docs README.md` prints "0 errors ... in 0 files." and exits 0. The gate reads back vale's own file count and requires it positive, so a `files` list or glob that stays syntactically valid while matching nothing fails instead of going green over an empty set.
 
 **D5 — the strict run is advisory, not gating.** An accepted vocabulary term suppresses non-spelling rules inside its match span, so a plain zero can hide a flagged pattern. `main` is currently clean both ways. Gate on the plain run, which is what a downstream experiences; report the strict run without failing on it, so a suppressed pattern is visible without making a downstream's own vocabulary additions break template CI. Revisit if the advisory output proves noisy.
 

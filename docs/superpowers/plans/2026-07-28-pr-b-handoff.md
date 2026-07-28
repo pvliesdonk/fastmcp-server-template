@@ -1,166 +1,149 @@
-# PR B handoff — Vale gate in template-ci
+# PR B review record — Vale gate in template-ci
 
-Written 2026-07-28, mid-review. **Not clean. Do not push.**
+What the review rounds found and how each was settled. Kept because the
+"verified clean" list below is what stops the next session re-litigating shell
+that has already been checked empirically.
 
-Read with `.superpowers/sdd/pr-b-brief.md` (original scope) and
-`docs/superpowers/plans/2026-07-28-pr-b-vale-gate.md` (decisions D1-D7).
+Read with `docs/superpowers/plans/2026-07-28-pr-b-vale-gate.md` (decisions
+D1-D9).
 
-## State
+## Findings and their resolution
 
-Branch `ci/vale-gate-over-render`, HEAD `b4bc2ee`, 5 commits, **unpushed**.
-Base `main` @ `1fd4657`. `Closes #270`.
+### 1. The pack list was restated, in the step whose own comment forbids restating
 
-Files touched: `.github/workflows/template-ci.yml`, `CLAUDE.md`,
-`docs/superpowers/plans/2026-07-28-pr-b-vale-gate.md`.
+`.vale.ini`'s `Packages =` is the source of truth. Four places enumerated it by
+hand: this workflow's cache `path:`, the rendered `ci.yml`'s cache `path:`, the
+rendered pre-commit `vale-sync` hook's `for p in`, and `.vale.ini`'s own
+`BasedOnStyles`. The gate extracts `version`, `files` and `vale_flags` from the
+rendered `ci.yml` precisely so they cannot drift, and carries a comment saying
+"Extract, never restate (#143/#159)" — while hardcoding the pack list twice.
 
-Circus round 2 ran against `1fd4657..3087af3`, one commit behind current HEAD.
+Consequence of adding a fifth pack: both caches miss it, so it is re-downloaded
+every run and the cache steps silently stop doing their job; the pre-commit hook
+never sees it as missing, so a downstream's local `vale` breaks with no sync;
+and a `BasedOnStyles` entry `Packages` does not fetch makes vale exit
+`E100 [loadStyles]`, which the gate reports as "rendered prose must be clean" —
+the packs-versus-prose misdiagnosis its `vale sync` guard exists to prevent.
 
-## Resolved in `b4bc2ee`
+**Settled:** a `vale pack-list lockstep` step derives the set from `Packages =`
+and asserts all four enumerations against it; the gate consumes the derived list
+via `VALE_PACKS`. The pre-commit hook was a member of the class the original
+finding had not enumerated — found by grepping every pack name across the repo.
+`actions/cache` cannot take a shell variable in `path:`, so the two cache lists
+stay literal and are asserted rather than generated. #159's rule that
+`.vale/styles/config/` is never cached is preserved: the enumeration stays
+directory-wise.
 
-The local routine in `CLAUDE.md` ordered `vale sync` before the
-render-hygiene check. Lenses 1, 2 and 3 each found it independently. Fixed:
-hygiene is step 4, Vale is step 5, and the caveat names both `uv sync` and
-`vale sync` as tree-writers. Two false claims in the same block were also
-corrected (a version described as pinned but absent, and "3.11-3.14" for a
-step gated to 3.11).
+### 2. The authorization render bypassed the render-hygiene gate
 
-Verified empirically: `check_render_hygiene.py` **fails** on a `vale sync`'d
-render, because `_SKIP_DIRS` covers `.git/.venv/__pycache__` and the tool
-caches but not `.vale/styles`. So it walks the downloaded packs and reports
-`Google/EmDash.yml` as a violation. The ordering fix is load-bearing.
+It was rendered inside the Vale step — after `uv sync` and before the gate's own
+pack copy, a position where hygiene can never be checked. PR #252 established
+that hygiene covers the gate-off render "because a Jinja tag at EOF only appears
+in one branch of a conditional", and `enable_authorization=false` is exactly
+such a branch.
 
-## Open findings — none fixed
+**Settled:** rendered beside its sibling variants, above the hygiene step and in
+its argument list. Review then found two more members of the same class — the
+clean-tree toggle renders — sitting below the hygiene step; those were split
+into their own render step and added too. Hygiene now covers all five variants.
+`/tmp/smoke2` is deliberately excluded: the idempotence step already asserts it
+is byte-identical to `/tmp/smoke`.
 
-### 1. The pack list is restated, in the step whose own comment forbids restating (lens 5)
+### 3. `--vcs-ref=HEAD` was missing on the new render
 
-`template-ci.yml:365-371` (cache `path:`) and `:442`
-(`for PACK in Google proselint write-good ai-tells`).
+**Settled by pinning every render step**, not by documenting the gap. The Vale
+gate made the cost concrete: run locally in a tag-bearing clone, it reported 19
+errors against docs merged `main` had already fixed (copier rendered
+`_commit: v2.11.2`; the next commit on main is `1fd4657 fix(docs): clear every
+Vale error`). The assertion-only siblings failed less loudly the same way. The
+`smoke`/`smoke2` idempotence pair must stay pinned together or it reports a
+failure that does not exist.
 
-`.vale.ini.jinja:45` (`Packages =`) is the source of truth. The step extracts
-`version`, `files` and `vale_flags` from the rendered `ci.yml` precisely so
-they cannot drift, and carries a comment at `:388-390` saying "Extract, never
-restate (#143/#159)". The pack list is the one piece of Vale configuration it
-hardcodes instead — twice. `ci.yml.jinja:290-292` already says a pack change
-means updating "both" places; this makes it four, and that comment was not
-updated.
+### 4. Extraction pipelines could not print their own diagnostics
 
-Consequence of adding a fifth pack: the cache `path:` misses it so it is
-re-downloaded every run, silently defeating the cache step's stated purpose;
-and the copy loop misses it so `/tmp/smoke-authz-off` lacks a style that
-`BasedOnStyles` lists, and Vale exits `E100 [loadStyles]`. The step reports
-that as `::error::vale reports errors in /tmp/smoke-authz-off — rendered prose
-must be clean`: exactly the packs-versus-prose misdiagnosis the adjacent
-`vale sync` guard exists to prevent.
+A zero-match `grep` exits 1, and under `pipefail` that killed the step at the
+assignment — before the guard written to diagnose exactly that case could print.
+The shape #159 already fixed once in the version-pin step. **Settled:** every
+extraction pipeline carries `|| true`, with the emptiness caught by the guard.
 
-Direction: derive the pack list from the rendered `.vale.ini`'s `Packages =`
-line and drive the copy loop from it. `actions/cache` cannot take a shell
-variable in `path:`, so that list stays literal — assert it equals the
-rendered `Packages` set so drift fails loudly. Note #159 forbids caching
-`.vale/styles/config/` (restore-keys would clobber a new vocab term with a
-stale snapshot), so the four-directory enumeration must stay directory-wise.
+### 5. The gate could pass over nothing
 
-### 2. The new render variant bypasses the render-hygiene gate (lens 4)
+Verified empirically: `vale --glob='!**' docs README.md` prints "0 errors ... in
+0 files." and exits 0. The non-empty extraction guards did not cover a `files`
+list or glob that stays syntactically valid while matching nothing.
+**Settled:** the gate reads back vale's own file count and requires it positive.
 
-`template-ci.yml:432-437` renders `/tmp/smoke-authz-off`; the hygiene call at
-`:106` covers only `/tmp/smoke` and `/tmp/smoke-gate-off`.
+### 6. The `vale-sync` extraction re-introduced a shape #159 removed
 
-PR #252 established the rule and the in-file comment at `:100-102` states it:
-hygiene covers the gate-off render "because a Jinja tag at EOF only appears in
-one branch of a conditional". `enable_authorization=false` is exactly such a
-branch, and per D4 it is materially different prose. A trailing-whitespace or
-`{%- endif %}`-at-EOF defect living only in that branch is the latent
-`copier update` conflict class of #251, now rendered in CI but never checked.
+The `PRECOMMIT` awk was unanchored and unbounded — the two defects `868ed9e`
+fixed in the sibling extraction 100 lines above. With the hook's loop reworded,
+awk scanned to EOF and captured a later hook's `for p in` as this one's.
+**Settled:** anchored at both ends and bounded by the next `- id:`. Confirmed by
+constructing both cases.
 
-It is also rendered after `uv sync` and then written into by the pack copy, so
-it can never be checked where it currently sits.
+### 7. The advisory block could turn into a red build with no diagnostic
 
-Direction: move the render up beside the `structural gate toggle-off render`
-step, extend `:106` to pass all three directories, and have the Vale step
-consume the existing directory instead of doing its own `rm -rf` + `copier
-copy`. `check_render_hygiene.py`'s `main()` takes an argv list; confirm it
-accepts three positional paths before relying on it.
+It runs under the step's `set -euo pipefail`, and its `cp` calls were unguarded,
+so a moved `accept.txt` would abort the step with `cp: cannot stat …` and no
+`::error::` — after the real gate had already passed. The diagnostic-loss shape
+#256 removed from this file. **Settled:** existence check, `trap` restoring the
+vocabulary on any exit, and a non-fatal wrapper.
 
-### 3. `--vcs-ref=HEAD` missing on the new render (lens 5, lower confidence)
+### 8. Maintainer comments understated the number of places to update
 
-Consistent with every sibling render step and with the acknowledged gap
-documented at `:129-137`, so CI is unaffected (tagless checkout). But this
-step exists to lint the prose being changed, so in a tag-bearing local clone
-it lints released prose rather than the working tree — sharper than for the
-assertion-only siblings. Either pin both renders or extend the comment at
-`:135-137` to record that the Vale gate now depends on that gap. Folding the
-render into the sibling block (finding 2) makes the posture consistent either
-way.
+`ci.yml.jinja` said a pack change means updating "both" places, and
+`.pre-commit-config.yaml.jinja` told the reader its hook goes blind without
+saying to update the list. Harmless while drift was silent; actively misleading
+now that the lockstep makes it fatal. **Settled:** both name the full set.
 
 ## Not actionable
 
 - Checksum diagnostics: a missing checksum line and a corrupt tarball produce
-  the same message. Lens 4 scored it ~60%, below threshold.
+  the same message. Scored below threshold.
 - `#` comments in `accept.txt`: gemini raised a HIGH on #145 claiming Vale's
   vocabulary files do not support them. The maintainer did not act and the
   comments are still there. Left alone.
-- The binary download at `:416` still uses the pre-rename
-  `errata-ai/vale` URL while `ci.yml.jinja:311` already says `vale-cli`. The
-  general lens fetched it live: GitHub's org redirect works and `curl -L`
-  follows it, so this is inconsistent rather than broken. Worth aligning while
-  finding 1 is being fixed, since it is the same block.
 - `restore-keys: vale-styles-v1-` could restore a stale pack snapshot when
   `.vale.ini.jinja` changes the pinned `ai-tells` URL. Pre-existing: the same
   pattern already ships unmodified in `ci.yml.jinja`'s own Vale job, so it is a
   mirrored design choice, not a defect this branch introduces.
+- Registry packs are unpinned by design (`.vale.ini.jinja` says so), so an
+  upstream rule release can turn the gate red on a PR that touched no prose.
+  Accepted; the alternative is pinning three packs and owning the bumps.
 
-## Where the lenses disagree
+## Verified clean — do not re-litigate
 
-The general lens found the pack copy **currently safe** and it is right:
-`.vale.ini.jinja`'s `Packages =` is unconditional on any copier variable, so
-both renders resolve identical packages today, and `.vale/styles/config/` is
-correctly excluded from both the cache and the copy.
+Confirmed by more than one independent reviewer, several empirically:
 
-That does not retire finding 1. Lens 5's claim is about drift, not present
-correctness — the hardcoded list is right until someone edits `Packages =`, and
-nothing fails loudly when they do. Both readings hold: ship-blocking as a
-structural defect, not as a live bug. Fix it for the failure mode, and do not
-let "the general lens said it was safe" be read as a clearance.
-
-## Verified clean, do not re-litigate
-
-Confirmed independently by more than one lens:
-
-- `read -ra VALE_FLAGS <<<"$GLOB"` yields one correct argv element; the
-  rendered `vale_flags` carries no inner quotes, per `ci.yml.jinja:330-336`.
+- `read -ra VALE_FLAGS <<<"$GLOB"` yields one correct argv element; the rendered
+  `vale_flags` carries no inner quotes, per `ci.yml.jinja`. A diff-only reviewer
+  re-raised this from the shell-quoted convenience copy in `CLAUDE.md` and was
+  wrong: the gate's own run prints the glob unquoted and lints 13 files.
 - `mapfile` without `|| true` is safe: process-substitution status cannot trip
   `set -e`, and the `${#FILES[@]}` guard catches an extraction break.
-- `STRICT=$(... | grep -vc ... || true)` is correct under `pipefail` in all
-  three cases.
-- The checksum flow matches errata-ai/vale's release asset layout; a no-match
-  `grep` fails the guard rather than passing silently.
-- `|| true` on `CI_VER`/`PC_VER` restores the posture `868ed9e` (#159) set for
-  the sibling step; the version-pin step had carried the unguarded form since
-  `44bfee1` and was never swept.
-- The fifth scrub anchor matches `CLAUDE.md.jinja:210` exactly once, is
+- `STRICT=$(... | grep -vc ... || true)` is correct under `pipefail`.
+- The checksum flow matches the release asset layout; a no-match `grep` fails
+  the guard rather than passing silently. Both `errata-ai/vale` and
+  `vale-cli/vale` serve the same asset via GitHub's org redirect; the URL now
+  names `vale-cli` to match the other two surfaces.
+- The fifth scrub anchor matches `CLAUDE.md.jinja` exactly once, is
   unconditional, sits outside both `TEMPLATE-TRACKING` ranges, and its `sed -e`
-  matches `FORKING.md.jinja:61` verbatim. Post-scrub `! grep -niF 'copier
-  update'` still holds.
+  matches `FORKING.md.jinja` verbatim. Post-scrub `! grep -niF 'copier update'`
+  still holds.
 - `hashFiles('.vale.ini.jinja')` is a sound cache key: no Jinja expressions, so
   it renders verbatim.
-- The unbounded `awk` extraction anchor is the accepted convention on the
-  `ci.yml` side since `44bfee1`; the only later `version:` match is setup-uv's
+- The unbounded `awk` extraction anchor on the `ci.yml` side is the accepted
+  convention since `44bfee1`; the only later `version:` match is setup-uv's
   `"latest"`, which the semver filter empties and the non-empty guard catches.
-- Curl-downloading the binary instead of `vale-cli/vale-action` is a
-  deliberate documented divergence, not a silent reversion.
-- The advisory block honours #159's "never cache `.vale/styles/config/`": it
-  backs up and restores `accept.txt`, and `config/` is outside the cached paths.
-
-## Next session
-
-1. Fix findings 1-3 in one commit.
-2. Re-run the **full** circus against `origin/main..HEAD`. Round 2's findings
-   were structural, so a subset re-run is not valid.
-3. Only then push and open the PR. Merging and release dispatch are human-only.
+- Curl-downloading the binary instead of `vale-cli/vale-action` is a deliberate
+  documented divergence, not a silent reversion.
+- The advisory block honours #159's "never cache `.vale/styles/config/`".
 
 ## Standing traps
 
-- Park `.vscode/` in `.git/info/exclude` before any render; a dirty tree makes
-  copier mint a temp commit and `_commit` differs between two identical renders.
+- Park `.vscode/` in `.git/info/exclude` before any render. Any uncommitted
+  change makes copier mint a temp commit, so `_commit` differs between two
+  otherwise identical renders and the idempotence check fails spuriously.
 - `vale sync` after every fresh render or vale exits `E100`.
 - `git reset --soft` leaves the index staged, so a later selective `git add`
   is a no-op and the commit takes everything.
