@@ -1,7 +1,7 @@
 # Config-surface Stage 1b, restructured into reviewable PRs
 
 **Date:** 2026-07-27
-**Status:** design approved, implementation not started
+**Status:** design approved. PR A shipped; B-H not started.
 **Supersedes:** `docs/superpowers/plans/2026-07-26-config-surface-generation-1b.md` (abandoned; exists only on the unpushed `feat/config-surface-splicing` spike at `283811e`, not on `main`)
 **Upstream spec:** `docs/superpowers/specs/2026-07-25-config-generation-and-ownership-model-design.md`, Stage 1
 **Closes (design-level):** #257, #260, plus four issues still to be filed (§8)
@@ -87,7 +87,7 @@ revertible.
 
 | PR | Scope | Primary verification |
 |---|---|---|
-| **A** | Fix `docs/guides/authorization.md`'s 19 Vale errors | `vale` over a render reports 0 |
+| **A** | Clear the 20 Vale errors in `authorization.md` and `config-migration.md` | `vale` over a render reports 0 |
 | **B** | `template-ci` runs Vale over the render; add the missing `check_anchor` | A deliberately injected error fails the build |
 | **C** | OIDC prose corrections (key derivation, re-registration, restart) | Every claim cited to a `fastmcp` file and symbol |
 | **D** | Markdown splice engine + the two OIDC doc tables + `required_vars` | The rendered tables read correctly to an operator |
@@ -139,9 +139,14 @@ would be red.
 No current consumer is exposed: all seven sibling repos render with
 `enable_authorization` false or absent, so the blast radius today is zero.
 That makes this the cheapest possible moment to fix it rather than a reason to
-defer — the same reasoning applies to PR A's marker-adjacent edits, which
-would conflict on `copier update` for an authz-enabled downstream that had
-already populated its gated-tools table.
+defer.
+
+That argument covers prose near a marker, not the marker line itself. PR A
+left the `DOMAIN-AUTHZ-SCOPES-START` line alone: editing it bought no
+error-count improvement, and a marker line is where a `copier update` 3-way
+merge is most likely to conflict for a downstream that customised the block
+beneath it. Where an edit is unnecessary, low blast radius is not a reason to
+make it.
 
 PR A fixes the errors; a baseline would have recorded them as accepted, and
 would then have to be maintained and eventually retired.
@@ -330,7 +335,7 @@ These must reach the release note and the rollout issue.
 
 | PR | Issue |
 |---|---|
-| A | to file — `docs/guides/authorization.md` fails Vale with 19 errors in every authz-enabled downstream |
+| A | #266 — the rendered docs fail Vale (19 in `authorization.md`, 1 in `config-migration.md`) |
 | B | to file — `template-ci` never runs Vale over the render, and one scrub rule is unguarded |
 | C, D, E | #260 (authored-prose remainder) |
 | F | #257 (`server.json` remainder) |
