@@ -37,6 +37,14 @@ re-derived.
 - **Vale reports a subset.** Only 6 of this file's 11 spaced em dashes were
   reported, and the set shifted as edits landed. The exit criterion has to be
   "re-run until zero", not "fix the reported list".
+- **`ai-tells.VerbTricolon` flags exactly three parallel verbs.** A sentence
+  written here tripped it (`run` / `keeps` / `shows`) and was split in two.
+- **An accepted vocabulary term suppresses non-spelling rules inside its
+  match span.** That tricolon reported zero only because the span contained
+  `OIDC`, which is in `accept.txt`; removing that one term surfaced the error.
+  So "Vale reports zero" is a weaker signal than it looks, and PR B's gate
+  inherits the weakness. A strict check drops the domain vocabulary and
+  re-runs; used here to confirm the tricolon was gone rather than masked.
 
 ## Constraints that governed the fix
 

@@ -20,11 +20,10 @@ that matches how callers authenticate (see the
 
 To turn either on: set the relevant `{{ env_prefix }}_*` variables
 and build the matching check in `src/{{ python_module }}/server.py`,
-which ships commented out (plus the config field it reads in
-`config.py`). Install only one authorization check: to run bearer and
-OIDC together, such as an OIDC deployment that keeps a bearer
-break-glass account, the stub shows how to combine them into a single
-check rather than adding a second.
+where it ships commented out (plus the config field it reads in
+`config.py`). Install only one authorization check. For bearer and OIDC
+together, the stub combines them into a single check rather than a
+second one.
 
 ## Gating by an OIDC claim
 

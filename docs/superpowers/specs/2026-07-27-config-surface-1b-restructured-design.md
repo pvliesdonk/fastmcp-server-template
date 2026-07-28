@@ -136,8 +136,11 @@ No baseline file. The pre-existing errors are not acceptable noise.
 `MinAlertLevel = error` with `fail_on_error: true`, so such a project's build
 would be red.
 
-No current consumer is exposed: all seven sibling repos render with
-`enable_authorization` false or absent, so the blast radius today is zero.
+No current consumer is exposed: all seven sibling checkouts in this
+workspace render with `enable_authorization` false or absent, so the blast
+radius today is zero. (Checked against each checkout's
+`.copier-answers.yml`; that is the local working set, which may not be the
+full consumer list.)
 That makes this the cheapest possible moment to fix it rather than a reason to
 defer.
 
@@ -306,8 +309,8 @@ Additional invariants:
 
 These must reach the release note and the rollout issue.
 
-- **README's domain table conflicts for every downstream.** All four carry a
-  hand-written table inside the `DOMAIN` fence that PR E replaces with
+- **README's domain table conflicts for every downstream.** Six of the seven local
+  checkouts carry a hand-written table inside the `DOMAIN` fence that PR E replaces with
   `GENERATED-ENV-TABLE-DOMAIN` markers. A downstream that resolves the
   conflict by keeping its own table *without* the markers gets a hard CI
   failure, not a silent skip: `splice_region` raises and `ci.yml` runs
@@ -315,8 +318,8 @@ These must reach the release note and the rollout issue.
   the rows between them may be deleted, and give the recovery for a
   missing-marker error mid-update.
 - **`_skip_if_exists` fixes do not propagate.** PR G's `.gitignore`
-  corrections and PR H's manifest cleanup reach new renders only. The four
-  downstreams need a one-time manual edit.
+  corrections and PR H's manifest cleanup reach new renders only. Each affected
+  downstream needs a one-time manual edit.
 - **Stage 1b must merge before the template is released**, or downstreams
   receive generated documentation without the corresponding fixes.
 
