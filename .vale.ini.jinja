@@ -52,8 +52,10 @@ Vocab = Base
 #   3. the `for p in` list in `.pre-commit-config.yaml`'s `vale-sync` hook.
 #      A pack missing there is never seen as missing, so the hook never
 #      syncs and the `vale` hook right after it fails on packaging.
-# The template's own CI asserts all three against this line, so drift fails
-# loudly rather than silently.
+# In the TEMPLATE repo, CI asserts these three plus its own workflow's cache
+# list against this line, so drift there fails loudly. This file is
+# `_skip_if_exists` (see above), so your copy is yours: nothing in this
+# project's CI checks that the three above still match a pack you add here.
 Packages = Google, proselint, write-good, https://github.com/tbhb/vale-ai-tells/releases/download/v1.9.0/ai-tells.zip
 
 [*.md]

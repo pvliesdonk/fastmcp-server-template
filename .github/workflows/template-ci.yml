@@ -198,9 +198,11 @@ jobs:
         # absence, and a missing test passes pytest vacuously, so assert the
         # rendered file directly — BOTH halves: present under the default render,
         # absent under the opt-out (an inverted condition would otherwise drop the
-        # self-check from every downstream and still go green). The two renders
-        # it asserts over are produced by the `clean-tree toggle renders` step
-        # above, which is also where the --vcs-ref=HEAD rationale lives.
+        # self-check from every downstream and still go green). The opt-out
+        # render comes from the `clean-tree opt-out render` step above, which is
+        # also where the --vcs-ref=HEAD rationale lives; the flag-true half
+        # asserts against /tmp/smoke directly, since that IS the flag-true
+        # render.
         #
         # Both rendered variants of the gate's own test file are then linted: the
         # opt-out trim must leave no unused import, and the jinja if/endif
@@ -389,29 +391,56 @@ jobs:
           # values if a downstream adds a second Vale invocation.
           CI_EXCL=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' .github/workflows/ci.yml \
             | grep -oE '!docs/[^"'"'"' ]*' || true)
-          # grep -A15 bounds the search to the vale hook block. The `$`
-          # anchor avoids matching `- id: vale-sync`. Window of 15 safely
-          # covers the 11-line gap between `- id: vale` and `exclude:` in the
-          # rendered pre-commit config; prevents capturing a later hook's
-          # exclude if the vale hook's own exclude is removed.
-          PC_EXCL=$(grep -A15 '^[[:space:]]*- id: vale$' .pre-commit-config.yaml \
-            | grep -m1 'exclude:' \
+          # Bounded by the NEXT `- id:` rather than a fixed-size window. The
+          # old form was `grep -A15`, and reviews on #159 and #209 both called
+          # the 15 a magic number: if the vale hook block grows past it,
+          # PC_EXCL comes back empty and the failure reads as misconfiguration
+          # rather than a window too small. That headroom had already eroded
+          # from the 4 lines #209 computed to 2 — the gap is 13 lines now, not
+          # the 11 the old comment claimed. Bounding on the block's real end
+          # retires the number instead of re-tuning it. The `$` anchor still
+          # keeps `- id: vale` from matching `- id: vale-sync`.
+          PC_EXCL=$(awk '
+              /^[[:space:]]*-[[:space:]]*id:[[:space:]]*vale[[:space:]]*$/{f=1; next}
+              f && /^[[:space:]]*-[[:space:]]*id:/{exit}
+              f && /exclude:/{print; exit}' .pre-commit-config.yaml \
             | grep -oE 'docs/[^[:space:]]*' || true)
           [ -n "$CI_EXCL" ] || { echo "::error::vale exclusion glob not found in ci.yml vale_flags"; exit 1; }
           [ -n "$PC_EXCL" ] || { echo "::error::vale exclude not found in .pre-commit-config.yaml vale hook"; exit 1; }
-          # Canonicalize to a sorted, comma-separated set of subtree names:
-          # strip a leading ! / ^, the docs/ prefix, and a trailing /** or /;
-          # drop {}/() grouping; split on , or | ; sort. Handles both a single
-          # subtree (docs/superpowers) and a multi-subtree set identically.
+          # Canonicalize to a sorted, comma-separated set of subtree names.
+          # SPLIT FIRST, then normalize each element: drop {}/() grouping,
+          # split on , or |, and only then strip a leading ! / ^, the docs/
+          # prefix, and a trailing /** or /. Stripping before the split only
+          # ever reached the first and last element, which was invisible while
+          # the two compared forms happened to carry their `/**` once at the
+          # end — mkdocs writes it per line (`design/**`, `decisions/**`), so
+          # the old order left the inner ones un-stripped.
           canon() {
             echo "$1" \
-              | sed -E 's|^!||; s|^\^||; s|^docs/||; s|/\*\*$||; s|/$||' \
               | tr -d '{}()' \
               | tr '|,' '\n' \
+              | sed -E 's|^!||; s|^\^||; s|^docs/||; s|/\*\*$||; s|/+$||' \
+              | grep -v '^$' \
               | sort | paste -sd, -
           }
+          # Third surface: mkdocs `exclude_docs`. mkdocs.yml.jinja says "Keep
+          # this set in lockstep with the Vale exclusion", and the #209 review
+          # signed the design off as a "three-place lockstep (CI/pre-commit/
+          # mkdocs) with CI enforcement" — but only two were ever compared, so
+          # the one a reviewer already believed was covered was the one that
+          # could drift silently. It is a block scalar of bare `subtree/**`
+          # lines, so it needs no ! or docs/ prefix stripping; canon() handles
+          # the trailing /** and the sort.
+          MK_EXCL=$(awk '/^exclude_docs:/{f=1; next} f && /^[^[:space:]]/{exit} f' \
+              mkdocs.yml \
+            | tr -d ' ' | grep -v '^$' | paste -sd, - || true)
+          [ -n "$MK_EXCL" ] \
+            || { echo "::error::exclude_docs block not found in the rendered mkdocs.yml — mkdocs.yml.jinja claims to be in lockstep with the Vale exclusion, so this must be extractable"; exit 1; }
           CI_NORM=$(canon "$CI_EXCL")
           PC_NORM=$(canon "$PC_EXCL")
+          MK_NORM=$(canon "$MK_EXCL")
+          [ "$CI_NORM" = "$MK_NORM" ] \
+            || { echo "::error::vale/mkdocs exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) mkdocs exclude_docs=$MK_EXCL ($MK_NORM). A subtree excluded from the published site but linted by Vale (or the reverse) means the two disagree about what is user-facing prose."; exit 1; }
           [ "$CI_NORM" = "$PC_NORM" ] \
             || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) pre-commit=$PC_EXCL ($PC_NORM)"; exit 1; }
 
@@ -455,13 +484,19 @@ jobs:
           # status propagates out of the command substitution, so `set -e`
           # would kill the step at the ASSIGNMENT — before the guard written to
           # diagnose exactly that case could print. #159 fixed this same shape
-          # in the version-pin step; every extraction here needs it, because
+          # in the exclusion-scope step (the version-pin step was still
+          # unguarded until this branch); every extraction here needs it, because
           # "extracted nothing" is the failure these guards exist to name.
           canon_packs() {
             tr ',' '\n' <<<"$1" \
               | sed -E 's#^[[:space:]]+##; s#[[:space:]]+$##; s#^.*/##; s#\.zip$##; s#@.*$##' \
               | grep -v '^$' | sort -u | paste -sd' ' - || true
           }
+          # Appended to every drift message below. The rendered files each name
+          # only the three surfaces that exist downstream — correct for their
+          # reader, but a template maintainer needs the fourth, and the moment
+          # they need it is when one of these assertions has just failed.
+          SURFACES="All four surfaces that must match Packages =: .vale.ini BasedOnStyles; .github/workflows/ci.yml cache path:; .pre-commit-config.yaml vale-sync 'for p in'; and template-ci.yml's own 'cache vale style packs' path: (template repo only)."
           PACKS=$(canon_packs "$(sed -nE 's/^Packages[[:space:]]*=[[:space:]]*//p' "$VALE_INI")")
           [ -n "$PACKS" ] \
             || { echo "::error::no Packages entries extractable from the rendered .vale.ini"; exit 1; }
@@ -471,7 +506,7 @@ jobs:
           BASED=$(canon_packs "$(sed -nE 's/^BasedOnStyles[[:space:]]*=[[:space:]]*//p' "$VALE_INI" \
             | sed -E 's/(^|,)[[:space:]]*Vale[[:space:]]*(,|$)/\1/')")
           [ "$BASED" = "$PACKS" ] \
-            || { echo "::error::.vale.ini pack drift — BasedOnStyles=[$BASED] but Packages=[$PACKS]. A style in BasedOnStyles that Packages never fetches makes vale exit E100 [loadStyles]; a fetched pack no style uses is dead weight."; exit 1; }
+            || { echo "::error::.vale.ini pack drift — BasedOnStyles=[$BASED] but Packages=[$PACKS]. A style in BasedOnStyles that Packages never fetches makes vale exit E100 [loadStyles]; a fetched pack no style uses is dead weight. $SURFACES"; exit 1; }
 
           # This workflow's own `cache vale style packs` path:, bounded to that
           # step by an anchored step-name match and the `key:` that ends the
@@ -485,7 +520,7 @@ jobs:
             | grep -oE '^[[:space:]]+/tmp/smoke/\.vale/styles/[A-Za-z0-9._-]+' \
             | sed -E 's#^.*/##' | sort -u | paste -sd' ' - || true)
           [ "$CACHED" = "$PACKS" ] \
-            || { echo "::error::template-ci cache path drift — cached=[$CACHED] but .vale.ini Packages=[$PACKS]. A pack missing from that path: list is never restored, so the guarded sync below re-syncs every run and the cache stops working. Update the 'cache vale style packs' path: list."; exit 1; }
+            || { echo "::error::template-ci cache path drift — cached=[$CACHED] but .vale.ini Packages=[$PACKS]. A pack missing from that path: list is never restored, so the guarded sync below re-syncs every run and the cache stops working. Update the 'cache vale style packs' path: list. $SURFACES"; exit 1; }
 
           # The same enumeration in the RENDERED ci.yml. It drifts identically
           # and nothing else checks it, so a pack change that reaches downstream
@@ -495,7 +530,7 @@ jobs:
             | grep -oE '^[[:space:]]+\.vale/styles/[A-Za-z0-9._-]+' \
             | sed -E 's#^.*/##' | sort -u | paste -sd' ' - || true)
           [ "$DOWNSTREAM" = "$PACKS" ] \
-            || { echo "::error::rendered ci.yml cache path drift — cached=[$DOWNSTREAM] but .vale.ini Packages=[$PACKS]. Update the 'Cache Vale style packages' path: list in ci.yml.jinja."; exit 1; }
+            || { echo "::error::rendered ci.yml cache path drift — cached=[$DOWNSTREAM] but .vale.ini Packages=[$PACKS]. Update the 'Cache Vale style packages' path: list in ci.yml.jinja. $SURFACES"; exit 1; }
 
           # The rendered pre-commit `vale-sync` hook decides whether to run
           # `vale sync` by testing each pack directory for existence. A pack it
@@ -515,7 +550,7 @@ jobs:
               /tmp/smoke/.pre-commit-config.yaml \
             | sed -E 's/^[[:space:]]*for p in //; s/;[[:space:]]*do[[:space:]]*$//' | tr ' ' ',')")
           [ "$PRECOMMIT" = "$PACKS" ] \
-            || { echo "::error::rendered .pre-commit-config.yaml pack drift — vale-sync hook checks [$PRECOMMIT] but .vale.ini Packages=[$PACKS]. Update the 'for p in ...' list in .pre-commit-config.yaml.jinja."; exit 1; }
+            || { echo "::error::rendered .pre-commit-config.yaml pack drift — vale-sync hook checks [$PRECOMMIT] but .vale.ini Packages=[$PACKS]. Update the 'for p in ...' list in .pre-commit-config.yaml.jinja. $SURFACES"; exit 1; }
 
           # Single source for the gate step's pack copy.
           echo "VALE_PACKS=$PACKS" >> "$GITHUB_ENV"
@@ -580,7 +615,7 @@ jobs:
           CI_YML=/tmp/smoke/.github/workflows/ci.yml
           # `|| true`: grep exits 1 on no match, and under set -e a failing
           # substitution kills the step before the guard below can say why
-          # (#159 fixed this same shape two steps up).
+          # (#159 fixed this same shape in the exclusion-scope step).
           VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' "$CI_YML" \
             | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
           FILES_JSON=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+files:/{print; exit}' "$CI_YML" \
@@ -652,8 +687,9 @@ jobs:
           # consume those trees, never re-render one here.
           [ -d /tmp/smoke-authz-off ] \
             || { echo "::error::/tmp/smoke-authz-off missing — the authorization toggle-off render step did not run"; exit 1; }
-          # D9 one level up. The file-count readback proves each run linted
-          # something; this proves the SECOND run linted something different.
+          # One level up from the file-count readback below: that proves each
+          # run linted something, this proves the SECOND run linted something
+          # DIFFERENT.
           # The variant is only meaningful because smoke-answers.yml sets
           # enable_authorization: true while copier.yml defaults it to false —
           # flip that fixture line and `--data enable_authorization=false`
@@ -707,13 +743,21 @@ jobs:
               echo "$OUT"
               echo "::error::vale reports errors in $RENDER — rendered prose must be clean"
               # Google/proselint/write-good are listed without an @version, so
-              # `vale sync` resolves them to the latest registry release on
-              # every run (.vale.ini.jinja calls that intentional). A rule
-              # added upstream therefore fails this gate on a PR that touched
-              # no prose, and the message above would send the reader hunting
-              # through their own diff. Say so here rather than pinning, which
-              # is the trade .vale.ini.jinja deliberately declines.
-              echo "::notice::if this PR changed no prose, suspect an upstream style-pack release: the registry packs resolve to latest on every sync"
+              # a sync resolves them to whatever the registry serves that day
+              # (.vale.ini.jinja calls that intentional). A rule added upstream
+              # can therefore fail this gate on a PR that touched no prose, and
+              # the message above would send the reader hunting through their
+              # own diff.
+              #
+              # The guarded sync narrows this to cache misses only: on a hit the
+              # packs are frozen at the vale-styles-v2-<hash> key and cannot
+              # move under a PR. So key the hint on what actually happened this
+              # run rather than asserting a refresh that mostly does not occur.
+              if [ -n "$MISSING" ]; then
+                echo "::notice::this run re-synced the style packs, so if the PR changed no prose suspect an upstream style-pack release — the registry packs carry no @version and resolve to the current release on a sync"
+              else
+                echo "::notice::style packs came from cache and are frozen at the vale-styles-v2 key, so an upstream pack release cannot explain this — the finding is in the rendered prose"
+              fi
               exit 1
             }
             echo "$OUT"

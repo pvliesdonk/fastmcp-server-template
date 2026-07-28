@@ -52,7 +52,8 @@ such a branch.
 **Settled:** rendered beside its sibling variants, above the hygiene step and in
 its argument list. Review then found two more members of the same class — the
 clean-tree toggle renders — sitting below the hygiene step; those were split
-into their own render step and added too. Hygiene now covers all five variants.
+into their own render step and added too. Hygiene now covers every variant
+the job renders.
 `/tmp/smoke2` is deliberately excluded: the idempotence step already asserts it
 is byte-identical to `/tmp/smoke`.
 

@@ -297,14 +297,18 @@ jobs:
         # Bump the v1- prefix to evict all cached
         # packs if Vale changes pack format backward-incompatibly.
         #
-        # NOTE: this cache does not currently prevent a re-download. The action
-        # below runs `vale sync` unconditionally, and `vale sync` wipes and
-        # re-creates every directory in `Packages =` rather than consulting
-        # what is already on disk (verified with canary files). Kept because it
-        # is harmless and because making it load-bearing — guarding the sync on
-        # pack-directory existence, as the pre-commit hook does — trades away
-        # `Packages =`'s deliberate "resolve to the latest registry release on
-        # each sync", which is a decision for the fleet, not this file.
+        # NOTE: this cache does not prevent a re-download, and cannot while
+        # this job uses vale-action. `vale sync` wipes and re-creates every
+        # directory in `Packages =` rather than consulting what is on disk
+        # (verified with canary files), so a restored cache is discarded before
+        # it is read unless the sync is skipped — and vale-action runs
+        # `vale sync` unconditionally (`src/input.ts:67`) with no input to skip
+        # it (both checked at the pinned SHA below). This is a constraint of
+        # the action, not a trade being declined: the only route to a
+        # load-bearing cache here is replacing vale-action with a direct
+        # invocation, giving up reviewdog annotations, filter_mode and
+        # fail_on_error. The template's own CI gate calls vale directly and so
+        # does guard its sync.
         uses: actions/cache@v6
         with:
           path: |
