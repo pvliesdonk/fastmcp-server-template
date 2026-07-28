@@ -366,8 +366,11 @@ jobs:
           # drifts, and a finding visible to one surface goes silent in the
           # other. Same `vale:`-job awk anchor the two lockstep steps use.
           CI_YML=/tmp/smoke/.github/workflows/ci.yml
+          # `|| true`: grep exits 1 on no match, and under set -e + pipefail a
+          # failing substitution kills the step before the guard below can say
+          # why. sed and mapfile exit 0 on empty input, so only this one needs it.
           VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' "$CI_YML" \
-            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
           FILES_JSON=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+files:/{print; exit}' "$CI_YML" \
             | sed -E "s/^[[:space:]]*files:[[:space:]]*'//; s/'[[:space:]]*$//")
           GLOB=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' "$CI_YML" \
@@ -378,6 +381,9 @@ jobs:
           [ -n "$VER" ]  || { echo "::error::vale version not extractable from rendered ci.yml"; exit 1; }
           [ -n "$GLOB" ] || { echo "::error::vale_flags not extractable from rendered ci.yml"; exit 1; }
           mapfile -t FILES < <(echo "$FILES_JSON" | jq -er '.[]')
+          # vale_flags is plural: split it so a second flag does not arrive as
+          # one argv element, which Vale would read as a path.
+          read -ra VALE_FLAGS <<<"$GLOB"
           [ "${#FILES[@]}" -gt 0 ] \
             || { echo "::error::vale files list not extractable from rendered ci.yml"; exit 1; }
           echo "gating on vale $VER over ${FILES[*]} with $GLOB"
@@ -390,9 +396,12 @@ jobs:
           # enable_authorization is true, and carried 19 of the 20 errors #266
           # cleared.
           for RENDER in /tmp/smoke /tmp/smoke-gate-off; do
-            ( cd "$RENDER"
-              vale sync >/dev/null
-              vale "$GLOB" "${FILES[@]}" ) \
+            # Separate guards: a sync failure is infrastructure (E100, network),
+            # not dirty prose, and conflating them sends the next debugger to
+            # the wrong place.
+            ( cd "$RENDER" && vale sync >/dev/null ) \
+              || { echo "::error::vale sync failed in $RENDER — style packages unavailable, not a prose failure"; exit 1; }
+            ( cd "$RENDER" && vale "${VALE_FLAGS[@]}" "${FILES[@]}" ) \
               || { echo "::error::vale reports errors in $RENDER — rendered prose must be clean"; exit 1; }
           done
 
@@ -403,7 +412,7 @@ jobs:
           ( cd /tmp/smoke
             cp .vale/styles/config/vocabularies/Base/accept.txt /tmp/accept.bak
             grep -E '^\s*(#|$)' /tmp/accept.bak > .vale/styles/config/vocabularies/Base/accept.txt || true
-            STRICT=$(vale "$GLOB" "${FILES[@]}" 2>&1 | grep -E '^ *[0-9]+:' | grep -vc 'Vale.Spelling' || true)
+            STRICT=$(vale "${VALE_FLAGS[@]}" "${FILES[@]}" 2>&1 | grep -E '^ *[0-9]+:' | grep -vc 'Vale.Spelling' || true)
             cp /tmp/accept.bak .vale/styles/config/vocabularies/Base/accept.txt
             if [ "$STRICT" != "0" ]; then
               echo "::warning::$STRICT non-spelling Vale finding(s) are suppressed by an accepted vocabulary term; run vale with an emptied accept.txt to see them"

@@ -44,13 +44,25 @@ create new projects.
    latest git tag (the default).  Without it, your edits render only
    after a release.  If you need to iterate, amend the commit or make
    follow-up commits — rendering from the working tree is not supported.
-4. Check the render is hygiene-clean (run it before `uv sync` pollutes
+4. Check the rendered prose is Vale-clean. `template-ci` gates on this
+   over both render variants, and it is the only pre-push path: the
+   template's own sources are `.md.jinja`, which Vale cannot usefully
+   lint.
+   ```bash
+   cd /tmp/smoke
+   vale sync
+   vale --glob='!docs/{superpowers,design,decisions}/**' docs README.md
+   ```
+   The version and file set here are a convenience copy. `template-ci`
+   extracts both from the rendered `ci.yml` rather than restating them,
+   so the gate cannot drift from what a downstream runs.
+5. Check the render is hygiene-clean (run it before `uv sync` pollutes
    the tree, or on a second pristine render):
    ```bash
    python3 scripts/check_render_hygiene.py /tmp/smoke
    ```
-5. Commit any fixes, push, open a PR.
-6. `template-ci.yml` runs the same gate on Python 3.11–3.14.
+6. Commit any fixes, push, open a PR.
+7. `template-ci.yml` runs the same gate on Python 3.11–3.14.
 
 ### Render hygiene
 
