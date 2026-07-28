@@ -439,6 +439,16 @@ jobs:
           CI_NORM=$(canon "$CI_EXCL")
           PC_NORM=$(canon "$PC_EXCL")
           MK_NORM=$(canon "$MK_EXCL")
+          # Assert what is actually compared. The -n guards above are on the
+          # RAW extractions, but the equality tests below use the canonicalized
+          # ones, and a non-empty raw value can canonicalize to empty (`!docs/`
+          # reduces to nothing). Two empties compare equal, so the step would
+          # pass vacuously — the same "prove you checked something" gap the
+          # gate's linted-file-count readback closes one step over.
+          for pair in "ci.yml:$CI_NORM" "pre-commit:$PC_NORM" "mkdocs:$MK_NORM"; do
+            [ -n "${pair#*:}" ] \
+              || { echo "::error::${pair%%:*} exclusion set canonicalized to empty — the raw value was non-empty, so the extraction matched something this canon() cannot read. Comparing it would pass vacuously."; exit 1; }
+          done
           [ "$CI_NORM" = "$MK_NORM" ] \
             || { echo "::error::vale/mkdocs exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) mkdocs exclude_docs=$MK_EXCL ($MK_NORM). A subtree excluded from the published site but linted by Vale (or the reverse) means the two disagree about what is user-facing prose."; exit 1; }
           [ "$CI_NORM" = "$PC_NORM" ] \
@@ -709,16 +719,29 @@ jobs:
           # Sync once and share the packs: the fetch is the expensive, network-
           # dependent part, and both renders resolve the same Packages line.
           #
-          # Guarded on pack-directory existence so the cache step above is
-          # load-bearing rather than decorative — `vale sync` wipes and
-          # re-creates every pack directory unconditionally, so an unguarded
-          # sync discards whatever was restored. Same decision the vale-sync
-          # pre-commit hook makes, for the same reason. A partial restore (some
-          # packs present, some not) re-syncs everything, which is correct:
-          # sync is all-or-nothing anyway.
+          # Guarded so the cache step above is load-bearing rather than
+          # decorative — `vale sync` wipes and re-creates every pack directory
+          # unconditionally, so an unguarded sync discards whatever was
+          # restored. Same decision the vale-sync pre-commit hook makes.
+          #
+          # The check is per-pack presence AND non-emptiness, not just `-d`.
+          # An empty-but-present directory would satisfy `-d`, skip the sync,
+          # and leave Vale to fail `E100 [loadStyles]` — which this step reports
+          # as "rendered prose must be clean", the packs-versus-prose
+          # misdiagnosis the whole design exists to avoid. Any pack failing
+          # either test re-syncs all of them, since `vale sync` is all-or-
+          # nothing regardless.
+          #
+          # A failed run cannot poison the cache under the exact key:
+          # actions/cache creates an entry only "provided the job completes
+          # successfully" (its README), which is why `save-always` had to exist
+          # as a separate opt-in. A gate failure therefore saves nothing.
           MISSING=
           for PACK in $VALE_PACKS; do
-            [ -d "/tmp/smoke/.vale/styles/$PACK" ] || MISSING="$MISSING $PACK"
+            if [ ! -d "/tmp/smoke/.vale/styles/$PACK" ] \
+               || [ -z "$(ls -A "/tmp/smoke/.vale/styles/$PACK" 2>/dev/null)" ]; then
+              MISSING="$MISSING $PACK"
+            fi
           done
           if [ -n "$MISSING" ]; then
             echo "syncing style packs (missing:$MISSING)"
