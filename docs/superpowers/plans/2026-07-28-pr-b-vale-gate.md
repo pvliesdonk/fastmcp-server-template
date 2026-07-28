@@ -26,6 +26,12 @@ One file, `.github/workflows/template-ci.yml`. No template sources, no generator
 
 **D6 — one `check_anchor` per scrub rule.** Five substitution rules, four anchored; add the fifth. The helper already exists, so this is one call plus its expected count.
 
+**D7 — one matrix leg.** `render-and-gate` is a 4-wide Python matrix, and
+Vale's result does not depend on the Python version while `vale sync`
+downloads style packages on every run. The gate runs on `3.11` only. Decided
+during execution; the alternative was a separate job that would have to
+re-render.
+
 ## Verification
 
 A gate that has never failed is untested. Each of these is run and its output recorded:

@@ -352,6 +352,63 @@ jobs:
           [ "$CI_NORM" = "$PC_NORM" ] \
             || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) pre-commit=$PC_EXCL ($PC_NORM)"; exit 1; }
 
+      - name: vale gate over the render
+        # The structural check above proves .vale.ini renders; it has never
+        # proved the rendered PROSE is clean. Every prose defect therefore
+        # reached a downstream's own vale job first (#270).
+        #
+        # One matrix leg only: Vale's result does not depend on the Python
+        # version, and `vale sync` downloads style packages on each run.
+        if: matrix.python == '3.11'
+        run: |
+          set -euo pipefail
+          # Extract, never restate (#143/#159): duplicated Vale configuration
+          # drifts, and a finding visible to one surface goes silent in the
+          # other. Same `vale:`-job awk anchor the two lockstep steps use.
+          CI_YML=/tmp/smoke/.github/workflows/ci.yml
+          VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' "$CI_YML" \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          FILES_JSON=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+files:/{print; exit}' "$CI_YML" \
+            | sed -E "s/^[[:space:]]*files:[[:space:]]*'//; s/'[[:space:]]*$//")
+          GLOB=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' "$CI_YML" \
+            | sed -E 's/^[[:space:]]*vale_flags:[[:space:]]*"//; s/"[[:space:]]*$//')
+          # Non-empty assertions matter more than the comparison: a future
+          # ci.yml restructure that breaks an anchor would otherwise leave this
+          # gate silently linting nothing and still reporting success.
+          [ -n "$VER" ]  || { echo "::error::vale version not extractable from rendered ci.yml"; exit 1; }
+          [ -n "$GLOB" ] || { echo "::error::vale_flags not extractable from rendered ci.yml"; exit 1; }
+          mapfile -t FILES < <(echo "$FILES_JSON" | jq -er '.[]')
+          [ "${#FILES[@]}" -gt 0 ] \
+            || { echo "::error::vale files list not extractable from rendered ci.yml"; exit 1; }
+          echo "gating on vale $VER over ${FILES[*]} with $GLOB"
+
+          curl -sSfL "https://github.com/errata-ai/vale/releases/download/v${VER}/vale_${VER}_Linux_64-bit.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin vale
+          vale --version
+
+          # Both variants: docs/guides/authorization.md exists only when
+          # enable_authorization is true, and carried 19 of the 20 errors #266
+          # cleared.
+          for RENDER in /tmp/smoke /tmp/smoke-gate-off; do
+            ( cd "$RENDER"
+              vale sync >/dev/null
+              vale "$GLOB" "${FILES[@]}" ) \
+              || { echo "::error::vale reports errors in $RENDER — rendered prose must be clean"; exit 1; }
+          done
+
+          # Advisory. An accepted vocabulary term suppresses non-spelling rules
+          # inside its match span, so the gate above can pass prose that still
+          # carries a flagged pattern. Reported, not enforced: a downstream's
+          # own legitimate vocabulary additions must not break template CI.
+          ( cd /tmp/smoke
+            cp .vale/styles/config/vocabularies/Base/accept.txt /tmp/accept.bak
+            grep -E '^\s*(#|$)' /tmp/accept.bak > .vale/styles/config/vocabularies/Base/accept.txt || true
+            STRICT=$(vale "$GLOB" "${FILES[@]}" 2>&1 | grep -E '^ *[0-9]+:' | grep -vc 'Vale.Spelling' || true)
+            cp /tmp/accept.bak .vale/styles/config/vocabularies/Base/accept.txt
+            if [ "$STRICT" != "0" ]; then
+              echo "::warning::$STRICT non-spelling Vale finding(s) are suppressed by an accepted vocabulary term; run vale with an emptied accept.txt to see them"
+            fi )
+
       - name: detach smoke (FORKING.md commands produce a clean standalone state)
         working-directory: /tmp/smoke
         run: |
@@ -422,6 +479,7 @@ jobs:
           check_anchor 1 ' on top of the shipped defaults survive `copier update`.'
           check_anchor 1 ' are preserved across `copier update`.'
           check_anchor 2 'The block is preserved across `copier update`.'
+          check_anchor 1 ' on every `copier copy`/`copier update` and re-verified by'
           [ "$preflight_fail" = "0" ] \
             || { echo "::error::detach scrub is no longer coupled to CLAUDE.md.jinja — see the scrub-anchor drift errors above"; exit 1; }
 
