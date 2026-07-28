@@ -62,16 +62,19 @@ writing; do not treat them as a description of the tool.
 
 ## Deliberately not done
 
-- **The `DOMAIN-AUTHZ-SCOPES-START` marker line keeps its em dash.** Editing
-  it is unnecessary — with the other occurrences fixed, Vale reports zero
-  either way, verified by restoring it — and it would open a `copier update`
+- **The `DOMAIN-AUTHZ-SCOPES-START` marker line keeps its em dash.** Vale skips
+  HTML comments, the same way it skips fenced blocks and code spans, so the
+  dash there is structurally out of scope rather than merely unreported.
+  `README.md.jinja:39` has carried a spaced em dash in a comment through a
+  clean gate since #145. Editing the line would also open a `copier update`
   3-way-merge conflict on a block downstream projects customise.
 - **The em dash inside the TOML fence is untouched.** Vale skips code blocks.
 - **One paragraph was restructured, the rest only reworded.** The "turn either
-  on" paragraph told the reader to enable "the matching block" and that "both
-  may run together". `server.py.jinja` ships one block of three mutually
-  exclusive checks and warns against installing two. That sentence was being
-  rewritten anyway, so the contradiction was fixed rather than preserved.
+  on" paragraph said to enable "the matching block", which reads as plural and
+  invites installing two middlewares; `server.py.jinja` warns against exactly
+  that. Running both mechanisms was never the problem, and is still described:
+  the stub's third option is bearer break-glass plus OIDC combined into one
+  check. The rewrite keeps that case and drops the plural-blocks reading.
 
 ## What this cost, and why the next plan should be shorter
 

@@ -127,9 +127,16 @@ claims to verify". They belong together.
 
 ### 4.1 Vale safety net, no baseline
 
-`template-ci` renders the template and runs Vale over `docs/` and `README.md`
-with the same scope, version and flags the downstream `ci.yml` uses, and
-asserts **zero** errors.
+`template-ci` renders the template and runs Vale over `docs/` and `README.md`,
+and asserts **zero** errors.
+
+Scope, version and exclusion glob must be **extracted from the rendered
+`ci.yml`**, not restated. #143/#159 established that Vale's scope is derived
+and compared rather than duplicated, because two surfaces drifting apart make
+a finding visible to one and silent to the other; the existing lockstep steps
+compare `ci.yml` against `.pre-commit-config.yaml` using an `awk` anchor on
+the `vale:` job. This gate is a third surface, so it either reuses that anchor
+or the lockstep grows to assert over all three.
 
 No baseline file. The pre-existing errors are not acceptable noise.
 `docs/guides/authorization.md` ships to any downstream rendered with
