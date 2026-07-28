@@ -19,11 +19,12 @@ that matches how callers authenticate (see the
   to that claim's name, such as `groups`.
 
 To turn either on: set the relevant `{{ env_prefix }}_*` variables
-and build the matching `check` in `src/{{ python_module }}/server.py`,
+and build the matching check in `src/{{ python_module }}/server.py`,
 which ships commented out (plus the config field it reads in
-`config.py`). Install exactly one `AuthMiddleware`: to run both at once,
-such as an OIDC deployment that keeps a bearer break-glass account,
-combine the two checks with `any_check` rather than adding a second one.
+`config.py`). Install only one authorization check: to run bearer and
+OIDC together, such as an OIDC deployment that keeps a bearer
+break-glass account, the stub shows how to combine them into a single
+check rather than adding a second.
 
 ## Gating by an OIDC claim
 
@@ -81,7 +82,8 @@ single-token mode every caller shares one subject (the default
   ACL file or the grants map.
 - **Fails fast on a structural error.** An unreadable or malformed file,
   the wrong shape, or a `*` subject key aborts startup rather than
-  running half-configured. A scope-*name* typo is not structural:
+  running half-configured. Structural checks do not cover a
+  **scope-name typo**:
   `"rite"` for `"write"` is valid and loads cleanly, then silently never
   matches, so those calls are denied. Double-check scope spelling
   against the table below.
