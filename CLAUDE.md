@@ -44,25 +44,30 @@ create new projects.
    latest git tag (the default).  Without it, your edits render only
    after a release.  If you need to iterate, amend the commit or make
    follow-up commits — rendering from the working tree is not supported.
-4. Check the rendered prose is Vale-clean. `template-ci` gates on this
-   over both render variants, and it is the only pre-push path: the
-   template's own sources are `.md.jinja`, which Vale cannot usefully
-   lint.
-   ```bash
-   cd /tmp/smoke
-   vale sync
-   vale --glob='!docs/{superpowers,design,decisions}/**' docs README.md
-   ```
-   The version and file set here are a convenience copy. `template-ci`
-   extracts both from the rendered `ci.yml` rather than restating them,
-   so the gate cannot drift from what a downstream runs.
-5. Check the render is hygiene-clean (run it before `uv sync` pollutes
-   the tree, or on a second pristine render):
+4. Check the render is hygiene-clean.  Run this **before** anything
+   writes into the tree, or on a second pristine render: both `uv sync`
+   (step 3) and `vale sync` (step 5) leave files behind, and the guard
+   reports them as violations the change never caused.
    ```bash
    python3 scripts/check_render_hygiene.py /tmp/smoke
    ```
+5. Check the rendered prose is Vale-clean.  `template-ci` gates on this,
+   and it is the only pre-push path: the template's own sources are
+   `.md.jinja`, which Vale cannot usefully lint.
+   ```bash
+   cd /tmp/smoke
+   vale sync    # writes style packs into the tree — after step 4, never before
+   vale --glob='!docs/{superpowers,design,decisions}/**' docs README.md
+   ```
+   Match the Vale version pinned in the rendered `.github/workflows/ci.yml`;
+   a different local binary can report differently.  The file set and glob
+   above are a convenience copy — `template-ci` extracts both from that
+   rendered `ci.yml` rather than restating them, so the gate cannot drift
+   from what a downstream runs.
 6. Commit any fixes, push, open a PR.
-7. `template-ci.yml` runs the same gate on Python 3.11–3.14.
+7. `template-ci.yml` runs the gate on Python 3.11–3.14.  The Vale step
+   runs on 3.11 alone: its result does not depend on the interpreter, and
+   syncing style packs is a network fetch.
 
 ### Render hygiene
 
