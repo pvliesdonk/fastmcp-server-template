@@ -418,18 +418,19 @@ jobs:
       - name: vale pack-list lockstep
         # Same family as the two lockstep steps above, one surface further out.
         # `.vale.ini`'s `Packages =` is the source of truth for WHICH style
-        # packs exist. Three other places enumerate them, and none can derive
+        # packs exist. Four other places enumerate them, and none can derive
         # the list at runtime:
         #
-        #   1. the rendered ci.yml's `Cache Vale style packages` path: —
-        #      actions/cache takes no shell variable, so the list must stay
-        #      literal, and it is what every downstream runs
-        #   2. the rendered .pre-commit-config.yaml's `vale-sync` hook, which
+        #   1. this workflow's `cache vale style packs` path: — actions/cache
+        #      takes no shell variable, so the list must stay literal
+        #   2. the rendered ci.yml's `Cache Vale style packages` path: — same
+        #      constraint, and it is what every downstream runs
+        #   3. the rendered .pre-commit-config.yaml's `vale-sync` hook, which
         #      tests each pack directory to decide whether to sync
-        #   3. `.vale.ini`'s own BasedOnStyles
+        #   4. `.vale.ini`'s own BasedOnStyles
         #
         # Nothing failed loudly when they diverged. Adding another pack to
-        # `Packages` alone leaves the downstream cache list stale; leaves the
+        # `Packages` alone leaves both cache lists stale; leaves the
         # pre-commit hook blind to it, so a downstream's local `vale` run breaks
         # with no sync; and — if BasedOnStyles names a pack `Packages` never
         # fetches — makes vale exit `E100 [loadStyles]`, which the gate below
@@ -437,9 +438,9 @@ jobs:
         # packs-versus-prose misdiagnosis its `vale sync` guard exists to
         # prevent.
         #
-        # So derive the set and assert all three enumerations equal it. The gate
+        # So derive the set and assert all four enumerations equal it. The gate
         # step consumes the derived list via VALE_PACKS rather than becoming a
-        # fourth.
+        # fifth — it uses it both for the cache-hit check and the pack copy.
         run: |
           set -euo pipefail
           VALE_INI=/tmp/smoke/.vale.ini
@@ -471,6 +472,20 @@ jobs:
             | sed -E 's/(^|,)[[:space:]]*Vale[[:space:]]*(,|$)/\1/')")
           [ "$BASED" = "$PACKS" ] \
             || { echo "::error::.vale.ini pack drift — BasedOnStyles=[$BASED] but Packages=[$PACKS]. A style in BasedOnStyles that Packages never fetches makes vale exit E100 [loadStyles]; a fetched pack no style uses is dead weight."; exit 1; }
+
+          # This workflow's own `cache vale style packs` path:, bounded to that
+          # step by an anchored step-name match and the `key:` that ends the
+          # list. The step name is anchored at both ends (`^      - name: …$`)
+          # so this awk program's OWN line — same literal, but indented inside
+          # a run: block — cannot start the scan early. Pack names are matched
+          # only at line start, so the step's prose mention of
+          # .vale/styles/config/ cannot match either.
+          CACHED=$(awk '/^      - name: cache vale style packs$/{f=1} f && /^ *key:/{exit} f' \
+              .github/workflows/template-ci.yml \
+            | grep -oE '^[[:space:]]+/tmp/smoke/\.vale/styles/[A-Za-z0-9._-]+' \
+            | sed -E 's#^.*/##' | sort -u | paste -sd' ' - || true)
+          [ "$CACHED" = "$PACKS" ] \
+            || { echo "::error::template-ci cache path drift — cached=[$CACHED] but .vale.ini Packages=[$PACKS]. A pack missing from that path: list is never restored, so the guarded sync below re-syncs every run and the cache stops working. Update the 'cache vale style packs' path: list."; exit 1; }
 
           # The same enumeration in the RENDERED ci.yml. It drifts identically
           # and nothing else checks it, so a pack change that reaches downstream
@@ -506,24 +521,48 @@ jobs:
           echo "VALE_PACKS=$PACKS" >> "$GITHUB_ENV"
           echo "vale packs: $PACKS"
 
-      # NO actions/cache step for the style packs, deliberately. The obvious
-      # move is to mirror the rendered ci.yml's `Cache Vale style packages`
-      # step, and an earlier revision of this gate did. It does nothing:
-      # `vale sync` does not consult a cache, it WIPES and re-creates every
-      # directory named in `Packages =` on every invocation. Verified by
-      # dropping a canary file into .vale/styles/Google and .vale/styles/
-      # ai-tells after a sync and running sync again — both canaries were gone.
-      # So a restored cache is discarded before it is ever read, and the step
-      # costs an upload and a download to change nothing.
-      #
-      # The consequence is real and is NOT solved by caching: this gate
-      # hard-depends on the pinned tbhb/vale-ai-tells release URL staying live,
-      # exactly as .vale.ini.jinja already warns. Making a cache load-bearing
-      # means guarding the sync on pack-directory existence the way the
-      # vale-sync pre-commit hook does — which trades that resilience against
-      # `Packages =`'s deliberate "resolve to the latest registry release on
-      # each sync". That is a fleet-wide call affecting the rendered ci.yml
-      # too, not something to settle inside this gate.
+      - name: cache vale style packs
+        # This cache is LOAD-BEARING, which took two attempts to get right.
+        # A plain mirror of the rendered ci.yml's cache step does nothing:
+        # `vale sync` never consults a cache, it wipes and re-creates every
+        # directory named in `Packages =` on every invocation. Verified by
+        # dropping canary files into .vale/styles/Google and
+        # .vale/styles/ai-tells after a sync and syncing again — both gone. A
+        # restored cache is therefore discarded before it is read unless the
+        # sync itself is skipped, which is what the gate step below now does:
+        # it syncs only when a pack directory is missing, exactly as the
+        # vale-sync pre-commit hook decides.
+        #
+        # NO restore-keys, deliberately, and this is the #159 clobber in a new
+        # place. With a guarded sync, a partial-key restore would hand the gate
+        # a STALE pack set and then skip the sync that would have corrected it
+        # — silently linting against the previous .vale.ini's packs. An exact
+        # key only: change .vale.ini.jinja and the cache misses, so the sync
+        # runs and re-resolves. The v2- prefix retires the v1- entries written
+        # while the sync was still unconditional.
+        #
+        # The trade this accepts: `Packages =` lists the registry packs without
+        # an @version, which .vale.ini.jinja calls intentional ("keeps style
+        # rules current"). On a cache hit the gate now lints against the packs
+        # as they were when the key was first written, not the latest release.
+        # That is the point — it is what stops an upstream rule landing mid-PR
+        # and failing a gate on prose nobody touched — but it means a rule
+        # refresh happens when .vale.ini.jinja changes, not continuously.
+        #
+        # Only the downloaded pack directories, never .vale/styles/config/ —
+        # that subtree is rendered from the template and must stay
+        # authoritative, which is the clobber #159 documents. The path list is
+        # asserted equal to the rendered .vale.ini's `Packages =` by the
+        # lockstep step above.
+        if: matrix.python == '3.11'
+        uses: actions/cache@v6
+        with:
+          path: |
+            /tmp/smoke/.vale/styles/Google
+            /tmp/smoke/.vale/styles/proselint
+            /tmp/smoke/.vale/styles/write-good
+            /tmp/smoke/.vale/styles/ai-tells
+          key: vale-styles-v2-${{ hashFiles('.vale.ini.jinja') }}
 
       - name: vale gate over the render
         # The structural check above proves .vale.ini renders; it has never
@@ -626,15 +665,32 @@ jobs:
             echo "::error::/tmp/smoke-authz-off has the same linted prose as /tmp/smoke — enable_authorization no longer differs between them, so the second variant proves nothing. Check enable_authorization in tests/fixtures/smoke-answers.yml."
             exit 1
           fi
-          # Sync once and share the packs: the fetch is the expensive, network-
-          # dependent part, and both renders resolve the same Packages line.
-          ( cd /tmp/smoke && vale sync >/dev/null ) \
-            || { echo "::error::vale sync failed — style packs unavailable, not a prose failure"; exit 1; }
           # VALE_PACKS comes from the pack-list lockstep step, which derives it
-          # from the rendered .vale.ini. Unquoted on purpose: it is a
-          # space-separated list and must word-split into the loop.
+          # from the rendered .vale.ini. Unquoted on purpose throughout: it is a
+          # space-separated list and must word-split.
           [ -n "${VALE_PACKS:-}" ] \
             || { echo "::error::VALE_PACKS unset — the vale pack-list lockstep step did not run"; exit 1; }
+          # Sync once and share the packs: the fetch is the expensive, network-
+          # dependent part, and both renders resolve the same Packages line.
+          #
+          # Guarded on pack-directory existence so the cache step above is
+          # load-bearing rather than decorative — `vale sync` wipes and
+          # re-creates every pack directory unconditionally, so an unguarded
+          # sync discards whatever was restored. Same decision the vale-sync
+          # pre-commit hook makes, for the same reason. A partial restore (some
+          # packs present, some not) re-syncs everything, which is correct:
+          # sync is all-or-nothing anyway.
+          MISSING=
+          for PACK in $VALE_PACKS; do
+            [ -d "/tmp/smoke/.vale/styles/$PACK" ] || MISSING="$MISSING $PACK"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "syncing style packs (missing:$MISSING)"
+            ( cd /tmp/smoke && vale sync >/dev/null ) \
+              || { echo "::error::vale sync failed — style packs unavailable, not a prose failure"; exit 1; }
+          else
+            echo "all style packs restored from cache; skipping vale sync"
+          fi
           for PACK in $VALE_PACKS; do
             # Load-bearing on an INFERRED fact: that `vale sync` names each
             # pack directory after the registry name or the .zip basename.

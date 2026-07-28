@@ -31,11 +31,15 @@ original finding had not enumerated — found by grepping every pack name across
 the repo. `actions/cache` cannot take a shell variable in `path:`, so the
 downstream cache list stays literal and is asserted rather than generated.
 
-The gate's own cache step was then **removed** rather than asserted: review
-showed it could not work. `vale sync` does not consult a cache — it wipes and
-re-creates every directory in `Packages =` on every invocation (verified with
-canary files, both wiped by a second sync), so a restored cache is discarded
-before it is read. That retired the fourth enumeration along with it.
+The gate's cache step went through both wrong states before landing. Review
+showed a plain mirror of the downstream cache could not work: `vale sync` does
+not consult a cache — it wipes and re-creates every directory in `Packages =`
+on every invocation (verified with canary files, both wiped by a second sync),
+so a restored cache is discarded before it is read. Removing it was the first
+answer; making it load-bearing is the one that shipped. The gate now syncs only
+when a pack directory is missing, and the cache carries no `restore-keys` —
+with a guarded sync, a partial restore would supply stale packs AND skip the
+sync that would fix them.
 
 ### 2. The authorization render bypassed the render-hygiene gate
 
@@ -106,12 +110,13 @@ now that the lockstep makes it fatal. **Settled:** both name the full set.
 - `#` comments in `accept.txt`: gemini raised a HIGH on #145 claiming Vale's
   vocabulary files do not support them. The maintainer did not act and the
   comments are still there. Left alone.
-- The rendered `ci.yml`'s own `Cache Vale style packages` step is inert for the
-  same reason the gate's removed one was: `vale-cli/vale-action` runs `vale
-  sync` unconditionally. Left alone — making it load-bearing means guarding the
-  sync on directory existence, which trades away `Packages =`'s deliberate
-  "resolve to the latest registry release on each sync". That is a fleet-wide
-  decision, not one to settle inside this PR. Worth a follow-up issue.
+- The rendered `ci.yml`'s own `Cache Vale style packages` step is inert and
+  cannot be fixed the way the gate's was. `vale-cli/vale-action` runs `vale
+  sync` unconditionally (`src/input.ts:67`) and `action.yml` exposes no input to
+  skip it — both checked at the pinned SHA `85f9f7f`, not recalled. The only
+  route is replacing the action with a direct invocation, which costs reviewdog
+  annotations, `filter_mode: added` and `fail_on_error`. Left alone with a note;
+  worth a follow-up issue.
 - Registry packs are unpinned by design (`.vale.ini.jinja` says so), so an
   upstream rule release can turn the gate red on a PR that touched no prose.
   Accepted; the alternative is pinning three packs and owning the bumps.
