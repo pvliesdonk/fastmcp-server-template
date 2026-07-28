@@ -89,7 +89,7 @@ revertible.
 |---|---|---|
 | **A** | Clear the 20 Vale errors in `authorization.md` and `config-migration.md` | `vale` over a render reports 0 |
 | **B** | `template-ci` runs Vale over the render; add the missing `check_anchor` | A deliberately injected error fails the build |
-| | *B must also decide whether the gate runs with the domain vocabulary dropped: an accepted term suppresses non-spelling rules inside its match span, so a plain zero-error run can pass prose that still carries a flagged pattern. One such case already exists at `README.md.jinja:142`.* | |
+| | *B decides whether the gate also runs with the domain vocabulary dropped. An accepted term suppresses non-spelling rules inside its match span, so a plain zero can pass prose carrying a flagged pattern. PR A leaves both runs clean, so B starts from zero either way.* | |
 | **C** | OIDC prose corrections (key derivation, re-registration, restart) | Every claim cited to a `fastmcp` file and symbol |
 | **D** | Markdown splice engine + the two OIDC doc tables + `required_vars` | The rendered tables read correctly to an operator |
 | **E** | README core + domain tables + `documented_defaults` + the `MISSING` fix | A real `ProjectConfig` field renders Required correctly both ways |
@@ -204,18 +204,9 @@ Together they prove the rule set is sufficient *for the pinned core*. When a
 future core introduces a new shape, `template-ci` goes red and a rule is added
 then — which is the entire purpose of §4.1.
 
-Facts measured against the live Vale binary, recorded so they are not
-re-derived:
+The rules this generated prose must follow are recorded once, in PR A's
+execution record. They are writing rules, not properties of the tool.
 
-- `ai-tells.EmDashUsage` flags an em dash at **any** spacing, and an en dash
-  too. `A—B` unspaced is an error.
-- `For example,` **and** `For instance,` both trip
-  `ai-tells.FormalTransitions`. Neither can replace `e.g.`.
-- `such as` is clean, as is dropping the abbreviation entirely.
-- A code span is skipped by Vale, which is why a rendered `Default` cell is
-  wrapped in backticks: it immunises the whole column against every
-  non-English default value at once, rather than one vocabulary entry per
-  value.
 
 ### 4.3 Required-ness for domain vars
 

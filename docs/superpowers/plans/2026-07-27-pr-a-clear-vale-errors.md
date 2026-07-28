@@ -19,37 +19,25 @@ Two authored `.jinja` files, 24 lines. No code, no CI, no generator.
 Verified: 0 Vale errors in the default and gate-off renders, renders
 byte-identical, hygiene clean on both variants, `mkdocs build --strict` passes.
 
-## Measured Vale behaviour
+## Rules this prose follows
 
-Probed against the live binary with this template's own ruleset. Each of these
-contradicts what the rule name suggests, so they are recorded rather than
-re-derived.
+Established by running the linter, not by reading rule names. Follow them when
+writing; do not treat them as a description of the tool.
 
-- **`ai-tells.EmDashUsage` flags an em dash at any spacing, and an en dash
-  too.** `A—B` unspaced is an error. Keying a normaliser on the spaced form
-  alone leaves failures behind.
-- **`For example,` and `For instance,` both trip
-  `ai-tells.FormalTransitions`.** Neither can replace `e.g.`. `such as` is
-  clean, as is dropping the abbreviation and capitalising the next word.
-- **Vale skips code spans and fenced blocks.** Wrapping a literal in backticks
-  immunises it against `Vale.Spelling`, which is why a generated table's
-  `Default` column should be a code span rather than bare prose.
-- **Vale reports a subset.** Only 6 of this file's 11 spaced em dashes were
-  reported, and the set shifted as edits landed. The exit criterion has to be
-  "re-run until zero", not "fix the reported list".
-- **`ai-tells.VerbTricolon` flags exactly three parallel verbs.** A sentence
-  written here tripped it (`run` / `keeps` / `shows`) and was split in two.
-- **An accepted vocabulary term suppresses non-spelling rules inside its
-  match span.** That tricolon reported zero only because the span contained
-  `OIDC`, which is in `accept.txt`; removing that one term surfaced the error.
-  So "Vale reports zero" is a weaker signal than it looks, and PR B's gate
-  inherits the weakness. A strict check drops the domain vocabulary and
-  re-runs; used here to confirm the tricolon was gone rather than masked.
-
-  That strict run also surfaces one pre-existing case outside this PR's diff:
-  `README.md.jinja:142` carries a verb tricolon that only passes because
-  `GitHub` is an accepted term. It came from #209 and is left alone here;
-  PR B owns the gate and should decide whether the gate runs strict.
+- No em dash or en dash, at any spacing. `A—B` is as wrong as `A — B`.
+- No Latin abbreviations. Use `such as`, or drop the abbreviation and
+  capitalise the next word. Never `For example,` or `For instance,`.
+- No emphasised negation. Delete the emphasis; do not move it to a
+  neighbouring word.
+- At most two parallel verbs in a clause.
+- Fix a flagged word by rewriting the sentence, never by adding a vocabulary
+  term: `.vale.ini` and the accept list are both `_skip_if_exists`, so a new
+  term reaches new renders only and leaves existing projects failing.
+- Re-run the linter until it reports zero. The reported set changes as edits
+  land, so the first report is not the whole list.
+- Run it a second time with the domain vocabulary dropped. An accepted term
+  suppresses non-spelling rules inside its match span, so a plain zero can
+  hide a flagged pattern. This PR clears both runs.
 
 ## Constraints that governed the fix
 
