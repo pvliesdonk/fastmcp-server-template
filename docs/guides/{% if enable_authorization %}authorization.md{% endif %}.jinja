@@ -83,7 +83,7 @@ single-token mode every caller shares one subject (the default
 - **Fails fast on a structural error.** An unreadable or malformed file,
   the wrong shape, or a `*` subject key aborts startup rather than
   running half-configured. Structural checks do not cover a
-  **scope-name typo**:
+  scope-name typo:
   `"rite"` for `"write"` is valid and loads cleanly, then silently never
   matches, so those calls are denied. Double-check scope spelling
   against the table below.

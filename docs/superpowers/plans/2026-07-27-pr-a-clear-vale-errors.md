@@ -49,11 +49,12 @@ re-derived.
   trades a `Google.Latin` error for a `FormalTransitions` one, and one rewrite
   introduced a fresh `Vale.Spelling` hit on "middleware". Both were caught by
   re-running Vale, not by reading.
-- **Vale rewrites must not shed semantic force.** PR #145 established this and
-  the maintainer applied it. Dropping the bold from `is **not** structural`
-  removed the salience from the guide's one silent-failure warning; the
-  negation moved off the copula instead, keeping the emphasis and clearing
-  `ai-tells.EmphaticCopula`.
+- **A flagged emphasis gets deleted, not relocated.**
+  `ai-tells.EmphaticCopula` fired on `is **not** structural`. The first two
+  attempts kept the emphasis and moved it, onto the verb and then onto the
+  noun; the rule caught both, correctly. Emphasising a negation is the tic the
+  rule exists to catch, so the emphasis is gone. The sentence reads no worse
+  without it.
 - **Downstream docs are operator-only.** `2a0e36d` deliberately purged the
   pvl-core API surface from this guide. A correction that reintroduced two of
   those symbols was reverted to a behavioural statement pointing at the stub.
