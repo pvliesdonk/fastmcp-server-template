@@ -25,7 +25,7 @@ jobs:
 
       - name: Render smoke project with copier
         # --vcs-ref=HEAD is not optional here; every render step in this file
-        # carries it. See the `clean-tree toggle renders` step below for why,
+        # carries it. See the `clean-tree opt-out render` step below for why,
         # and why removing it from one step alone breaks the job locally.
         run: |
           uv run --no-project --with copier \
@@ -113,7 +113,7 @@ jobs:
             --data enable_authorization=false \
             . /tmp/smoke-authz-off
 
-      - name: clean-tree toggle renders
+      - name: clean-tree opt-out render
         # Split out from the assertion step below and placed here for the same
         # reason as the authorization render above: a variant rendered after the
         # hygiene gate is a branch that gate never sees. The opt-out is a
@@ -141,13 +141,19 @@ jobs:
         # TOGETHER: pinning one and not the other makes them render different
         # templates in a tag-bearing clone, and the diff reports a template
         # idempotence failure that does not exist.
+        #
+        # Only the OPT-OUT variant is rendered. The flag-true render used to be
+        # done here as /tmp/smoke-cleantree-on with an invocation identical to
+        # the first render step's — same answers file, same --defaults, no
+        # --data override, because structural_gate_assert_clean_tree is absent
+        # from smoke-answers.yml and defaults to true. That made it a
+        # byte-identical copy of /tmp/smoke, which the idempotence check
+        # already proves cannot differ, at the cost of a sixth full copier
+        # render per matrix leg — each running _tasks, including vendor_spa.py's
+        # network download. /tmp/smoke IS the flag-true render; the assertions
+        # below use it directly.
         run: |
-          rm -rf /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off
-          # default render (flag true): the whole-tree self-check MUST be present.
-          uv run --no-project --with copier \
-            copier copy --trust --defaults --vcs-ref=HEAD \
-            --data-file tests/fixtures/smoke-answers.yml \
-            . /tmp/smoke-cleantree-on
+          rm -rf /tmp/smoke-cleantree-off
           uv run --no-project --with copier \
             copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
@@ -181,7 +187,7 @@ jobs:
         run: |
           python3 scripts/check_render_hygiene.py \
             /tmp/smoke /tmp/smoke-gate-off /tmp/smoke-authz-off \
-            /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off
+            /tmp/smoke-cleantree-off
 
       - name: structural gate clean-tree assertion present (default) / dropped (opt-out)
         # structural_gate_assert_clean_tree gates ONLY the whole-tree clean
@@ -201,7 +207,7 @@ jobs:
         # whitespace seam must stay format-clean in both the present and absent
         # branches.
         run: |
-          grep -q 'def test_shipped_code_passes_the_structural_overlay_cleanly' /tmp/smoke-cleantree-on/tests/test_structural_gate.py \
+          grep -q 'def test_shipped_code_passes_the_structural_overlay_cleanly' /tmp/smoke/tests/test_structural_gate.py \
             || { echo "::error::clean-tree assertion missing from the default render"; exit 1; }
           # opt-out render (flag false): the whole-tree self-check MUST be dropped,
           # everything else MUST remain.
@@ -218,7 +224,7 @@ jobs:
             || { echo "::error::structure CI job dropped by clean-tree opt-out"; exit 1; }
           # both branches of the conditional must lint + format clean (catches an
           # unused import left by the trim and any if/endif whitespace regression).
-          for d in /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off; do
+          for d in /tmp/smoke /tmp/smoke-cleantree-off; do
             ( cd "$d" \
               && uv run --no-project --with ruff ruff check --config pyproject.toml tests/test_structural_gate.py \
               && uv run --no-project --with ruff ruff format --check --config pyproject.toml tests/test_structural_gate.py ) \
@@ -571,21 +577,32 @@ jobs:
             || { echo "::error::CLAUDE.md's local Vale command drifted from the rendered ci.yml — CLAUDE.md=[$CLAUDE_CMD] but this gate runs [vale ${VALE_FLAGS[*]} ${FILES[*]}]. A maintainer following CLAUDE.md would lint a different set than CI."; exit 1; }
 
           # Checksum-verified, no sudo, run-scoped. #142 raised the unverified
-          # download; the rendered ci.yml answered it with a SHA-pinned action,
-          # and this gate answers it with the published checksum.
+          # download; the rendered ci.yml answered it with a SHA-pinned action.
+          # The checksum here is a weaker answer and should not be read as an
+          # equivalent one: it comes from the same release over the same
+          # channel as the tarball, so it catches a truncated or corrupted
+          # transfer, not a compromised release.
           #
           # errata-ai/vale was renamed to vale-cli/vale; both URLs still resolve
           # to the same release assets via GitHub's org redirect, but name it
           # the way ci.yml.jinja and .pre-commit-config.yaml.jinja already do so
           # all three agree if the redirect is ever retired.
+          # Every command here is guarded, not just the checksum compare. The
+          # asymmetry was the tell: the compare only runs once BOTH downloads
+          # have succeeded, so it was the least likely to fire, while a 404
+          # after a version bump produced `exit code 22` and no annotation at
+          # all. Same diagnostic-loss class as the advisory block below.
           mkdir -p "$RUNNER_TEMP/valebin"
           TARBALL="vale_${VER}_Linux_64-bit.tar.gz"
           BASE="https://github.com/vale-cli/vale/releases/download/v${VER}"
-          curl -sSfL -o "$RUNNER_TEMP/$TARBALL" "$BASE/$TARBALL"
-          curl -sSfL -o "$RUNNER_TEMP/checksums.txt" "$BASE/vale_${VER}_checksums.txt"
+          curl -sSfL -o "$RUNNER_TEMP/$TARBALL" "$BASE/$TARBALL" \
+            || { echo "::error::could not download $BASE/$TARBALL — vale $VER release asset missing or unreachable. The version comes from the rendered ci.yml, so check that pin first."; exit 1; }
+          curl -sSfL -o "$RUNNER_TEMP/checksums.txt" "$BASE/vale_${VER}_checksums.txt" \
+            || { echo "::error::could not download the vale $VER checksums file from $BASE"; exit 1; }
           ( cd "$RUNNER_TEMP" && grep " $TARBALL\$" checksums.txt | sha256sum -c - ) \
             || { echo "::error::vale $VER tarball failed checksum verification"; exit 1; }
-          tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$RUNNER_TEMP/valebin" vale
+          tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$RUNNER_TEMP/valebin" vale \
+            || { echo "::error::vale $VER tarball has no 'vale' member at its root — release layout changed"; exit 1; }
           export PATH="$RUNNER_TEMP/valebin:$PATH"
           vale --version
 
@@ -596,6 +613,19 @@ jobs:
           # consume those trees, never re-render one here.
           [ -d /tmp/smoke-authz-off ] \
             || { echo "::error::/tmp/smoke-authz-off missing — the authorization toggle-off render step did not run"; exit 1; }
+          # D9 one level up. The file-count readback proves each run linted
+          # something; this proves the SECOND run linted something different.
+          # The variant is only meaningful because smoke-answers.yml sets
+          # enable_authorization: true while copier.yml defaults it to false —
+          # flip that fixture line and `--data enable_authorization=false`
+          # renders a tree identical to /tmp/smoke. The gate would then lint
+          # the same prose twice, report two healthy file counts, and stay
+          # green while claiming to cover a branch no other step sees.
+          if diff -rq /tmp/smoke/docs /tmp/smoke-authz-off/docs >/dev/null 2>&1 \
+             && diff -q /tmp/smoke/README.md /tmp/smoke-authz-off/README.md >/dev/null 2>&1; then
+            echo "::error::/tmp/smoke-authz-off has the same linted prose as /tmp/smoke — enable_authorization no longer differs between them, so the second variant proves nothing. Check enable_authorization in tests/fixtures/smoke-answers.yml."
+            exit 1
+          fi
           # Sync once and share the packs: the fetch is the expensive, network-
           # dependent part, and both renders resolve the same Packages line.
           ( cd /tmp/smoke && vale sync >/dev/null ) \
@@ -606,7 +636,15 @@ jobs:
           [ -n "${VALE_PACKS:-}" ] \
             || { echo "::error::VALE_PACKS unset — the vale pack-list lockstep step did not run"; exit 1; }
           for PACK in $VALE_PACKS; do
-            cp -r "/tmp/smoke/.vale/styles/$PACK" /tmp/smoke-authz-off/.vale/styles/
+            # Load-bearing on an INFERRED fact: that `vale sync` names each
+            # pack directory after the registry name or the .zip basename.
+            # If an upstream ever repackages with a different top-level
+            # directory, this is where it surfaces — and unguarded it would
+            # surface as `cp: cannot stat`, a packs problem wearing no
+            # annotation at all, in the one step whose whole design is that
+            # packs failures must be distinguishable from prose failures.
+            cp -r "/tmp/smoke/.vale/styles/$PACK" /tmp/smoke-authz-off/.vale/styles/ \
+              || { echo "::error::vale sync did not create .vale/styles/$PACK — the Packages-entry-to-directory-name derivation no longer holds. This is a pack problem, not a prose problem."; exit 1; }
           done
           for RENDER in /tmp/smoke /tmp/smoke-authz-off; do
             OUT=$( cd "$RENDER" && vale "${VALE_FLAGS[@]}" "${FILES[@]}" 2>&1 ) || {
