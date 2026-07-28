@@ -313,9 +313,12 @@ jobs:
             .vale/styles/write-good
             .vale/styles/ai-tells
           key: vale-styles-v1-{% raw %}${{ hashFiles('.vale.ini') }}{% endraw %}
-          # Warm-start fallback: restores the most recent pack snapshot when
-          # .vale.ini changes (e.g. URL bump). vale sync then only re-fetches
-          # the changed pack rather than re-downloading all four.
+          # Warm-start fallback, kept for symmetry with the key. It does NOT
+          # save a re-fetch: per the NOTE above, `vale sync` discards whatever
+          # was restored and re-creates every pack directory. An earlier
+          # revision of this comment claimed the restore let vale sync
+          # "re-fetch only the changed pack"; that is not how vale sync
+          # behaves.
           restore-keys: vale-styles-v1-
 
       - name: Run Vale

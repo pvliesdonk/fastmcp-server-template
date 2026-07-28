@@ -422,7 +422,7 @@ jobs:
         #      tests each pack directory to decide whether to sync
         #   3. `.vale.ini`'s own BasedOnStyles
         #
-        # Nothing failed loudly when they diverged. Adding a fourth pack to
+        # Nothing failed loudly when they diverged. Adding another pack to
         # `Packages` alone leaves the downstream cache list stale; leaves the
         # pre-commit hook blind to it, so a downstream's local `vale` run breaks
         # with no sync; and — if BasedOnStyles names a pack `Packages` never
@@ -555,6 +555,21 @@ jobs:
           read -ra VALE_FLAGS <<<"$GLOB"
           echo "gating on vale $VER over ${FILES[*]} with ${VALE_FLAGS[*]}"
 
+          # CLAUDE.md's "Making changes" routine spells the same invocation out
+          # for a human to paste, and calls itself a convenience copy — which
+          # made it a restatement nothing checked, in the one file that also
+          # calls itself "the only pre-push path". A stale copy there is the
+          # #143 failure exactly: the maintainer's local run lints a narrower
+          # set than this gate, so prose passes locally and fails here.
+          # Single quotes are the shell quoting a human needs when pasting and
+          # are not part of the value, so strip them before comparing.
+          CLAUDE_CMD=$(grep -F 'vale --glob=' CLAUDE.md | head -1 \
+            | tr -d "'" | sed -E 's/^[[:space:]]*//; s/[[:space:]]+$//' || true)
+          [ -n "$CLAUDE_CMD" ] \
+            || { echo "::error::no 'vale --glob=' command found in CLAUDE.md — the documented local routine no longer shows one, so it cannot be checked against this gate"; exit 1; }
+          [ "$CLAUDE_CMD" = "vale ${VALE_FLAGS[*]} ${FILES[*]}" ] \
+            || { echo "::error::CLAUDE.md's local Vale command drifted from the rendered ci.yml — CLAUDE.md=[$CLAUDE_CMD] but this gate runs [vale ${VALE_FLAGS[*]} ${FILES[*]}]. A maintainer following CLAUDE.md would lint a different set than CI."; exit 1; }
+
           # Checksum-verified, no sudo, run-scoped. #142 raised the unverified
           # download; the rendered ci.yml answered it with a SHA-pinned action,
           # and this gate answers it with the published checksum.
@@ -597,6 +612,14 @@ jobs:
             OUT=$( cd "$RENDER" && vale "${VALE_FLAGS[@]}" "${FILES[@]}" 2>&1 ) || {
               echo "$OUT"
               echo "::error::vale reports errors in $RENDER — rendered prose must be clean"
+              # Google/proselint/write-good are listed without an @version, so
+              # `vale sync` resolves them to the latest registry release on
+              # every run (.vale.ini.jinja calls that intentional). A rule
+              # added upstream therefore fails this gate on a PR that touched
+              # no prose, and the message above would send the reader hunting
+              # through their own diff. Say so here rather than pinning, which
+              # is the trade .vale.ini.jinja deliberately declines.
+              echo "::notice::if this PR changed no prose, suspect an upstream style-pack release: the registry packs resolve to latest on every sync"
               exit 1
             }
             echo "$OUT"

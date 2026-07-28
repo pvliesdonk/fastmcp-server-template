@@ -42,6 +42,18 @@ Vocab = Base
 # If tbhb/vale-ai-tells renames or removes the pinned release, `vale sync`
 # will fail permanently for this project. Periodically check
 # https://github.com/tbhb/vale-ai-tells/releases and bump the URL manually.
+#
+# THIS LINE IS THE SOURCE OF TRUTH for which packs exist, and three places
+# restate it by hand — change it and all three change with it:
+#   1. `BasedOnStyles` below. A style named there that `Packages` does not
+#      fetch makes vale exit 2 with `E100 [loadStyles]`.
+#   2. the `Cache Vale style packages` `path:` list in
+#      `.github/workflows/ci.yml`.
+#   3. the `for p in` list in `.pre-commit-config.yaml`'s `vale-sync` hook.
+#      A pack missing there is never seen as missing, so the hook never
+#      syncs and the `vale` hook right after it fails on packaging.
+# The template's own CI asserts all three against this line, so drift fails
+# loudly rather than silently.
 Packages = Google, proselint, write-good, https://github.com/tbhb/vale-ai-tells/releases/download/v1.9.0/ai-tells.zip
 
 [*.md]

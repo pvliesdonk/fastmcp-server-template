@@ -90,11 +90,13 @@ also changes that region conflicts for **every** downstream.
 The classic trap (issue #251) is a Jinja block tag at EOF — Jinja has no
 `trim_blocks` here, so the newline after `{% endif %}` survives and the
 render ends with a blank line.  Use `{%- endif %}` or put real content
-after it.  `scripts/check_render_hygiene.py` is the guard; `template-ci`
-runs it over every variant it renders — default, gate-off,
+after it.  `scripts/check_render_hygiene.py` is the guard; in
+`render-and-gate` it covers five renders — default, gate-off,
 authorization-off, and the two clean-tree toggle renders.  A variant is
 only covered if it is rendered *above* the hygiene step and named in its
-argument list, so a new render step belongs in both places.
+argument list, so a new render step belongs in both places.  The
+idempotence render (`/tmp/smoke2`) is deliberately excluded: it is already
+asserted byte-identical to the default render.
 
 ## Release
 
