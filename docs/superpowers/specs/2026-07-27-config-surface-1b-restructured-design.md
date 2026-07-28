@@ -89,6 +89,7 @@ revertible.
 |---|---|---|
 | **A** | Clear the 20 Vale errors in `authorization.md` and `config-migration.md` | `vale` over a render reports 0 |
 | **B** | `template-ci` runs Vale over the render; add the missing `check_anchor` | A deliberately injected error fails the build |
+| | *B must also decide whether the gate runs with the domain vocabulary dropped: an accepted term suppresses non-spelling rules inside its match span, so a plain zero-error run can pass prose that still carries a flagged pattern. One such case already exists at `README.md.jinja:142`.* | |
 | **C** | OIDC prose corrections (key derivation, re-registration, restart) | Every claim cited to a `fastmcp` file and symbol |
 | **D** | Markdown splice engine + the two OIDC doc tables + `required_vars` | The rendered tables read correctly to an operator |
 | **E** | README core + domain tables + `documented_defaults` + the `MISSING` fix | A real `ProjectConfig` field renders Required correctly both ways |

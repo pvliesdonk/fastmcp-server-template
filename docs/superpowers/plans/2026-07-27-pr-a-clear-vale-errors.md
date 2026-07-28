@@ -46,6 +46,11 @@ re-derived.
   inherits the weakness. A strict check drops the domain vocabulary and
   re-runs; used here to confirm the tricolon was gone rather than masked.
 
+  That strict run also surfaces one pre-existing case outside this PR's diff:
+  `README.md.jinja:142` carries a verb tricolon that only passes because
+  `GitHub` is an accepted term. It came from #209 and is left alone here;
+  PR B owns the gate and should decide whether the gate runs strict.
+
 ## Constraints that governed the fix
 
 - **Spelling errors were reworded, never accepted.** `.vale.ini` and
