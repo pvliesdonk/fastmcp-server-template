@@ -74,7 +74,7 @@ The generator discovers domain vars by AST-scanning `ProjectConfig.from_env`
 for `env(prefix, "SUFFIX")` reads whose suffix matches a dataclass field.
 See `scripts/gen_config_surface.py`'s `_discover_domain_vars`. That covers
 every var your project reads through a declared field. Add an entry to
-`config-presentation.domain.yml` only for a var the scan genuinely cannot
+`config-presentation.domain.yml` only for a var the scan cannot
 see:
 
 - A deprecated alias for a var that no longer has its own field.
