@@ -24,9 +24,12 @@ jobs:
         run: uv python install ${{ matrix.python }}
 
       - name: Render smoke project with copier
+        # --vcs-ref=HEAD is not optional here; every render step in this file
+        # carries it. See the `clean-tree opt-out render` step below for why,
+        # and why removing it from one step alone breaks the job locally.
         run: |
           uv run --no-project --with copier \
-            copier copy --trust --defaults \
+            copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             . /tmp/smoke
 
@@ -35,9 +38,14 @@ jobs:
         # ``uv sync``/``ruff``/``mypy``/``pytest`` would otherwise add
         # .venv, uv.lock, .mypy_cache etc. that the second (untouched)
         # render doesn't have.
+        #
+        # This render and the one above must stay pinned to the SAME ref.
+        # Pinning one and not the other makes them render different templates
+        # in a tag-bearing clone, and this diff then reports an idempotence
+        # failure that does not exist.
         run: |
           uv run --no-project --with copier \
-            copier copy --trust --defaults \
+            copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             . /tmp/smoke2
           if ! diff -r /tmp/smoke /tmp/smoke2 > /tmp/smoke-diff 2>&1; then
@@ -59,7 +67,7 @@ jobs:
         run: |
           rm -rf /tmp/smoke-gate-off
           uv run --no-project --with copier \
-            copier copy --trust --defaults \
+            copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             --data enable_structural_gate=false \
             . /tmp/smoke-gate-off
@@ -83,6 +91,75 @@ jobs:
           ! grep -qF 'Structural quality (diff) passes' CLAUDE.md \
             || { echo "::error::structural acceptance-gate item rendered with gate off"; exit 1; }
 
+      - name: authorization toggle-off render
+        # Rendered for the Vale gate far below, but rendered HERE, beside its
+        # sibling variants and before anything writes into a tree, so it passes
+        # through the render-hygiene step like every other variant. Moving it
+        # down to its consumer would put it after `uv sync` and after the gate's
+        # own pack copy, where hygiene can no longer be checked at all.
+        #
+        # Chosen for what it changes in the LINTED set. Not the gate-off render
+        # above: enable_structural_gate toggles nothing under docs/ or
+        # README.md, so that variant's prose is byte-identical to /tmp/smoke.
+        # enable_authorization is the flag that matters — off, it drops
+        # docs/guides/authorization.md entirely and changes both README.md and
+        # docs/guides/authentication.md, so its prose is a branch no other step
+        # sees.
+        run: |
+          rm -rf /tmp/smoke-authz-off
+          uv run --no-project --with copier \
+            copier copy --trust --defaults --vcs-ref=HEAD \
+            --data-file tests/fixtures/smoke-answers.yml \
+            --data enable_authorization=false \
+            . /tmp/smoke-authz-off
+
+      - name: clean-tree opt-out render
+        # Split out from the assertion step below and placed here for the same
+        # reason as the authorization render above: a variant rendered after the
+        # hygiene gate is a branch that gate never sees. The opt-out is a
+        # {%- if %} trim inside tests/test_structural_gate.py, which is exactly
+        # the "Jinja tag in one branch of a conditional" class of #251.
+        #
+        # --vcs-ref=HEAD renders the working-tree commit — the canonical
+        # explanation for every render step in this file. Without it copier
+        # defaults to the latest git tag, which predates this step's variable: a
+        # clone that HAS tags (a normal local checkout) then renders the old
+        # template, ignores the --data, and the assertions below break. CI's
+        # default checkout fetches no tags, so copier falls through to HEAD and
+        # they pass even unpinned — i.e. an omitted pin slips through CI and
+        # breaks only on a local full clone.
+        #
+        # EVERY render step here carries the pin for that reason; they are not
+        # independent choices. The Vale gate forced the issue: it lints rendered
+        # PROSE, so in a tag-bearing clone it reported 19 errors against docs the
+        # merged tree had already fixed, blaming the working tree for the last
+        # release's text. The assertion-only steps failed less loudly but the
+        # same way. Pin them together or the job means something different
+        # locally than it does in CI.
+        #
+        # The smoke/smoke2 idempotence pair in particular must stay pinned
+        # TOGETHER: pinning one and not the other makes them render different
+        # templates in a tag-bearing clone, and the diff reports a template
+        # idempotence failure that does not exist.
+        #
+        # Only the OPT-OUT variant is rendered. The flag-true render used to be
+        # done here as /tmp/smoke-cleantree-on with an invocation identical to
+        # the first render step's — same answers file, same --defaults, no
+        # --data override, because structural_gate_assert_clean_tree is absent
+        # from smoke-answers.yml and defaults to true. That made it a
+        # byte-identical copy of /tmp/smoke, which the idempotence check
+        # already proves cannot differ, at the cost of a sixth full copier
+        # render per matrix leg — each running _tasks, including vendor_spa.py's
+        # network download. /tmp/smoke IS the flag-true render; the assertions
+        # below use it directly.
+        run: |
+          rm -rf /tmp/smoke-cleantree-off
+          uv run --no-project --with copier \
+            copier copy --trust --defaults --vcs-ref=HEAD \
+            --data-file tests/fixtures/smoke-answers.yml \
+            --data structural_gate_assert_clean_tree=false \
+            . /tmp/smoke-cleantree-off
+
       - name: render hygiene (pristine render already satisfies the shipped hooks)
         # The template ships `trailing-whitespace` and `end-of-file-fixer`
         # (.pre-commit-config.yaml.jinja). Both REWRITE files, so anything they
@@ -99,11 +176,18 @@ jobs:
         # downstream's ci.yml conflicted. Latent for months because nothing had
         # touched ci.yml's tail before.
         #
-        # Runs BEFORE `uv sync` so the render is still pristine, and covers the
-        # gate-off render too — a Jinja tag at EOF only appears in one branch of
-        # a conditional, so checking a single variant would miss it.
+        # Runs BEFORE `uv sync` so the render is still pristine, and covers
+        # EVERY rendered variant — a Jinja tag at EOF only appears in one branch
+        # of a conditional, so checking a single variant would miss it. Any new
+        # render step belongs above this one and in the argument list below;
+        # a variant rendered further down is a branch this guard never sees.
+        # /tmp/smoke2 is excluded deliberately: the idempotence step already
+        # asserts it is byte-identical to /tmp/smoke, so checking it again
+        # could not fail independently.
         run: |
-          python3 scripts/check_render_hygiene.py /tmp/smoke /tmp/smoke-gate-off
+          python3 scripts/check_render_hygiene.py \
+            /tmp/smoke /tmp/smoke-gate-off /tmp/smoke-authz-off \
+            /tmp/smoke-cleantree-off
 
       - name: structural gate clean-tree assertion present (default) / dropped (opt-out)
         # structural_gate_assert_clean_tree gates ONLY the whole-tree clean
@@ -114,40 +198,21 @@ jobs:
         # absence, and a missing test passes pytest vacuously, so assert the
         # rendered file directly — BOTH halves: present under the default render,
         # absent under the opt-out (an inverted condition would otherwise drop the
-        # self-check from every downstream and still go green).
-        #
-        # --vcs-ref=HEAD renders the working-tree commit. Without it copier
-        # defaults to the latest git tag, which predates this variable: a clone
-        # that HAS tags (a normal local checkout) then renders the old template,
-        # ignores the --data, and these assertions break. CI's default checkout
-        # fetches no tags, so copier falls through to HEAD and the assertions pass
-        # even unpinned — i.e. an omitted pin slips through CI and breaks only on a
-        # local full clone. Pin it so behaviour is identical everywhere. (The
-        # sibling render steps omit the pin too; their assertions still pass
-        # because they toggle only tag-existing vars, but in a tag-bearing local
-        # clone they render the tagged template, not the working tree — a
-        # pre-existing gap, not fixed here.)
+        # self-check from every downstream and still go green). The opt-out
+        # render comes from the `clean-tree opt-out render` step above, which is
+        # also where the --vcs-ref=HEAD rationale lives; the flag-true half
+        # asserts against /tmp/smoke directly, since that IS the flag-true
+        # render.
         #
         # Both rendered variants of the gate's own test file are then linted: the
         # opt-out trim must leave no unused import, and the jinja if/endif
         # whitespace seam must stay format-clean in both the present and absent
         # branches.
         run: |
-          rm -rf /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off
-          # default render (flag true): the whole-tree self-check MUST be present.
-          uv run --no-project --with copier \
-            copier copy --trust --defaults --vcs-ref=HEAD \
-            --data-file tests/fixtures/smoke-answers.yml \
-            . /tmp/smoke-cleantree-on
-          grep -q 'def test_shipped_code_passes_the_structural_overlay_cleanly' /tmp/smoke-cleantree-on/tests/test_structural_gate.py \
+          grep -q 'def test_shipped_code_passes_the_structural_overlay_cleanly' /tmp/smoke/tests/test_structural_gate.py \
             || { echo "::error::clean-tree assertion missing from the default render"; exit 1; }
           # opt-out render (flag false): the whole-tree self-check MUST be dropped,
           # everything else MUST remain.
-          uv run --no-project --with copier \
-            copier copy --trust --defaults --vcs-ref=HEAD \
-            --data-file tests/fixtures/smoke-answers.yml \
-            --data structural_gate_assert_clean_tree=false \
-            . /tmp/smoke-cleantree-off
           off=/tmp/smoke-cleantree-off
           test -f "$off/tests/test_structural_gate.py" \
             || { echo "::error::structural test file missing — gate should still render"; exit 1; }
@@ -161,7 +226,7 @@ jobs:
             || { echo "::error::structure CI job dropped by clean-tree opt-out"; exit 1; }
           # both branches of the conditional must lint + format clean (catches an
           # unused import left by the trim and any if/endif whitespace regression).
-          for d in /tmp/smoke-cleantree-on /tmp/smoke-cleantree-off; do
+          for d in /tmp/smoke /tmp/smoke-cleantree-off; do
             ( cd "$d" \
               && uv run --no-project --with ruff ruff check --config pyproject.toml tests/test_structural_gate.py \
               && uv run --no-project --with ruff ruff format --check --config pyproject.toml tests/test_structural_gate.py ) \
@@ -301,8 +366,8 @@ jobs:
           # (e.g. setup-uv) ever moves off `version: "latest"` to a pinned
           # semver — that would silently extract the wrong pin and let real
           # drift slip through.
-          CI_VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' .github/workflows/ci.yml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-          PC_VER=$(awk '/^[[:space:]]*-[[:space:]]*repo:.*vale-cli\/vale[[:space:]]*$/{f=1; next} f && /rev:/{print; exit}' .pre-commit-config.yaml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          CI_VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' .github/workflows/ci.yml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          PC_VER=$(awk '/^[[:space:]]*-[[:space:]]*repo:.*vale-cli\/vale[[:space:]]*$/{f=1; next} f && /rev:/{print; exit}' .pre-commit-config.yaml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
           [ -n "$CI_VER" ] || { echo "::error::vale version pin not found in rendered ci.yml"; exit 1; }
           [ -n "$PC_VER" ] || { echo "::error::vale rev not found in rendered .pre-commit-config.yaml"; exit 1; }
           [ "$CI_VER" = "$PC_VER" ] \
@@ -326,31 +391,441 @@ jobs:
           # values if a downstream adds a second Vale invocation.
           CI_EXCL=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' .github/workflows/ci.yml \
             | grep -oE '!docs/[^"'"'"' ]*' || true)
-          # grep -A15 bounds the search to the vale hook block. The `$`
-          # anchor avoids matching `- id: vale-sync`. Window of 15 safely
-          # covers the 11-line gap between `- id: vale` and `exclude:` in the
-          # rendered pre-commit config; prevents capturing a later hook's
-          # exclude if the vale hook's own exclude is removed.
-          PC_EXCL=$(grep -A15 '^[[:space:]]*- id: vale$' .pre-commit-config.yaml \
-            | grep -m1 'exclude:' \
+          # Bounded by the NEXT `- id:` rather than a fixed-size window. The
+          # old form was `grep -A15`, and reviews on #159 and #209 both called
+          # the 15 a magic number: if the vale hook block grows past it,
+          # PC_EXCL comes back empty and the failure reads as misconfiguration
+          # rather than a window too small. That headroom had already eroded
+          # from the 4 lines #209 computed to 2 — the gap is 13 lines now, not
+          # the 11 the old comment claimed. Bounding on the block's real end
+          # retires the number instead of re-tuning it. The `$` anchor still
+          # keeps `- id: vale` from matching `- id: vale-sync`.
+          PC_EXCL=$(awk '
+              /^[[:space:]]*-[[:space:]]*id:[[:space:]]*vale[[:space:]]*$/{f=1; next}
+              f && /^[[:space:]]*-[[:space:]]*id:/{exit}
+              f && /exclude:/{print; exit}' .pre-commit-config.yaml \
             | grep -oE 'docs/[^[:space:]]*' || true)
           [ -n "$CI_EXCL" ] || { echo "::error::vale exclusion glob not found in ci.yml vale_flags"; exit 1; }
           [ -n "$PC_EXCL" ] || { echo "::error::vale exclude not found in .pre-commit-config.yaml vale hook"; exit 1; }
-          # Canonicalize to a sorted, comma-separated set of subtree names:
-          # strip a leading ! / ^, the docs/ prefix, and a trailing /** or /;
-          # drop {}/() grouping; split on , or | ; sort. Handles both a single
-          # subtree (docs/superpowers) and a multi-subtree set identically.
+          # Canonicalize to a sorted, comma-separated set of subtree names.
+          # SPLIT FIRST, then normalize each element: drop {}/() grouping,
+          # split on , or |, and only then strip a leading ! / ^, the docs/
+          # prefix, and a trailing /** or /. Stripping before the split only
+          # ever reached the first and last element, which was invisible while
+          # the two compared forms happened to carry their `/**` once at the
+          # end — mkdocs writes it per line (`design/**`, `decisions/**`), so
+          # the old order left the inner ones un-stripped.
           canon() {
             echo "$1" \
-              | sed -E 's|^!||; s|^\^||; s|^docs/||; s|/\*\*$||; s|/$||' \
               | tr -d '{}()' \
               | tr '|,' '\n' \
+              | sed -E 's|^!||; s|^\^||; s|^docs/||; s|/\*\*$||; s|/+$||' \
+              | grep -v '^$' \
               | sort | paste -sd, -
           }
+          # Third surface: mkdocs `exclude_docs`. mkdocs.yml.jinja says "Keep
+          # this set in lockstep with the Vale exclusion", and the #209 review
+          # signed the design off as a "three-place lockstep (CI/pre-commit/
+          # mkdocs) with CI enforcement" — but only two were ever compared, so
+          # the one a reviewer already believed was covered was the one that
+          # could drift silently. It is a block scalar of bare `subtree/**`
+          # lines, so it needs no ! or docs/ prefix stripping; canon() handles
+          # the trailing /** and the sort.
+          MK_EXCL=$(awk '/^exclude_docs:/{f=1; next} f && /^[^[:space:]]/{exit} f' \
+              mkdocs.yml \
+            | tr -d ' ' | grep -v '^$' | paste -sd, - || true)
+          [ -n "$MK_EXCL" ] \
+            || { echo "::error::exclude_docs block not found in the rendered mkdocs.yml — mkdocs.yml.jinja claims to be in lockstep with the Vale exclusion, so this must be extractable"; exit 1; }
           CI_NORM=$(canon "$CI_EXCL")
           PC_NORM=$(canon "$PC_EXCL")
+          MK_NORM=$(canon "$MK_EXCL")
+          # Assert what is actually compared. The -n guards above are on the
+          # RAW extractions, but the equality tests below use the canonicalized
+          # ones, and a non-empty raw value can canonicalize to empty (`!docs/`
+          # reduces to nothing). Two empties compare equal, so the step would
+          # pass vacuously — the same "prove you checked something" gap the
+          # gate's linted-file-count readback closes one step over.
+          for pair in "ci.yml:$CI_NORM" "pre-commit:$PC_NORM" "mkdocs:$MK_NORM"; do
+            [ -n "${pair#*:}" ] \
+              || { echo "::error::${pair%%:*} exclusion set canonicalized to empty — the raw value was non-empty, so the extraction matched something this canon() cannot read. Comparing it would pass vacuously."; exit 1; }
+          done
+          [ "$CI_NORM" = "$MK_NORM" ] \
+            || { echo "::error::vale/mkdocs exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) mkdocs exclude_docs=$MK_EXCL ($MK_NORM). A subtree excluded from the published site but linted by Vale (or the reverse) means the two disagree about what is user-facing prose."; exit 1; }
           [ "$CI_NORM" = "$PC_NORM" ] \
             || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) pre-commit=$PC_EXCL ($PC_NORM)"; exit 1; }
+
+      - name: vale pack-list lockstep
+        # Same family as the two lockstep steps above, one surface further out.
+        # `.vale.ini`'s `Packages =` is the source of truth for WHICH style
+        # packs exist. Four other places enumerate them, and none can derive
+        # the list at runtime:
+        #
+        #   1. this workflow's `cache vale style packs` path: — actions/cache
+        #      takes no shell variable, so the list must stay literal
+        #   2. the rendered ci.yml's `Cache Vale style packages` path: — same
+        #      constraint, and it is what every downstream runs
+        #   3. the rendered .pre-commit-config.yaml's `vale-sync` hook, which
+        #      tests each pack directory to decide whether to sync
+        #   4. `.vale.ini`'s own BasedOnStyles
+        #
+        # Nothing failed loudly when they diverged. Adding another pack to
+        # `Packages` alone leaves both cache lists stale; leaves the
+        # pre-commit hook blind to it, so a downstream's local `vale` run breaks
+        # with no sync; and — if BasedOnStyles names a pack `Packages` never
+        # fetches — makes vale exit `E100 [loadStyles]`, which the gate below
+        # reports as "rendered prose must be clean": exactly the
+        # packs-versus-prose misdiagnosis its `vale sync` guard exists to
+        # prevent.
+        #
+        # So derive the set and assert all four enumerations equal it. The gate
+        # step consumes the derived list via VALE_PACKS rather than becoming a
+        # fifth — it uses it both for the cache-hit check and the pack copy.
+        run: |
+          set -euo pipefail
+          VALE_INI=/tmp/smoke/.vale.ini
+          [ -f "$VALE_INI" ] \
+            || { echo "::error::$VALE_INI missing — render regressed"; exit 1; }
+          # A Packages entry is either a registry name (`Google`, optionally
+          # `Name@1.2.3`) or a URL to a .zip whose basename is the directory
+          # `vale sync` creates under StylesPath. Reduce both to that name.
+          #
+          # Trailing `|| true` on every extraction pipeline below, including
+          # this one: a zero-match grep exits 1, and under `pipefail` that
+          # status propagates out of the command substitution, so `set -e`
+          # would kill the step at the ASSIGNMENT — before the guard written to
+          # diagnose exactly that case could print. #159 fixed this same shape
+          # in the exclusion-scope step (the version-pin step was still
+          # unguarded until this branch); every extraction here needs it, because
+          # "extracted nothing" is the failure these guards exist to name.
+          canon_packs() {
+            tr ',' '\n' <<<"$1" \
+              | sed -E 's#^[[:space:]]+##; s#[[:space:]]+$##; s#^.*/##; s#\.zip$##; s#@.*$##' \
+              | grep -v '^$' | sort -u | paste -sd' ' - || true
+          }
+          # Appended to every drift message below. The rendered files each name
+          # only the three surfaces that exist downstream — correct for their
+          # reader, but a template maintainer needs the fourth, and the moment
+          # they need it is when one of these assertions has just failed.
+          SURFACES="All four surfaces that must match Packages =: .vale.ini BasedOnStyles; .github/workflows/ci.yml cache path:; .pre-commit-config.yaml vale-sync 'for p in'; and template-ci.yml's own 'cache vale style packs' path: (template repo only)."
+          PACKS=$(canon_packs "$(sed -nE 's/^Packages[[:space:]]*=[[:space:]]*//p' "$VALE_INI")")
+          [ -n "$PACKS" ] \
+            || { echo "::error::no Packages entries extractable from the rendered .vale.ini"; exit 1; }
+
+          # BasedOnStyles minus the built-in `Vale` style, which is always
+          # available and has no package to fetch.
+          BASED=$(canon_packs "$(sed -nE 's/^BasedOnStyles[[:space:]]*=[[:space:]]*//p' "$VALE_INI" \
+            | sed -E 's/(^|,)[[:space:]]*Vale[[:space:]]*(,|$)/\1/')")
+          [ "$BASED" = "$PACKS" ] \
+            || { echo "::error::.vale.ini pack drift — BasedOnStyles=[$BASED] but Packages=[$PACKS]. A style in BasedOnStyles that Packages never fetches makes vale exit E100 [loadStyles]; a fetched pack no style uses is dead weight. $SURFACES"; exit 1; }
+
+          # This workflow's own `cache vale style packs` path:, bounded to that
+          # step by an anchored step-name match and the `key:` that ends the
+          # list. The step name is anchored at both ends (`^      - name: …$`)
+          # so this awk program's OWN line — same literal, but indented inside
+          # a run: block — cannot start the scan early. Pack names are matched
+          # only at line start, so the step's prose mention of
+          # .vale/styles/config/ cannot match either.
+          CACHED=$(awk '/^      - name: cache vale style packs$/{f=1} f && /^ *key:/{exit} f' \
+              .github/workflows/template-ci.yml \
+            | grep -oE '^[[:space:]]+/tmp/smoke/\.vale/styles/[A-Za-z0-9._-]+' \
+            | sed -E 's#^.*/##' | sort -u | paste -sd' ' - || true)
+          [ "$CACHED" = "$PACKS" ] \
+            || { echo "::error::template-ci cache path drift — cached=[$CACHED] but .vale.ini Packages=[$PACKS]. A pack missing from that path: list is never restored, so the guarded sync below re-syncs every run and the cache stops working. Update the 'cache vale style packs' path: list. $SURFACES"; exit 1; }
+
+          # The same enumeration in the RENDERED ci.yml. It drifts identically
+          # and nothing else checks it, so a pack change that reaches downstream
+          # with a stale cache list would otherwise be invisible here.
+          DOWNSTREAM=$(awk '/^      - name: Cache Vale style packages$/{f=1} f && /^ *key:/{exit} f' \
+              /tmp/smoke/.github/workflows/ci.yml \
+            | grep -oE '^[[:space:]]+\.vale/styles/[A-Za-z0-9._-]+' \
+            | sed -E 's#^.*/##' | sort -u | paste -sd' ' - || true)
+          [ "$DOWNSTREAM" = "$PACKS" ] \
+            || { echo "::error::rendered ci.yml cache path drift — cached=[$DOWNSTREAM] but .vale.ini Packages=[$PACKS]. Update the 'Cache Vale style packages' path: list in ci.yml.jinja. $SURFACES"; exit 1; }
+
+          # The rendered pre-commit `vale-sync` hook decides whether to run
+          # `vale sync` by testing each pack directory for existence. A pack it
+          # does not know about is never seen as missing, so the hook stays
+          # quiet and the `vale` hook right after it exits E100 on the
+          # downstream's machine — the local mirror of the CI failure above.
+          #
+          # Anchored at BOTH ends and bounded by the next `- id:`, which is the
+          # posture #159 established for the sibling extraction ~100 lines up.
+          # Unanchored, `- id: vale-sync` also matches `- id: vale-sync-foo`;
+          # unbounded, awk scans to EOF when the loop is reworded and captures
+          # a later hook's `for p in`, reporting that hook's list as this one's.
+          PRECOMMIT=$(canon_packs "$(awk '
+              /^[[:space:]]*-[[:space:]]*id:[[:space:]]*vale-sync[[:space:]]*$/{f=1; next}
+              f && /^[[:space:]]*-[[:space:]]*id:/{exit}
+              f && /^[[:space:]]*for p in /{print; exit}' \
+              /tmp/smoke/.pre-commit-config.yaml \
+            | sed -E 's/^[[:space:]]*for p in //; s/;[[:space:]]*do[[:space:]]*$//' | tr ' ' ',')")
+          [ "$PRECOMMIT" = "$PACKS" ] \
+            || { echo "::error::rendered .pre-commit-config.yaml pack drift — vale-sync hook checks [$PRECOMMIT] but .vale.ini Packages=[$PACKS]. Update the 'for p in ...' list in .pre-commit-config.yaml.jinja. $SURFACES"; exit 1; }
+
+          # Single source for the gate step's pack copy.
+          echo "VALE_PACKS=$PACKS" >> "$GITHUB_ENV"
+          echo "vale packs: $PACKS"
+
+      - name: cache vale style packs
+        # This cache is LOAD-BEARING, which took two attempts to get right.
+        # A plain mirror of the rendered ci.yml's cache step does nothing:
+        # `vale sync` never consults a cache, it wipes and re-creates every
+        # directory named in `Packages =` on every invocation. Verified by
+        # dropping canary files into .vale/styles/Google and
+        # .vale/styles/ai-tells after a sync and syncing again — both gone. A
+        # restored cache is therefore discarded before it is read unless the
+        # sync itself is skipped, which is what the gate step below now does:
+        # it syncs only when a pack directory is missing, exactly as the
+        # vale-sync pre-commit hook decides.
+        #
+        # NO restore-keys, deliberately, and this is the #159 clobber in a new
+        # place. With a guarded sync, a partial-key restore would hand the gate
+        # a STALE pack set and then skip the sync that would have corrected it
+        # — silently linting against the previous .vale.ini's packs. An exact
+        # key only: change .vale.ini.jinja and the cache misses, so the sync
+        # runs and re-resolves. The v2- prefix retires the v1- entries written
+        # while the sync was still unconditional.
+        #
+        # The trade this accepts: `Packages =` lists the registry packs without
+        # an @version, which .vale.ini.jinja calls intentional ("keeps style
+        # rules current"). On a cache hit the gate now lints against the packs
+        # as they were when the key was first written, not the latest release.
+        # That is the point — it is what stops an upstream rule landing mid-PR
+        # and failing a gate on prose nobody touched — but it means a rule
+        # refresh happens when .vale.ini.jinja changes, not continuously.
+        #
+        # Only the downloaded pack directories, never .vale/styles/config/ —
+        # that subtree is rendered from the template and must stay
+        # authoritative, which is the clobber #159 documents. The path list is
+        # asserted equal to the rendered .vale.ini's `Packages =` by the
+        # lockstep step above.
+        if: matrix.python == '3.11'
+        uses: actions/cache@v6
+        with:
+          path: |
+            /tmp/smoke/.vale/styles/Google
+            /tmp/smoke/.vale/styles/proselint
+            /tmp/smoke/.vale/styles/write-good
+            /tmp/smoke/.vale/styles/ai-tells
+          key: vale-styles-v2-${{ hashFiles('.vale.ini.jinja') }}
+
+      - name: vale gate over the render
+        # The structural check above proves .vale.ini renders; it has never
+        # proved the rendered PROSE is clean. Every prose defect therefore
+        # reached a downstream's own vale job first (#270).
+        #
+        # One matrix leg only: Vale's result does not depend on the Python
+        # version, and `vale sync` is a network fetch.
+        if: matrix.python == '3.11'
+        run: |
+          set -euo pipefail
+          # Extract, never restate (#143/#159): duplicated Vale configuration
+          # drifts, and a finding visible to one surface goes silent in the
+          # other. Same `vale:`-job awk anchor the two lockstep steps use.
+          CI_YML=/tmp/smoke/.github/workflows/ci.yml
+          # `|| true`: grep exits 1 on no match, and under set -e a failing
+          # substitution kills the step before the guard below can say why
+          # (#159 fixed this same shape in the exclusion-scope step).
+          VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' "$CI_YML" \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          FILES_JSON=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+files:/{print; exit}' "$CI_YML" \
+            | sed -E "s/^[[:space:]]*files:[[:space:]]*'//; s/'[[:space:]]*$//")
+          GLOB=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' "$CI_YML" \
+            | sed -E 's/^[[:space:]]*vale_flags:[[:space:]]*"//; s/"[[:space:]]*$//')
+          # Non-empty assertions matter more than the comparison: a future
+          # ci.yml restructure that breaks an anchor would otherwise leave this
+          # gate silently linting nothing and still reporting success.
+          [ -n "$VER" ]  || { echo "::error::vale version not extractable from rendered ci.yml"; exit 1; }
+          [ -n "$GLOB" ] || { echo "::error::vale_flags not extractable from rendered ci.yml"; exit 1; }
+          mapfile -t FILES < <(echo "$FILES_JSON" | jq -er '.[]')
+          [ "${#FILES[@]}" -gt 0 ] \
+            || { echo "::error::vale files list not extractable from rendered ci.yml"; exit 1; }
+          # vale_flags is plural: split it so a second flag does not arrive as
+          # one argv element, which Vale would read as a path.
+          read -ra VALE_FLAGS <<<"$GLOB"
+          echo "gating on vale $VER over ${FILES[*]} with ${VALE_FLAGS[*]}"
+
+          # CLAUDE.md's "Making changes" routine spells the same invocation out
+          # for a human to paste, and calls itself a convenience copy — which
+          # made it a restatement nothing checked, in the one file that also
+          # calls itself "the only pre-push path". A stale copy there is the
+          # #143 failure exactly: the maintainer's local run lints a narrower
+          # set than this gate, so prose passes locally and fails here.
+          # Single quotes are the shell quoting a human needs when pasting and
+          # are not part of the value, so strip them before comparing.
+          CLAUDE_CMD=$(grep -F 'vale --glob=' CLAUDE.md | head -1 \
+            | tr -d "'" | sed -E 's/^[[:space:]]*//; s/[[:space:]]+$//' || true)
+          [ -n "$CLAUDE_CMD" ] \
+            || { echo "::error::no 'vale --glob=' command found in CLAUDE.md — the documented local routine no longer shows one, so it cannot be checked against this gate"; exit 1; }
+          [ "$CLAUDE_CMD" = "vale ${VALE_FLAGS[*]} ${FILES[*]}" ] \
+            || { echo "::error::CLAUDE.md's local Vale command drifted from the rendered ci.yml — CLAUDE.md=[$CLAUDE_CMD] but this gate runs [vale ${VALE_FLAGS[*]} ${FILES[*]}]. A maintainer following CLAUDE.md would lint a different set than CI."; exit 1; }
+
+          # Checksum-verified, no sudo, run-scoped. #142 raised the unverified
+          # download; the rendered ci.yml answered it with a SHA-pinned action.
+          # The checksum here is a weaker answer and should not be read as an
+          # equivalent one: it comes from the same release over the same
+          # channel as the tarball, so it catches a truncated or corrupted
+          # transfer, not a compromised release.
+          #
+          # errata-ai/vale was renamed to vale-cli/vale; both URLs still resolve
+          # to the same release assets via GitHub's org redirect, but name it
+          # the way ci.yml.jinja and .pre-commit-config.yaml.jinja already do so
+          # all three agree if the redirect is ever retired.
+          # Every command here is guarded, not just the checksum compare. The
+          # asymmetry was the tell: the compare only runs once BOTH downloads
+          # have succeeded, so it was the least likely to fire, while a 404
+          # after a version bump produced `exit code 22` and no annotation at
+          # all. Same diagnostic-loss class as the advisory block below.
+          mkdir -p "$RUNNER_TEMP/valebin"
+          TARBALL="vale_${VER}_Linux_64-bit.tar.gz"
+          BASE="https://github.com/vale-cli/vale/releases/download/v${VER}"
+          curl -sSfL -o "$RUNNER_TEMP/$TARBALL" "$BASE/$TARBALL" \
+            || { echo "::error::could not download $BASE/$TARBALL — vale $VER release asset missing or unreachable. The version comes from the rendered ci.yml, so check that pin first."; exit 1; }
+          curl -sSfL -o "$RUNNER_TEMP/checksums.txt" "$BASE/vale_${VER}_checksums.txt" \
+            || { echo "::error::could not download the vale $VER checksums file from $BASE"; exit 1; }
+          ( cd "$RUNNER_TEMP" && grep " $TARBALL\$" checksums.txt | sha256sum -c - ) \
+            || { echo "::error::vale $VER tarball failed checksum verification"; exit 1; }
+          tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$RUNNER_TEMP/valebin" vale \
+            || { echo "::error::vale $VER tarball has no 'vale' member at its root — release layout changed"; exit 1; }
+          export PATH="$RUNNER_TEMP/valebin:$PATH"
+          vale --version
+
+          # Two variants, chosen for what they change in the LINTED set; see the
+          # `authorization toggle-off render` step for why enable_authorization
+          # and not the gate-off render. Both are rendered far above so they
+          # pass through render hygiene while still pristine — this step must
+          # consume those trees, never re-render one here.
+          [ -d /tmp/smoke-authz-off ] \
+            || { echo "::error::/tmp/smoke-authz-off missing — the authorization toggle-off render step did not run"; exit 1; }
+          # One level up from the file-count readback below: that proves each
+          # run linted something, this proves the SECOND run linted something
+          # DIFFERENT.
+          # The variant is only meaningful because smoke-answers.yml sets
+          # enable_authorization: true while copier.yml defaults it to false —
+          # flip that fixture line and `--data enable_authorization=false`
+          # renders a tree identical to /tmp/smoke. The gate would then lint
+          # the same prose twice, report two healthy file counts, and stay
+          # green while claiming to cover a branch no other step sees.
+          if diff -rq /tmp/smoke/docs /tmp/smoke-authz-off/docs >/dev/null 2>&1 \
+             && diff -q /tmp/smoke/README.md /tmp/smoke-authz-off/README.md >/dev/null 2>&1; then
+            echo "::error::/tmp/smoke-authz-off has the same linted prose as /tmp/smoke — enable_authorization no longer differs between them, so the second variant proves nothing. Check enable_authorization in tests/fixtures/smoke-answers.yml."
+            exit 1
+          fi
+          # VALE_PACKS comes from the pack-list lockstep step, which derives it
+          # from the rendered .vale.ini. Unquoted on purpose throughout: it is a
+          # space-separated list and must word-split.
+          [ -n "${VALE_PACKS:-}" ] \
+            || { echo "::error::VALE_PACKS unset — the vale pack-list lockstep step did not run"; exit 1; }
+          # Sync once and share the packs: the fetch is the expensive, network-
+          # dependent part, and both renders resolve the same Packages line.
+          #
+          # Guarded so the cache step above is load-bearing rather than
+          # decorative — `vale sync` wipes and re-creates every pack directory
+          # unconditionally, so an unguarded sync discards whatever was
+          # restored. Same decision the vale-sync pre-commit hook makes.
+          #
+          # The check is per-pack presence AND non-emptiness, not just `-d`.
+          # An empty-but-present directory would satisfy `-d`, skip the sync,
+          # and leave Vale to fail `E100 [loadStyles]` — which this step reports
+          # as "rendered prose must be clean", the packs-versus-prose
+          # misdiagnosis the whole design exists to avoid. Any pack failing
+          # either test re-syncs all of them, since `vale sync` is all-or-
+          # nothing regardless.
+          #
+          # A failed run cannot poison the cache under the exact key:
+          # actions/cache creates an entry only "provided the job completes
+          # successfully" (its README), which is why `save-always` had to exist
+          # as a separate opt-in. A gate failure therefore saves nothing.
+          MISSING=
+          for PACK in $VALE_PACKS; do
+            if [ ! -d "/tmp/smoke/.vale/styles/$PACK" ] \
+               || [ -z "$(ls -A "/tmp/smoke/.vale/styles/$PACK" 2>/dev/null)" ]; then
+              MISSING="$MISSING $PACK"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            echo "syncing style packs (missing:$MISSING)"
+            ( cd /tmp/smoke && vale sync >/dev/null ) \
+              || { echo "::error::vale sync failed — style packs unavailable, not a prose failure"; exit 1; }
+          else
+            echo "all style packs restored from cache; skipping vale sync"
+          fi
+          for PACK in $VALE_PACKS; do
+            # Load-bearing on an INFERRED fact: that `vale sync` names each
+            # pack directory after the registry name or the .zip basename.
+            # If an upstream ever repackages with a different top-level
+            # directory, this is where it surfaces — and unguarded it would
+            # surface as `cp: cannot stat`, a packs problem wearing no
+            # annotation at all, in the one step whose whole design is that
+            # packs failures must be distinguishable from prose failures.
+            cp -r "/tmp/smoke/.vale/styles/$PACK" /tmp/smoke-authz-off/.vale/styles/ \
+              || { echo "::error::vale sync did not create .vale/styles/$PACK — the Packages-entry-to-directory-name derivation no longer holds. This is a pack problem, not a prose problem."; exit 1; }
+          done
+          for RENDER in /tmp/smoke /tmp/smoke-authz-off; do
+            OUT=$( cd "$RENDER" && vale "${VALE_FLAGS[@]}" "${FILES[@]}" 2>&1 ) || {
+              echo "$OUT"
+              echo "::error::vale reports errors in $RENDER — rendered prose must be clean"
+              # Google/proselint/write-good are listed without an @version, so
+              # a sync resolves them to whatever the registry serves that day
+              # (.vale.ini.jinja calls that intentional). A rule added upstream
+              # can therefore fail this gate on a PR that touched no prose, and
+              # the message above would send the reader hunting through their
+              # own diff.
+              #
+              # The guarded sync narrows this to cache misses only: on a hit the
+              # packs are frozen at the vale-styles-v2-<hash> key and cannot
+              # move under a PR. So key the hint on what actually happened this
+              # run rather than asserting a refresh that mostly does not occur.
+              if [ -n "$MISSING" ]; then
+                echo "::notice::this run re-synced the style packs, so if the PR changed no prose suspect an upstream style-pack release — the registry packs carry no @version and resolve to the current release on a sync"
+              else
+                echo "::notice::style packs came from cache and are frozen at the vale-styles-v2 key, so an upstream pack release cannot explain this — the finding is in the rendered prose"
+              fi
+              exit 1
+            }
+            echo "$OUT"
+            # A non-empty extraction is NOT proof this gate linted anything.
+            # Verified empirically: `vale --glob='!**' docs README.md` prints
+            # "0 errors ... in 0 files." and exits 0. So a `files` list or glob
+            # that stays syntactically valid while matching nothing turns this
+            # step green over an empty set — the silent degradation the
+            # extraction is meant to prevent, wearing a passing checkmark.
+            # Vale reports the count it actually examined; require it positive.
+            LINTED=$(sed -nE 's/.*[^0-9]([0-9]+) files?\..*/\1/p' <<<"$OUT" | tail -1)
+            [ -n "$LINTED" ] \
+              || { echo "::error::could not read vale's file count for $RENDER — output format changed, so the linted-nothing guard is no longer effective"; exit 1; }
+            [ "$LINTED" -gt 0 ] \
+              || { echo "::error::vale linted 0 files in $RENDER — the extracted file set (${FILES[*]}) and glob (${VALE_FLAGS[*]}) match nothing, so this gate proved nothing"; exit 1; }
+            echo "linted $LINTED files in $RENDER"
+          done
+
+          # Advisory. An accepted vocabulary term suppresses non-spelling rules
+          # inside its match span, so the gate above can pass prose that still
+          # carries a flagged pattern. Reported, not enforced: a downstream's
+          # own legitimate vocabulary additions must not break template CI.
+          #
+          # "Advisory" has to hold for the block's own failures too. It runs
+          # under this step's `set -euo pipefail`, so an unguarded `cp` here
+          # would abort the step with a bare `cp: cannot stat …` and no
+          # ::error::, AFTER the real gate has already passed — turning the
+          # advisory into a red build with no diagnostic, the exact
+          # diagnostic-loss shape #256 removed from this file. The accept.txt
+          # path is `_skip_if_exists` in copier.yml, so it is a rename-sensitive
+          # literal: check it, and trap so an abort between the emptying and the
+          # restore cannot leave the vocabulary gutted for later steps.
+          ( cd /tmp/smoke
+            ACC=.vale/styles/config/vocabularies/Base/accept.txt
+            if [ ! -f "$ACC" ]; then
+              echo "::warning::$ACC not found — skipping the suppressed-findings advisory"
+              exit 0
+            fi
+            cp "$ACC" "$RUNNER_TEMP/accept.bak"
+            trap 'cp "$RUNNER_TEMP/accept.bak" "$ACC" 2>/dev/null || true' EXIT
+            grep -E '^\s*(#|$)' "$RUNNER_TEMP/accept.bak" > "$ACC" || true
+            STRICT=$(vale "${VALE_FLAGS[@]}" "${FILES[@]}" 2>&1 | grep -E '^ *[0-9]+:' | grep -vc 'Vale.Spelling' || true)
+            if [ "$STRICT" != "0" ]; then
+              echo "::warning::$STRICT non-spelling Vale finding(s) are suppressed by an accepted vocabulary term; re-run with an emptied accept.txt to see them"
+            fi ) || echo "::warning::the suppressed-findings advisory could not run; the gate above is unaffected"
 
       - name: detach smoke (FORKING.md commands produce a clean standalone state)
         working-directory: /tmp/smoke
@@ -422,6 +897,7 @@ jobs:
           check_anchor 1 ' on top of the shipped defaults survive `copier update`.'
           check_anchor 1 ' are preserved across `copier update`.'
           check_anchor 2 'The block is preserved across `copier update`.'
+          check_anchor 1 ' on every `copier copy`/`copier update` and re-verified by'
           [ "$preflight_fail" = "0" ] \
             || { echo "::error::detach scrub is no longer coupled to CLAUDE.md.jinja — see the scrub-anchor drift errors above"; exit 1; }
 
@@ -532,6 +1008,7 @@ jobs:
           check_replacement 1 ' on top of the shipped defaults are yours to maintain.'
           check_replacement 1 ' are domain-owned.'
           check_replacement 2 'The block is domain-owned.'
+          check_replacement 1 ' whenever config fields change, and re-verified by'
           [ "$replacement_fail" = "0" ] \
             || { echo "::error::detach scrub ran but did not produce its replacement text — see the errors above"; exit 1; }
           # stripped files gone:
@@ -579,7 +1056,7 @@ jobs:
       - name: Render smoke project with copier
         run: |
           uv run --no-project --with copier \
-            copier copy --trust --defaults \
+            copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             . /tmp/smoke
 
