@@ -98,6 +98,28 @@ way.
 - `#` comments in `accept.txt`: gemini raised a HIGH on #145 claiming Vale's
   vocabulary files do not support them. The maintainer did not act and the
   comments are still there. Left alone.
+- The binary download at `:416` still uses the pre-rename
+  `errata-ai/vale` URL while `ci.yml.jinja:311` already says `vale-cli`. The
+  general lens fetched it live: GitHub's org redirect works and `curl -L`
+  follows it, so this is inconsistent rather than broken. Worth aligning while
+  finding 1 is being fixed, since it is the same block.
+- `restore-keys: vale-styles-v1-` could restore a stale pack snapshot when
+  `.vale.ini.jinja` changes the pinned `ai-tells` URL. Pre-existing: the same
+  pattern already ships unmodified in `ci.yml.jinja`'s own Vale job, so it is a
+  mirrored design choice, not a defect this branch introduces.
+
+## Where the lenses disagree
+
+The general lens found the pack copy **currently safe** and it is right:
+`.vale.ini.jinja`'s `Packages =` is unconditional on any copier variable, so
+both renders resolve identical packages today, and `.vale/styles/config/` is
+correctly excluded from both the cache and the copy.
+
+That does not retire finding 1. Lens 5's claim is about drift, not present
+correctness — the hardcoded list is right until someone edits `Packages =`, and
+nothing fails loudly when they do. Both readings hold: ship-blocking as a
+structural defect, not as a live bug. Fix it for the failure mode, and do not
+let "the general lens said it was safe" be read as a clearance.
 
 ## Verified clean, do not re-litigate
 
@@ -130,12 +152,10 @@ Confirmed independently by more than one lens:
 
 ## Next session
 
-1. Read the sixth lens's output, never collected:
-   `/tmp/claude-1000/-mnt-code-mcp-servers-fastmcp-server-template/980e7f63-3844-474f-8293-9126fddafcc6/tasks/ad10737f2ba45719c.output`
-2. Fix findings 1-3 in one commit.
-3. Re-run the **full** circus against `origin/main..HEAD`. Round 2's findings
+1. Fix findings 1-3 in one commit.
+2. Re-run the **full** circus against `origin/main..HEAD`. Round 2's findings
    were structural, so a subset re-run is not valid.
-4. Only then push and open the PR. Merging and release dispatch are human-only.
+3. Only then push and open the PR. Merging and release dispatch are human-only.
 
 ## Standing traps
 
