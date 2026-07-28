@@ -20,11 +20,11 @@ One file, `.github/workflows/template-ci.yml`. No template sources, no generator
 
 **D3 — assert zero, no baseline.** `main` is clean, so there is nothing to baseline. A baseline would also have to be maintained and retired.
 
-**D4 — both render variants.** The job already renders default and `enable_authorization=false`. `authorization.md` exists only in the first, and it carried 19 of PR A's 20 errors.
+**D4 — two variants, chosen for what they change in the linted set.** Corrected twice during review. The job's existing second render toggles `enable_structural_gate`, which nothing under `docs/` or `README.md` is conditioned on, so its prose is byte-identical and linting it buys nothing. `enable_authorization` is the flag that matters: off, it drops `docs/guides/authorization.md` entirely and changes both `README.md` and `docs/guides/authentication.md`. The gate renders that variant itself and lints both. The style packs are fetched once and copied, since the network fetch is the expensive part and both renders resolve the same `Packages` line.
 
 **D5 — the strict run is advisory, not gating.** An accepted vocabulary term suppresses non-spelling rules inside its match span, so a plain zero can hide a flagged pattern. `main` is currently clean both ways. Gate on the plain run, which is what a downstream experiences; report the strict run without failing on it, so a suppressed pattern is visible without making a downstream's own vocabulary additions break template CI. Revisit if the advisory output proves noisy.
 
-**D6 — one `check_anchor` per scrub rule.** Five substitution rules, four anchored; add the fifth. The helper already exists, so this is one call plus its expected count.
+**D6 — both halves of the #199 pair per scrub rule.** Five substitution rules, four anchored; add the fifth. #199 pairs each anchor with a `check_replacement`, because absence of the old wording never proves the substitution fired, only that the text is gone. The fifth rule needs both.
 
 **D7 — one matrix leg.** `render-and-gate` is a 4-wide Python matrix, and
 Vale's result does not depend on the Python version while `vale sync`

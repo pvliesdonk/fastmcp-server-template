@@ -301,8 +301,8 @@ jobs:
           # (e.g. setup-uv) ever moves off `version: "latest"` to a pinned
           # semver — that would silently extract the wrong pin and let real
           # drift slip through.
-          CI_VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' .github/workflows/ci.yml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-          PC_VER=$(awk '/^[[:space:]]*-[[:space:]]*repo:.*vale-cli\/vale[[:space:]]*$/{f=1; next} f && /rev:/{print; exit}' .pre-commit-config.yaml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          CI_VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' .github/workflows/ci.yml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          PC_VER=$(awk '/^[[:space:]]*-[[:space:]]*repo:.*vale-cli\/vale[[:space:]]*$/{f=1; next} f && /rev:/{print; exit}' .pre-commit-config.yaml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
           [ -n "$CI_VER" ] || { echo "::error::vale version pin not found in rendered ci.yml"; exit 1; }
           [ -n "$PC_VER" ] || { echo "::error::vale rev not found in rendered .pre-commit-config.yaml"; exit 1; }
           [ "$CI_VER" = "$PC_VER" ] \
@@ -352,13 +352,33 @@ jobs:
           [ "$CI_NORM" = "$PC_NORM" ] \
             || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) pre-commit=$PC_EXCL ($PC_NORM)"; exit 1; }
 
+      - name: cache vale style packs
+        # #142/#159: `vale sync` fetches four packs, one of them a
+        # tbhb/vale-ai-tells release asset. Uncached, every template PR
+        # hard-depends on that URL staying live. The rendered ci.yml already
+        # caches for this reason; so does this gate.
+        #
+        # Only the downloaded pack directories, never .vale/styles/config/ —
+        # that subtree is rendered from the template and must stay
+        # authoritative, which is the clobber #159 documents.
+        if: matrix.python == '3.11'
+        uses: actions/cache@v6
+        with:
+          path: |
+            /tmp/smoke/.vale/styles/Google
+            /tmp/smoke/.vale/styles/proselint
+            /tmp/smoke/.vale/styles/write-good
+            /tmp/smoke/.vale/styles/ai-tells
+          key: vale-styles-v1-${{ hashFiles('.vale.ini.jinja') }}
+          restore-keys: vale-styles-v1-
+
       - name: vale gate over the render
         # The structural check above proves .vale.ini renders; it has never
         # proved the rendered PROSE is clean. Every prose defect therefore
         # reached a downstream's own vale job first (#270).
         #
         # One matrix leg only: Vale's result does not depend on the Python
-        # version, and `vale sync` downloads style packages on each run.
+        # version, and `vale sync` is a network fetch.
         if: matrix.python == '3.11'
         run: |
           set -euo pipefail
@@ -366,9 +386,9 @@ jobs:
           # drifts, and a finding visible to one surface goes silent in the
           # other. Same `vale:`-job awk anchor the two lockstep steps use.
           CI_YML=/tmp/smoke/.github/workflows/ci.yml
-          # `|| true`: grep exits 1 on no match, and under set -e + pipefail a
-          # failing substitution kills the step before the guard below can say
-          # why. sed and mapfile exit 0 on empty input, so only this one needs it.
+          # `|| true`: grep exits 1 on no match, and under set -e a failing
+          # substitution kills the step before the guard below can say why
+          # (#159 fixed this same shape two steps up).
           VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' "$CI_YML" \
             | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
           FILES_JSON=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+files:/{print; exit}' "$CI_YML" \
@@ -381,26 +401,48 @@ jobs:
           [ -n "$VER" ]  || { echo "::error::vale version not extractable from rendered ci.yml"; exit 1; }
           [ -n "$GLOB" ] || { echo "::error::vale_flags not extractable from rendered ci.yml"; exit 1; }
           mapfile -t FILES < <(echo "$FILES_JSON" | jq -er '.[]')
+          [ "${#FILES[@]}" -gt 0 ] \
+            || { echo "::error::vale files list not extractable from rendered ci.yml"; exit 1; }
           # vale_flags is plural: split it so a second flag does not arrive as
           # one argv element, which Vale would read as a path.
           read -ra VALE_FLAGS <<<"$GLOB"
-          [ "${#FILES[@]}" -gt 0 ] \
-            || { echo "::error::vale files list not extractable from rendered ci.yml"; exit 1; }
-          echo "gating on vale $VER over ${FILES[*]} with $GLOB"
+          echo "gating on vale $VER over ${FILES[*]} with ${VALE_FLAGS[*]}"
 
-          curl -sSfL "https://github.com/errata-ai/vale/releases/download/v${VER}/vale_${VER}_Linux_64-bit.tar.gz" \
-            | sudo tar -xz -C /usr/local/bin vale
+          # Checksum-verified, no sudo, run-scoped. #142 raised the unverified
+          # download; the rendered ci.yml answered it with a SHA-pinned action,
+          # and this gate answers it with the published checksum.
+          mkdir -p "$RUNNER_TEMP/valebin"
+          TARBALL="vale_${VER}_Linux_64-bit.tar.gz"
+          BASE="https://github.com/errata-ai/vale/releases/download/v${VER}"
+          curl -sSfL -o "$RUNNER_TEMP/$TARBALL" "$BASE/$TARBALL"
+          curl -sSfL -o "$RUNNER_TEMP/checksums.txt" "$BASE/vale_${VER}_checksums.txt"
+          ( cd "$RUNNER_TEMP" && grep " $TARBALL\$" checksums.txt | sha256sum -c - ) \
+            || { echo "::error::vale $VER tarball failed checksum verification"; exit 1; }
+          tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$RUNNER_TEMP/valebin" vale
+          export PATH="$RUNNER_TEMP/valebin:$PATH"
           vale --version
 
-          # Both variants: docs/guides/authorization.md exists only when
-          # enable_authorization is true, and carried 19 of the 20 errors #266
-          # cleared.
-          for RENDER in /tmp/smoke /tmp/smoke-gate-off; do
-            # Separate guards: a sync failure is infrastructure (E100, network),
-            # not dirty prose, and conflating them sends the next debugger to
-            # the wrong place.
-            ( cd "$RENDER" && vale sync >/dev/null ) \
-              || { echo "::error::vale sync failed in $RENDER — style packages unavailable, not a prose failure"; exit 1; }
+          # Two variants, chosen for what they change in the LINTED set.
+          # Not /tmp/smoke-gate-off: that toggles enable_structural_gate, which
+          # nothing under docs/ or README.md is conditioned on, so its prose is
+          # byte-identical to /tmp/smoke. enable_authorization is the one that
+          # matters — it drops docs/guides/authorization.md entirely and changes
+          # both README.md and docs/guides/authentication.md, so the off state
+          # is prose this gate would otherwise never see.
+          rm -rf /tmp/smoke-authz-off
+          uv run --no-project --with copier \
+            copier copy --trust --defaults \
+            --data-file tests/fixtures/smoke-answers.yml \
+            --data enable_authorization=false \
+            . /tmp/smoke-authz-off
+          # Sync once and share the packs: the fetch is the expensive, network-
+          # dependent part, and both renders resolve the same Packages line.
+          ( cd /tmp/smoke && vale sync >/dev/null ) \
+            || { echo "::error::vale sync failed — style packs unavailable, not a prose failure"; exit 1; }
+          for PACK in Google proselint write-good ai-tells; do
+            cp -r "/tmp/smoke/.vale/styles/$PACK" /tmp/smoke-authz-off/.vale/styles/
+          done
+          for RENDER in /tmp/smoke /tmp/smoke-authz-off; do
             ( cd "$RENDER" && vale "${VALE_FLAGS[@]}" "${FILES[@]}" ) \
               || { echo "::error::vale reports errors in $RENDER — rendered prose must be clean"; exit 1; }
           done
@@ -410,12 +452,13 @@ jobs:
           # carries a flagged pattern. Reported, not enforced: a downstream's
           # own legitimate vocabulary additions must not break template CI.
           ( cd /tmp/smoke
-            cp .vale/styles/config/vocabularies/Base/accept.txt /tmp/accept.bak
-            grep -E '^\s*(#|$)' /tmp/accept.bak > .vale/styles/config/vocabularies/Base/accept.txt || true
+            ACC=.vale/styles/config/vocabularies/Base/accept.txt
+            cp "$ACC" "$RUNNER_TEMP/accept.bak"
+            grep -E '^\s*(#|$)' "$RUNNER_TEMP/accept.bak" > "$ACC" || true
             STRICT=$(vale "${VALE_FLAGS[@]}" "${FILES[@]}" 2>&1 | grep -E '^ *[0-9]+:' | grep -vc 'Vale.Spelling' || true)
-            cp /tmp/accept.bak .vale/styles/config/vocabularies/Base/accept.txt
+            cp "$RUNNER_TEMP/accept.bak" "$ACC"
             if [ "$STRICT" != "0" ]; then
-              echo "::warning::$STRICT non-spelling Vale finding(s) are suppressed by an accepted vocabulary term; run vale with an emptied accept.txt to see them"
+              echo "::warning::$STRICT non-spelling Vale finding(s) are suppressed by an accepted vocabulary term; re-run with an emptied accept.txt to see them"
             fi )
 
       - name: detach smoke (FORKING.md commands produce a clean standalone state)
@@ -599,6 +642,7 @@ jobs:
           check_replacement 1 ' on top of the shipped defaults are yours to maintain.'
           check_replacement 1 ' are domain-owned.'
           check_replacement 2 'The block is domain-owned.'
+          check_replacement 1 ' whenever config fields change, and re-verified by'
           [ "$replacement_fail" = "0" ] \
             || { echo "::error::detach scrub ran but did not produce its replacement text — see the errors above"; exit 1; }
           # stripped files gone:
