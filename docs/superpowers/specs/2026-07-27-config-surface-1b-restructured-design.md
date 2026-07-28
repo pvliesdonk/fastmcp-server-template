@@ -4,7 +4,7 @@
 **Status:** design approved. PR A shipped; B-H not started.
 **Supersedes:** `docs/superpowers/plans/2026-07-26-config-surface-generation-1b.md` (abandoned; exists only on the unpushed `feat/config-surface-splicing` spike at `283811e`, not on `main`)
 **Upstream spec:** `docs/superpowers/specs/2026-07-25-config-generation-and-ownership-model-design.md`, Stage 1
-**Closes (design-level):** #257, #260, plus four issues still to be filed (§8)
+**Closes (design-level):** #257, #260, #266, plus three issues still to be filed (§8)
 
 ## 1. Why this design exists
 
