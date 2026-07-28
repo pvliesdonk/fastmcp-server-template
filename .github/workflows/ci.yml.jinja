@@ -291,10 +291,20 @@ jobs:
         # source of truth and THREE places restate it by hand: this path: list,
         # BasedOnStyles in .vale.ini, and the `for p in` list in the vale-sync
         # pre-commit hook. Adding or removing a pack means changing all three —
-        # a stale list here silently re-downloads the pack on every run, and a
-        # stale BasedOnStyles makes vale exit E100 [loadStyles].
+        # a stale BasedOnStyles makes vale exit E100 [loadStyles], and a stale
+        # `for p in` leaves the pre-commit hook blind to the new pack so it
+        # never triggers a sync.
         # Bump the v1- prefix to evict all cached
         # packs if Vale changes pack format backward-incompatibly.
+        #
+        # NOTE: this cache does not currently prevent a re-download. The action
+        # below runs `vale sync` unconditionally, and `vale sync` wipes and
+        # re-creates every directory in `Packages =` rather than consulting
+        # what is already on disk (verified with canary files). Kept because it
+        # is harmless and because making it load-bearing — guarding the sync on
+        # pack-directory existence, as the pre-commit hook does — trades away
+        # `Packages =`'s deliberate "resolve to the latest registry release on
+        # each sync", which is a decision for the fleet, not this file.
         uses: actions/cache@v6
         with:
           path: |

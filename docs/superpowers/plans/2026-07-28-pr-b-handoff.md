@@ -5,34 +5,37 @@ What the review rounds found and how each was settled. Kept because the
 that has already been checked empirically.
 
 Read with `docs/superpowers/plans/2026-07-28-pr-b-vale-gate.md` (decisions
-D1-D9).
+D1-D10).
 
 ## Findings and their resolution
 
 ### 1. The pack list was restated, in the step whose own comment forbids restating
 
-`.vale.ini`'s `Packages =` is the source of truth. Four places enumerated it by
-hand: this workflow's cache `path:`, the rendered `ci.yml`'s cache `path:`, the
-rendered pre-commit `vale-sync` hook's `for p in`, and `.vale.ini`'s own
-`BasedOnStyles`. The gate extracts `version`, `files` and `vale_flags` from the
+`.vale.ini`'s `Packages =` is the source of truth. Several places enumerate it
+by hand: the rendered `ci.yml`'s cache `path:`, the rendered pre-commit
+`vale-sync` hook's `for p in`, and `.vale.ini`'s own `BasedOnStyles`. The gate extracts `version`, `files` and `vale_flags` from the
 rendered `ci.yml` precisely so they cannot drift, and carries a comment saying
-"Extract, never restate (#143/#159)" — while hardcoding the pack list twice.
+"Extract, never restate (#143/#159)" — while hardcoding the pack list itself.
 
-Consequence of adding a fifth pack: both caches miss it, so it is re-downloaded
-every run and the cache steps silently stop doing their job; the pre-commit hook
-never sees it as missing, so a downstream's local `vale` breaks with no sync;
+Consequence of adding a further pack: the downstream cache list goes stale; the
+pre-commit hook never sees the pack as missing, so a downstream's local `vale`
+breaks with no sync;
 and a `BasedOnStyles` entry `Packages` does not fetch makes vale exit
 `E100 [loadStyles]`, which the gate reports as "rendered prose must be clean" —
 the packs-versus-prose misdiagnosis its `vale sync` guard exists to prevent.
 
 **Settled:** a `vale pack-list lockstep` step derives the set from `Packages =`
-and asserts all four enumerations against it; the gate consumes the derived list
-via `VALE_PACKS`. The pre-commit hook was a member of the class the original
-finding had not enumerated — found by grepping every pack name across the repo.
-`actions/cache` cannot take a shell variable in `path:`, so the two cache lists
-stay literal and are asserted rather than generated. #159's rule that
-`.vale/styles/config/` is never cached is preserved: the enumeration stays
-directory-wise.
+and asserts all three enumerations against it; the gate consumes the derived
+list via `VALE_PACKS`. The pre-commit hook was a member of the class the
+original finding had not enumerated — found by grepping every pack name across
+the repo. `actions/cache` cannot take a shell variable in `path:`, so the
+downstream cache list stays literal and is asserted rather than generated.
+
+The gate's own cache step was then **removed** rather than asserted: review
+showed it could not work. `vale sync` does not consult a cache — it wipes and
+re-creates every directory in `Packages =` on every invocation (verified with
+canary files, both wiped by a second sync), so a restored cache is discarded
+before it is read. That retired the fourth enumeration along with it.
 
 ### 2. The authorization render bypassed the render-hygiene gate
 
@@ -103,10 +106,12 @@ now that the lockstep makes it fatal. **Settled:** both name the full set.
 - `#` comments in `accept.txt`: gemini raised a HIGH on #145 claiming Vale's
   vocabulary files do not support them. The maintainer did not act and the
   comments are still there. Left alone.
-- `restore-keys: vale-styles-v1-` could restore a stale pack snapshot when
-  `.vale.ini.jinja` changes the pinned `ai-tells` URL. Pre-existing: the same
-  pattern already ships unmodified in `ci.yml.jinja`'s own Vale job, so it is a
-  mirrored design choice, not a defect this branch introduces.
+- The rendered `ci.yml`'s own `Cache Vale style packages` step is inert for the
+  same reason the gate's removed one was: `vale-cli/vale-action` runs `vale
+  sync` unconditionally. Left alone — making it load-bearing means guarding the
+  sync on directory existence, which trades away `Packages =`'s deliberate
+  "resolve to the latest registry release on each sync". That is a fleet-wide
+  decision, not one to settle inside this PR. Worth a follow-up issue.
 - Registry packs are unpinned by design (`.vale.ini.jinja` says so), so an
   upstream rule release can turn the gate red on a PR that touched no prose.
   Accepted; the alternative is pinning three packs and owning the bumps.
@@ -130,8 +135,6 @@ Confirmed by more than one independent reviewer, several empirically:
   unconditional, sits outside both `TEMPLATE-TRACKING` ranges, and its `sed -e`
   matches `FORKING.md.jinja` verbatim. Post-scrub `! grep -niF 'copier update'`
   still holds.
-- `hashFiles('.vale.ini.jinja')` is a sound cache key: no Jinja expressions, so
-  it renders verbatim.
 - The unbounded `awk` extraction anchor on the `ci.yml` side is the accepted
   convention since `44bfee1`; the only later `version:` match is setup-uv's
   `"latest"`, which the semver filter empties and the non-empty guard catches.
