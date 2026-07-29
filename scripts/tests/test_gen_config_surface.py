@@ -1288,6 +1288,56 @@ class TestSelectRegionVars:
         assert "DEMO_MCP_BEARER_TOKEN" not in {v.name for v in selected}
 
 
+class TestSelectRegionVarsWithRequiredNames:
+    """The region-level view of `config-presentation.yml`'s real
+    `required_vars:` list — the `OIDC-REQUIRED`/`OIDC-OPTIONAL` split as it
+    actually happens once `required_names` is threaded through, not the
+    provenance-only fallback `TestSelectRegionVars` above exercises."""
+
+    def _oidc_names(self, fake_project, template_root, required):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        required_names = frozenset(pres["required_vars"])
+        vars_ = g.collect_vars(fake_project, answers)
+        selected = g._select_region_vars(
+            vars_, {"tags": ["oidc"], "required": required}, required_names
+        )
+        return {v.name for v in selected}
+
+    def test_required_true_is_exactly_the_four_prerequisites(
+        self, fake_project, template_root
+    ):
+        names = self._oidc_names(fake_project, template_root, True)
+        assert names == {
+            "DEMO_MCP_BASE_URL",
+            "DEMO_MCP_OIDC_CONFIG_URL",
+            "DEMO_MCP_OIDC_CLIENT_ID",
+            "DEMO_MCP_OIDC_CLIENT_SECRET",
+        }
+
+    def test_required_false_is_the_remaining_oidc_tagged_vars(
+        self, fake_project, template_root
+    ):
+        names = self._oidc_names(fake_project, template_root, False)
+        assert names == {
+            "DEMO_MCP_OIDC_AUDIENCE",
+            "DEMO_MCP_OIDC_JWT_SIGNING_KEY",
+            "DEMO_MCP_OIDC_REQUIRED_SCOPES",
+            "DEMO_MCP_OIDC_VERIFY_ACCESS_TOKEN",
+        }
+
+    def test_required_and_optional_are_disjoint_and_union_to_the_unfiltered_oidc_set(
+        self, fake_project, template_root
+    ):
+        answers = g.load_answers(fake_project)
+        vars_ = g.collect_vars(fake_project, answers)
+        unfiltered = {v.name for v in g._select_region_vars(vars_, {"tags": ["oidc"]})}
+        required = self._oidc_names(fake_project, template_root, True)
+        optional = self._oidc_names(fake_project, template_root, False)
+        assert required & optional == set()
+        assert required | optional == unfiltered
+
+
 class TestRenderSpliceFileMultiRegion:
     def test_two_regions_splice_in_one_pass_and_stay_idempotent(self, tmp_path):
         target = tmp_path / "doc.md"
