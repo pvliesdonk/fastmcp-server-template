@@ -113,7 +113,7 @@ Client → {{ project_name }} → OIDC Provider
 | `{{ env_prefix }}_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
 
 !!! tip "JWT signing key and secret rotation"
-    When `OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret, so the key stays the same across restarts. Rotating the client secret changes the derived key and invalidates every token issued under the old one. Set an explicit key to decouple token validity from client-secret rotation:
+    When `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret, so the key stays the same across restarts. Rotating the client secret changes the derived key and invalidates every token issued under the old one. Set an explicit key to decouple token validity from client-secret rotation:
 
     ```bash
     openssl rand -hex 32
