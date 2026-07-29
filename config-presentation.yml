@@ -120,6 +120,9 @@ required_vars:
 # carries no such key, so this template asserts it here, and it must be
 # re-verified against core on every dependency bump. Keyed by full var name,
 # same lookup shape as `examples:` below.
+markdown_vocabulary:
+  JWTs: "JSON Web Tokens"
+
 documented_defaults:
   # `build_oidc_proxy_auth`: `required_scopes = list(config.oidc_required_scopes)
   # or ["openid"]`. The field default itself is `()`
@@ -285,3 +288,27 @@ files:
 
   docs/javascripts/config-wizard/wizard-spec.json:
     kind: wizard
+
+  docs/guides/authentication.md:
+    kind: splice
+    regions:
+      - id: OIDC-REQUIRED
+        tags: [oidc]
+        required: true
+        columns: [variable, description]
+      - id: OIDC-OPTIONAL
+        tags: [oidc]
+        required: false
+        columns: [variable, default, description]
+
+  docs/deployment/oidc.md:
+    kind: splice
+    regions:
+      - id: OIDC-REQUIRED
+        tags: [oidc]
+        required: true
+        columns: [variable, description]
+      - id: OIDC-OPTIONAL
+        tags: [oidc]
+        required: false
+        columns: [variable, default, description]

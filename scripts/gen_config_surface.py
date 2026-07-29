@@ -1420,10 +1420,13 @@ def render_splice_file(
 # `env` renderers take that entry's own file spec; `wizard` takes the whole
 # presentation (it has no per-file content of its own — see `files:` in
 # `config-presentation.yml`, where `docs/javascripts/config-wizard/wizard-
-# spec.json` declares only `kind: wizard` and nothing else).
+# spec.json` declares only `kind: wizard` and nothing else). `splice`
+# rewrites a marked region inside an otherwise hand-authored file — see
+# `render_splice_file`.
 _ENV_KIND = "env"
 _WIZARD_KIND = "wizard"
-_KNOWN_FILE_KINDS = frozenset({_ENV_KIND, _WIZARD_KIND})
+_SPLICE_KIND = "splice"
+_KNOWN_FILE_KINDS = frozenset({_ENV_KIND, _WIZARD_KIND, _SPLICE_KIND})
 
 
 def _env_destinations(
@@ -1533,6 +1536,12 @@ def write_artifacts(
     if vars_ is None:
         vars_ = collect_vars(project_root, answers)
 
+    required_names: Collection[str] = presentation.get("required_vars", ())
+    vocabulary: Mapping[str, str] = presentation.get("markdown_vocabulary", {}) or {}
+    documented_defaults: Mapping[str, str] = (
+        presentation.get("documented_defaults", {}) or {}
+    )
+
     artifacts: list[tuple[str, str]] = []
     for rel_path, file_spec in presentation.get("files", {}).items():
         kind = file_spec.get("kind")
@@ -1540,6 +1549,16 @@ def write_artifacts(
             text = render_env_file(file_spec, vars_, answers)
         elif kind == _WIZARD_KIND:
             text = render_wizard_spec(presentation, vars_, answers)
+        elif kind == _SPLICE_KIND:
+            text = render_splice_file(
+                project_root,
+                rel_path,
+                file_spec,
+                vars_,
+                required_names=required_names,
+                vocabulary=vocabulary,
+                documented_defaults=documented_defaults,
+            )
         else:
             raise SystemExit(
                 f"ERROR: config-presentation.yml files[{rel_path!r}] has "
