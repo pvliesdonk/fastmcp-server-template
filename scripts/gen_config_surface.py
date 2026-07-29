@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
     from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -933,14 +933,510 @@ def render_wizard_spec(
     return f"{text}\n"
 
 
+# ---------------------------------------------------------------------------
+# Markdown table splicing (docs artifacts)
+# ---------------------------------------------------------------------------
+
+# Column id -> header title, for `render_md_table`. `columns` in a spliced
+# region's `config-presentation.yml` declaration is a sequence of these ids,
+# rendered in the declared order.
+_MD_COLUMN_TITLES: dict[str, str] = {
+    "variable": "Variable",
+    "default": "Default",
+    "description": "Description",
+    "required": "Required",
+}
+
+
+def _escape_pipes(text: str) -> str:
+    """Escape ``|`` so it can't be mistaken for a Markdown table-cell separator.
+
+    An unescaped pipe in a help string or default (e.g. help text quoting a
+    shell pipeline, or a default value containing one) would otherwise split
+    the row into extra cells and corrupt every cell after it.
+    """
+    return text.replace("|", r"\|")
+
+
+def _is_required(var: Var, required_names: Collection[str] | None) -> bool:
+    """Whether *var* counts as "required" — the single resolution consulted
+    by both a spliced region's `required:` filter and `render_md_table`'s
+    `required` column, so the two can never disagree.
+
+    *required_names* is `config-presentation.yml`'s `required_vars:` list
+    (already `{PREFIX}`-substituted), or `None` when no such declaration is
+    in scope at all (e.g. `render_md_table` called directly, with no
+    splice-region context):
+
+    1. If *required_names* is not `None` and *var.name* appears in it, the
+       var is required — this is the template's own, explicit source of
+       truth for the vars it presents.
+    2. Otherwise, when *required_names* is not `None`: a `domain`-provenance
+       var — whose full name this template cannot enumerate ahead of time —
+       falls back to "no default means required", the signal a downstream
+       `ProjectConfig` author already controls by omitting a field default,
+       since that author has no way to edit this template-owned list. Any
+       other var (core/template/external, all fully enumerable by this
+       template) that isn't explicitly listed is optional; a null default
+       alone is *not* evidence of being required for those — several are
+       null-defaulted and still have a working fallback (e.g. an OIDC
+       signing key derived from the client secret when unset).
+    3. When *required_names* is `None` (no declaration in scope at all),
+       every var falls back to the plain "no default means required" check,
+       regardless of provenance.
+    """
+    if required_names is not None:
+        if var.name in required_names:
+            return True
+        if var.provenance != "domain":
+            return False
+    return var.default is None
+
+
+def _is_empty_default(default: object) -> bool:
+    """Whether *default* carries no usable value to display.
+
+    ``None`` obviously, but also any empty container or string: rendering
+    ``OIDC_REQUIRED_SCOPES``'s ``()`` or a ``default: ""`` as an empty cell
+    produces exactly the bare blank both display paths promise never to emit.
+    Numeric and boolean falsiness is deliberately excluded — ``0`` and
+    ``False`` are real, displayable defaults.
+    """
+    if default is None:
+        return True
+    if isinstance(default, (bool, int, float)):
+        return False
+    return not default
+
+
+def _documented_default(var: Var, documented_defaults: Mapping[str, str]) -> str | None:
+    """The effective default *var* falls back to at runtime, if one is declared.
+
+    A var's dataclass default is not always the value an operator actually
+    gets. ``KV_STORE_URL``'s field default is ``None``, but core resolves an
+    unset value to ``file:///data/state`` inside its own store builder — so
+    "what happens if you set nothing" is a concrete path, not "nothing". A
+    ``Default`` cell reading ``(none)`` beside a description that names the
+    fallback contradicts itself, and a registry manifest that omits the value
+    loses something a client could pre-fill; both were regressions against the
+    hand-written tables this generator replaced.
+
+    The declared value need not be a literal the operator could paste in
+    verbatim. It may instead be a short descriptive label standing in for a
+    derived or dynamic fallback that has no fixed string to print —
+    ``OIDC_JWT_SIGNING_KEY`` declares ``derived`` for exactly this reason:
+    the actual value is computed from the client secret at runtime, and the
+    ``Default`` cell reading ``derived`` is a pointer to the description,
+    which carries the full explanation, rather than a value anyone would
+    set verbatim.
+
+    Declared in `config-presentation.yml`'s `documented_defaults:` map, keyed
+    by full var name, because core's field metadata carries no such key. That
+    makes it a claim this template asserts about core's behaviour, so it must
+    be re-verified against core on every dependency bump — the same standing
+    obligation `required_vars:` carries, and for the same reason.
+    """
+    return documented_defaults.get(var.name)
+
+
+def _md_variable_cell(
+    var: Var,
+    _required_names: Collection[str] | None,
+    _vocabulary: Mapping[str, str],
+    _documented_defaults: Mapping[str, str],
+) -> str:
+    return f"`{var.name}`"
+
+
+# A spaced em dash, optionally followed by a coordinating conjunction that
+# opens the next clause. Capturing the conjunction (group 1, may be absent)
+# and the first character of whatever follows it (group 2) lets the
+# replacement decide, per occurrence, whether the two clauses read better
+# joined by a semicolon or split into two sentences.
+_EM_DASH_CONJUNCTION_RE = re.compile(
+    r" — (?:(but|and|or|so|yet|nor) )?(\S)", re.IGNORECASE
+)
+# Anything the pattern above did not reshape (a spaced dash at end of string,
+# or one followed by whitespace) still has to go: a single leaked ` — ` is a
+# hard CI failure in every downstream, so this path guarantees the invariant
+# rather than relying on having enumerated every prose shape core might use.
+# Named escapes rather than the literal glyphs: an en dash is visually
+# indistinguishable from a hyphen in most editors, and ruff flags the
+# ambiguity (RUF001).
+_EM_DASH = "\N{EM DASH}"
+_EN_DASH = "\N{EN DASH}"
+_RESIDUAL_EM_DASH_RE = re.compile(rf"\s*[{_EM_DASH}{_EN_DASH}]\s*")
+# A separator left stranded at the end of a cell once a trailing dash was
+# rewritten (`Value continues —` would otherwise become `Value continues; `).
+_TRAILING_SEPARATOR_RE = re.compile(r"[;,\s]+$")
+# `e.g. FRAGMENT.`/`e.g. FRAGMENT;` -> ` (FRAGMENT).`/` (FRAGMENT);` — a
+# parenthetical aside instead of the Latin abbreviation. FRAGMENT is
+# whatever sits between `e.g.` and the clause's own terminator: a `;`, or a
+# `.` that is itself followed by whitespace or end-of-string. The lookahead
+# on the `.` terminator matters — an `e.g.` example is frequently a URL
+# (`https://mcp.example.com`) whose own periods must NOT end the match; only
+# a period followed by whitespace/EOS is a genuine sentence boundary.
+_EG_CLAUSE_RE = re.compile(r",\s*e\.g\.,?\s+(.+?)(\.(?=\s|$)|;)", re.IGNORECASE)
+# `e.g.` outside the comma-clause shape above — sentence-initial (`E.g. do X`)
+# or inside an existing parenthetical (`(e.g. \`url\`)`), where wrapping the
+# fragment in another pair of parentheses would read wrongly. Sentence-initial
+# is handled first so it can take a capitalised replacement.
+_EG_SENTENCE_INITIAL_RE = re.compile(r"(?:^|(?<=\.\s))E\.g\.,?\s+(\w)", re.IGNORECASE)
+_EG_RESIDUAL_RE = re.compile(r"\be\.g\.,?\s+", re.IGNORECASE)
+_IE_RE = re.compile(r"\bi\.e\.,?\s+", re.IGNORECASE)
+
+
+def _dedash_for_markdown_table(match: re.Match[str]) -> str:
+    """`_EM_DASH_CONJUNCTION_RE` replacement: see that pattern's comment."""
+    conjunction, first_char = match.group(1), match.group(2)
+    if conjunction is not None:
+        # Two full clauses joined by "; but" reads stiffly — split into two
+        # sentences instead and drop the now-redundant conjunction; the
+        # sentence break already carries the same contrast.
+        return f". {first_char.upper()}"
+    return f"; {first_char}"
+
+
+def _clean_help_for_markdown_table(
+    text: str, vocabulary: Mapping[str, str] | None = None
+) -> str:
+    """Normalise *text* for a Vale-checked Markdown destination (a spliced
+    docs table cell) — applied only on this path, never to the env-file or
+    wizard-spec text, both of which keep the original `_clean_help`-cleaned
+    prose unmodified.
+
+    Core's field-metadata help text is written for a plain-text env-file
+    comment, which Vale never lints. A spliced table cell lands in `docs/`,
+    which every downstream lints with `MinAlertLevel = error`, and some of
+    that prose trips rules a comment never faces. This is not a one-off fix
+    for the vars that happen to need it today — any future core help text
+    carrying the same patterns would break every downstream's Vale job
+    again — so the normalisation lives here, at the one destination that
+    needs it, rather than as a hand-patch of each offending sentence:
+
+    Every rule below was probed against the live Vale binary with this
+    template's own ruleset. Three of the results contradict what the rule
+    names suggest, so they are recorded here rather than re-derived:
+
+    - **Dashes.** `ai-tells.EmDashUsage` flags an em dash at *any* spacing,
+      and an en dash too: `A—B` with no surrounding spaces is an error just
+      as `A — B` is. So keying on the spaced form alone is not enough. A
+      spaced dash opening a clause with a coordinating conjunction (`but`,
+      `and`, `or`, `so`, `yet`, `nor`) becomes a sentence break (see
+      `_dedash_for_markdown_table`); every other dash of either kind, at any
+      spacing, collapses to `; `. A dash left at the very end would strand
+      that separator, so a trailing one is trimmed.
+    - **`e.g.`** (`Google.Latin`). Mid-clause it becomes a parenthetical
+      (`, e.g. X.` -> ` (X).`); anything else becomes `such as `.
+      Sentence-initially the abbreviation is dropped and the next word
+      capitalised, because there is no usable connective: both
+      `For example,` *and* `For instance,` trip
+      `ai-tells.FormalTransitions`. Measured, not assumed — an earlier
+      version of this function emitted `For example, ` and would have hard-
+      failed every downstream the first time core shipped that shape.
+    - **`i.e. `** becomes `that is, `, with no `ai-tells` conflict.
+
+    A vocabulary map handles words Vale's spell-check rejects; see
+    `config-presentation.yml`'s `markdown_vocabulary:` for why that cannot
+    live in the Vale accept list.
+    """
+    # Collapse first: a table cell is one physical line by construction. A
+    # newline anywhere in the prose would terminate the row and leak the
+    # remainder into the page as body text, and `var.help` is genuinely
+    # multi-line-capable — the env-file path splits it on `splitlines()`, and
+    # the README DOMAIN region renders help a downstream author wrote, which
+    # no test here can enumerate ahead of time.
+    text = " ".join(text.split())
+    text = _EM_DASH_CONJUNCTION_RE.sub(_dedash_for_markdown_table, text)
+    text = _RESIDUAL_EM_DASH_RE.sub("; ", text)
+    text = _EG_CLAUSE_RE.sub(lambda m: f" ({m.group(1)}){m.group(2)}", text)
+    text = _EG_SENTENCE_INITIAL_RE.sub(lambda m: m.group(1).upper(), text)
+    text = _EG_RESIDUAL_RE.sub("such as ", text)
+    text = _IE_RE.sub("that is, ", text)
+    for term, replacement in (vocabulary or {}).items():
+        text = text.replace(term, replacement)
+    return _TRAILING_SEPARATOR_RE.sub("", text)
+
+
+def _md_description_cell(
+    var: Var,
+    _required_names: Collection[str] | None,
+    vocabulary: Mapping[str, str],
+    _documented_defaults: Mapping[str, str],
+) -> str:
+    return _clean_help_for_markdown_table(var.help, vocabulary)
+
+
+def _md_default_cell(
+    var: Var,
+    _required_names: Collection[str] | None,
+    _vocabulary: Mapping[str, str],
+    documented_defaults: Mapping[str, str],
+) -> str:
+    """The `default` column cell: the real default, else the placeholder text `(none)`.
+
+    Deliberately does **not** mirror `_format_value`'s fallback to
+    `var.example` — the two destinations answer different questions.
+    `_format_value` (the env-file path) asks "what fillable value should
+    this line show a copy-pasting operator", where an example placeholder
+    is exactly the right answer. This column asks "what happens if the
+    operator sets nothing at all", where the example is flatly wrong: it's
+    a fill-in suggestion, not a statement of runtime behaviour, and for a
+    var like `OIDC_JWT_SIGNING_KEY` — whose example is a literal
+    `your-signing-key` placeholder — showing it under "Default" tells an
+    operator the system uses that string unless they change it, directly
+    contradicting the same row's description ("derived from the client
+    secret when unset").
+
+    So: a real, non-empty default renders via `_format_default`. Anything
+    else — `None`, or an empty `set`/`frozenset`/`list`/`tuple` such as
+    `OIDC_REQUIRED_SCOPES`'s `()` — falls back to the var's declared
+    `documented_defaults:` entry if it has one, and otherwise renders the
+    literal `(none)`. A bare empty cell is never emitted: next to a
+    description that names a fallback it reads as a contradiction.
+
+    A rendered value is wrapped in backticks. That is better typography for a
+    literal, and it also makes the whole column immune to `Vale.Spelling`:
+    `openid`, `stdio`, a URL scheme and most other real defaults are not
+    English words, and every downstream lints `docs/` at
+    `MinAlertLevel = error`. Vale skips code spans, so this closes the class
+    instead of adding a vocabulary entry per offending value. `(none)` stays
+    bare, being prose standing in for the absence of a value rather than a
+    value anyone could set.
+
+    This is scoped to this function alone: `_format_default`/`_format_value`
+    (the env-file rendering path) are untouched and keep using the example
+    fallback, correctly.
+    """
+    if not _is_empty_default(var.default):
+        return f"`{_format_default(var.default)}`"
+    documented = _documented_default(var, documented_defaults)
+    return f"`{documented}`" if documented else "(none)"
+
+
+def _md_required_cell(
+    var: Var,
+    required_names: Collection[str] | None,
+    _vocabulary: Mapping[str, str],
+    _documented_defaults: Mapping[str, str],
+) -> str:
+    return "**Yes**" if _is_required(var, required_names) else "No"
+
+
+_MD_COLUMN_RENDERERS: dict[
+    str,
+    Callable[[Var, Collection[str] | None, Mapping[str, str], Mapping[str, str]], str],
+] = {
+    "variable": _md_variable_cell,
+    "default": _md_default_cell,
+    "description": _md_description_cell,
+    "required": _md_required_cell,
+}
+
+
+def render_md_table(
+    vars_: Sequence[Var],
+    columns: Sequence[str],
+    *,
+    required_names: Collection[str] | None = None,
+    vocabulary: Mapping[str, str] | None = None,
+    documented_defaults: Mapping[str, str] | None = None,
+) -> str:
+    """Render *vars_* as a Markdown table with the given *columns*, no trailing newline.
+
+    *columns* is a sequence of column ids (``variable``, ``default``,
+    ``description``, ``required``) — see `_MD_COLUMN_TITLES` for the full
+    vocabulary; an unrecognised id fails loudly rather than silently
+    rendering an empty or mistitled column. Every cell is pipe-escaped (see
+    `_escape_pipes`) since a value containing a literal ``|`` would otherwise
+    split the row. *required_names* is forwarded to the ``required`` column
+    (see `_is_required`); omit it when no spliced region's `required_vars:`
+    vocabulary is in scope. The caller (`render_splice_file`) owns embedding
+    this inside a `GENERATED-ENV-TABLE-*` region; this function itself never
+    touches a marker or a file.
+    """
+    unknown = [c for c in columns if c not in _MD_COLUMN_TITLES]
+    if unknown:
+        raise SystemExit(
+            f"ERROR: render_md_table got unknown column(s) {unknown!r} — "
+            f"known columns are {sorted(_MD_COLUMN_TITLES)!r}."
+        )
+
+    header = "| " + " | ".join(_MD_COLUMN_TITLES[c] for c in columns) + " |"
+    separator = "|" + "|".join("---" for _ in columns) + "|"
+    lines = [header, separator]
+    for var in vars_:
+        cells = [
+            _escape_pipes(
+                _MD_COLUMN_RENDERERS[column](
+                    var, required_names, vocabulary or {}, documented_defaults or {}
+                )
+            )
+            for column in columns
+        ]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def _generated_region_markers(region_id: str) -> tuple[str, str]:
+    """The START/END HTML-comment marker pair for one spliced region.
+
+    ``GENERATED-`` is deliberately distinct from the `DOMAIN-*`/`PROJECT-*`/
+    `CONFIG-*` marker prefixes used elsewhere in this template: those mark
+    hand-owned content that copier update preserves untouched. A
+    ``GENERATED-`` region means the opposite — it is machine-owned and
+    rewritten by this script on every run, so the START marker says so
+    in-file; nothing between the two markers should ever be hand-edited.
+    """
+    start = (
+        f"<!-- GENERATED-ENV-TABLE-{region_id}-START — generated by "
+        "scripts/gen_config_surface.py; do not edit -->"
+    )
+    end = f"<!-- GENERATED-ENV-TABLE-{region_id}-END -->"
+    return start, end
+
+
+def splice_region(text: str, region_id: str, body: str, *, source: str) -> str:
+    """Replace the content between one region's START/END markers, return the whole file text.
+
+    Pure: never reads or writes a file — the caller owns all I/O (a spliced
+    file must already exist; `render_splice_file` is what enforces that).
+    *source* is the file this *text* came from (a project-relative path,
+    e.g. ``"docs/deployment/oidc.md"``) — used only to name the offending
+    file in an error message, never to read or write anything here.
+
+    Raises `SystemExit` naming both *source* and *region_id* when: the
+    START marker is missing, the END marker is missing, either marker
+    appears more than once, or the END marker appears before the START
+    marker — each of those would otherwise either silently no-op the splice
+    or corrupt the file rather than fail loudly. Naming *source* matters
+    concretely: the same region ids (``OIDC-REQUIRED`` / ``OIDC-OPTIONAL``)
+    are declared in more than one file, so a region-id-only message can't
+    tell an operator which of those files to fix — a marker broken in
+    either one used to raise byte-identical text.
+    """
+    start_marker, end_marker = _generated_region_markers(region_id)
+    start_matches = [m.start() for m in re.finditer(re.escape(start_marker), text)]
+    end_matches = [m.start() for m in re.finditer(re.escape(end_marker), text)]
+
+    if not start_matches:
+        raise SystemExit(
+            f"ERROR: {source}: region {region_id!r} is missing its START "
+            f"marker ({start_marker!r})."
+        )
+    if not end_matches:
+        raise SystemExit(
+            f"ERROR: {source}: region {region_id!r} is missing its END "
+            f"marker ({end_marker!r})."
+        )
+    if len(start_matches) > 1 or len(end_matches) > 1:
+        raise SystemExit(
+            f"ERROR: {source}: region {region_id!r} has a duplicated START "
+            "or END marker — expected exactly one of each."
+        )
+
+    start_pos = start_matches[0]
+    end_pos = end_matches[0]
+    if end_pos < start_pos:
+        raise SystemExit(
+            f"ERROR: {source}: region {region_id!r}'s END marker appears "
+            "before its START marker."
+        )
+
+    newline_pos = text.find("\n", start_pos)
+    start_line_end = newline_pos + 1 if newline_pos != -1 else len(text)
+    before = text[:start_line_end]
+    after = text[end_pos:]
+    return f"{before}{body}\n{after}" if body else f"{before}{after}"
+
+
+def _select_region_vars(
+    vars_: Sequence[Var],
+    region: Mapping[str, Any],
+    required_names: Collection[str] | None = None,
+) -> list[Var]:
+    """Select the vars_ one spliced region's table should render.
+
+    First narrows to vars whose tags intersect the region's own `tags` —
+    the same intersection test an env-file section's `tags` already uses —
+    in the same order `vars_` already carries (contractual, see
+    `collect_vars`'s ordering guarantee). The region's optional `required`
+    key then further restricts that set using `_is_required` — the same
+    resolution `_md_required_cell` uses for the `required` table column, so
+    a region's filter and its own `Required` column (were it to declare
+    one) can never disagree about which vars count as required. Omitting
+    `required` entirely (the key absent, not merely falsy — checked via
+    `is None`, not truthiness) keeps every tag-matched var, unchanged from
+    before this filter existed; this is what lets one `tags:` selector
+    split cleanly into a "required" and an "optional" region for the same
+    file, each claiming a disjoint half of the same tag-matched set whose
+    union is the unfiltered set.
+    """
+    region_tags = set(region.get("tags", ()))
+    matched = [v for v in vars_ if region_tags & set(v.tags)]
+    required = region.get("required")
+    if required is None:
+        return matched
+    return [v for v in matched if _is_required(v, required_names) == bool(required)]
+
+
+def render_splice_file(
+    project_root: Path,
+    rel_path: str,
+    file_spec: Mapping[str, Any],
+    vars_: Sequence[Var],
+    required_names: Collection[str] | None = None,
+    vocabulary: Mapping[str, str] | None = None,
+    documented_defaults: Mapping[str, str] | None = None,
+) -> str:
+    """Render one `kind: splice` artifact's full on-disk text.
+
+    Unlike a whole-file `kind: env`/`kind: wizard` artifact, a spliced
+    file's surrounding prose is hand-authored and must already exist on
+    disk — a missing file is a `SystemExit` naming *rel_path*, since this
+    generator only rewrites the marked region inside an existing file and
+    never creates the file itself. Each declared region's vars are chosen
+    by `_select_region_vars` (tag intersection, then an optional `required`
+    filter, both driven by *required_names* — `config-presentation.yml`'s
+    `required_vars:` list) and rendered via `render_md_table` using the
+    region's declared `columns` (forwarding *required_names* too, so a
+    region that declares a `required` table column agrees with its own
+    filter). Regions are spliced one after another, each pass operating on
+    the previous pass's output, so multiple regions in one file compose
+    correctly regardless of their relative marker positions.
+    """
+    target = project_root / rel_path
+    if not target.exists():
+        raise SystemExit(
+            f"ERROR: {target} does not exist — a `kind: splice` artifact "
+            "must already exist; this generator only rewrites the marked "
+            "region inside it, never the surrounding file."
+        )
+    text = target.read_text(encoding="utf-8")
+    for region in file_spec.get("regions", ()):
+        region_vars = _select_region_vars(vars_, region, required_names)
+        table = render_md_table(
+            region_vars,
+            region["columns"],
+            required_names=required_names,
+            vocabulary=vocabulary,
+            documented_defaults=documented_defaults,
+        )
+        text = splice_region(text, region["id"], table, source=rel_path)
+    return text
+
+
 # `kind` -> renderer, dispatched per `config-presentation.yml` `files` entry.
 # `env` renderers take that entry's own file spec; `wizard` takes the whole
 # presentation (it has no per-file content of its own — see `files:` in
 # `config-presentation.yml`, where `docs/javascripts/config-wizard/wizard-
-# spec.json` declares only `kind: wizard` and nothing else).
+# spec.json` declares only `kind: wizard` and nothing else). `splice`
+# rewrites a marked region inside an otherwise hand-authored file — see
+# `render_splice_file`.
 _ENV_KIND = "env"
 _WIZARD_KIND = "wizard"
-_KNOWN_FILE_KINDS = frozenset({_ENV_KIND, _WIZARD_KIND})
+_SPLICE_KIND = "splice"
+_KNOWN_FILE_KINDS = frozenset({_ENV_KIND, _WIZARD_KIND, _SPLICE_KIND})
 
 
 def _env_destinations(
@@ -1050,6 +1546,12 @@ def write_artifacts(
     if vars_ is None:
         vars_ = collect_vars(project_root, answers)
 
+    required_names: Collection[str] = presentation.get("required_vars", ())
+    vocabulary: Mapping[str, str] = presentation.get("markdown_vocabulary", {}) or {}
+    documented_defaults: Mapping[str, str] = (
+        presentation.get("documented_defaults", {}) or {}
+    )
+
     artifacts: list[tuple[str, str]] = []
     for rel_path, file_spec in presentation.get("files", {}).items():
         kind = file_spec.get("kind")
@@ -1057,6 +1559,16 @@ def write_artifacts(
             text = render_env_file(file_spec, vars_, answers)
         elif kind == _WIZARD_KIND:
             text = render_wizard_spec(presentation, vars_, answers)
+        elif kind == _SPLICE_KIND:
+            text = render_splice_file(
+                project_root,
+                rel_path,
+                file_spec,
+                vars_,
+                required_names=required_names,
+                vocabulary=vocabulary,
+                documented_defaults=documented_defaults,
+            )
         else:
             raise SystemExit(
                 f"ERROR: config-presentation.yml files[{rel_path!r}] has "
