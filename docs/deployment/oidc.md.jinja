@@ -25,15 +25,14 @@ Optional token-based authentication for HTTP deployments. OIDC activates automat
 
 ## JWT Signing Key
 
-The FastMCP default signing key is ephemeral (regenerated on startup), which forces clients to re-authenticate after every restart. Set a stable random secret to avoid this:
+When `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.
+
+The real reason to set an explicit key is secret rotation: because the default key is derived from the client secret, rotating that secret changes the derived key and invalidates every token issued under the old one. Setting an explicit signing key decouples token validity from client-secret rotation:
 
 ```bash
 # Generate once, store in your .env file
 openssl rand -hex 32
 ```
-
-!!! danger "Linux / Docker"
-    On Linux (including Docker), the ephemeral key is especially problematic because it does not persist across process restarts. Always set `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY` in production.
 
 ## Setup with Authelia
 
