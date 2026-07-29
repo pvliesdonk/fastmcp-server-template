@@ -115,7 +115,7 @@ Implemented then reverted (see D6 and the header note). The circus found the bul
 | Prose is Vale-clean | B's gate over the render (both authz variants) | 0 errors |
 | `#260` false claim gone from prose | grep the corrected sections | no `ephemeral`/`invalidates on restart`/`Required on Linux` in prose (table row is D1) |
 | `#260` real caveats present | grep | derivation + secret-rotation caveat present |
-| `#267` reference present | grep the authz render | pvl-core Authorization bullet present |
+| ~~`#267` reference present~~ | — | Task 4 dropped after review (see header); the authorization guide is unchanged from `main`, so there is no bullet to check |
 | Downstream unaffected | none of these three files is `_skip_if_exists` | edits propagate on `copier update`; no reset-file re-run needed |
 | Mechanical edits applied | each task's post-grep asserts the change is in the *render*, not just the source | no silent no-op |
 
