@@ -112,8 +112,8 @@ Client → {{ project_name }} → OIDC Provider
 | `{{ env_prefix }}_OIDC_REQUIRED_SCOPES` | `openid` | Comma-separated required scopes |
 | `{{ env_prefix }}_OIDC_VERIFY_ACCESS_TOKEN` | `false` | Set `true` to verify the access token as a JWT instead of the id token; useful for audience-claim validation on JWT access tokens |
 
-!!! danger "JWT signing key on Linux/Docker"
-    Without `OIDC_JWT_SIGNING_KEY`, FastMCP generates an ephemeral key that invalidates all tokens on restart. Always set a stable key in production:
+!!! tip "JWT signing key and secret rotation"
+    When `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret, so the key stays the same across restarts. Rotating the client secret changes the derived key and invalidates every token issued under the old one. Set an explicit key to decouple token validity from client-secret rotation:
 
     ```bash
     openssl rand -hex 32
@@ -134,9 +134,9 @@ For the full OIDC reference (env vars, Docker Compose, subpath deployments, arch
 
 The `client_id` and/or `redirect_uris` in your OIDC provider config don't match the values in your `.env` file. Verify both sides match exactly.
 
-### Tokens invalidated after restart
+### Tokens invalidated after a client-secret rotation
 
-You're missing `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP generates an ephemeral key on each startup. Generate and set a stable key:
+You're missing `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY`. Without it, FastMCP derives the signing key from the OIDC client secret, so rotating that secret changes the derived key and invalidates every token issued under the old one. Generate and set a stable key to decouple token validity from secret rotation:
 
 ```bash
 openssl rand -hex 32
