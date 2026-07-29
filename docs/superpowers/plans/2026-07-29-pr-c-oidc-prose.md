@@ -1,8 +1,10 @@
 # PR C: OIDC prose corrections
 
-**Goal:** the authored OIDC prose states only claims that hold against the pinned `fastmcp`/`fastmcp-pvl-core`, each cited to a symbol; drop the false "ephemeral signing key" framing (#260) and give the authorization guide its missing library reference (#267).
+**Goal:** the authored OIDC prose states only claims that hold against the pinned `fastmcp`/`fastmcp-pvl-core`, each cited to a symbol; drop the false "ephemeral signing key" framing (#260).
 
-**Closes:** #267, and the authored-prose half of #260. (#260's wizard-spec half is retired by generation in a later stage and its core-runtime half already landed in pvl-core 4.5.0 — see D4. Use `Closes #267` and a `Refs #260` unless the whole of #260 is genuinely gone at merge; confirm before writing the squash keyword, since a stale `Closes` auto-closed three still-open issues in Stage 1a.)
+**Closes:** none by keyword — `Refs #260`. C fixes #260's authored-**prose** surfaces in `oidc.md.jinja` and `authentication.md.jinja`; the false claim then survives only in the two env-var **table rows** (PR D's region, D1), so #260 closes when D lands. The wizard-spec surface is already correct (generated from corrected core metadata) and the core-runtime warning already landed in pvl-core 4.5.0 (D4).
+
+> **#267 (See also) was dropped from this PR.** The plan originally added an authorization-guide bullet linking pvl-core's README (D6, below). The preflight circus found it (a) misattributed FastMCP **core**'s `AuthMiddleware` hide/deny behaviour to pvl-core — the spike's exact failure mode, a "fix" asserting a new false claim — and (b) carried a broken anchor. Combined with lens 3's point that it reverses #181's stated operator-only "no implementer back-link" rule, the decision was to **drop the bullet** rather than reword it (rewording accurately would have to name `AuthMiddleware`, reintroducing the API symbol #181 purged). #267 is resolved separately, not by this PR. D6 is retained below struck-through as the record of what was tried.
 
 **Spec:** `docs/superpowers/specs/2026-07-27-config-surface-1b-restructured-design.md` — PR C row, §3.1, §5. This is PR C of the strictly-sequential Stage 1b series; A (#269) and B (#271) are merged.
 
@@ -24,7 +26,7 @@ Three authored `.jinja` files. Each task owns disjoint prose within them.
 |---|---|---|
 | `docs/deployment/oidc.md.jinja` | `## JWT Signing Key` section + its admonitions; the client re-registration / Authelia section | the env-var table at the top (rows incl. the false `OIDC_JWT_SIGNING_KEY` row) |
 | `docs/guides/authentication.md.jinja` | the `## OIDC` narrative (proxy-flow claims) | the OIDC env-var table |
-| `docs/guides/{% if enable_authorization %}authorization.md{% endif %}.jinja` | the `## See also` list | `DOMAIN-AUTHZ-*` fences |
+| ~~`authorization.md.jinja`~~ | ~~`## See also`~~ (Task 4 dropped — see header) | whole file left unchanged |
 
 ## Decisions
 
@@ -41,7 +43,7 @@ Three authored `.jinja` files. Each task owns disjoint prose within them.
 
 **D5 — classify each re-registration/restart claim before touching it.** "Clients must re-authenticate after every restart" is a fastmcp-behaviour claim (cite or correct). "Authelia does not support Dynamic Client Registration (RFC 7591)" is a *provider* fact, not a fastmcp claim — it cannot be cited to a fastmcp symbol, so verify it against Authelia's own docs and leave it if correct, rather than forcing a citation it cannot have. The plan does not assume any of these is wrong; each is verified and corrected only if it fails.
 
-**D6 — #267 is one See-also bullet, colon form.** Add a bullet to the authorization guide's `## See also` pointing at pvl-core's README "Authorization" section, matching the pointer `server.py.jinja` already carries. A README link is not API surface, so it respects the operator-only boundary `2a0e36d` drew (which purged `AuthMiddleware`/`any_check`/… from this guide). Colon form, no em dash, or B's gate fails.
+**D6 — ~~#267 is one See-also bullet~~ DROPPED.** Original plan: add a colon-form bullet to the authorization guide's `## See also` pointing at pvl-core's README "Authorization" section, on the theory that a README link is not the API surface `2a0e36d` purged. The circus refuted the execution: the bullet as written misattributed core's `AuthMiddleware` hide/deny behaviour to pvl-core (a new false claim) and used a broken anchor, and an accurate rewrite would have to name `AuthMiddleware` — reintroducing the very symbol `2a0e36d` removed. Bullet dropped; #267 resolved separately. Kept here as the record.
 
 ## Tasks
 
@@ -101,18 +103,9 @@ Commit per task. Each commit message records the symbols cited for that task's c
 - [ ] **Re-render, run B's gate** = 0 errors.
 - [ ] **Commit.** `docs(authn): verify the OIDC proxy-flow narrative against pvl-core (refs #260)`.
 
-### Task 4 — authorization guide: the missing See-also (#267)
+### Task 4 — ~~authorization guide: the missing See-also (#267)~~ DROPPED
 
-**Files:** Modify `docs/guides/{% if enable_authorization %}authorization.md{% endif %}.jinja` (`## See also` list only).
-
-- [ ] **Confirm the pointer's target** matches what `server.py.jinja` already cites: `grep -n 'pvl-core' src/*/server.py.jinja` (expects `# See fastmcp-pvl-core's README "Authorization" section.`).
-- [ ] **Add one bullet** in colon form to `## See also`, linking pvl-core's README "Authorization" section, adjacent to the existing authentication-guide bullet. No em dash.
-- [ ] **Re-render with `enable_authorization=true`** (the default fixture renders the file) and run B's gate over both variants, since B lints the authz-on and authz-off renders:
-  ```bash
-  cd /tmp/smoke && vale --glob='!docs/{superpowers,design,decisions}/**' docs README.md
-  ```
-  Expected: `0 errors`; the new bullet present in `/tmp/smoke/docs/guides/authorization.md`.
-- [ ] **Commit.** `docs(authz): add the pvl-core Authorization reference to See also (closes #267)`.
+Implemented then reverted (see D6 and the header note). The circus found the bullet misattributed core behaviour and carried a broken anchor; #267 is resolved separately, not in this PR. The authorization guide is unchanged from `main`.
 
 ## Verification contract (spec §5)
 
