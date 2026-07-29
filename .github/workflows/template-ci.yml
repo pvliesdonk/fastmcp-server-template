@@ -310,6 +310,92 @@ jobs:
               docs/guides/authentication.md \
             || { echo "::error::fastmcp-server-template literal leaked into shared docs"; exit 1; }
 
+      - name: OIDC generated env-var tables (markers, content, idempotence)
+        # PR D generates docs/deployment/oidc.md's and
+        # docs/guides/authentication.md's OIDC env-var tables from a single
+        # source of truth (scripts/gen_config_surface.py), spliced between
+        # GENERATED-ENV-TABLE-OIDC-{REQUIRED,OPTIONAL} markers — replacing
+        # two hand-maintained tables that had drifted out of sync with core
+        # and with each other. Nothing in this file asserted anything about
+        # that generated content before this step.
+        #
+        # Placed here, not right after the render: it needs the rendered
+        # project's own venv (`uv sync`, above) so `gen_config_surface.py
+        # --check` imports fastmcp-pvl-core from it directly rather than
+        # re-execing under an ad hoc `uv run --no-project` download. Grouped
+        # with the "shared docs render" step just above because both inspect
+        # the same two files' rendered content — this one only reads them
+        # (plus the offline `--check`, which never writes), so it does not
+        # need to run before render hygiene the way a step that WRITES into
+        # the tree would.
+        working-directory: /tmp/smoke
+        run: |
+          set -euo pipefail
+          OIDC=docs/deployment/oidc.md
+          AUTH=docs/guides/authentication.md
+
+          # --- #260 regression guard, and the load-bearing outcome of the
+          # whole PR: the "ephemeral"/restart-invalidation wording that used
+          # to describe the JWT signing key must never come back, whether
+          # from the generator or a hand-edit inside the marker'd region.
+          ! grep -rniE 'ephemeral|invalidates.*restart|Required on Linux' "$OIDC" "$AUTH" \
+            || { echo "::error::#260 regression — 'ephemeral'/restart-invalidation wording found in the generated OIDC tables"; exit 1; }
+
+          # --- markers present, with data rows between them, in both files.
+          region() {  # region <file> <REQUIRED|OPTIONAL>
+            sed -n "/GENERATED-ENV-TABLE-OIDC-$2-START/,/GENERATED-ENV-TABLE-OIDC-$2-END/p" "$1"
+          }
+          for f in "$OIDC" "$AUTH"; do
+            for kind in REQUIRED OPTIONAL; do
+              grep -qF "GENERATED-ENV-TABLE-OIDC-$kind-START" "$f" \
+                || { echo "::error::$f missing GENERATED-ENV-TABLE-OIDC-$kind-START marker"; exit 1; }
+              grep -qF "GENERATED-ENV-TABLE-OIDC-$kind-END" "$f" \
+                || { echo "::error::$f missing GENERATED-ENV-TABLE-OIDC-$kind-END marker"; exit 1; }
+              # `|| true` guards the command substitution against `set -e`:
+              # a zero-match grep under `-c` still exits 1, which would abort
+              # the step here rather than let the `-gt 0` check below report
+              # it with context (same guard shape the vale lockstep steps use).
+              rows=$(region "$f" "$kind" | grep -cE '^\| `' || true)
+              [ "$rows" -gt 0 ] \
+                || { echo "::error::$f GENERATED-ENV-TABLE-OIDC-$kind region has no data rows between its markers"; exit 1; }
+            done
+          done
+
+          # --- the four connection vars land in REQUIRED; the rest land in
+          # OPTIONAL — env_prefix is fixed to SMOKE_MCP by smoke-answers.yml,
+          # matching the "shared docs render" step above.
+          for f in "$OIDC" "$AUTH"; do
+            for var in SMOKE_MCP_BASE_URL SMOKE_MCP_OIDC_CONFIG_URL SMOKE_MCP_OIDC_CLIENT_ID SMOKE_MCP_OIDC_CLIENT_SECRET; do
+              region "$f" REQUIRED | grep -qF "\`$var\`" \
+                || { echo "::error::$f REQUIRED region missing $var"; exit 1; }
+            done
+            for var in SMOKE_MCP_OIDC_AUDIENCE SMOKE_MCP_OIDC_REQUIRED_SCOPES SMOKE_MCP_OIDC_JWT_SIGNING_KEY SMOKE_MCP_OIDC_VERIFY_ACCESS_TOKEN; do
+              region "$f" OPTIONAL | grep -qF "\`$var\`" \
+                || { echo "::error::$f OPTIONAL region missing $var"; exit 1; }
+            done
+          done
+
+          # --- signing-key row: Default `derived`, description spells out
+          # "JSON Web Tokens" (never the "JWTs" abbreviation).
+          for f in "$OIDC" "$AUTH"; do
+            signing_row=$(region "$f" OPTIONAL | grep -F '`SMOKE_MCP_OIDC_JWT_SIGNING_KEY`') \
+              || { echo "::error::$f OPTIONAL region missing the signing-key row"; exit 1; }
+            echo "$signing_row" | grep -qF '| `derived` |' \
+              || { echo "::error::$f signing-key row does not show Default \`derived\`: $signing_row"; exit 1; }
+            echo "$signing_row" | grep -qF 'JSON Web Tokens' \
+              || { echo "::error::$f signing-key row missing 'JSON Web Tokens'"; exit 1; }
+            ! echo "$signing_row" | grep -qF 'JWTs' \
+              || { echo "::error::$f signing-key row still abbreviates to 'JWTs'"; exit 1; }
+          done
+
+          # --- generation is idempotent on this pristine render: the
+          # committed generator output already matches a fresh, offline
+          # re-generation. Mirrors the `--check` step the rendered project's
+          # OWN ci.yml.jinja runs on every downstream commit; nothing in
+          # template-ci exercised it before this step.
+          uv run python scripts/gen_config_surface.py --check \
+            || { echo "::error::gen_config_surface.py --check reports the rendered config artifacts are stale — generation is not idempotent"; exit 1; }
+
       - name: Dockerfile sentinel structure
         working-directory: /tmp/smoke
         run: |
