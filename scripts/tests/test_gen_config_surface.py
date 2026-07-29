@@ -1266,9 +1266,9 @@ class TestSpliceRegion:
             g.splice_region(swapped, "AUTH", "NEW", source="docs/x.md")
 
     def test_error_names_the_source_file(self):
-        """Fix round 1: a region-id-only message can't tell an operator
-        which file broke when two files declare the same region id (D5) —
-        the message must name *source* too."""
+        """A region-id-only message can't tell an operator which file broke
+        when two files declare the same region id — the message must name
+        *source* too."""
         broken = self._DOC.replace("<!-- GENERATED-ENV-TABLE-AUTH-END -->\n", "")
         with pytest.raises(SystemExit, match=r"docs/deployment/oidc\.md"):
             g.splice_region(broken, "AUTH", "NEW", source="docs/deployment/oidc.md")
@@ -1276,9 +1276,9 @@ class TestSpliceRegion:
     def test_same_region_id_broken_in_two_files_yields_distinct_messages(self):
         """The concrete ambiguity this fixes: `docs/deployment/oidc.md` and
         `docs/guides/authentication.md` both declare `OIDC-REQUIRED`/
-        `OIDC-OPTIONAL` (D5). Breaking the same-id marker in each must not
-        raise byte-identical text — an operator hitting the D7 marker-drop
-        hazard needs the message to say which file to fix."""
+        `OIDC-OPTIONAL`. Breaking the same-id marker in each must not raise
+        byte-identical text — an operator hitting the marker-drop hazard
+        needs the message to say which file to fix."""
         broken = self._DOC.replace("<!-- GENERATED-ENV-TABLE-AUTH-END -->\n", "")
 
         with pytest.raises(SystemExit) as exc_oidc:

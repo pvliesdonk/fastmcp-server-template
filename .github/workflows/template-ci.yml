@@ -311,9 +311,9 @@ jobs:
             || { echo "::error::fastmcp-server-template literal leaked into shared docs"; exit 1; }
 
       - name: OIDC generated env-var tables (markers, content, idempotence)
-        # PR D generates docs/deployment/oidc.md's and
-        # docs/guides/authentication.md's OIDC env-var tables from a single
-        # source of truth (scripts/gen_config_surface.py), spliced between
+        # docs/deployment/oidc.md's and docs/guides/authentication.md's OIDC
+        # env-var tables are generated from a single source of truth
+        # (scripts/gen_config_surface.py), spliced between
         # GENERATED-ENV-TABLE-OIDC-{REQUIRED,OPTIONAL} markers — replacing
         # two hand-maintained tables that had drifted out of sync with core
         # and with each other. Nothing in this file asserted anything about
@@ -334,8 +334,8 @@ jobs:
           OIDC=docs/deployment/oidc.md
           AUTH=docs/guides/authentication.md
 
-          # --- #260 regression guard, and the load-bearing outcome of the
-          # whole PR: the "ephemeral"/restart-invalidation wording that used
+          # --- #260 regression guard, the load-bearing outcome: the
+          # "ephemeral"/restart-invalidation wording that used
           # to describe the JWT signing key must never come back, whether
           # from the generator or a hand-edit inside the marker'd region.
           ! grep -rniE 'ephemeral|invalidates.*restart|Required on Linux' "$OIDC" "$AUTH" \

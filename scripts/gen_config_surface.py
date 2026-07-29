@@ -1310,10 +1310,10 @@ def splice_region(text: str, region_id: str, body: str, *, source: str) -> str:
     appears more than once, or the END marker appears before the START
     marker — each of those would otherwise either silently no-op the splice
     or corrupt the file rather than fail loudly. Naming *source* matters
-    concretely: D5 declares the same region ids (``OIDC-REQUIRED`` /
-    ``OIDC-OPTIONAL``) in two different files, so a region-id-only message
-    can't tell an operator which of the two files to fix — a marker broken
-    in either one used to raise byte-identical text.
+    concretely: the same region ids (``OIDC-REQUIRED`` / ``OIDC-OPTIONAL``)
+    are declared in more than one file, so a region-id-only message can't
+    tell an operator which of those files to fix — a marker broken in
+    either one used to raise byte-identical text.
     """
     start_marker, end_marker = _generated_region_markers(region_id)
     start_matches = [m.start() for m in re.finditer(re.escape(start_marker), text)]
