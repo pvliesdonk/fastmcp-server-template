@@ -115,14 +115,19 @@ required_vars:
   - "{PREFIX}_OIDC_CLIENT_ID"
   - "{PREFIX}_OIDC_CLIENT_SECRET"
 
+# Term-replacement map applied to help text on the Vale-linted markdown
+# table splice path only (`_clean_help_for_markdown_table`). Can't live in
+# `.vale.ini`/`accept.txt` instead: that file is `_skip_if_exists`, so a term
+# added there never reaches an existing downstream, while a generated table
+# arrives on every `copier update` — this file is the only lever that does.
+markdown_vocabulary:
+  JWTs: "JSON Web Tokens"
+
 # The effective value a var falls back to at runtime when its own dataclass
 # `default` renders empty (see `_is_empty_default`) — core's field metadata
 # carries no such key, so this template asserts it here, and it must be
 # re-verified against core on every dependency bump. Keyed by full var name,
 # same lookup shape as `examples:` below.
-markdown_vocabulary:
-  JWTs: "JSON Web Tokens"
-
 documented_defaults:
   # `build_oidc_proxy_auth`: `required_scopes = list(config.oidc_required_scopes)
   # or ["openid"]`. The field default itself is `()`
