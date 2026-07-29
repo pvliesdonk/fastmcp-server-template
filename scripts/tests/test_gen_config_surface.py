@@ -1228,33 +1228,33 @@ class TestSpliceRegion:
     )
 
     def test_replaces_only_the_region_body(self):
-        out = g.splice_region(self._DOC, "AUTH", "NEW")
+        out = g.splice_region(self._DOC, "AUTH", "NEW", source="docs/x.md")
         assert "old content" not in out
         assert "NEW" in out
         assert out.startswith("intro\n")
         assert out.endswith("outro\n")
 
     def test_markers_survive(self):
-        out = g.splice_region(self._DOC, "AUTH", "NEW")
+        out = g.splice_region(self._DOC, "AUTH", "NEW", source="docs/x.md")
         assert "GENERATED-ENV-TABLE-AUTH-START" in out
         assert "GENERATED-ENV-TABLE-AUTH-END" in out
 
     def test_is_idempotent(self):
-        once = g.splice_region(self._DOC, "AUTH", "NEW")
-        assert g.splice_region(once, "AUTH", "NEW") == once
+        once = g.splice_region(self._DOC, "AUTH", "NEW", source="docs/x.md")
+        assert g.splice_region(once, "AUTH", "NEW", source="docs/x.md") == once
 
     def test_missing_start_marker_raises(self):
         with pytest.raises(SystemExit, match="AUTH"):
-            g.splice_region("no markers here\n", "AUTH", "NEW")
+            g.splice_region("no markers here\n", "AUTH", "NEW", source="docs/x.md")
 
     def test_missing_end_marker_raises(self):
         broken = self._DOC.replace("<!-- GENERATED-ENV-TABLE-AUTH-END -->\n", "")
         with pytest.raises(SystemExit, match="AUTH"):
-            g.splice_region(broken, "AUTH", "NEW")
+            g.splice_region(broken, "AUTH", "NEW", source="docs/x.md")
 
     def test_duplicated_region_raises(self):
         with pytest.raises(SystemExit, match="AUTH"):
-            g.splice_region(self._DOC + self._DOC, "AUTH", "NEW")
+            g.splice_region(self._DOC + self._DOC, "AUTH", "NEW", source="docs/x.md")
 
     def test_end_before_start_raises(self):
         swapped = (
@@ -1263,7 +1263,36 @@ class TestSpliceRegion:
             "scripts/gen_config_surface.py; do not edit -->\n"
         )
         with pytest.raises(SystemExit, match="AUTH"):
-            g.splice_region(swapped, "AUTH", "NEW")
+            g.splice_region(swapped, "AUTH", "NEW", source="docs/x.md")
+
+    def test_error_names_the_source_file(self):
+        """Fix round 1: a region-id-only message can't tell an operator
+        which file broke when two files declare the same region id (D5) —
+        the message must name *source* too."""
+        broken = self._DOC.replace("<!-- GENERATED-ENV-TABLE-AUTH-END -->\n", "")
+        with pytest.raises(SystemExit, match=r"docs/deployment/oidc\.md"):
+            g.splice_region(broken, "AUTH", "NEW", source="docs/deployment/oidc.md")
+
+    def test_same_region_id_broken_in_two_files_yields_distinct_messages(self):
+        """The concrete ambiguity this fixes: `docs/deployment/oidc.md` and
+        `docs/guides/authentication.md` both declare `OIDC-REQUIRED`/
+        `OIDC-OPTIONAL` (D5). Breaking the same-id marker in each must not
+        raise byte-identical text — an operator hitting the D7 marker-drop
+        hazard needs the message to say which file to fix."""
+        broken = self._DOC.replace("<!-- GENERATED-ENV-TABLE-AUTH-END -->\n", "")
+
+        with pytest.raises(SystemExit) as exc_oidc:
+            g.splice_region(broken, "AUTH", "NEW", source="docs/deployment/oidc.md")
+        with pytest.raises(SystemExit) as exc_auth:
+            g.splice_region(
+                broken, "AUTH", "NEW", source="docs/guides/authentication.md"
+            )
+
+        message_oidc = str(exc_oidc.value)
+        message_auth = str(exc_auth.value)
+        assert message_oidc != message_auth
+        assert "docs/deployment/oidc.md" in message_oidc
+        assert "docs/guides/authentication.md" in message_auth
 
 
 class TestSelectRegionVars:

@@ -1296,16 +1296,24 @@ def _generated_region_markers(region_id: str) -> tuple[str, str]:
     return start, end
 
 
-def splice_region(text: str, region_id: str, body: str) -> str:
+def splice_region(text: str, region_id: str, body: str, *, source: str) -> str:
     """Replace the content between one region's START/END markers, return the whole file text.
 
     Pure: never reads or writes a file — the caller owns all I/O (a spliced
     file must already exist; `render_splice_file` is what enforces that).
-    Raises `SystemExit` naming *region_id* when: the START marker is
-    missing, the END marker is missing, either marker appears more than
-    once, or the END marker appears before the START marker — each of those
-    would otherwise either silently no-op the splice or corrupt the file
-    rather than fail loudly.
+    *source* is the file this *text* came from (a project-relative path,
+    e.g. ``"docs/deployment/oidc.md"``) — used only to name the offending
+    file in an error message, never to read or write anything here.
+
+    Raises `SystemExit` naming both *source* and *region_id* when: the
+    START marker is missing, the END marker is missing, either marker
+    appears more than once, or the END marker appears before the START
+    marker — each of those would otherwise either silently no-op the splice
+    or corrupt the file rather than fail loudly. Naming *source* matters
+    concretely: D5 declares the same region ids (``OIDC-REQUIRED`` /
+    ``OIDC-OPTIONAL``) in two different files, so a region-id-only message
+    can't tell an operator which of the two files to fix — a marker broken
+    in either one used to raise byte-identical text.
     """
     start_marker, end_marker = _generated_region_markers(region_id)
     start_matches = [m.start() for m in re.finditer(re.escape(start_marker), text)]
@@ -1313,24 +1321,26 @@ def splice_region(text: str, region_id: str, body: str) -> str:
 
     if not start_matches:
         raise SystemExit(
-            f"ERROR: region {region_id!r} is missing its START marker "
-            f"({start_marker!r})."
+            f"ERROR: {source}: region {region_id!r} is missing its START "
+            f"marker ({start_marker!r})."
         )
     if not end_matches:
         raise SystemExit(
-            f"ERROR: region {region_id!r} is missing its END marker ({end_marker!r})."
+            f"ERROR: {source}: region {region_id!r} is missing its END "
+            f"marker ({end_marker!r})."
         )
     if len(start_matches) > 1 or len(end_matches) > 1:
         raise SystemExit(
-            f"ERROR: region {region_id!r} has a duplicated START or END "
-            "marker — expected exactly one of each."
+            f"ERROR: {source}: region {region_id!r} has a duplicated START "
+            "or END marker — expected exactly one of each."
         )
 
     start_pos = start_matches[0]
     end_pos = end_matches[0]
     if end_pos < start_pos:
         raise SystemExit(
-            f"ERROR: region {region_id!r}'s END marker appears before its START marker."
+            f"ERROR: {source}: region {region_id!r}'s END marker appears "
+            "before its START marker."
         )
 
     newline_pos = text.find("\n", start_pos)
@@ -1412,7 +1422,7 @@ def render_splice_file(
             vocabulary=vocabulary,
             documented_defaults=documented_defaults,
         )
-        text = splice_region(text, region["id"], table)
+        text = splice_region(text, region["id"], table, source=rel_path)
     return text
 
 
