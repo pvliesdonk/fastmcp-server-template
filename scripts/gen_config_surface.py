@@ -1021,11 +1021,14 @@ def _documented_default(var: Var, documented_defaults: Mapping[str, str]) -> str
     loses something a client could pre-fill; both were regressions against the
     hand-written tables this generator replaced.
 
-    Only a fallback with a *literal* value can be declared this way. Where the
-    fallback is derived rather than fixed — ``OIDC_JWT_SIGNING_KEY`` is
-    computed from the client secret, so there is no string to print — the cell
-    still renders ``(none)`` and the description carries the explanation. That
-    is a deliberate limit of this mechanism, not an oversight.
+    The declared value need not be a literal the operator could paste in
+    verbatim. It may instead be a short descriptive label standing in for a
+    derived or dynamic fallback that has no fixed string to print —
+    ``OIDC_JWT_SIGNING_KEY`` declares ``derived`` for exactly this reason:
+    the actual value is computed from the client secret at runtime, and the
+    ``Default`` cell reading ``derived`` is a pointer to the description,
+    which carries the full explanation, rather than a value anyone would
+    set verbatim.
 
     Declared in `config-presentation.yml`'s `documented_defaults:` map, keyed
     by full var name, because core's field metadata carries no such key. That
