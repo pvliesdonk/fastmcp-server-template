@@ -466,8 +466,8 @@ jobs:
         # dependency, already installed by `uv sync` above.
         working-directory: /tmp/smoke
         run: |
-          set -uo pipefail
-          uv run python3 - "$GITHUB_WORKSPACE/schemas/server.schema.json" <<'PY'
+          set -euo pipefail
+          uv run python3 - "$GITHUB_WORKSPACE/schemas/server.schema.json" <<'PY' || { echo "::error::server.json does not validate against schemas/server.schema.json"; exit 1; }
           import json
           import sys
 
@@ -479,10 +479,6 @@ jobs:
           jsonschema.validate(instance=data, schema=schema)
           print(f"server.json validates against {schema_path}")
           PY
-          if [ $? -ne 0 ]; then
-            echo "::error::server.json does not validate against schemas/server.schema.json"
-            exit 1
-          fi
 
       - name: README generated env-var tables (markers, content)
         # README.md's "Configuration" and "Domain configuration" sections
