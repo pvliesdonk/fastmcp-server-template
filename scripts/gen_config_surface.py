@@ -465,7 +465,16 @@ def collect_vars(
                 suffix=suffix,
                 provenance=raw.get("provenance", "domain"),
                 type_name=raw["type_name"],
-                default=raw.get("default"),
+                # `raw.get("default", _NO_DEFAULT)`, not `raw.get("default")`:
+                # this is the manual escape hatch's half of the same
+                # required-ness signal `_discover_domain_vars` produces for
+                # the AST-scanned path. Omitting `default:` here must mean
+                # "no default declared at all" (required), matching a
+                # dataclass field with neither `default` nor
+                # `default_factory`; an explicit `default: null` still means
+                # a real default of `None` (optional), exactly as it does for
+                # the AST-scanned path.
+                default=raw.get("default", _NO_DEFAULT),
                 help=_clean_help(raw["help"]),
                 # Same "domain" tag `_discover_domain_vars` adds to every
                 # AST-discovered var, so a var declared here — the "the AST
@@ -1011,15 +1020,18 @@ def _is_required(var: Var, required_names: Collection[str] | None) -> bool:
        author has no way to edit this template-owned list. This is
        deliberately keyed on `_NO_DEFAULT`, not on `var.default is None`: a
        domain field declared `x: str | None = None` has a real default (of
-       `None`) and is optional, not required — `_discover_domain_vars` only
-       produces `_NO_DEFAULT` when the field genuinely declares neither.
-       Any other var (core/template/external, all fully enumerable by this
-       template) that isn't explicitly listed is optional; a null default
-       alone is *not* evidence of being required for those — several are
-       null-defaulted and still have a working fallback (e.g. an OIDC
-       signing key derived from the client secret when unset), and none of
-       them can ever carry `_NO_DEFAULT` (only `_discover_domain_vars`
-       produces it).
+       `None`) and is optional, not required. Two producers agree on this:
+       `_discover_domain_vars` (the AST-scanned path) produces `_NO_DEFAULT`
+       when the field genuinely declares neither, and `collect_vars`'s
+       `config-presentation.domain.yml` loop (the manual escape hatch for a
+       var the AST scan cannot see) produces it the same way, when a manual
+       entry omits its `default:` key. Any other var (core/template/external,
+       all fully enumerable by this template) that isn't explicitly listed
+       is optional; a null default alone is *not* evidence of being required
+       for those — several are null-defaulted and still have a working
+       fallback (e.g. an OIDC signing key derived from the client secret
+       when unset), and none of them can ever carry `_NO_DEFAULT` (only the
+       two domain-provenance producers above do).
     3. When *required_names* is `None` (no declaration in scope at all),
        every var falls back to the same provenance-aware check: `domain`
        keys on `_NO_DEFAULT`, everything else keys on a plain `None` default

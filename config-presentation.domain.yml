@@ -8,6 +8,10 @@
 #
 # Same shape as the template-owned config-presentation.yml.  `{PREFIX}` is
 # substituted with your env_prefix.
+#
+# A var's `default:` key controls whether it renders required, the same way
+# a dataclass field does: omit `default:` entirely to mark the var required,
+# or give it `default: null` (or a real default) to mark it optional.
 vars: []
 
 # Extra wizard questions specific to this project.

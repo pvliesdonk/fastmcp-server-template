@@ -1043,6 +1043,111 @@ class TestDomainYamlTagging:
         assert "DEMO_MCP_UNTAGGED" in text
 
 
+class TestDomainYamlRequiredness:
+    """`config-presentation.domain.yml` is the manual escape hatch for a var
+    the AST scan cannot see, and it must express required-ness the same way
+    the scanned path does: omitting `default:` means the var declares no
+    default at all (required), while an explicit `default: null` means a
+    real default of `None` (an ordinary optional field) — the same
+    distinction a dataclass field with neither `default` nor
+    `default_factory` draws against one declared `x: str | None = None`.
+    """
+
+    @staticmethod
+    def _fake_domain_presentation(presentation_root, env_prefix):  # noqa: ARG004
+        return {
+            "vars": [
+                {
+                    "name": f"{env_prefix}_REQUIRED_TOKEN",
+                    "type_name": "str",
+                    "help": "Manually declared; no default key at all.",
+                    "tags": ["auth"],
+                },
+                {
+                    "name": f"{env_prefix}_OPTIONAL_NULL",
+                    "type_name": "str",
+                    "default": None,
+                    "help": "Manually declared; explicit null default.",
+                    "tags": ["auth"],
+                },
+                {
+                    "name": f"{env_prefix}_WITH_DEFAULT",
+                    "type_name": "str",
+                    "default": "/data",
+                    "help": "Manually declared; a real default.",
+                    "tags": ["persistence"],
+                },
+            ]
+        }
+
+    def _collect(self, fake_project, monkeypatch):
+        monkeypatch.setattr(
+            g, "_load_domain_presentation", self._fake_domain_presentation
+        )
+        answers = g.load_answers(fake_project)
+        return g.collect_vars(fake_project, answers), answers
+
+    @staticmethod
+    def _cells(vars_, columns):
+        domain_vars = [v for v in vars_ if v.provenance == "domain"]
+        table = g.render_md_table(domain_vars, columns)
+        return {
+            ln.split("|")[1].strip(): ln.split("|")[2].strip()
+            for ln in table.splitlines()[2:]
+        }
+
+    def test_omitted_default_key_carries_the_sentinel(self, fake_project, monkeypatch):
+        vars_, _ = self._collect(fake_project, monkeypatch)
+        token = next(v for v in vars_ if v.suffix == "REQUIRED_TOKEN")
+        assert token.default is g._NO_DEFAULT
+
+    def test_omitted_default_key_renders_required(self, fake_project, monkeypatch):
+        vars_, _ = self._collect(fake_project, monkeypatch)
+        cells = self._cells(vars_, ["variable", "required"])
+        assert cells["`DEMO_MCP_REQUIRED_TOKEN`"] == "**Yes**"
+
+    def test_explicit_null_default_carries_none_and_renders_not_required(
+        self, fake_project, monkeypatch
+    ):
+        vars_, _ = self._collect(fake_project, monkeypatch)
+        optional = next(v for v in vars_ if v.suffix == "OPTIONAL_NULL")
+        assert optional.default is None
+        cells = self._cells(vars_, ["variable", "required"])
+        assert cells["`DEMO_MCP_OPTIONAL_NULL`"] == "No"
+
+    def test_real_default_renders_not_required_and_shown(
+        self, fake_project, monkeypatch
+    ):
+        vars_, _ = self._collect(fake_project, monkeypatch)
+        required_cells = self._cells(vars_, ["variable", "required"])
+        assert required_cells["`DEMO_MCP_WITH_DEFAULT`"] == "No"
+        default_cells = self._cells(vars_, ["variable", "default"])
+        assert default_cells["`DEMO_MCP_WITH_DEFAULT`"] == "`/data`"
+
+    def test_omitted_default_env_file_line_is_blank_same_as_none_default(
+        self, fake_project, template_root, monkeypatch
+    ):
+        vars_, answers = self._collect(fake_project, monkeypatch)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        lines = text.splitlines()
+        # `.env.example` is a `commented` artifact — every value line is
+        # prefixed `# `.
+        assert "# DEMO_MCP_REQUIRED_TOKEN=" in lines
+        assert "# DEMO_MCP_OPTIONAL_NULL=" in lines
+
+    def test_omitted_default_wizard_spec_has_no_default_key(
+        self, fake_project, template_root, monkeypatch
+    ):
+        vars_, answers = self._collect(fake_project, monkeypatch)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        spec = json.loads(g.render_wizard_spec(pres, vars_, answers))
+        question = next(
+            q for q in spec["questions"] if q.get("var") == "DEMO_MCP_REQUIRED_TOKEN"
+        )
+        assert "default" not in question
+
+
 class TestImportProjectConfigWarnings:
     """I3: `_import_project_config` used to swallow every exception silently,
     so a broken `config.py` (a `SyntaxError`, a missing third-party import)

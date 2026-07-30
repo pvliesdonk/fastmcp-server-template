@@ -199,6 +199,12 @@ Resolve it the same way:
    marked region, then rerun the generator so the rows reflect your
    moved metadata.
 
+The `config-presentation.domain.yml` escape hatch (for a var the AST scan
+cannot see) expresses required-ness the same way a dataclass field does:
+a manual entry with no `default:` key renders `Required: Yes`, and one
+with an explicit `default: null` (or a real default) renders
+`Required: No`.
+
 Dropping or breaking either marker fails the same guard as the OIDC
 tables: `scripts/gen_config_surface.py --check` (and a plain generation
 run) raises a `SystemExit` naming the file and the region instead of
