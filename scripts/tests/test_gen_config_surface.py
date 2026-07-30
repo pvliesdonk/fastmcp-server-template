@@ -2198,3 +2198,196 @@ class TestMarkdownVocabularyNormalisation:
             assert var.name in text  # sanity: the var reached this page
             assert "JWTs" not in text, rel
             assert "JSON Web Tokens" in text, rel
+
+
+class TestPackagingIds:
+    """`packaging:` resolution for a `server.json` array entry, which mirrors
+    `_is_required`'s three-step shape: an explicit entry wins, a
+    `domain`-provenance var falls back to "relevant everywhere", and anything
+    else is relevant nowhere. Direct `Var` construction, no fixture project
+    needed — this is `_packaging_ids` in isolation."""
+
+    def _var(self, name: str, provenance: str) -> g.Var:
+        return g.Var(
+            name=name,
+            suffix=None,
+            provenance=provenance,
+            type_name="str",
+            default=None,
+            help="",
+            tags=(),
+            inferred=False,
+            wizard={},
+        )
+
+    def test_an_explicit_entry_wins(self):
+        packaging = {"X_A": ["oci"]}
+        assert g._packaging_ids(self._var("X_A", "core"), packaging) == frozenset(
+            {"oci"}
+        )
+
+    def test_an_unlisted_domain_var_is_relevant_to_every_packaging(self):
+        """A downstream's own `ProjectConfig` vars cannot be enumerated by
+        this template-owned map, so they must come for free — otherwise a
+        downstream would have to hand-write its own domain env declarations
+        into server.json."""
+        ids = g._packaging_ids(self._var("X_VAULT_PATH", "domain"), {"X_A": ["oci"]})
+        assert ids == g._ALL_PACKAGING_IDS
+
+    def test_an_unlisted_non_domain_var_is_relevant_nowhere(self):
+        """A template-enumerable var absent from the map is a deliberate
+        omission, not an oversight — server.json's arrays are curated per
+        packaging, not a dump of the whole surface."""
+        assert g._packaging_ids(self._var("X_A", "core"), {}) == frozenset()
+
+
+class TestServerJsonEntryShape:
+    """Pins for the schema `Input` shape `_render_json_env_entry` builds — a
+    fourth destination for a var's default and help text, alongside the
+    env-file value, the markdown default cell, and the markdown description
+    cell, each with its own rules. Direct `Var` construction throughout, no
+    fixture project or config-presentation.yml wiring needed."""
+
+    def _var(
+        self,
+        *,
+        name: str = "X_A",
+        type_name: str = "str",
+        default: object = None,
+        help: str = "Some help text.",
+        example: str | None = None,
+        wizard: dict[str, object] | None = None,
+    ) -> g.Var:
+        return g.Var(
+            name=name,
+            suffix="A",
+            provenance="template",
+            type_name=type_name,
+            default=default,
+            help=help,
+            tags=(),
+            inferred=False,
+            wizard=wizard or {},
+            example=example,
+        )
+
+    def _identity_sub(self, text: str) -> str:
+        return text
+
+    def test_default_is_always_a_string(self):
+        """`Input.default` is typed `string` in the schema, so a bool default
+        must be rendered through `_format_default`, not emitted as a JSON
+        boolean."""
+        var = self._var(type_name="bool", default=True)
+        entry = g._render_json_env_entry(
+            var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert entry["default"] == "true"
+        assert isinstance(entry["default"], str)
+
+    def test_an_example_becomes_a_placeholder_not_a_default(self):
+        """The schema's own wording: use `placeholder` instead of `default`
+        for "input examples or guidance". Emitting an example as `default`
+        would tell a client the server uses that literal value unless
+        changed."""
+        var = self._var(default=None, example="your-signing-key")
+        entry = g._render_json_env_entry(
+            var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert entry.get("placeholder") == "your-signing-key"
+        assert "default" not in entry
+
+    def test_an_empty_default_omits_the_key(self):
+        """An empty container default (e.g. `()`, meaning "no restriction")
+        must never render as `"default": ""` — that would read as "defaults
+        to nothing" rather than "has no fixed default"."""
+        var = self._var(default=())
+        assert g._json_default(var, {}) is None
+        entry = g._render_json_env_entry(
+            var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert "default" not in entry
+
+    def test_a_documented_default_fills_the_gap_an_empty_default_leaves(self):
+        var = self._var(default=())
+        entry = g._render_json_env_entry(
+            var,
+            sub=self._identity_sub,
+            choices={},
+            documented_defaults={"X_A": "openid"},
+        )
+        assert entry["default"] == "openid"
+
+    def test_format_is_derived_from_the_type_and_stays_in_the_schema_enum(self):
+        """`Input.format` is an enum of string/number/boolean/filepath; a
+        plain string var omits the key and takes the schema's own default."""
+        allowed = {"string", "number", "boolean", "filepath"}
+        cases = {
+            "bool": "boolean",
+            "int": "number",
+            "float": "number",
+            "path": "filepath",
+        }
+        for type_name, expected_format in cases.items():
+            var = self._var(type_name=type_name)
+            entry = g._render_json_env_entry(
+                var, sub=self._identity_sub, choices={}, documented_defaults={}
+            )
+            assert entry["format"] == expected_format
+            assert entry["format"] in allowed
+
+        plain_var = self._var(type_name="str")
+        entry = g._render_json_env_entry(
+            plain_var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert "format" not in entry
+
+    def test_choices_come_from_the_presentation_map(self):
+        """`choices` is not a field on the `Var` record; it is a
+        presentation-config affordance rather than a code special case for
+        whichever var happens to need one."""
+        var = self._var(name="X_LOG_LEVEL")
+        entry = g._render_json_env_entry(
+            var,
+            sub=self._identity_sub,
+            choices={"X_LOG_LEVEL": ["DEBUG", "INFO"]},
+            documented_defaults={},
+        )
+        assert entry["choices"] == ["DEBUG", "INFO"]
+        assert all(isinstance(choice, str) for choice in entry["choices"])
+
+        no_choices_var = self._var(name="X_OTHER")
+        entry = g._render_json_env_entry(
+            no_choices_var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert "choices" not in entry
+
+    def test_description_is_not_vale_normalised(self):
+        """JSON is linted by nothing, so `description` keeps the original
+        prose — spaced em dash and `e.g.` included — while the markdown
+        table destination strips both. Pins the two destinations apart."""
+        help_text = (
+            "Uses a store — but rotating that secret invalidates every "
+            "issued token, e.g. this one."
+        )
+        var = self._var(help=help_text)
+        entry = g._render_json_env_entry(
+            var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert entry["description"] == help_text
+
+        table_text = g._clean_help_for_markdown_table(help_text)
+        assert " — " not in table_text
+        assert "e.g." not in table_text
+        assert entry["description"] != table_text
+
+    def test_a_placeholder_gets_project_name_substituted(self):
+        """An example like `/etc/{PROJECT_NAME}/tokens.toml` is only useful
+        once `{PROJECT_NAME}` is a real project name — the same substitution
+        an env file's header and section notes get."""
+        sub = g._name_substituter({"project_name": "demo-mcp", "human_name": "Demo"})
+        var = self._var(default=None, example="/etc/{PROJECT_NAME}/tokens.toml")
+        entry = g._render_json_env_entry(
+            var, sub=sub, choices={}, documented_defaults={}
+        )
+        assert entry["placeholder"] == "/etc/demo-mcp/tokens.toml"
