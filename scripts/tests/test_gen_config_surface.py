@@ -1753,6 +1753,16 @@ class TestRenderSpliceFileMultiRegion:
         assert twice == once
 
 
+def _core_table(project_root: Path) -> str:
+    """Write every artifact for *project_root*, return README.md's spliced
+    CORE region body (between its GENERATED-ENV-TABLE-CORE markers)."""
+    g.write_artifacts(project_root, check=False)
+    text = (project_root / "README.md").read_text(encoding="utf-8")
+    return text.split("GENERATED-ENV-TABLE-CORE-START")[1].split(
+        "GENERATED-ENV-TABLE-CORE-END"
+    )[0]
+
+
 def _domain_table(project_root: Path) -> str:
     """Write every artifact for *project_root*, return README.md's spliced
     DOMAIN region body (between its GENERATED-ENV-TABLE-DOMAIN markers)."""
@@ -1761,6 +1771,24 @@ def _domain_table(project_root: Path) -> str:
     return text.split("GENERATED-ENV-TABLE-DOMAIN-START")[1].split(
         "GENERATED-ENV-TABLE-DOMAIN-END"
     )[0]
+
+
+def _table_rows_by_variable(table: str, default_column: int) -> dict[str, str]:
+    """Parse a rendered Markdown table's data rows into {variable: default}.
+
+    Skips the header/separator lines and any marker-comment remnant a
+    `_core_table`/`_domain_table`-style string split leaves as the first
+    line — a data row is recognised structurally (starts with `` | ` ``,
+    a backtick-quoted variable name), not by line position, so this is
+    immune to exactly that residue.
+    """
+    rows = {}
+    for ln in table.splitlines():
+        if not ln.startswith("| `"):
+            continue
+        cells = [c.strip() for c in ln.split("|")]
+        rows[cells[1]] = cells[default_column]
+    return rows
 
 
 class TestReadmeRegions:
@@ -1799,6 +1827,27 @@ class TestReadmeRegions:
             for ln in table.splitlines()[2:]
         }
         assert rows["`DEMO_MCP_KV_STORE_URL`"] == "`file:///data/state`"
+
+    def test_core_table_content_is_exactly_the_three_expected_rows(self, fake_project):
+        """E2 regression guard, through the real README splice path
+        (`write_artifacts`, not `render_md_table` called directly): the
+        generated CORE table must carry exactly these three vars with these
+        Default cells — as a SET, not a sequence. `collect_vars`'s
+        core-then-template-then-external provenance ordering is a
+        determinism contract this task doesn't fight (see
+        `TestCollectVars::test_provenance_order_is_core_then_template_then_external`),
+        so it is free to reorder these three rows without that counting as
+        a content regression; only the row set and each row's Default cell
+        are pinned here. A future `collect_vars` change that drops a var,
+        adds an unexpected one, or silently changes a default must fail
+        this test."""
+        table = _core_table(fake_project)
+        rows = _table_rows_by_variable(table, default_column=2)
+        assert rows == {
+            "`FASTMCP_LOG_LEVEL`": "`INFO`",
+            "`FASTMCP_ENABLE_RICH_LOGGING`": "`true`",
+            "`DEMO_MCP_KV_STORE_URL`": "`file:///data/state`",
+        }
 
     def test_core_table_stays_small(self, fake_project):
         """The landing page carries a curated subset, not the full surface."""

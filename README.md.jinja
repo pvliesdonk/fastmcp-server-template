@@ -122,7 +122,7 @@ Authorization gates individual tools by scope and is **off by default** (every a
 
 After `copier copy` and `gh repo create --push`:
 
-1. **Fill in the DOMAIN blocks** (every section marked with a `DOMAIN` sentinel comment) in this README and in `CLAUDE.md`.
+1. **Fill in the DOMAIN blocks** (every section marked with a `DOMAIN` sentinel comment) in this README and in `CLAUDE.md`. The `GENERATED-ENV-TABLE-*` regions are not DOMAIN blocks; the config generator owns them and rewrites them on every run.
 2. Configure GitHub secrets (see below).
 3. Install dev + docs tooling: `uv sync --all-extras --all-groups`.
 4. Install pre-commit hooks: `uv run pre-commit install`.
