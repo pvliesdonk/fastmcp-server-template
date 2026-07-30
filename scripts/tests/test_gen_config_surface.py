@@ -2336,12 +2336,17 @@ class TestServerJsonSplice:
         assert '\n  "' in text  # a top-level key, indent=2
         assert '\n      "' in text  # a package key, three levels deep
 
-    def test_matches_bump_manifests_byte_for_byte_after_a_round_trip(
-        self, fake_project
+    def test_generated_server_json_is_a_fixed_point_of_bump_manifests_serialization(
+        self, fake_project, template_root
     ):
-        """The strongest available form of the formatting contract: run the
-        generator, then re-serialise the result the way `bump_manifests.py`
-        does, and require the bytes to be identical."""
+        """Both halves of the formatting contract, so a format change on
+        either side fails here. First: the generated file already equals a
+        re-serialisation with `indent=2, ensure_ascii=False` plus a trailing
+        newline, so it is a fixed point of that dump. Second: the release-time
+        rewriter still uses exactly that call — asserted against the real
+        `scripts/bump_manifests.py.jinja` source, not a copy of the format
+        inlined here, so the two cannot silently drift and reformat the file
+        against each other on alternate runs."""
         g.write_artifacts(fake_project, check=False)
         target = fake_project / "server.json"
         generated = target.read_text(encoding="utf-8")
@@ -2349,6 +2354,10 @@ class TestServerJsonSplice:
             json.dumps(json.loads(generated), indent=2, ensure_ascii=False) + "\n"
         )
         assert generated == reserialised
+        bump = (template_root / "scripts" / "bump_manifests.py.jinja").read_text(
+            encoding="utf-8"
+        )
+        assert "json.dump(data, fh, indent=2, ensure_ascii=False)" in bump
 
     def test_packaging_relevance_differs_between_the_two_packages(self, fake_project):
         """The whole point of the two arrays: a stdio/uvx install has no
