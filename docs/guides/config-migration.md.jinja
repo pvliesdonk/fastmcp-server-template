@@ -216,3 +216,71 @@ ERROR: README.md: region 'DOMAIN' is missing its START marker ('<!-- GENERATED-E
 
 Recovery follows the same pattern as the OIDC guard above: restore the
 missing marker line around the region, then rerun the generator.
+
+## `server.json`'s package env-var arrays became generated too
+
+A later template version generates the two `environmentVariables` arrays
+inside `server.json`'s `packages` entries: one for the `pypi` package, one
+for the `oci` package. Before this version, an author added or edited
+entries in those arrays by hand. Now each array is produced by
+`scripts/gen_config_surface.py` from `ProjectConfig` field metadata plus
+`config-presentation.yml`'s `packaging:` map, which says which of the two
+packages a given var belongs in.
+
+JSON has no comment syntax, so this file cannot carry a marker-pair
+region the way the OIDC and domain tables above do. The generator splices
+structurally instead: for each declared array it walks to the array's
+parent object and replaces that one array wholesale, leaving every other
+key in the document, including `version` and the `oci` package's
+`identifier`, untouched. Those two keys are rewritten separately by
+`scripts/bump_manifests.py` on release, so keeping the generator off them
+is intentional, not an oversight.
+
+**Overwrite hazard:** if you hand-edited entries inside either
+`environmentVariables` array, the next `gen_config_surface.py --check`
+(or a plain generation run) overwrites the whole array with the
+generator's output, silently discarding your edits; a structural
+whole-array replacement has no `ours`/`theirs` to reconcile the way a
+3-way merge would. Move domain env-var customisation into the escape
+hatch the README domain table migration above already describes: your
+project's `ProjectConfig` field `metadata` (so the generator emits it) or
+a `config-presentation.domain.yml` entry for a var the AST scan cannot
+see.
+
+**The `pypi` array only carries what a local install needs.** OIDC and
+auth vars such as `{{ env_prefix }}_OIDC_CLIENT_ID` and
+`{{ env_prefix }}_BEARER_TOKEN` now appear only in the `oci` package's
+array, the one a remote HTTP deployment reads. The `pypi` package's
+array keeps only what a stdio install needs: the log-level and
+rich-logging switches, together with `{{ env_prefix }}_SERVER_NAME`,
+`{{ env_prefix }}_INSTRUCTIONS`, and `{{ env_prefix }}_KV_STORE_URL`.
+If you diff your project's old `server.json` against the regenerated
+one, expect the `pypi` array to shrink. That is the intended split, not
+lost data; the vars that dropped out of the `pypi` array are still
+present, unchanged, in the `oci` array.
+
+Restructuring `server.json` itself, not just editing an array's
+contents, raises a different guard. If a package is reordered or a new
+one is inserted so that the `pypi` and `oci` entries no longer sit at
+index 0 and 1, the generator's array-path resolver still finds two
+arrays at those positions, but the wrong ones, and refuses to guess:
+
+```text
+ERROR: server.json: array path ['packages', 1, 'environmentVariables'] resolved to a package whose registryType is 'pypi', but the entry declares packaging 'oci'. The packages were probably reordered or one was inserted. Restore the declared order (pypi first, oci second) in this file; editing config-presentation.yml instead will not survive, since copier update overwrites it. Left unfixed, the two packages' environment sets are swapped.
+```
+
+Recovery: restore the declared package order in `server.json`, `pypi`
+first and `oci` second, then rerun the generator.
+
+A more severe restructuring, deleting a `packages` entry outright or
+removing `server.json` itself, fails even earlier, before the
+registry-type check runs:
+
+```text
+ERROR: /home/dev/my-project/server.json does not exist — a `kind: json-splice` artifact must already exist; this generator only replaces the declared array(s) inside it, never the surrounding file.
+```
+
+Recovery: restore `server.json` from git history (or `copier update`'s
+pre-update commit) before rerunning the generator; this generator only
+ever replaces the two declared arrays inside the file, never creates the
+file itself.
