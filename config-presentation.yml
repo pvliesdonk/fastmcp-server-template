@@ -143,6 +143,16 @@ documented_defaults:
   # secret; set explicitly to keep tokens valid across a secret rotation"
   # explanation.
   "{PREFIX}_OIDC_JWT_SIGNING_KEY": "derived"
+  # `kv_store_url`'s own field default is `None` (verified:
+  # `fastmcp_pvl_core.ServerConfig.kv_store_url`,
+  # `default=None`/`default_factory=MISSING`) — the runtime fallback to
+  # `file:///data/state` lives in pvl-core's KV-backend selection, not in
+  # this field, and the help text (`"Defaults to ``file:///data/state`` when
+  # unset."`) already promises exactly that. Without this entry the
+  # generated README CORE table's Default cell would regress from the
+  # pre-generation hand-written table's `` `file:///data/state` `` to a bare
+  # `(none)` — E2 requires the generated table's content to match today's.
+  "{PREFIX}_KV_STORE_URL": "file:///data/state"
 
 # Placeholder example values, shown as the `=` value only for a var whose
 # real `default` is null — so a reader sees the expected *shape* of the

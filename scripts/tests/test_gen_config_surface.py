@@ -1777,6 +1777,29 @@ class TestReadmeRegions:
         assert "DEMO_MCP_KV_STORE_URL" in table
         assert "DEMO_MCP_OIDC_CLIENT_SECRET" not in table
 
+    def test_core_table_kv_store_url_default_cell_matches_pre_generation_content(
+        self, fake_project, template_root
+    ):
+        """E2: the generated CORE table's content must equal today's
+        hand-written Configuration table. `kv_store_url`'s own dataclass
+        default is `None` (core derives `file:///data/state` at runtime,
+        outside this field) — without a `documented_defaults:` entry the
+        Default cell regresses to a bare `(none)`, silently breaking E2's
+        non-breaking promise."""
+        answers = g.load_answers(fake_project)
+        presentation = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = [v for v in g.collect_vars(fake_project, answers) if "readme" in v.tags]
+        table = g.render_md_table(
+            vars_,
+            ["variable", "default", "description"],
+            documented_defaults=presentation.get("documented_defaults", {}),
+        )
+        rows = {
+            ln.split("|")[1].strip(): ln.split("|")[2].strip()
+            for ln in table.splitlines()[2:]
+        }
+        assert rows["`DEMO_MCP_KV_STORE_URL`"] == "`file:///data/state`"
+
     def test_core_table_stays_small(self, fake_project):
         """The landing page carries a curated subset, not the full surface."""
         answers = g.load_answers(fake_project)
