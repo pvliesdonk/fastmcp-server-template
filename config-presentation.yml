@@ -317,3 +317,21 @@ files:
         tags: [oidc]
         required: false
         columns: [variable, default, description]
+
+  README.md:
+    kind: splice
+    regions:
+      # A deliberately curated landing-page subset, not the full surface —
+      # `readme` is a hand-picked tag on a handful of vars, not a
+      # section-wide selector like the env-file `tags:` above. Do not widen
+      # it to cover more ground; that is what the full `.env.example` and
+      # the Domain region below are for.
+      - id: CORE
+        tags: [readme]
+        columns: [variable, default, description]
+      # A fresh scaffold has no domain fields yet, so this renders as an
+      # empty table (header + separator only, no data rows) until the
+      # project's own `ProjectConfig` grows some.
+      - id: DOMAIN
+        tags: [domain]
+        columns: [variable, default, required, description]
