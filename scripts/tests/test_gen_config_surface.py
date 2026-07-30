@@ -50,11 +50,12 @@ def fake_project(tmp_path):
 
     # `write_artifacts` drives off the real (template-root) config-
     # presentation.yml when a fixture project has none of its own, and that
-    # file declares two `kind: splice` targets — the OIDC-REQUIRED/
+    # file declares three `kind: splice` targets — the OIDC-REQUIRED/
     # OIDC-OPTIONAL regions in both `docs/guides/authentication.md` and
-    # `docs/deployment/oidc.md`. Unlike a whole-file artifact, a spliced
-    # file must already exist on disk with every one of its marker pairs in
-    # place, so every fixture project needs minimal stand-ins here.
+    # `docs/deployment/oidc.md`, plus README.md's own CORE/DOMAIN regions.
+    # Unlike a whole-file artifact, a spliced file must already exist on disk
+    # with every one of its marker pairs in place, so every fixture project
+    # needs minimal stand-ins here.
     auth_dir = tmp_path / "docs" / "guides"
     auth_dir.mkdir(parents=True)
     (auth_dir / "authentication.md").write_text(
@@ -65,6 +66,10 @@ def fake_project(tmp_path):
     oidc_dir.mkdir(parents=True)
     (oidc_dir / "oidc.md").write_text(
         _marker_pair("OIDC-REQUIRED") + _marker_pair("OIDC-OPTIONAL"),
+        encoding="utf-8",
+    )
+    (tmp_path / "README.md").write_text(
+        _marker_pair("CORE") + _marker_pair("DOMAIN"),
         encoding="utf-8",
     )
     return tmp_path
@@ -94,6 +99,114 @@ def domain_project(fake_project):
         "    @classmethod\n"
         "    def from_env(cls) -> ProjectConfig:\n"
         '        return cls(vault_path=env("DEMO_MCP", "VAULT_PATH") or "/data/vault")\n',
+        encoding="utf-8",
+    )
+    return fake_project
+
+
+@pytest.fixture
+def domain_project_field_shapes(fake_project):
+    """A project whose ``ProjectConfig`` covers the three domain field shapes:
+
+    a field with a real default, a field with a real default of ``None``
+    (an ordinary optional field), and a field with neither a ``default`` nor
+    a ``default_factory`` at all (genuinely required). Fields without a
+    default must precede fields with one in a dataclass, so ``token`` (the
+    no-default field) is declared first.
+    """
+    cfg = fake_project / "src" / "demo_mcp" / "config.py"
+    cfg.write_text(
+        "from __future__ import annotations\n\n"
+        "from dataclasses import dataclass, field\n\n"
+        "from fastmcp_pvl_core import env\n\n\n"
+        "@dataclass(frozen=True)\n"
+        "class ProjectConfig:\n"
+        "    token: str = field(\n"
+        '        metadata={"help": "Auth token.", "tags": ("auth",)},\n'
+        "    )\n"
+        "    vault_path: str = field(\n"
+        '        default="/data",\n'
+        '        metadata={"help": "Vault root.", "tags": ("persistence",)},\n'
+        "    )\n"
+        "    api_key: str | None = field(\n"
+        "        default=None,\n"
+        '        metadata={"help": "Optional API key.", "tags": ("auth",)},\n'
+        "    )\n\n"
+        "    @classmethod\n"
+        "    def from_env(cls) -> ProjectConfig:\n"
+        "        return cls(\n"
+        '            token=env("DEMO_MCP", "TOKEN") or "",\n'
+        '            vault_path=env("DEMO_MCP", "VAULT_PATH") or "/data",\n'
+        '            api_key=env("DEMO_MCP", "API_KEY"),\n'
+        "        )\n",
+        encoding="utf-8",
+    )
+    return fake_project
+
+
+@pytest.fixture
+def domain_project_hostile_help(fake_project):
+    """A ``ProjectConfig`` covering the hostile-input matrix for the README
+    DOMAIN region: help text carrying a literal pipe, help spanning multiple
+    lines, help carrying Markdown markup, plus one required (no-default)
+    field and one ordinary optional (``str | None = None``) field. Exercised
+    end to end through the actual README splice path — not `render_md_table`
+    called directly — because that is the real path a generated table takes,
+    and it is also the only path that threads a non-`None` `required_names`
+    (README's DOMAIN region declares no `required_vars:` of its own, but
+    `write_artifacts` always forwards `config-presentation.yml`'s real
+    `required_vars:` list, which contains none of these domain vars) through
+    `_is_required`'s domain-provenance branch. Fields without a default must
+    precede fields with one in a dataclass, so ``required_field`` is declared
+    first.
+    """
+    cfg = fake_project / "src" / "demo_mcp" / "config.py"
+    cfg.write_text(
+        "from __future__ import annotations\n\n"
+        "from dataclasses import dataclass, field\n\n"
+        "from fastmcp_pvl_core import env\n\n\n"
+        "@dataclass(frozen=True)\n"
+        "class ProjectConfig:\n"
+        "    required_field: str = field(\n"
+        "        metadata={\n"
+        '            "help": "Required setting with no default.",\n'
+        '            "tags": ("domain",),\n'
+        "        },\n"
+        "    )\n"
+        "    optional_field: str | None = field(\n"
+        "        default=None,\n"
+        '        metadata={"help": "Optional setting.", "tags": ("domain",)},\n'
+        "    )\n"
+        "    pipe_field: str = field(\n"
+        '        default="ok",\n'
+        "        metadata={\n"
+        '            "help": "Accepts a|b or c|d shaped values.",\n'
+        '            "tags": ("domain",),\n'
+        "        },\n"
+        "    )\n"
+        "    multiline_field: str = field(\n"
+        '        default="ok",\n'
+        "        metadata={\n"
+        '            "help": "Line one of the help.\\nLine two continues here.",\n'
+        '            "tags": ("domain",),\n'
+        "        },\n"
+        "    )\n"
+        "    markup_field: str = field(\n"
+        '        default="ok",\n'
+        "        metadata={\n"
+        '            "help": "Uses `code style` and **bold** for emphasis.",\n'
+        '            "tags": ("domain",),\n'
+        "        },\n"
+        "    )\n\n"
+        "    @classmethod\n"
+        "    def from_env(cls) -> ProjectConfig:\n"
+        "        return cls(\n"
+        '            required_field=env("DEMO_MCP", "REQUIRED_FIELD") or "",\n'
+        '            optional_field=env("DEMO_MCP", "OPTIONAL_FIELD"),\n'
+        '            pipe_field=env("DEMO_MCP", "PIPE_FIELD") or "ok",\n'
+        '            multiline_field=env("DEMO_MCP", "MULTILINE_FIELD") or "ok",\n'
+        '            markup_field=env("DEMO_MCP", "MARKUP_FIELD") or "ok",\n'
+        "        )\n",
         encoding="utf-8",
     )
     return fake_project
@@ -570,6 +683,183 @@ class TestDiscoverDomainVars:
         assert frozenset(sys.modules) == before
 
 
+class TestNoDefaultSentinelIsRequired:
+    """`_is_required`'s domain branch must key on `_NO_DEFAULT` (no
+    default declared at all), not on `var.default is None` (a real default
+    of `None`, an ordinary optional field). Direct `Var` construction, no
+    fixture project needed — this is `_is_required` in isolation."""
+
+    def _domain_var(self, *, default: object) -> g.Var:
+        return g.Var(
+            name="DEMO_MCP_X",
+            suffix="X",
+            provenance="domain",
+            type_name="str",
+            default=default,
+            help="",
+            tags=("domain",),
+            inferred=False,
+            wizard={},
+        )
+
+    def test_a_real_default_is_not_required(self):
+        """`vault_path: str = field(default="/data")` — has a default."""
+        var = self._domain_var(default="/data")
+        assert g._is_required(var, required_names=None) is False
+
+    def test_an_explicit_none_default_is_not_required(self):
+        """`api_key: str | None = None` — the headline regression: a real
+        default of `None` is a normal optional field, not a required one."""
+        var = self._domain_var(default=None)
+        assert g._is_required(var, required_names=None) is False
+
+    def test_no_default_declared_at_all_is_required(self):
+        """`api_key: str = field(metadata={...})` — neither `default` nor
+        `default_factory`: genuinely required."""
+        var = self._domain_var(default=g._NO_DEFAULT)
+        assert g._is_required(var, required_names=None) is True
+
+    def test_non_domain_provenance_still_keys_on_none(self):
+        """`_NO_DEFAULT` is only ever produced by `_discover_domain_vars` for
+        `domain`-provenance vars; a core/template/external var's fallback
+        must stay exactly `var.default is None`, unchanged by this fix."""
+        var = g.Var(
+            name="X_Y",
+            suffix="Y",
+            provenance="template",
+            type_name="str",
+            default=None,
+            help="",
+            tags=(),
+            inferred=False,
+            wizard={},
+        )
+        assert g._is_required(var, required_names=None) is True
+
+
+class TestDiscoverDomainVarsFieldShapes:
+    """The three domain field shapes, as discovered by `_discover_domain_vars`
+    through the real AST-scan + dataclass-field path (not a hand-built
+    `Var`) — the actual bug location."""
+
+    def test_field_with_a_default_carries_it(self, domain_project_field_shapes):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        vault_path = next(v for v in vars_ if v.suffix == "VAULT_PATH")
+        assert vault_path.default == "/data"
+
+    def test_field_with_an_explicit_none_default_carries_none(
+        self, domain_project_field_shapes
+    ):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        api_key = next(v for v in vars_ if v.suffix == "API_KEY")
+        assert api_key.default is None
+
+    def test_field_with_no_default_at_all_carries_the_sentinel(
+        self, domain_project_field_shapes
+    ):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        token = next(v for v in vars_ if v.suffix == "TOKEN")
+        assert token.default is g._NO_DEFAULT
+
+
+class TestDomainRequiredColumnFieldShapes:
+    """The three domain field-shape rows, rendered through `render_md_table`'s `required`
+    column — the reader-facing surface `_is_required` feeds."""
+
+    def _required_cells(self, domain_project_field_shapes):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        domain_vars = [v for v in vars_ if v.provenance == "domain"]
+        table = g.render_md_table(domain_vars, ["variable", "required"])
+        return {
+            ln.split("|")[1].strip(): ln.split("|")[2].strip()
+            for ln in table.splitlines()[2:]
+        }
+
+    def test_default_field_renders_not_required(self, domain_project_field_shapes):
+        cells = self._required_cells(domain_project_field_shapes)
+        assert cells["`DEMO_MCP_VAULT_PATH`"] == "No"
+
+    def test_explicit_none_default_field_renders_not_required(
+        self, domain_project_field_shapes
+    ):
+        """The headline regression this task fixes."""
+        cells = self._required_cells(domain_project_field_shapes)
+        assert cells["`DEMO_MCP_API_KEY`"] == "No"
+
+    def test_no_default_field_renders_required(self, domain_project_field_shapes):
+        cells = self._required_cells(domain_project_field_shapes)
+        assert cells["`DEMO_MCP_TOKEN`"] == "**Yes**"
+
+
+class TestNoDefaultDomainOutputUnchanged:
+    """The invariant the required-ness fix depends on: the sentinel changes ONLY the
+    required-ness signal. A no-default domain field's env-file line and
+    wizard-spec entry must be byte-identical to the pre-fix `None` output —
+    a blank env-file value (`_format_value` falls back to `example`, which
+    this field has none of) and a plain `text` wizard question with no
+    `default` key at all (the wizard spec has never had one)."""
+
+    def test_no_default_field_env_file_line_is_blank_same_as_none_default(
+        self, domain_project_field_shapes, template_root
+    ):
+        answers = g.load_answers(domain_project_field_shapes)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        lines = text.splitlines()
+        # `.env.example` is a `commented` artifact — every value line is
+        # prefixed `# `.
+        assert "# DEMO_MCP_TOKEN=" in lines
+        assert "# DEMO_MCP_API_KEY=" in lines
+
+    def test_no_default_field_gets_a_plain_text_wizard_question(
+        self, domain_project_field_shapes, template_root
+    ):
+        answers = g.load_answers(domain_project_field_shapes)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        spec = json.loads(g.render_wizard_spec(pres, vars_, answers))
+        token_question = next(
+            q for q in spec["questions"] if q.get("var") == "DEMO_MCP_TOKEN"
+        )
+        assert token_question["type"] == "text"
+        assert "default" not in token_question
+
+    def test_wizard_spec_never_carries_a_default_key_at_all(
+        self, domain_project_field_shapes, template_root
+    ):
+        """The wizard path never reads `Var.default` in the first place, so
+        it can never leak the sentinel — pinned here rather than assumed."""
+        answers = g.load_answers(domain_project_field_shapes)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        spec_text = g.render_wizard_spec(pres, vars_, answers)
+        assert '"default"' not in spec_text
+
+    def test_sentinel_repr_never_leaks_into_any_rendered_artifact(
+        self, domain_project_field_shapes, template_root
+    ):
+        """Mechanical grep-equivalent: whatever `object()`'s default `repr()`
+        looks like must never appear in generated text."""
+        answers = g.load_answers(domain_project_field_shapes)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        env_text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        wizard_text = g.render_wizard_spec(pres, vars_, answers)
+        domain_vars = [v for v in vars_ if v.provenance == "domain"]
+        table_text = g.render_md_table(
+            domain_vars, ["variable", "default", "required", "description"]
+        )
+        marker_repr = repr(g._NO_DEFAULT)
+        for rendered in (env_text, wizard_text, table_text):
+            assert marker_repr not in rendered
+            assert "object at 0x" not in rendered
+
+
 class TestWriteArtifacts:
     def test_writes_then_reports_clean(self, fake_project):
         g.write_artifacts(fake_project, check=False)
@@ -751,6 +1041,111 @@ class TestDomainYamlTagging:
         pres = g.load_presentation(template_root, str(answers["env_prefix"]))
         text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
         assert "DEMO_MCP_UNTAGGED" in text
+
+
+class TestDomainYamlRequiredness:
+    """`config-presentation.domain.yml` is the manual escape hatch for a var
+    the AST scan cannot see, and it must express required-ness the same way
+    the scanned path does: omitting `default:` means the var declares no
+    default at all (required), while an explicit `default: null` means a
+    real default of `None` (an ordinary optional field) — the same
+    distinction a dataclass field with neither `default` nor
+    `default_factory` draws against one declared `x: str | None = None`.
+    """
+
+    @staticmethod
+    def _fake_domain_presentation(presentation_root, env_prefix):  # noqa: ARG004
+        return {
+            "vars": [
+                {
+                    "name": f"{env_prefix}_REQUIRED_TOKEN",
+                    "type_name": "str",
+                    "help": "Manually declared; no default key at all.",
+                    "tags": ["auth"],
+                },
+                {
+                    "name": f"{env_prefix}_OPTIONAL_NULL",
+                    "type_name": "str",
+                    "default": None,
+                    "help": "Manually declared; explicit null default.",
+                    "tags": ["auth"],
+                },
+                {
+                    "name": f"{env_prefix}_WITH_DEFAULT",
+                    "type_name": "str",
+                    "default": "/data",
+                    "help": "Manually declared; a real default.",
+                    "tags": ["persistence"],
+                },
+            ]
+        }
+
+    def _collect(self, fake_project, monkeypatch):
+        monkeypatch.setattr(
+            g, "_load_domain_presentation", self._fake_domain_presentation
+        )
+        answers = g.load_answers(fake_project)
+        return g.collect_vars(fake_project, answers), answers
+
+    @staticmethod
+    def _cells(vars_, columns):
+        domain_vars = [v for v in vars_ if v.provenance == "domain"]
+        table = g.render_md_table(domain_vars, columns)
+        return {
+            ln.split("|")[1].strip(): ln.split("|")[2].strip()
+            for ln in table.splitlines()[2:]
+        }
+
+    def test_omitted_default_key_carries_the_sentinel(self, fake_project, monkeypatch):
+        vars_, _ = self._collect(fake_project, monkeypatch)
+        token = next(v for v in vars_ if v.suffix == "REQUIRED_TOKEN")
+        assert token.default is g._NO_DEFAULT
+
+    def test_omitted_default_key_renders_required(self, fake_project, monkeypatch):
+        vars_, _ = self._collect(fake_project, monkeypatch)
+        cells = self._cells(vars_, ["variable", "required"])
+        assert cells["`DEMO_MCP_REQUIRED_TOKEN`"] == "**Yes**"
+
+    def test_explicit_null_default_carries_none_and_renders_not_required(
+        self, fake_project, monkeypatch
+    ):
+        vars_, _ = self._collect(fake_project, monkeypatch)
+        optional = next(v for v in vars_ if v.suffix == "OPTIONAL_NULL")
+        assert optional.default is None
+        cells = self._cells(vars_, ["variable", "required"])
+        assert cells["`DEMO_MCP_OPTIONAL_NULL`"] == "No"
+
+    def test_real_default_renders_not_required_and_shown(
+        self, fake_project, monkeypatch
+    ):
+        vars_, _ = self._collect(fake_project, monkeypatch)
+        required_cells = self._cells(vars_, ["variable", "required"])
+        assert required_cells["`DEMO_MCP_WITH_DEFAULT`"] == "No"
+        default_cells = self._cells(vars_, ["variable", "default"])
+        assert default_cells["`DEMO_MCP_WITH_DEFAULT`"] == "`/data`"
+
+    def test_omitted_default_env_file_line_is_blank_same_as_none_default(
+        self, fake_project, template_root, monkeypatch
+    ):
+        vars_, answers = self._collect(fake_project, monkeypatch)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        lines = text.splitlines()
+        # `.env.example` is a `commented` artifact — every value line is
+        # prefixed `# `.
+        assert "# DEMO_MCP_REQUIRED_TOKEN=" in lines
+        assert "# DEMO_MCP_OPTIONAL_NULL=" in lines
+
+    def test_omitted_default_wizard_spec_has_no_default_key(
+        self, fake_project, template_root, monkeypatch
+    ):
+        vars_, answers = self._collect(fake_project, monkeypatch)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        spec = json.loads(g.render_wizard_spec(pres, vars_, answers))
+        question = next(
+            q for q in spec["questions"] if q.get("var") == "DEMO_MCP_REQUIRED_TOKEN"
+        )
+        assert "default" not in question
 
 
 class TestImportProjectConfigWarnings:
@@ -1461,6 +1856,267 @@ class TestRenderSpliceFileMultiRegion:
             tmp_path, "doc.md", file_spec, [v_required, v_optional]
         )
         assert twice == once
+
+
+def _core_table(project_root: Path) -> str:
+    """Write every artifact for *project_root*, return README.md's spliced
+    CORE region body (between its GENERATED-ENV-TABLE-CORE markers)."""
+    g.write_artifacts(project_root, check=False)
+    text = (project_root / "README.md").read_text(encoding="utf-8")
+    return text.split("GENERATED-ENV-TABLE-CORE-START")[1].split(
+        "GENERATED-ENV-TABLE-CORE-END"
+    )[0]
+
+
+def _domain_table(project_root: Path) -> str:
+    """Write every artifact for *project_root*, return README.md's spliced
+    DOMAIN region body (between its GENERATED-ENV-TABLE-DOMAIN markers)."""
+    g.write_artifacts(project_root, check=False)
+    text = (project_root / "README.md").read_text(encoding="utf-8")
+    return text.split("GENERATED-ENV-TABLE-DOMAIN-START")[1].split(
+        "GENERATED-ENV-TABLE-DOMAIN-END"
+    )[0]
+
+
+def _table_rows_by_variable(table: str, default_column: int) -> dict[str, str]:
+    """Parse a rendered Markdown table's data rows into {variable: default}.
+
+    Skips the header/separator lines and any marker-comment remnant a
+    `_core_table`/`_domain_table`-style string split leaves as the first
+    line — a data row is recognised structurally (starts with `` | ` ``,
+    a backtick-quoted variable name), not by line position, so this is
+    immune to exactly that residue.
+    """
+    rows = {}
+    for ln in table.splitlines():
+        if not ln.startswith("| `"):
+            continue
+        cells = [c.strip() for c in ln.split("|")]
+        rows[cells[1]] = cells[default_column]
+    return rows
+
+
+class TestReadmeRegions:
+    """README.md's own `kind: splice` regions: CORE (a curated landing-page
+    subset, tag `readme`) and DOMAIN (the project's own fields, tag
+    `domain`). Unlike the OIDC docs, CORE is a hand-picked few vars, not a
+    section-wide selector — these tests pin that shape down."""
+
+    def test_core_table_is_the_readme_tagged_subset(self, fake_project):
+        answers = g.load_answers(fake_project)
+        vars_ = [v for v in g.collect_vars(fake_project, answers) if "readme" in v.tags]
+        table = g.render_md_table(vars_, ["variable", "default", "description"])
+        assert "FASTMCP_LOG_LEVEL" in table
+        assert "DEMO_MCP_KV_STORE_URL" in table
+        assert "DEMO_MCP_OIDC_CLIENT_SECRET" not in table
+
+    def test_core_table_kv_store_url_default_cell_matches_pre_generation_content(
+        self, fake_project, template_root
+    ):
+        """The generated CORE table's content must equal the pre-generation
+        hand-written Configuration table. `kv_store_url`'s own dataclass
+        default is `None` (core derives `file:///data/state` at runtime,
+        outside this field) — without a `documented_defaults:` entry the
+        Default cell regresses to a bare `(none)`, silently breaking that
+        equal-content promise."""
+        answers = g.load_answers(fake_project)
+        presentation = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = [v for v in g.collect_vars(fake_project, answers) if "readme" in v.tags]
+        table = g.render_md_table(
+            vars_,
+            ["variable", "default", "description"],
+            documented_defaults=presentation.get("documented_defaults", {}),
+        )
+        rows = {
+            ln.split("|")[1].strip(): ln.split("|")[2].strip()
+            for ln in table.splitlines()[2:]
+        }
+        assert rows["`DEMO_MCP_KV_STORE_URL`"] == "`file:///data/state`"
+
+    def test_core_table_content_is_exactly_the_three_expected_rows(self, fake_project):
+        """CORE-content regression guard, through the real README splice path
+        (`write_artifacts`, not `render_md_table` called directly): the
+        generated CORE table must carry exactly these three vars with these
+        Default cells — as a SET, not a sequence. `collect_vars`'s
+        core-then-template-then-external provenance ordering is a
+        determinism contract this task doesn't fight (see
+        `TestCollectVars::test_provenance_order_is_core_then_template_then_external`),
+        so it is free to reorder these three rows without that counting as
+        a content regression; only the row set and each row's Default cell
+        are pinned here. A future `collect_vars` change that drops a var,
+        adds an unexpected one, or silently changes a default must fail
+        this test."""
+        table = _core_table(fake_project)
+        rows = _table_rows_by_variable(table, default_column=2)
+        assert rows == {
+            "`FASTMCP_LOG_LEVEL`": "`INFO`",
+            "`FASTMCP_ENABLE_RICH_LOGGING`": "`true`",
+            "`DEMO_MCP_KV_STORE_URL`": "`file:///data/state`",
+        }
+
+    def test_core_table_stays_small(self, fake_project):
+        """The landing page carries a curated subset, not the full surface."""
+        answers = g.load_answers(fake_project)
+        vars_ = [v for v in g.collect_vars(fake_project, answers) if "readme" in v.tags]
+        assert len(vars_) <= 5
+
+    def test_domain_table_uses_the_four_column_shape(self, fake_project):
+        answers = g.load_answers(fake_project)
+        vars_ = [v for v in g.collect_vars(fake_project, answers) if "domain" in v.tags]
+        table = g.render_md_table(
+            vars_, ["variable", "default", "required", "description"]
+        )
+        assert (
+            table.splitlines()[0] == "| Variable | Default | Required | Description |"
+        )
+
+    def test_empty_domain_table_still_renders_a_header(self, fake_project):  # noqa: ARG002
+        """A fresh scaffold has no domain fields; the table must not collapse to nothing."""
+        table = g.render_md_table(
+            [], ["variable", "default", "required", "description"]
+        )
+        assert table.splitlines()[0].startswith("| Variable |")
+
+    def test_populated_domain_table_marks_a_defaulted_field_optional(
+        self, domain_project, template_root
+    ):
+        """`_is_required`'s domain-provenance fallback branch (required_names
+        is not None, the var isn't in it, but its provenance is "domain" so
+        it still falls through to the `_NO_DEFAULT` check) was uncovered at
+        exactly the destination this task introduces: every prior
+        domain-table test either passed no `required_names` at all (hitting
+        the required_names-is-None branch instead, which happens to agree
+        here but not in general) or rendered zero domain vars.
+        `write_artifacts` always forwards `required_names`, so this pins the
+        real call shape down."""
+        answers = g.load_answers(domain_project)
+        presentation = g.load_presentation(template_root, str(answers["env_prefix"]))
+        required_names = frozenset(presentation.get("required_vars", ()))
+        vars_ = [
+            v for v in g.collect_vars(domain_project, answers) if "domain" in v.tags
+        ]
+        assert vars_, "domain_project's vault_path field must produce a domain var"
+
+        table = g.render_md_table(
+            vars_,
+            ["variable", "default", "required", "description"],
+            required_names=required_names,
+        )
+        rows = {
+            ln.split("|")[1].strip(): ln.split("|")[3].strip()
+            for ln in table.splitlines()[2:]
+        }
+        assert rows["`DEMO_MCP_VAULT_PATH`"] == "No"
+
+    def test_populated_domain_table_marks_a_no_default_field_required(
+        self, domain_project_field_shapes, template_root
+    ):
+        """The Yes-side counterpart of the test above, pinned separately so
+        the domain-provenance fallback branch (`required_names is not None`)
+        is exercised both ways, not just the No case: a domain var not in
+        `required_vars:` with no declared default at all must still render
+        **Yes**, the same as it does when `required_names` is `None`
+        (`TestDomainRequiredColumnFieldShapes`)."""
+        answers = g.load_answers(domain_project_field_shapes)
+        presentation = g.load_presentation(template_root, str(answers["env_prefix"]))
+        required_names = frozenset(presentation.get("required_vars", ()))
+        vars_ = [
+            v
+            for v in g.collect_vars(domain_project_field_shapes, answers)
+            if "domain" in v.tags
+        ]
+        table = g.render_md_table(
+            vars_,
+            ["variable", "default", "required", "description"],
+            required_names=required_names,
+        )
+        rows = {
+            ln.split("|")[1].strip(): ln.split("|")[3].strip()
+            for ln in table.splitlines()[2:]
+        }
+        assert rows["`DEMO_MCP_TOKEN`"] == "**Yes**"
+        assert rows["`DEMO_MCP_VAULT_PATH`"] == "No"
+        assert rows["`DEMO_MCP_API_KEY`"] == "No"
+
+    def test_readme_splice_writes_both_regions(self, fake_project):
+        """End-to-end: `write_artifacts` must splice README.md's CORE and
+        DOMAIN regions in place, leaving the surrounding hand-authored text
+        untouched."""
+        (fake_project / "README.md").write_text(
+            "# Demo MCP\n\n"
+            "## Configuration\n\n"
+            "<!-- GENERATED-ENV-TABLE-CORE-START — generated by "
+            "scripts/gen_config_surface.py; do not edit -->\n"
+            "<!-- GENERATED-ENV-TABLE-CORE-END -->\n\n"
+            "## Domain configuration\n\n"
+            "<!-- GENERATED-ENV-TABLE-DOMAIN-START — generated by "
+            "scripts/gen_config_surface.py; do not edit -->\n"
+            "<!-- GENERATED-ENV-TABLE-DOMAIN-END -->\n",
+            encoding="utf-8",
+        )
+
+        g.write_artifacts(fake_project, check=False)
+        text = (fake_project / "README.md").read_text(encoding="utf-8")
+
+        assert "# Demo MCP" in text
+        assert "FASTMCP_LOG_LEVEL" in text
+        core_table = text.split("GENERATED-ENV-TABLE-CORE-START")[1].split(
+            "GENERATED-ENV-TABLE-CORE-END"
+        )[0]
+        assert "| Variable | Default | Description |" in core_table
+        domain_table = text.split("GENERATED-ENV-TABLE-DOMAIN-START")[1].split(
+            "GENERATED-ENV-TABLE-DOMAIN-END"
+        )[0]
+        assert "| Variable | Default | Required | Description |" in domain_table
+
+
+class TestReadmeDomainHostileHelp:
+    """The DOMAIN description column renders text a downstream author
+    wrote, not text this template controls. Exercised end to end through the
+    real README splice path (`write_artifacts`, not `render_md_table` called
+    directly) — that path is what threads `config-presentation.yml`'s real
+    `required_vars:` (which contains none of these domain vars) through
+    `_is_required`'s domain-provenance branch, a path no other test in this
+    module exercises."""
+
+    def test_pipe_in_help_does_not_break_the_table_row(
+        self, domain_project_hostile_help
+    ):
+        table = _domain_table(domain_project_hostile_help)
+        row = next(ln for ln in table.splitlines() if "DEMO_MCP_PIPE_FIELD" in ln)
+        # A 4-column row has exactly 5 unescaped pipes: leading, three
+        # separators, trailing — a literal pipe in help must not add a sixth.
+        assert len(re.findall(r"(?<!\\)\|", row)) == 5
+        assert r"a\|b" in row
+        assert r"c\|d" in row
+
+    def test_multiline_help_collapses_to_one_cell(self, domain_project_hostile_help):
+        table = _domain_table(domain_project_hostile_help)
+        rows = [ln for ln in table.splitlines() if "DEMO_MCP_MULTILINE_FIELD" in ln]
+        assert len(rows) == 1
+        assert "Line one of the help. Line two continues here." in rows[0]
+
+    def test_markup_in_help_survives(self, domain_project_hostile_help):
+        table = _domain_table(domain_project_hostile_help)
+        row = next(ln for ln in table.splitlines() if "DEMO_MCP_MARKUP_FIELD" in ln)
+        assert "`code style`" in row
+        assert "**bold**" in row
+
+    def test_no_default_field_renders_required_yes_through_the_splice_path(
+        self, domain_project_hostile_help
+    ):
+        table = _domain_table(domain_project_hostile_help)
+        row = next(ln for ln in table.splitlines() if "DEMO_MCP_REQUIRED_FIELD" in ln)
+        cells = [c.strip() for c in row.split("|")]
+        assert cells[3] == "**Yes**"
+
+    def test_none_default_field_renders_required_no_through_the_splice_path(
+        self, domain_project_hostile_help
+    ):
+        table = _domain_table(domain_project_hostile_help)
+        row = next(ln for ln in table.splitlines() if "DEMO_MCP_OPTIONAL_FIELD" in ln)
+        cells = [c.strip() for c in row.split("|")]
+        assert cells[3] == "No"
 
 
 class TestCleanHelpForMarkdownTable:

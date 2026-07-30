@@ -66,6 +66,21 @@ class Var:
     example: str | None = None  # shown as the value when `default` is null
 
 
+# Sentinel for "this domain field has neither a `default` nor a
+# `default_factory` at all" — a genuinely required field — distinct from a
+# real default of `None` (`x: str | None = None`, an ordinary optional
+# field). `_discover_domain_vars` used to collapse both cases to
+# `default=None` on the `Var`, which made `_is_required`'s domain fallback
+# ("no default means required") wrongly mark every `... | None = None`
+# domain field as required. Every other `Var.default` consumer
+# (`_format_default`, `_format_value`, `_is_empty_default`/`_md_default_cell`)
+# treats this sentinel exactly as it already treated `None` — it changes
+# ONLY the required-ness signal, never env-file, wizard, or markdown-default
+# output. Never leaked to a caller outside this module: every field is
+# either a real value, `None`, or this sentinel, and every renderer that
+# touches `default` is listed above.
+_NO_DEFAULT = object()
+
 # Rank order for the provenance merge; vars are ordered by this rank first,
 # then by declaration order within each provenance.
 _PROVENANCE_ORDER = ("core", "template", "external", "domain")
@@ -324,13 +339,22 @@ def _discover_domain_vars(
             field_info = fields_by_suffix.get(suffix)
             metadata = field_info.metadata if field_info is not None else {}
             if field_info is None:
-                default = None
+                # No matching dataclass field at all (read directly rather
+                # than through a field) — no default is knowable either, so
+                # this is "no default declared" just like the ladder's final
+                # rung below, not a real value of `None`.
+                default = _NO_DEFAULT
             elif field_info.default is not dataclasses.MISSING:
                 default = field_info.default
             elif field_info.default_factory is not dataclasses.MISSING:
                 default = field_info.default_factory()
             else:
-                default = None
+                # Neither `default` nor `default_factory` declared: a
+                # genuinely required field. Must NOT collapse to
+                # `None` — that would be indistinguishable from a real
+                # `x: str | None = None` optional field once both reach
+                # `_is_required`'s domain fallback.
+                default = _NO_DEFAULT
             tags = tuple(dict.fromkeys((*metadata.get("tags", ()), "domain")))
             discovered.append(
                 Var(
@@ -441,7 +465,16 @@ def collect_vars(
                 suffix=suffix,
                 provenance=raw.get("provenance", "domain"),
                 type_name=raw["type_name"],
-                default=raw.get("default"),
+                # `raw.get("default", _NO_DEFAULT)`, not `raw.get("default")`:
+                # this is the manual escape hatch's half of the same
+                # required-ness signal `_discover_domain_vars` produces for
+                # the AST-scanned path. Omitting `default:` here must mean
+                # "no default declared at all" (required), matching a
+                # dataclass field with neither `default` nor
+                # `default_factory`; an explicit `default: null` still means
+                # a real default of `None` (optional), exactly as it does for
+                # the AST-scanned path.
+                default=raw.get("default", _NO_DEFAULT),
                 help=_clean_help(raw["help"]),
                 # Same "domain" tag `_discover_domain_vars` adds to every
                 # AST-discovered var, so a var declared here — the "the AST
@@ -506,8 +539,14 @@ def _format_default(default: object) -> str:
     ``str()``/``repr()`` would print (also order-unstable, pre-3.7 dict
     ordering guarantees aside — the point is there is no *sensible* rendering,
     not just an unstable one).
+
+    `_NO_DEFAULT` (a domain field with no declared default at all) renders
+    exactly like `None` — blank — never its own `repr()`. Both callers
+    (`_format_value`, `_md_default_cell`) already guard against passing the
+    sentinel here, but the guard is repeated at this, the lowest level, so no
+    future caller can leak it into rendered output by skipping that guard.
     """
-    if default is None:
+    if default is None or default is _NO_DEFAULT:
         return ""
     if isinstance(default, bool):
         return "true" if default else "false"
@@ -527,17 +566,18 @@ def _format_default(default: object) -> str:
 def _format_value(var: Var, sub: Callable[[str], str]) -> str:
     """The text after ``=`` for one var: its real default, else its example.
 
-    A ``None`` default (no real default at all) falls back to `var.example`
-    — a presentation-declared placeholder shown so a reader knows the
-    expected *shape* of the value (a JSON blob, a file path, a URL), not just
-    that the field exists. A real default, even a falsy one (``False``,
-    ``0``, an empty sequence), always wins over an example: only "no default
-    at all" is ambiguous enough to need one. *sub* applies the same
-    ``{HUMAN_NAME}``/``{PROJECT_NAME}`` substitution the header and section
-    notes get, since an example like ``/etc/{PROJECT_NAME}/tokens.toml`` is
-    only useful once ``{PROJECT_NAME}`` is a real project name.
+    A ``None`` default, or `_NO_DEFAULT` (a domain field with no default
+    declared at all — no real default either way) falls back to
+    `var.example` — a presentation-declared placeholder shown so a reader
+    knows the expected *shape* of the value (a JSON blob, a file path, a
+    URL), not just that the field exists. A real default, even a falsy one
+    (``False``, ``0``, an empty sequence), always wins over an example: only
+    "no default at all" is ambiguous enough to need one. *sub* applies the
+    same ``{HUMAN_NAME}``/``{PROJECT_NAME}`` substitution the header and
+    section notes get, since an example like ``/etc/{PROJECT_NAME}/tokens.toml``
+    is only useful once ``{PROJECT_NAME}`` is a real project name.
     """
-    if var.default is not None:
+    if var.default is not None and var.default is not _NO_DEFAULT:
         return _format_default(var.default)
     if var.example:
         return sub(var.example)
@@ -973,23 +1013,37 @@ def _is_required(var: Var, required_names: Collection[str] | None) -> bool:
        truth for the vars it presents.
     2. Otherwise, when *required_names* is not `None`: a `domain`-provenance
        var — whose full name this template cannot enumerate ahead of time —
-       falls back to "no default means required", the signal a downstream
-       `ProjectConfig` author already controls by omitting a field default,
-       since that author has no way to edit this template-owned list. Any
-       other var (core/template/external, all fully enumerable by this
-       template) that isn't explicitly listed is optional; a null default
-       alone is *not* evidence of being required for those — several are
-       null-defaulted and still have a working fallback (e.g. an OIDC
-       signing key derived from the client secret when unset).
+       falls back to "no default *declared* means required": does the
+       field carry `_NO_DEFAULT` — neither a `default` nor a
+       `default_factory` at all — the signal a downstream `ProjectConfig`
+       author already controls by omitting a field default, since that
+       author has no way to edit this template-owned list. This is
+       deliberately keyed on `_NO_DEFAULT`, not on `var.default is None`: a
+       domain field declared `x: str | None = None` has a real default (of
+       `None`) and is optional, not required. Two producers agree on this:
+       `_discover_domain_vars` (the AST-scanned path) produces `_NO_DEFAULT`
+       when the field genuinely declares neither, and `collect_vars`'s
+       `config-presentation.domain.yml` loop (the manual escape hatch for a
+       var the AST scan cannot see) produces it the same way, when a manual
+       entry omits its `default:` key. Any other var (core/template/external,
+       all fully enumerable by this template) that isn't explicitly listed
+       is optional; a null default alone is *not* evidence of being required
+       for those — several are null-defaulted and still have a working
+       fallback (e.g. an OIDC signing key derived from the client secret
+       when unset), and none of them can ever carry `_NO_DEFAULT` (only the
+       two domain-provenance producers above do).
     3. When *required_names* is `None` (no declaration in scope at all),
-       every var falls back to the plain "no default means required" check,
-       regardless of provenance.
+       every var falls back to the same provenance-aware check: `domain`
+       keys on `_NO_DEFAULT`, everything else keys on a plain `None` default
+       — unchanged from before this fix for every non-domain provenance.
     """
     if required_names is not None:
         if var.name in required_names:
             return True
         if var.provenance != "domain":
             return False
+    if var.provenance == "domain":
+        return var.default is _NO_DEFAULT
     return var.default is None
 
 
@@ -1000,9 +1054,12 @@ def _is_empty_default(default: object) -> bool:
     ``OIDC_REQUIRED_SCOPES``'s ``()`` or a ``default: ""`` as an empty cell
     produces exactly the bare blank both display paths promise never to emit.
     Numeric and boolean falsiness is deliberately excluded — ``0`` and
-    ``False`` are real, displayable defaults.
+    ``False`` are real, displayable defaults. `_NO_DEFAULT` (a domain field
+    with no default declared at all) counts as empty too, same as `None` —
+    `_md_default_cell` falls back to the documented default or `(none)`
+    either way, never the sentinel's own `repr()`.
     """
-    if default is None:
+    if default is None or default is _NO_DEFAULT:
         return True
     if isinstance(default, (bool, int, float)):
         return False

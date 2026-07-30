@@ -396,6 +396,69 @@ jobs:
           uv run python scripts/gen_config_surface.py --check \
             || { echo "::error::gen_config_surface.py --check reports the rendered config artifacts are stale — generation is not idempotent"; exit 1; }
 
+      - name: README generated env-var tables (markers, content)
+        # README.md's "Configuration" and "Domain configuration" sections
+        # are spliced from the same scripts/gen_config_surface.py source of
+        # truth as the OIDC tables above, between GENERATED-ENV-TABLE-CORE
+        # and GENERATED-ENV-TABLE-DOMAIN markers — replacing two
+        # hand-maintained tables. Nothing in this file asserted anything
+        # about that generated content before this step.
+        #
+        # Idempotence of these regions is already covered by the OIDC
+        # step's `--check` just above: one generator writes every spliced
+        # file (README.md included), and one offline `--check` validates
+        # all of its output, so this step does not repeat that check —
+        # it only asserts markers and content.
+        working-directory: /tmp/smoke
+        run: |
+          set -euo pipefail
+          README=README.md
+
+          region() {  # region <CORE|DOMAIN>
+            sed -n "/GENERATED-ENV-TABLE-$1-START/,/GENERATED-ENV-TABLE-$1-END/p" "$README"
+          }
+
+          # --- markers present for both regions.
+          for kind in CORE DOMAIN; do
+            grep -qF "GENERATED-ENV-TABLE-$kind-START" "$README" \
+              || { echo "::error::$README missing GENERATED-ENV-TABLE-$kind-START marker"; exit 1; }
+            grep -qF "GENERATED-ENV-TABLE-$kind-END" "$README" \
+              || { echo "::error::$README missing GENERATED-ENV-TABLE-$kind-END marker"; exit 1; }
+          done
+
+          # --- CORE region: exactly the three shared pvl-core vars, each
+          # paired with its expected Default cell — an added, dropped, or
+          # renamed CORE var, or a changed default, fails this step.
+          # `|| true` guards the command substitutions against `set -e`: a
+          # zero-match grep under `-c`/no-match `grep -F` still exits 1,
+          # which would abort the step here rather than let the checks
+          # below report it with context (same guard shape the OIDC step
+          # above uses).
+          kv_row=$(region CORE | grep -F '`SMOKE_MCP_KV_STORE_URL`') \
+            || { echo "::error::$README CORE region missing the SMOKE_MCP_KV_STORE_URL row"; exit 1; }
+          echo "$kv_row" | grep -qF '| `file:///data/state` |' \
+            || { echo "::error::$README KV_STORE_URL row does not show Default \`file:///data/state\`: $kv_row"; exit 1; }
+
+          log_row=$(region CORE | grep -F '`FASTMCP_LOG_LEVEL`') \
+            || { echo "::error::$README CORE region missing the FASTMCP_LOG_LEVEL row"; exit 1; }
+          echo "$log_row" | grep -qF '| `INFO` |' \
+            || { echo "::error::$README LOG_LEVEL row does not show Default \`INFO\`: $log_row"; exit 1; }
+
+          rich_row=$(region CORE | grep -F '`FASTMCP_ENABLE_RICH_LOGGING`') \
+            || { echo "::error::$README CORE region missing the FASTMCP_ENABLE_RICH_LOGGING row"; exit 1; }
+          echo "$rich_row" | grep -qF '| `true` |' \
+            || { echo "::error::$README RICH_LOGGING row does not show Default \`true\`: $rich_row"; exit 1; }
+
+          core_rows=$(region CORE | grep -cE '^\| `' || true)
+          [ "$core_rows" -eq 3 ] \
+            || { echo "::error::$README CORE region has $core_rows data rows, expected exactly 3"; exit 1; }
+
+          # --- DOMAIN region: header row present. The smoke render has no
+          # domain fields, so this only asserts the table header — NOT data
+          # rows, which the no-domain-fields smoke render would never have.
+          region DOMAIN | grep -qF '| Variable | Default | Required | Description |' \
+            || { echo "::error::$README DOMAIN region missing its table header row"; exit 1; }
+
       - name: Dockerfile sentinel structure
         working-directory: /tmp/smoke
         run: |

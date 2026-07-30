@@ -83,8 +83,9 @@ _skip_if_exists:
   #
   # Domain presentation config — declares only the vars
   # scripts/gen_config_surface.py's AST scan of ProjectConfig cannot see
-  # (deprecated aliases, vars read outside ProjectConfig.from_env).  Preserved
-  # across copier update; the template ships an empty seed on first render.
+  # (deprecated aliases no longer read inside ProjectConfig.from_env, or vars
+  # read outside it entirely).  Preserved across copier update; the template
+  # ships an empty seed on first render.
   - "config-presentation.domain.yml"
   # Domain-specific wizard browser tests — seeded with one skipped placeholder,
   # owned downstream.  Generic framework tests stay in
@@ -108,8 +109,9 @@ _skip_if_exists:
 # customisation of the config surface therefore does NOT belong in these
 # files — it belongs in `config.py`'s `CONFIG-FIELDS` field `metadata={"help":
 # ..., "tags": (...)}` (for a var read through `ProjectConfig.from_env`) or in
-# `config-presentation.domain.yml` (for a var the AST scan cannot see, e.g. a
-# deprecated alias, or a var read outside `from_env`).
+# `config-presentation.domain.yml` (for a var the AST scan cannot see: a
+# deprecated alias no longer read inside `from_env`, or a var read outside
+# `from_env` entirely).
 # Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is

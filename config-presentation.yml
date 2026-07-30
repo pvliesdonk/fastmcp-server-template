@@ -143,6 +143,16 @@ documented_defaults:
   # secret; set explicitly to keep tokens valid across a secret rotation"
   # explanation.
   "{PREFIX}_OIDC_JWT_SIGNING_KEY": "derived"
+  # `kv_store_url`'s own field default is `None` (verified:
+  # `fastmcp_pvl_core.ServerConfig.kv_store_url`,
+  # `default=None`/`default_factory=MISSING`) — the runtime fallback to
+  # `file:///data/state` lives in pvl-core's KV-backend selection, not in
+  # this field, and the help text (`"Defaults to ``file:///data/state`` when
+  # unset."`) already promises exactly that. Without this entry the
+  # generated README CORE table's Default cell would regress from the
+  # pre-generation hand-written table's `` `file:///data/state` `` to a bare
+  # `(none)`; the generated table must keep showing the real runtime default.
+  "{PREFIX}_KV_STORE_URL": "file:///data/state"
 
 # Placeholder example values, shown as the `=` value only for a var whose
 # real `default` is null — so a reader sees the expected *shape* of the
@@ -317,3 +327,21 @@ files:
         tags: [oidc]
         required: false
         columns: [variable, default, description]
+
+  README.md:
+    kind: splice
+    regions:
+      # A deliberately curated landing-page subset, not the full surface —
+      # `readme` is a hand-picked tag on a handful of vars, not a
+      # section-wide selector like the env-file `tags:` above. Do not widen
+      # it to cover more ground; that is what the full `.env.example` and
+      # the Domain region below are for.
+      - id: CORE
+        tags: [readme]
+        columns: [variable, default, description]
+      # A fresh scaffold has no domain fields yet, so this renders as an
+      # empty table (header + separator only, no data rows) until the
+      # project's own `ProjectConfig` grows some.
+      - id: DOMAIN
+        tags: [domain]
+        columns: [variable, default, required, description]

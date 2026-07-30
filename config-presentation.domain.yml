@@ -3,10 +3,15 @@
 # Domain env vars are discovered automatically from your ProjectConfig's
 # CONFIG-FIELDS block, using each field's `metadata={"help": ..., "tags": ...}`.
 # Declare a var here only when it is read somewhere the scan cannot see it —
-# for example a deprecated alias, or a var read outside ProjectConfig.from_env.
+# a deprecated alias no longer read inside ProjectConfig.from_env, or a var
+# read outside ProjectConfig.from_env entirely.
 #
 # Same shape as the template-owned config-presentation.yml.  `{PREFIX}` is
 # substituted with your env_prefix.
+#
+# A var's `default:` key controls whether it renders required, the same way
+# a dataclass field does: omit `default:` entirely to mark the var required,
+# or give it `default: null` (or a real default) to mark it optional.
 vars: []
 
 # Extra wizard questions specific to this project.
