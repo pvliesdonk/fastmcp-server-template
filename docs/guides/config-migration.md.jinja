@@ -71,18 +71,22 @@ prose described.
 ### 3. Declare only what the AST scan cannot see
 
 The generator discovers domain vars by AST-scanning `ProjectConfig.from_env`
-for `env(prefix, "SUFFIX")` reads whose suffix matches a dataclass field.
-See `scripts/gen_config_surface.py`'s `_discover_domain_vars`. That covers
-every var your project reads through a declared field. Add an entry to
+for every literal `env(prefix, "SUFFIX")` read, whether or not that suffix
+matches a dataclass field. See `scripts/gen_config_surface.py`'s
+`_discover_domain_vars`. That covers every var your project reads inside
+`from_env`, with or without a matching field. Add an entry to
 `config-presentation.domain.yml` only for a var the scan cannot
 see:
 
-- A deprecated alias for a var that no longer has its own field.
+- A deprecated alias that is no longer read inside `ProjectConfig.from_env`
+  at all. An alias still read there is already covered by the scan;
+  declaring it here raises the duplicate-name error described below.
 - A var read directly via `os.environ` or a helper, outside
   `ProjectConfig.from_env` entirely.
 
-Do not duplicate a var here that already has a `CONFIG-FIELDS` entry; that
-produces a duplicate-name error from the generator.
+Do not duplicate a var here that already has a `CONFIG-FIELDS` entry, or one
+still read inside `from_env` without a field; either produces a
+duplicate-name error from the generator.
 
 ### 4. Run the generator and diff
 

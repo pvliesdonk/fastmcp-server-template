@@ -3,7 +3,8 @@
 # Domain env vars are discovered automatically from your ProjectConfig's
 # CONFIG-FIELDS block, using each field's `metadata={"help": ..., "tags": ...}`.
 # Declare a var here only when it is read somewhere the scan cannot see it —
-# for example a deprecated alias, or a var read outside ProjectConfig.from_env.
+# a deprecated alias no longer read inside ProjectConfig.from_env, or a var
+# read outside ProjectConfig.from_env entirely.
 #
 # Same shape as the template-owned config-presentation.yml.  `{PREFIX}` is
 # substituted with your env_prefix.
