@@ -106,7 +106,7 @@ def domain_project(fake_project):
 
 @pytest.fixture
 def domain_project_field_shapes(fake_project):
-    """A project whose ``ProjectConfig`` covers the three §4.3 field shapes:
+    """A project whose ``ProjectConfig`` covers the three domain field shapes:
 
     a field with a real default, a field with a real default of ``None``
     (an ordinary optional field), and a field with neither a ``default`` nor
@@ -146,7 +146,7 @@ def domain_project_field_shapes(fake_project):
 
 @pytest.fixture
 def domain_project_hostile_help(fake_project):
-    """A ``ProjectConfig`` covering §5's hostile-input matrix for the README
+    """A ``ProjectConfig`` covering the hostile-input matrix for the README
     DOMAIN region: help text carrying a literal pipe, help spanning multiple
     lines, help carrying Markdown markup, plus one required (no-default)
     field and one ordinary optional (``str | None = None``) field. Exercised
@@ -684,7 +684,7 @@ class TestDiscoverDomainVars:
 
 
 class TestNoDefaultSentinelIsRequired:
-    """§4.3: `_is_required`'s domain branch must key on `_NO_DEFAULT` (no
+    """`_is_required`'s domain branch must key on `_NO_DEFAULT` (no
     default declared at all), not on `var.default is None` (a real default
     of `None`, an ordinary optional field). Direct `Var` construction, no
     fixture project needed — this is `_is_required` in isolation."""
@@ -738,7 +738,7 @@ class TestNoDefaultSentinelIsRequired:
 
 
 class TestDiscoverDomainVarsFieldShapes:
-    """§4.3's three field shapes, as discovered by `_discover_domain_vars`
+    """The three domain field shapes, as discovered by `_discover_domain_vars`
     through the real AST-scan + dataclass-field path (not a hand-built
     `Var`) — the actual bug location."""
 
@@ -766,7 +766,7 @@ class TestDiscoverDomainVarsFieldShapes:
 
 
 class TestDomainRequiredColumnFieldShapes:
-    """The three §4.3 rows, rendered through `render_md_table`'s `required`
+    """The three domain field-shape rows, rendered through `render_md_table`'s `required`
     column — the reader-facing surface `_is_required` feeds."""
 
     def _required_cells(self, domain_project_field_shapes):
@@ -796,7 +796,7 @@ class TestDomainRequiredColumnFieldShapes:
 
 
 class TestNoDefaultDomainOutputUnchanged:
-    """The invariant §4.3 depends on: the sentinel changes ONLY the
+    """The invariant the required-ness fix depends on: the sentinel changes ONLY the
     required-ness signal. A no-default domain field's env-file line and
     wizard-spec entry must be byte-identical to the pre-fix `None` output —
     a blank env-file value (`_format_value` falls back to `example`, which
@@ -1808,12 +1808,12 @@ class TestReadmeRegions:
     def test_core_table_kv_store_url_default_cell_matches_pre_generation_content(
         self, fake_project, template_root
     ):
-        """E2: the generated CORE table's content must equal today's
+        """The generated CORE table's content must equal the pre-generation
         hand-written Configuration table. `kv_store_url`'s own dataclass
         default is `None` (core derives `file:///data/state` at runtime,
         outside this field) — without a `documented_defaults:` entry the
-        Default cell regresses to a bare `(none)`, silently breaking E2's
-        non-breaking promise."""
+        Default cell regresses to a bare `(none)`, silently breaking that
+        equal-content promise."""
         answers = g.load_answers(fake_project)
         presentation = g.load_presentation(template_root, str(answers["env_prefix"]))
         vars_ = [v for v in g.collect_vars(fake_project, answers) if "readme" in v.tags]
@@ -1829,7 +1829,7 @@ class TestReadmeRegions:
         assert rows["`DEMO_MCP_KV_STORE_URL`"] == "`file:///data/state`"
 
     def test_core_table_content_is_exactly_the_three_expected_rows(self, fake_project):
-        """E2 regression guard, through the real README splice path
+        """CORE-content regression guard, through the real README splice path
         (`write_artifacts`, not `render_md_table` called directly): the
         generated CORE table must carry exactly these three vars with these
         Default cells — as a SET, not a sequence. `collect_vars`'s
@@ -1966,13 +1966,13 @@ class TestReadmeRegions:
 
 
 class TestReadmeDomainHostileHelp:
-    """§5/E4: the DOMAIN description column renders text a downstream author
+    """The DOMAIN description column renders text a downstream author
     wrote, not text this template controls. Exercised end to end through the
     real README splice path (`write_artifacts`, not `render_md_table` called
     directly) — that path is what threads `config-presentation.yml`'s real
     `required_vars:` (which contains none of these domain vars) through
-    `_is_required`'s domain-provenance branch, the exact destination the
-    Task 1 reviewer flagged as uncovered."""
+    `_is_required`'s domain-provenance branch, a path no other test in this
+    module exercises."""
 
     def test_pipe_in_help_does_not_break_the_table_row(
         self, domain_project_hostile_help
