@@ -72,7 +72,7 @@ class Var:
 # field). `_discover_domain_vars` used to collapse both cases to
 # `default=None` on the `Var`, which made `_is_required`'s domain fallback
 # ("no default means required") wrongly mark every `... | None = None`
-# domain field as required (§4.3). Every other `Var.default` consumer
+# domain field as required. Every other `Var.default` consumer
 # (`_format_default`, `_format_value`, `_is_empty_default`/`_md_default_cell`)
 # treats this sentinel exactly as it already treated `None` — it changes
 # ONLY the required-ness signal, never env-file, wizard, or markdown-default
@@ -350,7 +350,7 @@ def _discover_domain_vars(
                 default = field_info.default_factory()
             else:
                 # Neither `default` nor `default_factory` declared: a
-                # genuinely required field (§4.3). Must NOT collapse to
+                # genuinely required field. Must NOT collapse to
                 # `None` — that would be indistinguishable from a real
                 # `x: str | None = None` optional field once both reach
                 # `_is_required`'s domain fallback.
@@ -1004,7 +1004,7 @@ def _is_required(var: Var, required_names: Collection[str] | None) -> bool:
        truth for the vars it presents.
     2. Otherwise, when *required_names* is not `None`: a `domain`-provenance
        var — whose full name this template cannot enumerate ahead of time —
-       falls back to "no default *declared* means required" (§4.3): does the
+       falls back to "no default *declared* means required": does the
        field carry `_NO_DEFAULT` — neither a `default` nor a
        `default_factory` at all — the signal a downstream `ProjectConfig`
        author already controls by omitting a field default, since that

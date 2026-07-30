@@ -151,7 +151,7 @@ documented_defaults:
   # unset."`) already promises exactly that. Without this entry the
   # generated README CORE table's Default cell would regress from the
   # pre-generation hand-written table's `` `file:///data/state` `` to a bare
-  # `(none)` — E2 requires the generated table's content to match today's.
+  # `(none)`; the generated table must keep showing the real runtime default.
   "{PREFIX}_KV_STORE_URL": "file:///data/state"
 
 # Placeholder example values, shown as the `=` value only for a var whose
