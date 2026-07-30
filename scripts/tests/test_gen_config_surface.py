@@ -2391,3 +2391,136 @@ class TestServerJsonEntryShape:
             var, sub=sub, choices={}, documented_defaults={}
         )
         assert entry["placeholder"] == "/etc/demo-mcp/tokens.toml"
+
+
+class TestPackagingMapValidation:
+    """A typo in a `packaging:` value must fail loudly, not silently drop the
+    var from every package. Direct calls to `_validate_packaging_map`, no
+    fixture project needed — the map it guards is a plain dict."""
+
+    def test_an_unknown_packaging_value_raises_naming_the_var(self):
+        with pytest.raises(SystemExit, match="DEMO_MCP_BASE_URL"):
+            g._validate_packaging_map({"DEMO_MCP_BASE_URL": ["ocl"], "PUID": ["oci"]})
+
+    def test_the_error_names_every_offender_not_just_the_first(self):
+        """Fixing one typo only to have the next run report its sibling is
+        what makes a one-line correction cost several rounds."""
+        with pytest.raises(SystemExit) as excinfo:
+            g._validate_packaging_map({"DEMO_MCP_BASE_URL": ["ocl"], "PUID": ["pypy"]})
+        message = str(excinfo.value)
+        assert "DEMO_MCP_BASE_URL" in message
+        assert "PUID" in message
+
+    def test_a_non_list_packaging_value_raises(self):
+        """`list("oci")` would silently explode a scalar into ['o','c','i']
+        instead of raising, so a bare string must be rejected outright."""
+        with pytest.raises(SystemExit, match="DEMO_MCP_BASE_URL"):
+            g._validate_packaging_map({"DEMO_MCP_BASE_URL": "oci"})
+
+    def test_a_valid_map_passes(self):
+        g._validate_packaging_map({"DEMO_MCP_BASE_URL": ["oci"], "PUID": ["pypi"]})
+
+    def test_an_empty_map_passes(self):
+        g._validate_packaging_map({})
+
+
+class TestValidatePresentationKeys:
+    """A key in one of the five var-keyed presentation maps that names a var
+    absent from the collected set is a typo indistinguishable from a
+    deliberate omission — `--check` cannot catch it, since it compares
+    generated output against generated output and a typo's wrong form *is*
+    the expected form on both sides. Direct construction of `vars_` and
+    `presentation` throughout, no fixture project needed."""
+
+    def _var(self, name: str) -> g.Var:
+        return g.Var(
+            name=name,
+            suffix=None,
+            provenance="template",
+            type_name="str",
+            default=None,
+            help="",
+            tags=(),
+            inferred=False,
+            wizard={},
+        )
+
+    def _assert_names_map_and_key(self, excinfo, map_name: str, key: str) -> None:
+        message = str(excinfo.value)
+        assert map_name in message
+        assert key in message
+
+    def test_an_unknown_key_in_packaging_raises_naming_the_map_and_key(self):
+        vars_ = [self._var("DEMO_MCP_BASE_URL")]
+        presentation = {"packaging": {"DEMO_MCP_BASE_URLL": ["oci"]}}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "packaging", "DEMO_MCP_BASE_URLL")
+
+    def test_an_unknown_key_in_choices_raises_naming_the_map_and_key(self):
+        vars_ = [self._var("DEMO_MCP_LOG_LEVEL")]
+        presentation = {"choices": {"DEMO_MCP_LOG_LEVL": ["DEBUG", "INFO"]}}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "choices", "DEMO_MCP_LOG_LEVL")
+
+    def test_an_unknown_key_in_documented_defaults_raises_naming_the_map_and_key(
+        self,
+    ):
+        vars_ = [self._var("OIDC_SCOPE")]
+        presentation = {"documented_defaults": {"OIDC_SCOPEE": "openid"}}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "documented_defaults", "OIDC_SCOPEE")
+
+    def test_an_unknown_key_in_examples_raises_naming_the_map_and_key(self):
+        vars_ = [self._var("OIDC_JWT_SIGNING_KEY")]
+        presentation = {"examples": {"OIDC_JWT_SIGNING_KEYY": "your-signing-key"}}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "examples", "OIDC_JWT_SIGNING_KEYY")
+
+    def test_an_unknown_entry_in_required_vars_raises_naming_the_list_and_entry(
+        self,
+    ):
+        vars_ = [self._var("OIDC_ISSUER")]
+        presentation = {"required_vars": ["OIDC_ISSUERR"]}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "required_vars", "OIDC_ISSUERR")
+
+    def test_a_presentation_with_all_valid_keys_passes(self):
+        vars_ = [
+            self._var("DEMO_MCP_BASE_URL"),
+            self._var("DEMO_MCP_LOG_LEVEL"),
+            self._var("OIDC_SCOPE"),
+            self._var("OIDC_JWT_SIGNING_KEY"),
+            self._var("OIDC_ISSUER"),
+        ]
+        presentation = {
+            "packaging": {"DEMO_MCP_BASE_URL": ["oci"]},
+            "choices": {"DEMO_MCP_LOG_LEVEL": ["DEBUG", "INFO"]},
+            "documented_defaults": {"OIDC_SCOPE": "openid"},
+            "examples": {"OIDC_JWT_SIGNING_KEY": "your-signing-key"},
+            "required_vars": ["OIDC_ISSUER"],
+        }
+        g.validate_presentation_keys(presentation, vars_)
+
+    def test_a_presentation_missing_a_map_entirely_passes(self):
+        """An absent map means "nothing declared", not "everything invalid" —
+        `config-presentation.yml` need not carry all five keys at once."""
+        vars_ = [self._var("DEMO_MCP_BASE_URL")]
+        g.validate_presentation_keys({}, vars_)
+
+    def test_a_gated_off_vars_entry_counts_as_known(self):
+        """A var declared under `vars:` whose `when_answer` gate is
+        currently false (e.g. an authorization var on a render with
+        `enable_authorization: false`) is absent from the collected `vars_`
+        but is still a legitimate key in these maps for the renders where
+        the gate is on."""
+        vars_: list[g.Var] = []
+        presentation = {
+            "vars": [{"name": "AUTHZ_SCOPES", "when_answer": "enable_authorization"}],
+            "required_vars": ["AUTHZ_SCOPES"],
+        }
+        g.validate_presentation_keys(presentation, vars_)

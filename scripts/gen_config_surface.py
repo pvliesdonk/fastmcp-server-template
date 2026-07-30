@@ -1177,6 +1177,103 @@ def _packaging_ids(var: Var, packaging: Mapping[str, Sequence[str]]) -> frozense
     return frozenset()
 
 
+# The keyed-by-full-var-name maps in `config-presentation.yml`. Each exists
+# because core owns a var's own metadata and this template cannot add to it,
+# so every one of them is a place a name can be misspelled.
+_VAR_KEYED_MAPS = ("packaging", "choices", "documented_defaults", "examples")
+_VAR_KEYED_LISTS = ("required_vars",)
+
+
+def validate_presentation_keys(
+    presentation: Mapping[str, Any], vars_: Sequence[Var]
+) -> None:
+    """Reject any keyed-by-var-name entry naming a var that does not exist.
+
+    `_validate_packaging_map` guards the *values* of one map. This guards the
+    *keys* of all of them, and for the same reason: a typo is byte-for-byte
+    indistinguishable from a deliberate omission, so "an omission here is a
+    decision" is only true if a misspelling cannot masquerade as one. Each map
+    fails differently and silently — a `packaging:` typo drops the var from
+    the registry manifest, a `choices:` typo downgrades a client's picker to a
+    free-text box, a `required_vars:` typo moves a var from the Required table
+    to the Optional one, a `documented_defaults:` typo restores the
+    self-contradicting `(none)` cell. ``--check`` catches none of it, because
+    it compares generated output against generated output: with the typo in
+    place, the wrong form *is* the expected form.
+
+    The valid-name set is deliberately wider than *vars_*: it also includes
+    every name declared under `vars:` whose `when_answer` gate is currently
+    false. `{PREFIX}_ACL_PATH` and the `AUTHZ_*` pair are absent from a
+    render with `enable_authorization: false` — which `template-ci` runs on
+    every push — yet they are legitimately declared in these maps for the
+    renders where they do exist. Validating against collected vars alone
+    would fail every gate-off render, which is a worse defect than the gap it
+    closes.
+
+    Domain vars are not enumerable here and need no entry in any of these
+    template-owned maps, so they neither widen nor narrow the check.
+    """
+    known = {v.name for v in vars_}
+    known.update(str(raw["name"]) for raw in presentation.get("vars", ()))
+
+    problems: list[str] = []
+    for map_name in _VAR_KEYED_MAPS:
+        entries = presentation.get(map_name) or {}
+        unknown = sorted(name for name in entries if name not in known)
+        if unknown:
+            problems.append(f"{map_name}: {unknown!r}")
+    for list_name in _VAR_KEYED_LISTS:
+        entries = presentation.get(list_name) or ()
+        unknown = sorted(name for name in entries if name not in known)
+        if unknown:
+            problems.append(f"{list_name}: {unknown!r}")
+
+    if problems:
+        raise SystemExit(
+            "ERROR: config-presentation.yml names config vars that do not "
+            "exist (check for a typo in the var name) — "
+            + "; ".join(problems)
+            + ". Every key in these maps must match a collected var, or a var "
+            "declared under `vars:` whose `when_answer` gate is currently off."
+        )
+
+
+def _validate_packaging_map(packaging: Mapping[str, Any]) -> None:
+    """Reject any `packaging:` value outside the known vocabulary, loudly.
+
+    Mirrors `_validate_wizard_hint`, and for the same reason: an unrecognised
+    token that is merely *ignored* silently changes what ships. A var whose
+    packaging is misspelled (``[ocl]``) resolves to no packaging at all and
+    vanishes from every `server.json` array with exit 0 and no diagnostic —
+    indistinguishable from a deliberate omission, since an unlisted var is
+    legitimately relevant nowhere.
+
+    A non-list value is rejected rather than coerced: ``list("oci")`` silently
+    explodes a scalar into ``["o", "c", "i"]`` instead of raising, the same
+    trap `_wizard_guard` already guards its ``when`` against.
+
+    Every offender is named in one message, not just the first — fixing one
+    typo only to have the next run report its sibling is what makes a
+    one-line correction cost several rounds.
+    """
+    problems: list[str] = []
+    for name, value in packaging.items():
+        if not isinstance(value, list):
+            problems.append(
+                f"{name!r} has a non-list value {value!r} (expected a list, e.g. [oci])"
+            )
+            continue
+        unknown = [item for item in value if item not in _ALL_PACKAGING_IDS]
+        if unknown:
+            problems.append(f"{name!r} names unknown packaging(s) {unknown!r}")
+    if problems:
+        raise SystemExit(
+            "ERROR: config-presentation.yml `packaging:` is invalid — "
+            + "; ".join(problems)
+            + f". Known packagings are {sorted(_ALL_PACKAGING_IDS)!r}."
+        )
+
+
 def _json_input_format(var: Var) -> str | None:
     """The schema's ``Input.format`` for *var*, or ``None`` to omit the key.
 
@@ -1419,6 +1516,7 @@ def render_json_splice_file(
 
     sub = _name_substituter(answers)
     packaging: Mapping[str, Sequence[str]] = presentation.get("packaging") or {}
+    _validate_packaging_map(packaging)
     choices: Mapping[str, Sequence[str]] = presentation.get("choices") or {}
     documented_defaults: Mapping[str, str] = (
         presentation.get("documented_defaults") or {}
@@ -1964,6 +2062,7 @@ def write_artifacts(
     if vars_ is None:
         vars_ = collect_vars(project_root, answers)
 
+    validate_presentation_keys(presentation, vars_)
     required_names: Collection[str] = presentation.get("required_vars", ())
     vocabulary: Mapping[str, str] = presentation.get("markdown_vocabulary", {}) or {}
     documented_defaults: Mapping[str, str] = (
