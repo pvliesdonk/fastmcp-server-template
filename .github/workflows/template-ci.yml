@@ -454,6 +454,36 @@ jobs:
           ! jq -e '..|.isRequired? // empty' "$SERVER" >/dev/null \
             || { echo "::error::server.json asserts isRequired on at least one environmentVariables entry"; exit 1; }
 
+      - name: server.json schema validation (vendored MCP registry schema)
+        # Real schema validation for the whole rendered server.json against
+        # the MCP registry's own 2025-12-11 server.schema.json — the step
+        # above only hand-asserts individual properties (package membership,
+        # identity fields), never that the document as a whole is
+        # schema-valid. The schema is vendored at schemas/server.schema.json
+        # in the TEMPLATE checkout; copier.yml's `_exclude` keeps it out of
+        # every rendered project, so it is read from $GITHUB_WORKSPACE here
+        # rather than from /tmp/smoke. jsonschema is a rendered-project
+        # dependency, already installed by `uv sync` above.
+        working-directory: /tmp/smoke
+        run: |
+          set -uo pipefail
+          uv run python3 - "$GITHUB_WORKSPACE/schemas/server.schema.json" <<'PY'
+          import json
+          import sys
+
+          import jsonschema
+
+          schema_path = sys.argv[1]
+          data = json.load(open("server.json", encoding="utf-8"))
+          schema = json.load(open(schema_path, encoding="utf-8"))
+          jsonschema.validate(instance=data, schema=schema)
+          print(f"server.json validates against {schema_path}")
+          PY
+          if [ $? -ne 0 ]; then
+            echo "::error::server.json does not validate against schemas/server.schema.json"
+            exit 1
+          fi
+
       - name: README generated env-var tables (markers, content)
         # README.md's "Configuration" and "Domain configuration" sections
         # are spliced from the same scripts/gen_config_surface.py source of

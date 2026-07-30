@@ -90,12 +90,14 @@ def _seed_server_json(project_root: Path) -> None:
         json.dumps(
             {
                 "name": "io.github.demo/demo-mcp",
+                "description": "Demo MCP server for template tests.",
                 "version": "9.9.9",
                 "packages": [
                     {
                         "registryType": "pypi",
                         "identifier": "demo-mcp",
                         "version": "9.9.9",
+                        "transport": {"type": "stdio"},
                         "environmentVariables": [
                             {"name": "STALE", "description": "gone"}
                         ],
@@ -103,6 +105,10 @@ def _seed_server_json(project_root: Path) -> None:
                     {
                         "registryType": "oci",
                         "identifier": "ghcr.io/demo/demo-mcp:v9.9.9",
+                        "transport": {
+                            "type": "streamable-http",
+                            "url": "http://localhost:{--port}/mcp",
+                        },
                         "environmentVariables": [
                             {"name": "STALE", "description": "gone"}
                         ],
@@ -2484,6 +2490,35 @@ class TestServerJsonSplice:
         _seed_server_json(fake_project)
         g.write_artifacts(fake_project, check=False)
         assert (fake_project / "server.json").read_text(encoding="utf-8") == first
+
+
+class TestGeneratedServerJsonMatchesShippedSchema:
+    """Mirrors `TestGeneratedSpecMatchesShippedSchema`: the salvaged
+    `TestServerJsonSplice` tests above hand-assert individual properties
+    (which vars land where, formatting, identity fields), but none of them
+    validates the generated document as a whole against the registry's own
+    `server.json` schema. Real schema validation is what actually proves the
+    file is *schema-valid*, the property those tests only approximate."""
+
+    def _schema(self, template_root):
+        schema_path = template_root / "schemas" / "server.schema.json"
+        return json.loads(schema_path.read_text(encoding="utf-8"))
+
+    def test_generated_server_json_validates(self, fake_project, template_root):
+        g.write_artifacts(fake_project, check=False)
+        data = _server_json(fake_project)
+        jsonschema.validate(instance=data, schema=self._schema(template_root))
+
+    def test_a_non_string_env_var_name_is_rejected(self, fake_project, template_root):
+        """Proof the check above has teeth: corrupt one generated entry so it
+        violates the schema (`name` must be a string, per the registry's
+        `Input`/`KeyValueInput` definitions), and confirm validation actually
+        raises rather than passing vacuously."""
+        g.write_artifacts(fake_project, check=False)
+        data = _server_json(fake_project)
+        data["packages"][0]["environmentVariables"][0]["name"] = 123
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(instance=data, schema=self._schema(template_root))
 
 
 class TestServerJsonEntryShape:
