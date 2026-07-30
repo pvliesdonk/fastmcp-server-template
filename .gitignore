@@ -34,6 +34,13 @@ site/
 
 # Local MCP + scratch artifacts from agent sessions
 .mcp.json
+# Editor-local config; the only IDE entry here by design, matching
+# .gitignore.jinja. Repowise rewrites .vscode/mcp.json and extensions.json on
+# every index refresh with no way to turn that off, so they reappear
+# indefinitely — and in this repo specifically a dirty tree makes copier mint a
+# fresh temp commit per render, so `_commit` differs between two otherwise
+# identical renders and the render-twice `diff -r` fails.
+.vscode/
 full_pr_feedback.json
 pr_comments.txt
 pr_inline_comments.json
