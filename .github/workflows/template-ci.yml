@@ -396,6 +396,64 @@ jobs:
           uv run python scripts/gen_config_surface.py --check \
             || { echo "::error::gen_config_surface.py --check reports the rendered config artifacts are stale — generation is not idempotent"; exit 1; }
 
+      - name: server.json generated env-var arrays (packaging, identity)
+        # server.json's two `environmentVariables` arrays are spliced from
+        # the same scripts/gen_config_surface.py source of truth as the OIDC
+        # tables above (config-presentation.yml's `packaging:` map), but
+        # located by JSON path rather than a GENERATED-* marker pair — JSON
+        # has no comment syntax for one to live in. Idempotence is already
+        # covered by the `--check` run in the step above (one generator
+        # writes every declared artifact, server.json included); this step
+        # only asserts package membership and that the two fields
+        # scripts/bump_manifests.py owns (version, the OCI identifier)
+        # survived the splice untouched.
+        working-directory: /tmp/smoke
+        run: |
+          set -euo pipefail
+          SERVER=server.json
+
+          # --- pypi package: the shrunk set. A uvx/stdio install has no HTTP
+          # listener and no OAuth callback, so no OIDC/auth/container var
+          # belongs there.
+          pypi_names=$(jq -r '.packages[0].environmentVariables[].name' "$SERVER")
+          for var in SMOKE_MCP_KV_STORE_URL FASTMCP_LOG_LEVEL; do
+            echo "$pypi_names" | grep -qxF "$var" \
+              || { echo "::error::server.json packages[0] (pypi) missing $var"; exit 1; }
+          done
+          if echo "$pypi_names" | grep -qxF SMOKE_MCP_OIDC_CLIENT_SECRET; then
+            echo "::error::server.json packages[0] (pypi) carries an OIDC var"
+            exit 1
+          fi
+
+          # --- oci package: the OIDC/auth/container vars, present here
+          # because smoke-answers.yml sets enable_authorization: true.
+          oci_names=$(jq -r '.packages[1].environmentVariables[].name' "$SERVER")
+          for var in SMOKE_MCP_OIDC_CONFIG_URL SMOKE_MCP_OIDC_CLIENT_ID \
+              SMOKE_MCP_OIDC_CLIENT_SECRET SMOKE_MCP_BASE_URL SMOKE_MCP_BEARER_TOKEN \
+              SMOKE_MCP_ACL_PATH SMOKE_MCP_AUTHZ_CLAIM PUID PGID; do
+            echo "$oci_names" | grep -qxF "$var" \
+              || { echo "::error::server.json packages[1] (oci) missing $var"; exit 1; }
+          done
+
+          # --- identity fields scripts/bump_manifests.py owns must survive
+          # the splice untouched — the whole reason kind: json-splice
+          # replaces one array per package rather than the file.
+          version=$(jq -r '.version' "$SERVER")
+          [ "$version" = "0.1.0" ] \
+            || { echo "::error::server.json top-level version changed unexpectedly: $version"; exit 1; }
+          identifier=$(jq -r '.packages[1].identifier' "$SERVER")
+          [ "$identifier" = "ghcr.io/pvliesdonk/smoke-mcp:v0.1.0" ] \
+            || { echo "::error::server.json OCI identifier regressed: $identifier"; exit 1; }
+
+          # --- isRequired must never be asserted in a package manifest — see
+          # gen_config_surface.py's `_render_json_env_entry` docstring for
+          # why: the flag has no feature-conditional scoping, and marking
+          # e.g. the OIDC vars required would assert that an unauthenticated
+          # deployment (which this project documents as supported) cannot
+          # start.
+          ! jq -e '..|.isRequired? // empty' "$SERVER" >/dev/null \
+            || { echo "::error::server.json asserts isRequired on at least one environmentVariables entry"; exit 1; }
+
       - name: README generated env-var tables (markers, content)
         # README.md's "Configuration" and "Domain configuration" sections
         # are spliced from the same scripts/gen_config_surface.py source of
