@@ -1,5 +1,18 @@
 # Changelog
 
+## v3.0.0 (2026-07-30)
+
+- #280 ci(claude): grant GitHub MCP tools to the claude workflows; make @claude read-only
+- #278 chore: rendered-project hygiene — .gitignore fixes + drop dead READ_ONLY manifest knob
+- #276 feat(config): generate the server.json env-var arrays (json-splice)
+- #275 feat(config): generate the README env-var tables + fix domain required-ness
+- #274 feat(config): generate the OIDC env-var tables, dropping the ephemeral claim
+- #273 docs(oidc): correct the false ephemeral signing-key claim
+- #271 ci(template): run Vale over the render, and enforce the lockstep it claimed
+- #269 fix(docs): clear every Vale error from the rendered docs
+- #264 feat(config)!: generate the config surface, retire the drift test
+
+
 ## v2.11.2 (2026-07-25)
 
 - #256 ci: make detach-smoke fail loudly when CLAUDE.md drifts from the scrub
