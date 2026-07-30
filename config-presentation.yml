@@ -52,11 +52,31 @@ vars:
     tags: [debug]
     wizard: {control: none}
 
+  # Read by the container entrypoint, not by any Python config object — but
+  # an operator setting them sees no difference from any other env var, so
+  # they are declared here rather than kept as a hand-written special case in
+  # the one artifact that happens to mention them.
+  - name: "PUID"
+    provenance: template
+    type_name: "int"
+    default: 1000
+    help: "Run the server process as this UID; the container entrypoint chowns writable paths to match."
+    tags: [container]
+    wizard: {control: none}
+
+  - name: "PGID"
+    provenance: template
+    type_name: "int"
+    default: 1000
+    help: "Run the server process as this GID; pair with PUID to match the owner of a mounted volume."
+    tags: [container]
+    wizard: {control: none}
+
   - name: "FASTMCP_LOG_LEVEL"
     provenance: external
     type_name: "str"
     default: "INFO"
-    help: "Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR). The -v CLI flag overrides to DEBUG."
+    help: "Log level for FastMCP internals and app loggers (DEBUG / INFO / WARNING / ERROR / CRITICAL). The -v CLI flag overrides to DEBUG."
     tags: [observability, readme]
     wizard: {group: Logging}
 
@@ -115,6 +135,60 @@ required_vars:
   - "{PREFIX}_OIDC_CLIENT_ID"
   - "{PREFIX}_OIDC_CLIENT_SECRET"
 
+# Which package shapes each var is relevant to, keyed by full var name —
+# the same override-map shape as `examples` and `wizard_labels`, and for the
+# same reason: a core var's `tags` belong to core, so relevance-per-packaging
+# cannot be expressed as a tag from here.
+#
+# `server.json` declares one `environmentVariables` array per package, and
+# the right contents differ. A `pypi` install runs under `uvx` over stdio: no
+# HTTP listener, no OAuth callback, no shared session state, so the auth,
+# persistence and MCP Apps knobs are inert there and would only add noise to
+# a client's install prompt. An `oci` deployment is the HTTP one, where all
+# of them apply.
+#
+# A var listed nowhere here appears in no package — the arrays are a curated
+# per-packaging selection, not a dump of the whole surface. Deliberately
+# absent: TRANSPORT (fixed by the packaging itself), PORT (an `oci`
+# packageArguments entry, not an env var), HOST (the entrypoint owns the
+# in-container bind address), DEBUG_PORT/DEBUG_WAIT (they do nothing unless
+# the image was built with --build-arg DEBUG=true), and EVENT_STORE_URL (a
+# legacy fallback honoured only when KV_STORE_URL is unset; offering a
+# deprecated knob in an install prompt is noise, and it stays fully
+# documented in the env files and the docs either way).
+#
+# A `domain`-provenance var needs no entry: a project's own ProjectConfig
+# fields cannot be enumerated by this template-owned map and are relevant
+# wherever that project runs, so they land in every package automatically.
+packaging:
+  FASTMCP_LOG_LEVEL: [pypi, oci]
+  FASTMCP_ENABLE_RICH_LOGGING: [pypi, oci]
+  "{PREFIX}_SERVER_NAME": [pypi, oci]
+  "{PREFIX}_INSTRUCTIONS": [pypi, oci]
+  "{PREFIX}_HTTP_PATH": [oci]
+  "{PREFIX}_BASE_URL": [oci]
+  "{PREFIX}_AUTH_MODE": [oci]
+  "{PREFIX}_BEARER_TOKEN": [oci]
+  "{PREFIX}_BEARER_TOKENS_FILE": [oci]
+  "{PREFIX}_BEARER_DEFAULT_SUBJECT": [oci]
+  "{PREFIX}_OIDC_CONFIG_URL": [oci]
+  "{PREFIX}_OIDC_CLIENT_ID": [oci]
+  "{PREFIX}_OIDC_CLIENT_SECRET": [oci]
+  "{PREFIX}_OIDC_JWT_SIGNING_KEY": [oci]
+  "{PREFIX}_OIDC_AUDIENCE": [oci]
+  "{PREFIX}_OIDC_REQUIRED_SCOPES": [oci]
+  "{PREFIX}_OIDC_VERIFY_ACCESS_TOKEN": [oci]
+  # Not HTTP-specific despite the wizard's shorthand label: this backs every
+  # pvl-core subsystem that keeps state, so a stdio install still wants it to
+  # persist to a file instead of losing everything on restart.
+  "{PREFIX}_KV_STORE_URL": [pypi, oci]
+  "{PREFIX}_APP_DOMAIN": [oci]
+  "{PREFIX}_ACL_PATH": [oci]
+  "{PREFIX}_AUTHZ_CLAIM": [oci]
+  "{PREFIX}_AUTHZ_GRANTS": [oci]
+  PUID: [oci]
+  PGID: [oci]
+
 # Term-replacement map applied to help text on the Vale-linted markdown
 # table splice path only (`_clean_help_for_markdown_table`). Can't live in
 # `.vale.ini`/`accept.txt` instead: that file is `_skip_if_exists`, so a term
@@ -153,6 +227,14 @@ documented_defaults:
   # pre-generation hand-written table's `` `file:///data/state` `` to a bare
   # `(none)`; the generated table must keep showing the real runtime default.
   "{PREFIX}_KV_STORE_URL": "file:///data/state"
+
+# The schema is normative here: "If provided, the user must select one of
+# these values", so an omission blocks a valid configuration. This set is
+# fastmcp's own `Settings.log_level` Literal, verified against the pinned
+# runtime rather than copied from the previous hand-written manifest, which
+# omitted CRITICAL.
+choices:
+  FASTMCP_LOG_LEVEL: [DEBUG, INFO, WARNING, ERROR, CRITICAL]
 
 # Placeholder example values, shown as the `=` value only for a var whose
 # real `default` is null — so a reader sees the expected *shape* of the
@@ -256,6 +338,7 @@ files:
       - {title: "MCP Apps", tags: [apps]}
       - {title: Authorization, tags: [authz], when_answer: enable_authorization}
       - {title: Logging, tags: [observability]}
+      - {title: "Container runtime (Docker / Compose)", tags: [container]}
       - {title: "Remote debugger (development only)", tags: [debug]}
       - {title: Domain, tags: [domain], note: "Populated from your ProjectConfig CONFIG-FIELDS block."}
 
@@ -345,3 +428,17 @@ files:
       - id: DOMAIN
         tags: [domain]
         columns: [variable, default, required, description]
+
+  # JSON has no comment syntax, so there is nowhere for a GENERATED-* marker
+  # pair to live. This kind splices structurally instead: each declared
+  # `path` is replaced wholesale and every other key survives untouched —
+  # which is what keeps `version` and the OCI `identifier` suffix, both
+  # rewritten by scripts/bump_manifests.py on every release, out of this
+  # generator's reach. Membership per array comes from `packaging:` above.
+  server.json:
+    kind: json-splice
+    arrays:
+      - path: [packages, 0, environmentVariables]
+        packaging: pypi
+      - path: [packages, 1, environmentVariables]
+        packaging: oci

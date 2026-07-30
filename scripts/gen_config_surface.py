@@ -584,6 +584,28 @@ def _format_value(var: Var, sub: Callable[[str], str]) -> str:
     return ""
 
 
+def _name_substituter(answers: Mapping[str, object]) -> Callable[[str], str]:
+    """A substituter for the ``{HUMAN_NAME}``/``{PROJECT_NAME}`` presentation tokens.
+
+    `load_presentation` only replaces ``{PREFIX}``; these two are
+    answers-derived and applied at render time instead. Shared by every
+    destination that emits presentation-authored text (an env file's header
+    and section notes, a `server.json` entry's ``placeholder``), so a path
+    like ``/etc/{PROJECT_NAME}/tokens.toml`` reads the same wherever it
+    surfaces rather than leaking a raw token in whichever destination forgot
+    to substitute.
+    """
+    human_name = str(answers.get("human_name", ""))
+    project_name = str(answers.get("project_name", ""))
+
+    def _sub(text: str) -> str:
+        return text.replace("{HUMAN_NAME}", human_name).replace(
+            "{PROJECT_NAME}", project_name
+        )
+
+    return _sub
+
+
 def render_env_file(
     spec: Mapping[str, Any], vars_: Sequence[Var], answers: Mapping[str, object]
 ) -> str:
@@ -612,13 +634,7 @@ def render_env_file(
     since shipping both it and `BEARER_TOKEN` together makes core prefer the
     non-existent tokens file and refuse to start).
     """
-    human_name = str(answers.get("human_name", ""))
-    project_name = str(answers.get("project_name", ""))
-
-    def _sub(text: str) -> str:
-        return text.replace("{HUMAN_NAME}", human_name).replace(
-            "{PROJECT_NAME}", project_name
-        )
+    _sub = _name_substituter(answers)
 
     lines: list[str] = []
 
@@ -750,25 +766,36 @@ def _validate_wizard_hint(var: Var) -> None:
         )
 
 
-def _wizard_question_type(type_name: str) -> str:
-    """Normalise a `Var.type_name` down to one of the spec's four question types.
+def _normalize_type_name(type_name: str) -> str:
+    """Reduce a `Var.type_name` to its bare, lower-cased base token.
 
     `type_name` is annotation-form dependent: a core/template field (declared
     under ``from __future__ import annotations``) carries the literal
     annotation string (``"str | None"``, ``"Path"``), but a domain field
     discovered from a project *without* that import carries
     ``repr(field.type)`` instead (``"<class 'pathlib.Path'>"``). Both forms
-    are reduced to their base token before matching, rather than matching
-    either exact string — a union (``"str | None"``) or generic
-    (``"tuple[str, ...]"``) is reduced to its first/outer name the same way.
-    Anything that isn't recognisably ``bool``/``int``/``float`` renders as a
-    plain text question — including `Path`, which has no dedicated wizard
-    control in this spec.
+    reduce here, rather than at each consumer matching either exact string —
+    a union (``"str | None"``) or generic (``"tuple[str, ...]"``) is reduced
+    to its first/outer name the same way. Shared by every destination that
+    maps a declared type onto its own vocabulary (`_wizard_question_type`'s
+    four question types, `_json_input_format`'s schema `format` enum) so the
+    two can never disagree about what a given annotation *is*, only about how
+    to present it.
     """
     match = _TYPE_NAME_CLASS_RE.match(type_name)
     normalized = match.group(1) if match else type_name
-    normalized = normalized.split("|", 1)[0].split("[", 1)[0].strip()
-    base = normalized.lower()
+    return normalized.split("|", 1)[0].split("[", 1)[0].strip().lower()
+
+
+def _wizard_question_type(type_name: str) -> str:
+    """Normalise a `Var.type_name` down to one of the spec's four question types.
+
+    Anything that isn't recognisably ``bool``/``int``/``float`` renders as a
+    plain text question — including `Path`, which has no dedicated wizard
+    control in this spec (unlike `server.json`, whose schema has a
+    ``filepath`` format; see `_json_input_format`).
+    """
+    base = _normalize_type_name(type_name)
     if base == "bool":
         return "bool"
     if base in ("int", "float"):
@@ -1094,6 +1121,432 @@ def _documented_default(var: Var, documented_defaults: Mapping[str, str]) -> str
     obligation `required_vars:` carries, and for the same reason.
     """
     return documented_defaults.get(var.name)
+
+
+# ---------------------------------------------------------------------------
+# JSON array splicing (`server.json`'s registry manifest)
+# ---------------------------------------------------------------------------
+
+# The package shapes `config-presentation.yml`'s `packaging:` map may name,
+# and that a `kind: json-splice` array entry selects one of. These are the
+# `registryType` values `server.json` declares; a var is listed against the
+# packagings it is actually *relevant to*, which is not the same set for
+# each — a stdio/uvx install has no HTTP listener and no OAuth callback, so
+# the auth and persistence knobs are inert there.
+_ALL_PACKAGING_IDS = frozenset({"pypi", "oci"})
+
+# `Var.type_name` base token -> the schema's `Input.format` enum value.
+# Anything absent (`str` and friends) omits the key and takes the schema's
+# own `"string"` default rather than restating it.
+_JSON_INPUT_FORMATS: dict[str, str] = {
+    "bool": "boolean",
+    "int": "number",
+    "float": "number",
+    "path": "filepath",
+}
+
+
+def _packaging_ids(var: Var, packaging: Mapping[str, Sequence[str]]) -> frozenset[str]:
+    """Which package shapes *var* is relevant to.
+
+    *packaging* is `config-presentation.yml`'s `packaging:` map (already
+    ``{PREFIX}``-substituted), keyed by full var name. It is a keyed-by-name
+    override map rather than a tag because a core var's ``tags`` belong to
+    core — the same reason `examples`/`wizard_labels`/`wizard_help` are
+    keyed that way.
+
+    Resolution deliberately mirrors `_is_required`'s three steps:
+
+    1. An explicit entry wins — this template's own source of truth for the
+       vars it can enumerate.
+    2. Otherwise a ``domain``-provenance var, whose full name this
+       template-owned map cannot know ahead of time, is relevant to *every*
+       packaging. A project's own config is relevant wherever that project
+       runs, and this is what makes a downstream's `ProjectConfig` fields
+       appear in its registry manifest without anyone hand-writing them.
+    3. Any other unlisted var is relevant nowhere. `server.json`'s arrays
+       are a curated per-packaging selection, not a dump of the whole
+       surface, so an omission here is a decision rather than an oversight;
+       a var that should appear gets an entry.
+    """
+    declared = packaging.get(var.name)
+    if declared is not None:
+        return frozenset(declared)
+    if var.provenance == "domain":
+        return _ALL_PACKAGING_IDS
+    return frozenset()
+
+
+# The keyed-by-full-var-name maps in `config-presentation.yml`. Each exists
+# because core owns a var's own metadata and this template cannot add to it,
+# so every one of them is a place a name can be misspelled.
+_VAR_KEYED_MAPS = ("packaging", "choices", "documented_defaults", "examples")
+_VAR_KEYED_LISTS = ("required_vars",)
+
+
+def validate_presentation_keys(
+    presentation: Mapping[str, Any], vars_: Sequence[Var]
+) -> None:
+    """Reject any keyed-by-var-name entry naming a var that does not exist.
+
+    `_validate_packaging_map` guards the *values* of one map. This guards the
+    *keys* of all of them, and for the same reason: a typo is byte-for-byte
+    indistinguishable from a deliberate omission, so "an omission here is a
+    decision" is only true if a misspelling cannot masquerade as one. Each map
+    fails differently and silently — a `packaging:` typo drops the var from
+    the registry manifest, a `choices:` typo downgrades a client's picker to a
+    free-text box, a `required_vars:` typo moves a var from the Required table
+    to the Optional one, a `documented_defaults:` typo restores the
+    self-contradicting `(none)` cell. ``--check`` catches none of it, because
+    it compares generated output against generated output: with the typo in
+    place, the wrong form *is* the expected form.
+
+    The valid-name set is deliberately wider than *vars_*: it also includes
+    every name declared under `vars:` whose `when_answer` gate is currently
+    false. `{PREFIX}_ACL_PATH` and the `AUTHZ_*` pair are absent from a
+    render with `enable_authorization: false` — which `template-ci` runs on
+    every push — yet they are legitimately declared in these maps for the
+    renders where they do exist. Validating against collected vars alone
+    would fail every gate-off render, which is a worse defect than the gap it
+    closes.
+
+    Domain vars are not enumerable here and need no entry in any of these
+    template-owned maps, so they neither widen nor narrow the check.
+    """
+    known = {v.name for v in vars_}
+    known.update(str(raw["name"]) for raw in presentation.get("vars", ()))
+
+    problems: list[str] = []
+    for map_name in _VAR_KEYED_MAPS:
+        entries = presentation.get(map_name) or {}
+        unknown = sorted(name for name in entries if name not in known)
+        if unknown:
+            problems.append(f"{map_name}: {unknown!r}")
+    for list_name in _VAR_KEYED_LISTS:
+        entries = presentation.get(list_name) or ()
+        unknown = sorted(name for name in entries if name not in known)
+        if unknown:
+            problems.append(f"{list_name}: {unknown!r}")
+
+    if problems:
+        raise SystemExit(
+            "ERROR: config-presentation.yml names config vars that do not "
+            "exist (check for a typo in the var name) — "
+            + "; ".join(problems)
+            + ". Every key in these maps must match a collected var, or a var "
+            "declared under `vars:` whose `when_answer` gate is currently off."
+        )
+
+
+def _validate_packaging_map(packaging: Mapping[str, Any]) -> None:
+    """Reject any `packaging:` value outside the known vocabulary, loudly.
+
+    Mirrors `_validate_wizard_hint`, and for the same reason: an unrecognised
+    token that is merely *ignored* silently changes what ships. A var whose
+    packaging is misspelled (``[ocl]``) resolves to no packaging at all and
+    vanishes from every `server.json` array with exit 0 and no diagnostic —
+    indistinguishable from a deliberate omission, since an unlisted var is
+    legitimately relevant nowhere.
+
+    A non-list value is rejected rather than coerced: ``list("oci")`` silently
+    explodes a scalar into ``["o", "c", "i"]`` instead of raising, the same
+    trap `_wizard_guard` already guards its ``when`` against.
+
+    Every offender is named in one message, not just the first — fixing one
+    typo only to have the next run report its sibling is what makes a
+    one-line correction cost several rounds.
+    """
+    problems: list[str] = []
+    for name, value in packaging.items():
+        if not isinstance(value, list):
+            problems.append(
+                f"{name!r} has a non-list value {value!r} (expected a list, e.g. [oci])"
+            )
+            continue
+        unknown = [item for item in value if item not in _ALL_PACKAGING_IDS]
+        if unknown:
+            problems.append(f"{name!r} names unknown packaging(s) {unknown!r}")
+    if problems:
+        raise SystemExit(
+            "ERROR: config-presentation.yml `packaging:` is invalid — "
+            + "; ".join(problems)
+            + f". Known packagings are {sorted(_ALL_PACKAGING_IDS)!r}."
+        )
+
+
+def _json_input_format(var: Var) -> str | None:
+    """The schema's ``Input.format`` for *var*, or ``None`` to omit the key.
+
+    The 2025-12-11 `server.schema.json` types ``format`` as an enum of
+    ``string``/``number``/``boolean``/``filepath``. Derived from the declared
+    type via the same `_normalize_type_name` the wizard's question-type
+    mapping uses, so the two destinations agree about what an annotation is
+    even though they present it differently — the wizard has no ``filepath``
+    control, this schema does.
+    """
+    return _JSON_INPUT_FORMATS.get(_normalize_type_name(var.type_name))
+
+
+def _json_default(var: Var, documented_defaults: Mapping[str, str]) -> str | None:
+    """*var*'s ``default`` for a `server.json` entry, or ``None`` to omit the key.
+
+    The fourth destination for a var's default, with its own correct answer;
+    the other three are `_format_value` (env file: falls back to `var.example`,
+    because a reader wants something fillable), `_md_default_cell` (markdown
+    table: renders the literal ``(none)``, because the column states what
+    happens if the operator sets nothing), and this one.
+
+    Two rules follow from the schema rather than from taste. ``Input.default``
+    is typed ``string``, so a bool/int default is *rendered* via
+    `_format_default` rather than emitted as a JSON bool/number. And a var
+    with no real default omits the key entirely instead of emitting ``""`` —
+    including an empty ``set``/``list``/``tuple`` default (``OIDC_REQUIRED_
+    SCOPES``'s ``()``, meaning "no restriction"), which would otherwise
+    render as an empty string that reads as "defaults to nothing" rather than
+    "has no default". An example placeholder never appears here at all: the
+    schema has a dedicated ``placeholder`` field for exactly that, and says
+    so — see `_render_json_env_entry`.
+    """
+    documented = _documented_default(var, documented_defaults)
+    if _is_empty_default(var.default):
+        return documented
+    return _format_default(var.default)
+
+
+def _render_json_env_entry(
+    var: Var,
+    *,
+    sub: Callable[[str], str],
+    choices: Mapping[str, Sequence[str]],
+    documented_defaults: Mapping[str, str],
+) -> dict[str, Any]:
+    """One `server.json` ``environmentVariables`` entry, as a schema ``Input``.
+
+    Key insertion order is fixed by this dict-literal construction and never
+    by iterating a `set`/`frozenset` — `template-ci` renders the template
+    twice and diffs the results, so the serialised text must be byte-identical
+    across processes regardless of ``PYTHONHASHSEED``.
+
+    ``description`` is `var.help` as `_clean_help` left it, deliberately *not*
+    `_clean_help_for_markdown_table`'s Vale-normalised variant: that
+    normalisation exists because a spliced docs table lands in ``docs/``,
+    which every downstream lints at ``MinAlertLevel = error``. JSON is linted
+    by nothing, so the original prose (spaced em dash, ``e.g.`` and all) is
+    both correct and closer to what core wrote.
+
+    ``placeholder`` carries `var.example` when there is no real default. The
+    schema documents that field as the place for "input examples or guidance"
+    and says to use it *instead of* ``default`` — so the split that had to be
+    hand-enforced for the markdown table (an example is a fill-in suggestion,
+    not a statement of runtime behaviour) is native here. Emitting
+    ``your-signing-key`` as ``OIDC_JWT_SIGNING_KEY``'s ``default`` would tell
+    a client the server uses that literal string unless changed, contradicting
+    the same entry's own description.
+
+    ``choices`` comes from `config-presentation.yml`'s `choices:` map: it is
+    not a field on the `Var` record, so it is a declared affordance rather
+    than a special case in code for whichever var happens to need one today.
+
+    ``isRequired`` is deliberately **never** emitted, even though the schema
+    defines it and `required_vars:` looks like exactly the input for it. That
+    list means "required for the feature this var belongs to" — the docs
+    tables that consume it sit under an ``## OIDC`` heading, which supplies
+    the missing half of the sentence. A package-level manifest has no such
+    context, and the schema gives ``isRequired`` no feature-conditional
+    scoping, so marking the four OIDC vars required would assert something
+    false: a container with none of them set starts fine and serves
+    unauthenticated, which this project documents as supported. A conformant
+    registry client enforcing the flag would refuse to install without a
+    public base URL and full OIDC client credentials. The requirement is
+    genuine but conditional, so it stays in the prose ``description`` where
+    the condition can be stated, and this is the fourth destination-specific
+    split of a shared formatter rather than a fourth reuse of one.
+    """
+    entry: dict[str, Any] = {"name": var.name}
+    if var.help:
+        entry["description"] = var.help
+    input_format = _json_input_format(var)
+    if input_format is not None:
+        entry["format"] = input_format
+    default = _json_default(var, documented_defaults)
+    if default is not None:
+        entry["default"] = sub(default)
+    elif var.example:
+        entry["placeholder"] = sub(var.example)
+    var_choices = choices.get(var.name)
+    if var_choices:
+        entry["choices"] = [str(choice) for choice in var_choices]
+    if var.wizard.get("secret"):
+        entry["isSecret"] = True
+    return entry
+
+
+def _json_array_container(
+    data: Any, path: Sequence[Any], rel_path: str
+) -> tuple[Any, Any]:
+    """Walk *path*'s parent steps and return ``(container, last_key)``.
+
+    Returning the container rather than the array itself is what keeps the
+    replacement surgical: the caller assigns one key and every other key in
+    the document — ``version`` and the OCI ``identifier`` above all, both
+    owned by `bump_manifests.py` — is left byte-untouched by construction
+    rather than by remembering to copy it.
+
+    Every way the walk can fail (a missing key, an out-of-range index, a
+    scalar where a container was expected, or a final key that does not
+    already hold a JSON array) raises `SystemExit` naming *rel_path* and the
+    offending path. A `kind: json-splice` target is a hand-authored file
+    whose structure this generator does not own, so a path that no longer
+    resolves means the file was restructured under it — silently creating
+    the missing key would bury that.
+    """
+    cursor = data
+    for step in path[:-1]:
+        try:
+            cursor = cursor[step]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise SystemExit(
+                f"ERROR: {rel_path}: cannot resolve array path {list(path)!r} — "
+                f"failed at {step!r} ({exc.__class__.__name__}: {exc})."
+            ) from exc
+    last_key = path[-1]
+    try:
+        existing = cursor[last_key]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise SystemExit(
+            f"ERROR: {rel_path}: cannot resolve array path {list(path)!r} — "
+            f"failed at {last_key!r} ({exc.__class__.__name__}: {exc})."
+        ) from exc
+    if not isinstance(existing, list):
+        raise SystemExit(
+            f"ERROR: {rel_path}: array path {list(path)!r} holds a "
+            f"{type(existing).__name__}, not a JSON array."
+        )
+    return cursor, last_key
+
+
+def _assert_packaging_matches_container(
+    container: Any, packaging_id: str, path: Sequence[Any], rel_path: str
+) -> None:
+    """Fail when a positional `path:` resolved to the wrong package.
+
+    `_json_array_container` covers every way the walk can *fail*; this covers
+    the one way it can succeed *wrongly*. An `arrays:` entry locates its target
+    by index (``[packages, 0, environmentVariables]``), so inserting or
+    reordering a package silently swaps the two selections: the container
+    package would receive the stdio set and the uvx package would receive the
+    HTTP set, secrets and ``PUID``/``PGID`` included. That output is
+    still schema-valid and still self-consistent, so neither the registry
+    schema nor ``--check`` catches it.
+
+    The `packaging:` ids are deliberately spelled the same as `server.json`'s
+    own ``registryType`` values, which makes the binding self-checking: when
+    the resolved parent object declares a ``registryType``, it must equal the
+    declared packaging. `scripts/bump_manifests.py` — the other tool that
+    rewrites this file — already locates packages by ``registryType`` rather
+    than by index, so this also stops the two tools disagreeing about which
+    package is which.
+
+    A parent with no ``registryType`` at all is left alone: `path:` is a
+    general JSON path and its target need not be a registry package.
+    """
+    if not isinstance(container, dict):
+        return
+    declared = container.get("registryType")
+    if declared is None or declared == packaging_id:
+        return
+    raise SystemExit(
+        f"ERROR: {rel_path}: array path {list(path)!r} resolved to a package "
+        f"whose registryType is {declared!r}, but the entry declares "
+        f"packaging {packaging_id!r}. The packages were probably reordered or "
+        "one was inserted. Restore the declared order (pypi first, oci "
+        "second) in this file; editing config-presentation.yml instead will "
+        "not survive, since copier update overwrites it. Left unfixed, the "
+        "two packages' environment sets are swapped."
+    )
+
+
+def render_json_splice_file(
+    project_root: Path,
+    rel_path: str,
+    file_spec: Mapping[str, Any],
+    vars_: Sequence[Var],
+    presentation: Mapping[str, Any],
+    answers: Mapping[str, object],
+) -> str:
+    """Render one `kind: json-splice` artifact's full on-disk text.
+
+    JSON has no comment syntax, so a `GENERATED-*` marker pair — the
+    mechanism `kind: splice` uses for Markdown — has nowhere to live. This
+    kind splices *structurally* instead: each declared array is located by
+    its `path:` and replaced wholesale, and every other key in the document
+    survives untouched because it is never read, rewritten or reordered.
+    That matters most for ``server.json``'s ``version`` and its OCI
+    ``identifier`` suffix, which `bump_manifests.py` rewrites on every
+    release and this generator must never touch.
+
+    Like `kind: splice` and unlike a whole-file artifact, the target must
+    already exist — a missing file is a `SystemExit` naming *rel_path*, since
+    this generator owns one array per package and none of the surrounding
+    manifest.
+
+    Serialisation is ``json.dump``-equivalent with ``indent=2``,
+    ``ensure_ascii=False`` and exactly one trailing newline — byte-identical
+    to `bump_manifests.py`'s own write of this same file. A mismatch would
+    make the two tools reformat the file against each other on alternate
+    runs: permanent churn, and `template-ci`'s render-twice ``diff -r``
+    would fail.
+
+    Presentation-level validation of the whole `packaging:` map (every
+    declared entry, not just the ones a var resolves to) is a separate,
+    broader check layered on top of this function rather than inside it.
+    """
+    target = project_root / rel_path
+    if not target.exists():
+        raise SystemExit(
+            f"ERROR: {target} does not exist — a `kind: json-splice` artifact "
+            "must already exist; this generator only replaces the declared "
+            "array(s) inside it, never the surrounding file."
+        )
+    raw = target.read_text(encoding="utf-8")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"ERROR: {rel_path} is not valid JSON: {exc}.") from exc
+
+    sub = _name_substituter(answers)
+    packaging: Mapping[str, Sequence[str]] = presentation.get("packaging") or {}
+    _validate_packaging_map(packaging)
+    choices: Mapping[str, Sequence[str]] = presentation.get("choices") or {}
+    documented_defaults: Mapping[str, str] = (
+        presentation.get("documented_defaults") or {}
+    )
+
+    for array_spec in file_spec.get("arrays", ()):
+        packaging_id = array_spec["packaging"]
+        if packaging_id not in _ALL_PACKAGING_IDS:
+            raise SystemExit(
+                f"ERROR: config-presentation.yml files[{rel_path!r}] declares "
+                f"unknown packaging {packaging_id!r} — known packagings are "
+                f"{sorted(_ALL_PACKAGING_IDS)!r}."
+            )
+        container, last_key = _json_array_container(data, array_spec["path"], rel_path)
+        _assert_packaging_matches_container(
+            container, packaging_id, array_spec["path"], rel_path
+        )
+        container[last_key] = [
+            _render_json_env_entry(
+                var,
+                sub=sub,
+                choices=choices,
+                documented_defaults=documented_defaults,
+            )
+            for var in vars_
+            if packaging_id in _packaging_ids(var, packaging)
+        ]
+
+    text = json.dumps(data, indent=2, ensure_ascii=False)
+    return f"{text}\n"
 
 
 def _md_variable_cell(
@@ -1487,13 +1940,19 @@ def render_splice_file(
 # `env` renderers take that entry's own file spec; `wizard` takes the whole
 # presentation (it has no per-file content of its own — see `files:` in
 # `config-presentation.yml`, where `docs/javascripts/config-wizard/wizard-
-# spec.json` declares only `kind: wizard` and nothing else). `splice`
+# spec.json` declares only `kind: wizard` and nothing else); `splice`
 # rewrites a marked region inside an otherwise hand-authored file — see
-# `render_splice_file`.
+# `render_splice_file`. `json-splice` additionally takes the whole
+# presentation (for the `packaging:`/`choices:` maps) and the answers (for
+# `{PROJECT_NAME}` substitution inside a placeholder) — see
+# `render_json_splice_file`.
 _ENV_KIND = "env"
 _WIZARD_KIND = "wizard"
 _SPLICE_KIND = "splice"
-_KNOWN_FILE_KINDS = frozenset({_ENV_KIND, _WIZARD_KIND, _SPLICE_KIND})
+_JSON_SPLICE_KIND = "json-splice"
+_KNOWN_FILE_KINDS = frozenset(
+    {_ENV_KIND, _WIZARD_KIND, _SPLICE_KIND, _JSON_SPLICE_KIND}
+)
 
 
 def _env_destinations(
@@ -1603,6 +2062,7 @@ def write_artifacts(
     if vars_ is None:
         vars_ = collect_vars(project_root, answers)
 
+    validate_presentation_keys(presentation, vars_)
     required_names: Collection[str] = presentation.get("required_vars", ())
     vocabulary: Mapping[str, str] = presentation.get("markdown_vocabulary", {}) or {}
     documented_defaults: Mapping[str, str] = (
@@ -1625,6 +2085,10 @@ def write_artifacts(
                 required_names=required_names,
                 vocabulary=vocabulary,
                 documented_defaults=documented_defaults,
+            )
+        elif kind == _JSON_SPLICE_KIND:
+            text = render_json_splice_file(
+                project_root, rel_path, file_spec, vars_, presentation, answers
             )
         else:
             raise SystemExit(

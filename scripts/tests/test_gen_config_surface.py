@@ -72,7 +72,68 @@ def fake_project(tmp_path):
         _marker_pair("CORE") + _marker_pair("DOMAIN"),
         encoding="utf-8",
     )
+    _seed_server_json(tmp_path)
     return tmp_path
+
+
+def _seed_server_json(project_root: Path) -> None:
+    """A minimal `server.json` carrying the keys the splice must leave untouched.
+
+    `kind: json-splice` is a *spliced* artifact like `kind: splice`: the file
+    must already exist, since the generator replaces exactly one array per
+    package and owns none of the surrounding keys. Both packages are seeded
+    with a `STALE` entry so a test can prove the array was genuinely replaced
+    rather than merely appended to, and `version`/`identifier` are seeded with
+    values `bump_manifests.py` owns so a test can prove they survive.
+    """
+    (project_root / "server.json").write_text(
+        json.dumps(
+            {
+                "name": "io.github.demo/demo-mcp",
+                "description": "Demo MCP server for template tests.",
+                "version": "9.9.9",
+                "packages": [
+                    {
+                        "registryType": "pypi",
+                        "identifier": "demo-mcp",
+                        "version": "9.9.9",
+                        "transport": {"type": "stdio"},
+                        "environmentVariables": [
+                            {"name": "STALE", "description": "gone"}
+                        ],
+                    },
+                    {
+                        "registryType": "oci",
+                        "identifier": "ghcr.io/demo/demo-mcp:v9.9.9",
+                        "transport": {
+                            "type": "streamable-http",
+                            "url": "http://localhost:{--port}/mcp",
+                        },
+                        "environmentVariables": [
+                            {"name": "STALE", "description": "gone"}
+                        ],
+                    },
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _server_json(project_root: Path) -> dict:
+    return json.loads((project_root / "server.json").read_text(encoding="utf-8"))
+
+
+def _env_names(project_root: Path, package_index: int) -> list[str]:
+    pkg = _server_json(project_root)["packages"][package_index]
+    return [entry["name"] for entry in pkg["environmentVariables"]]
+
+
+def _env_entry(project_root: Path, package_index: int, name: str) -> dict:
+    pkg = _server_json(project_root)["packages"][package_index]
+    return next(e for e in pkg["environmentVariables"] if e["name"] == name)
 
 
 @pytest.fixture
@@ -2198,3 +2259,557 @@ class TestMarkdownVocabularyNormalisation:
             assert var.name in text  # sanity: the var reached this page
             assert "JWTs" not in text, rel
             assert "JSON Web Tokens" in text, rel
+
+
+class TestPackagingIds:
+    """`packaging:` resolution for a `server.json` array entry, which mirrors
+    `_is_required`'s three-step shape: an explicit entry wins, a
+    `domain`-provenance var falls back to "relevant everywhere", and anything
+    else is relevant nowhere. Direct `Var` construction, no fixture project
+    needed — this is `_packaging_ids` in isolation."""
+
+    def _var(self, name: str, provenance: str) -> g.Var:
+        return g.Var(
+            name=name,
+            suffix=None,
+            provenance=provenance,
+            type_name="str",
+            default=None,
+            help="",
+            tags=(),
+            inferred=False,
+            wizard={},
+        )
+
+    def test_an_explicit_entry_wins(self):
+        packaging = {"X_A": ["oci"]}
+        assert g._packaging_ids(self._var("X_A", "core"), packaging) == frozenset(
+            {"oci"}
+        )
+
+    def test_an_unlisted_domain_var_is_relevant_to_every_packaging(self):
+        """A downstream's own `ProjectConfig` vars cannot be enumerated by
+        this template-owned map, so they must come for free — otherwise a
+        downstream would have to hand-write its own domain env declarations
+        into server.json."""
+        ids = g._packaging_ids(self._var("X_VAULT_PATH", "domain"), {"X_A": ["oci"]})
+        assert ids == g._ALL_PACKAGING_IDS
+
+    def test_an_unlisted_non_domain_var_is_relevant_nowhere(self):
+        """A template-enumerable var absent from the map is a deliberate
+        omission, not an oversight — server.json's arrays are curated per
+        packaging, not a dump of the whole surface."""
+        assert g._packaging_ids(self._var("X_A", "core"), {}) == frozenset()
+
+
+class TestServerJsonSplice:
+    def test_replaces_the_array_in_every_package(self, fake_project):
+        """The file has two `environmentVariables` arrays with different
+        content; generating one and leaving the other hand-written is
+        exactly the stale-duplicate defect this regression pins shut."""
+        g.write_artifacts(fake_project, check=False)
+        for index in (0, 1):
+            assert "STALE" not in _env_names(fake_project, index), index
+            assert _env_names(fake_project, index), f"packages[{index}] emptied"
+
+    def test_leaves_version_and_the_oci_identifier_untouched(self, fake_project):
+        """`bump_manifests.py` owns both on every release. The generator
+        replaces exactly one array per package and nothing else."""
+        g.write_artifacts(fake_project, check=False)
+        data = _server_json(fake_project)
+        assert data["version"] == "9.9.9"
+        assert data["name"] == "io.github.demo/demo-mcp"
+        assert data["packages"][0]["version"] == "9.9.9"
+        assert data["packages"][1]["identifier"] == "ghcr.io/demo/demo-mcp:v9.9.9"
+
+    def test_formatting_matches_bump_manifests(self, fake_project):
+        """`bump_manifests.py` rewrites this same file with
+        `json.dump(data, fh, indent=2, ensure_ascii=False)` then one
+        `fh.write("\\n")` (`scripts/bump_manifests.py.jinja`). A mismatch
+        makes the two tools reformat the file against each other on
+        alternate runs: permanent churn, and template-ci's render-twice
+        `diff -r` breaks."""
+        g.write_artifacts(fake_project, check=False)
+        text = (fake_project / "server.json").read_text(encoding="utf-8")
+        assert text.endswith("\n") and not text.endswith("\n\n")
+        assert "\\u" not in text
+        assert '\n  "' in text  # a top-level key, indent=2
+        assert '\n      "' in text  # a package key, three levels deep
+
+    def test_generated_server_json_is_a_fixed_point_of_bump_manifests_serialization(
+        self, fake_project, template_root
+    ):
+        """Both halves of the formatting contract, so a format change on
+        either side fails here. First: the generated file already equals a
+        re-serialisation with `indent=2, ensure_ascii=False` plus a trailing
+        newline, so it is a fixed point of that dump. Second: the release-time
+        rewriter still uses exactly that call — asserted against the real
+        `scripts/bump_manifests.py.jinja` source, not a copy of the format
+        inlined here, so the two cannot silently drift and reformat the file
+        against each other on alternate runs."""
+        g.write_artifacts(fake_project, check=False)
+        target = fake_project / "server.json"
+        generated = target.read_text(encoding="utf-8")
+        reserialised = (
+            json.dumps(json.loads(generated), indent=2, ensure_ascii=False) + "\n"
+        )
+        assert generated == reserialised
+        bump = (template_root / "scripts" / "bump_manifests.py.jinja").read_text(
+            encoding="utf-8"
+        )
+        assert "json.dump(data, fh, indent=2, ensure_ascii=False)" in bump
+
+    def test_packaging_relevance_differs_between_the_two_packages(self, fake_project):
+        """The whole point of the two arrays: a stdio/uvx install has no
+        HTTP listener and no OAuth callback, so the OIDC and persistence
+        knobs are inert there and belong only to the container package."""
+        g.write_artifacts(fake_project, check=False)
+        pypi, oci = _env_names(fake_project, 0), _env_names(fake_project, 1)
+        assert "DEMO_MCP_OIDC_CLIENT_SECRET" in oci
+        assert "DEMO_MCP_OIDC_CLIENT_SECRET" not in pypi
+        assert "DEMO_MCP_BASE_URL" in oci
+        assert "DEMO_MCP_BASE_URL" not in pypi
+        assert "DEMO_MCP_APP_DOMAIN" in oci
+        assert "DEMO_MCP_APP_DOMAIN" not in pypi
+        assert "PUID" in oci
+        assert "PUID" not in pypi
+        # Shared: the server's own identity, log verbosity, and state
+        # persistence — which is not HTTP-specific despite the wizard's
+        # shorthand label, so a stdio install wants it too.
+        assert "FASTMCP_LOG_LEVEL" in pypi and "FASTMCP_LOG_LEVEL" in oci
+        assert "DEMO_MCP_SERVER_NAME" in pypi and "DEMO_MCP_SERVER_NAME" in oci
+        assert "DEMO_MCP_KV_STORE_URL" in pypi and "DEMO_MCP_KV_STORE_URL" in oci
+
+    def test_a_deprecated_fallback_is_in_neither(self, fake_project):
+        """`EVENT_STORE_URL` is honoured only when `KV_STORE_URL` is unset and
+        core's own help says to prefer the latter. It stays documented in the
+        env files; a registry install prompt is the wrong place for it."""
+        g.write_artifacts(fake_project, check=False)
+        every = _env_names(fake_project, 0) + _env_names(fake_project, 1)
+        assert "DEMO_MCP_EVENT_STORE_URL" not in every
+
+    def test_transport_fixed_and_development_only_vars_are_in_neither(
+        self, fake_project
+    ):
+        """TRANSPORT is fixed by the packaging, PORT is an OCI
+        `packageArguments` entry, and the debugpy vars need an image built
+        with `--build-arg DEBUG=true`."""
+        g.write_artifacts(fake_project, check=False)
+        every = _env_names(fake_project, 0) + _env_names(fake_project, 1)
+        for suffix in ("TRANSPORT", "PORT", "HOST", "DEBUG_PORT", "DEBUG_WAIT"):
+            assert f"DEMO_MCP_{suffix}" not in every, suffix
+
+    def test_domain_vars_land_in_every_package(self, domain_project):
+        """A downstream that hand-writes its own domain env declarations
+        into server.json is exactly the maintenance burden this closes:
+        a domain var must come for free in both packages."""
+        g.write_artifacts(domain_project, check=False)
+        assert "DEMO_MCP_VAULT_PATH" in _env_names(domain_project, 0)
+        assert "DEMO_MCP_VAULT_PATH" in _env_names(domain_project, 1)
+
+    def test_secret_vars_are_marked(self, fake_project):
+        g.write_artifacts(fake_project, check=False)
+        pkg = _server_json(fake_project)["packages"][1]
+        secret = {e["name"] for e in pkg["environmentVariables"] if e.get("isSecret")}
+        assert secret == {
+            "DEMO_MCP_BEARER_TOKEN",
+            "DEMO_MCP_OIDC_CLIENT_SECRET",
+            "DEMO_MCP_OIDC_JWT_SIGNING_KEY",
+        }
+
+    def test_is_required_is_never_asserted_in_the_manifest(self, fake_project):
+        """`required_vars:` means "required for the feature this var belongs
+        to". The docs tables that consume it sit under an `## OIDC` heading,
+        which supplies the missing half. A package manifest has no such
+        context and the schema has no feature-conditional scoping, so marking
+        the four OIDC vars required asserts something false: a container with
+        none of them set starts fine and serves unauthenticated. Verified
+        against core: `ServerConfig.from_env` on an empty environment returns
+        `auth_mode=None` without raising."""
+        g.write_artifacts(fake_project, check=False)
+        for index in (0, 1):
+            pkg = _server_json(fake_project)["packages"][index]
+            marked = [
+                e["name"] for e in pkg["environmentVariables"] if "isRequired" in e
+            ]
+            assert marked == [], f"packages[{index}] asserts isRequired: {marked}"
+
+    def test_the_markdown_required_column_still_marks_them(
+        self, fake_project, template_root
+    ):
+        """The other half of the split: dropping `isRequired` from JSON must
+        not weaken the docs table, where the OIDC heading makes "Required"
+        true. Pins the two destinations apart so a future change cannot
+        silently re-merge them."""
+        answers = g.load_answers(fake_project)
+        vars_ = g.collect_vars(fake_project, answers)
+        pres = g.load_presentation(template_root, "DEMO_MCP")
+        names = frozenset(pres.get("required_vars", ()))
+        marked = {
+            v.name
+            for v in vars_
+            if "**Yes**"
+            in g.render_md_table([v], ["required"], required_names=names).splitlines()[
+                2
+            ]
+        }
+        assert marked == {
+            "DEMO_MCP_BASE_URL",
+            "DEMO_MCP_OIDC_CONFIG_URL",
+            "DEMO_MCP_OIDC_CLIENT_ID",
+            "DEMO_MCP_OIDC_CLIENT_SECRET",
+        }
+
+    def test_check_reports_a_stale_array_without_rewriting_it(self, fake_project):
+        g.write_artifacts(fake_project, check=False)
+        target = fake_project / "server.json"
+        _seed_server_json(fake_project)  # valid JSON, stale arrays
+        stale_text = target.read_text(encoding="utf-8")
+        assert "server.json" in g.write_artifacts(fake_project, check=True)
+        assert target.read_text(encoding="utf-8") == stale_text
+
+    def test_a_current_file_is_reported_neither_stale_nor_written(self, fake_project):
+        g.write_artifacts(fake_project, check=False)
+        assert "server.json" not in g.write_artifacts(fake_project, check=True)
+        assert "server.json" not in g.write_artifacts(fake_project, check=False)
+
+    def test_a_missing_file_fails_loudly(self, fake_project):
+        (fake_project / "server.json").unlink()
+        with pytest.raises(SystemExit, match=r"server\.json"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_malformed_json_fails_loudly_naming_the_file(self, fake_project):
+        (fake_project / "server.json").write_text("not json\n", encoding="utf-8")
+        with pytest.raises(SystemExit, match=r"server\.json"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_a_missing_array_path_fails_loudly(self, fake_project):
+        data = _server_json(fake_project)
+        del data["packages"][1]
+        (fake_project / "server.json").write_text(
+            json.dumps(data, indent=2) + "\n", encoding="utf-8"
+        )
+        with pytest.raises(SystemExit, match="packages"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_output_is_deterministic(self, fake_project):
+        """template-ci renders the template twice and diffs the results."""
+        g.write_artifacts(fake_project, check=False)
+        first = (fake_project / "server.json").read_text(encoding="utf-8")
+        _seed_server_json(fake_project)
+        g.write_artifacts(fake_project, check=False)
+        assert (fake_project / "server.json").read_text(encoding="utf-8") == first
+
+
+class TestGeneratedServerJsonMatchesShippedSchema:
+    """Mirrors `TestGeneratedSpecMatchesShippedSchema`: the salvaged
+    `TestServerJsonSplice` tests above hand-assert individual properties
+    (which vars land where, formatting, identity fields), but none of them
+    validates the generated document as a whole against the registry's own
+    `server.json` schema. Real schema validation is what actually proves the
+    file is *schema-valid*, the property those tests only approximate."""
+
+    def _schema(self, template_root):
+        schema_path = template_root / "schemas" / "server.schema.json"
+        return json.loads(schema_path.read_text(encoding="utf-8"))
+
+    def test_generated_server_json_validates(self, fake_project, template_root):
+        g.write_artifacts(fake_project, check=False)
+        data = _server_json(fake_project)
+        jsonschema.validate(instance=data, schema=self._schema(template_root))
+
+    def test_a_non_string_env_var_name_is_rejected(self, fake_project, template_root):
+        """Proof the check above has teeth: corrupt one generated entry so it
+        violates the schema (`name` must be a string, per the registry's
+        `Input`/`KeyValueInput` definitions), and confirm validation actually
+        raises rather than passing vacuously."""
+        g.write_artifacts(fake_project, check=False)
+        data = _server_json(fake_project)
+        data["packages"][0]["environmentVariables"][0]["name"] = 123
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(instance=data, schema=self._schema(template_root))
+
+
+class TestServerJsonEntryShape:
+    """Pins for the schema `Input` shape `_render_json_env_entry` builds — a
+    fourth destination for a var's default and help text, alongside the
+    env-file value, the markdown default cell, and the markdown description
+    cell, each with its own rules. Direct `Var` construction throughout, no
+    fixture project or config-presentation.yml wiring needed."""
+
+    def _var(
+        self,
+        *,
+        name: str = "X_A",
+        type_name: str = "str",
+        default: object = None,
+        help: str = "Some help text.",
+        example: str | None = None,
+        wizard: dict[str, object] | None = None,
+    ) -> g.Var:
+        return g.Var(
+            name=name,
+            suffix="A",
+            provenance="template",
+            type_name=type_name,
+            default=default,
+            help=help,
+            tags=(),
+            inferred=False,
+            wizard=wizard or {},
+            example=example,
+        )
+
+    def _identity_sub(self, text: str) -> str:
+        return text
+
+    def test_default_is_always_a_string(self):
+        """`Input.default` is typed `string` in the schema, so a bool default
+        must be rendered through `_format_default`, not emitted as a JSON
+        boolean."""
+        var = self._var(type_name="bool", default=True)
+        entry = g._render_json_env_entry(
+            var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert entry["default"] == "true"
+        assert isinstance(entry["default"], str)
+
+    def test_an_example_becomes_a_placeholder_not_a_default(self):
+        """The schema's own wording: use `placeholder` instead of `default`
+        for "input examples or guidance". Emitting an example as `default`
+        would tell a client the server uses that literal value unless
+        changed."""
+        var = self._var(default=None, example="your-signing-key")
+        entry = g._render_json_env_entry(
+            var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert entry.get("placeholder") == "your-signing-key"
+        assert "default" not in entry
+
+    def test_an_empty_default_omits_the_key(self):
+        """An empty container default (e.g. `()`, meaning "no restriction")
+        must never render as `"default": ""` — that would read as "defaults
+        to nothing" rather than "has no fixed default"."""
+        var = self._var(default=())
+        assert g._json_default(var, {}) is None
+        entry = g._render_json_env_entry(
+            var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert "default" not in entry
+
+    def test_a_documented_default_fills_the_gap_an_empty_default_leaves(self):
+        var = self._var(default=())
+        entry = g._render_json_env_entry(
+            var,
+            sub=self._identity_sub,
+            choices={},
+            documented_defaults={"X_A": "openid"},
+        )
+        assert entry["default"] == "openid"
+
+    def test_format_is_derived_from_the_type_and_stays_in_the_schema_enum(self):
+        """`Input.format` is an enum of string/number/boolean/filepath; a
+        plain string var omits the key and takes the schema's own default."""
+        allowed = {"string", "number", "boolean", "filepath"}
+        cases = {
+            "bool": "boolean",
+            "int": "number",
+            "float": "number",
+            "path": "filepath",
+        }
+        for type_name, expected_format in cases.items():
+            var = self._var(type_name=type_name)
+            entry = g._render_json_env_entry(
+                var, sub=self._identity_sub, choices={}, documented_defaults={}
+            )
+            assert entry["format"] == expected_format
+            assert entry["format"] in allowed
+
+        plain_var = self._var(type_name="str")
+        entry = g._render_json_env_entry(
+            plain_var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert "format" not in entry
+
+    def test_choices_come_from_the_presentation_map(self):
+        """`choices` is not a field on the `Var` record; it is a
+        presentation-config affordance rather than a code special case for
+        whichever var happens to need one."""
+        var = self._var(name="X_LOG_LEVEL")
+        entry = g._render_json_env_entry(
+            var,
+            sub=self._identity_sub,
+            choices={"X_LOG_LEVEL": ["DEBUG", "INFO"]},
+            documented_defaults={},
+        )
+        assert entry["choices"] == ["DEBUG", "INFO"]
+        assert all(isinstance(choice, str) for choice in entry["choices"])
+
+        no_choices_var = self._var(name="X_OTHER")
+        entry = g._render_json_env_entry(
+            no_choices_var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert "choices" not in entry
+
+    def test_description_is_not_vale_normalised(self):
+        """JSON is linted by nothing, so `description` keeps the original
+        prose — spaced em dash and `e.g.` included — while the markdown
+        table destination strips both. Pins the two destinations apart."""
+        help_text = (
+            "Uses a store — but rotating that secret invalidates every "
+            "issued token, e.g. this one."
+        )
+        var = self._var(help=help_text)
+        entry = g._render_json_env_entry(
+            var, sub=self._identity_sub, choices={}, documented_defaults={}
+        )
+        assert entry["description"] == help_text
+
+        table_text = g._clean_help_for_markdown_table(help_text)
+        assert " — " not in table_text
+        assert "e.g." not in table_text
+        assert entry["description"] != table_text
+
+    def test_a_placeholder_gets_project_name_substituted(self):
+        """An example like `/etc/{PROJECT_NAME}/tokens.toml` is only useful
+        once `{PROJECT_NAME}` is a real project name — the same substitution
+        an env file's header and section notes get."""
+        sub = g._name_substituter({"project_name": "demo-mcp", "human_name": "Demo"})
+        var = self._var(default=None, example="/etc/{PROJECT_NAME}/tokens.toml")
+        entry = g._render_json_env_entry(
+            var, sub=sub, choices={}, documented_defaults={}
+        )
+        assert entry["placeholder"] == "/etc/demo-mcp/tokens.toml"
+
+
+class TestPackagingMapValidation:
+    """A typo in a `packaging:` value must fail loudly, not silently drop the
+    var from every package. Direct calls to `_validate_packaging_map`, no
+    fixture project needed — the map it guards is a plain dict."""
+
+    def test_an_unknown_packaging_value_raises_naming_the_var(self):
+        with pytest.raises(SystemExit, match="DEMO_MCP_BASE_URL"):
+            g._validate_packaging_map({"DEMO_MCP_BASE_URL": ["ocl"], "PUID": ["oci"]})
+
+    def test_the_error_names_every_offender_not_just_the_first(self):
+        """Fixing one typo only to have the next run report its sibling is
+        what makes a one-line correction cost several rounds."""
+        with pytest.raises(SystemExit) as excinfo:
+            g._validate_packaging_map({"DEMO_MCP_BASE_URL": ["ocl"], "PUID": ["pypy"]})
+        message = str(excinfo.value)
+        assert "DEMO_MCP_BASE_URL" in message
+        assert "PUID" in message
+
+    def test_a_non_list_packaging_value_raises(self):
+        """`list("oci")` would silently explode a scalar into ['o','c','i']
+        instead of raising, so a bare string must be rejected outright."""
+        with pytest.raises(SystemExit, match="DEMO_MCP_BASE_URL"):
+            g._validate_packaging_map({"DEMO_MCP_BASE_URL": "oci"})
+
+    def test_a_valid_map_passes(self):
+        g._validate_packaging_map({"DEMO_MCP_BASE_URL": ["oci"], "PUID": ["pypi"]})
+
+    def test_an_empty_map_passes(self):
+        g._validate_packaging_map({})
+
+
+class TestValidatePresentationKeys:
+    """A key in one of the five var-keyed presentation maps that names a var
+    absent from the collected set is a typo indistinguishable from a
+    deliberate omission — `--check` cannot catch it, since it compares
+    generated output against generated output and a typo's wrong form *is*
+    the expected form on both sides. Direct construction of `vars_` and
+    `presentation` throughout, no fixture project needed."""
+
+    def _var(self, name: str) -> g.Var:
+        return g.Var(
+            name=name,
+            suffix=None,
+            provenance="template",
+            type_name="str",
+            default=None,
+            help="",
+            tags=(),
+            inferred=False,
+            wizard={},
+        )
+
+    def _assert_names_map_and_key(self, excinfo, map_name: str, key: str) -> None:
+        message = str(excinfo.value)
+        assert map_name in message
+        assert key in message
+
+    def test_an_unknown_key_in_packaging_raises_naming_the_map_and_key(self):
+        vars_ = [self._var("DEMO_MCP_BASE_URL")]
+        presentation = {"packaging": {"DEMO_MCP_BASE_URLL": ["oci"]}}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "packaging", "DEMO_MCP_BASE_URLL")
+
+    def test_an_unknown_key_in_choices_raises_naming_the_map_and_key(self):
+        vars_ = [self._var("DEMO_MCP_LOG_LEVEL")]
+        presentation = {"choices": {"DEMO_MCP_LOG_LEVL": ["DEBUG", "INFO"]}}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "choices", "DEMO_MCP_LOG_LEVL")
+
+    def test_an_unknown_key_in_documented_defaults_raises_naming_the_map_and_key(
+        self,
+    ):
+        vars_ = [self._var("OIDC_SCOPE")]
+        presentation = {"documented_defaults": {"OIDC_SCOPEE": "openid"}}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "documented_defaults", "OIDC_SCOPEE")
+
+    def test_an_unknown_key_in_examples_raises_naming_the_map_and_key(self):
+        vars_ = [self._var("OIDC_JWT_SIGNING_KEY")]
+        presentation = {"examples": {"OIDC_JWT_SIGNING_KEYY": "your-signing-key"}}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "examples", "OIDC_JWT_SIGNING_KEYY")
+
+    def test_an_unknown_entry_in_required_vars_raises_naming_the_list_and_entry(
+        self,
+    ):
+        vars_ = [self._var("OIDC_ISSUER")]
+        presentation = {"required_vars": ["OIDC_ISSUERR"]}
+        with pytest.raises(SystemExit) as excinfo:
+            g.validate_presentation_keys(presentation, vars_)
+        self._assert_names_map_and_key(excinfo, "required_vars", "OIDC_ISSUERR")
+
+    def test_a_presentation_with_all_valid_keys_passes(self):
+        vars_ = [
+            self._var("DEMO_MCP_BASE_URL"),
+            self._var("DEMO_MCP_LOG_LEVEL"),
+            self._var("OIDC_SCOPE"),
+            self._var("OIDC_JWT_SIGNING_KEY"),
+            self._var("OIDC_ISSUER"),
+        ]
+        presentation = {
+            "packaging": {"DEMO_MCP_BASE_URL": ["oci"]},
+            "choices": {"DEMO_MCP_LOG_LEVEL": ["DEBUG", "INFO"]},
+            "documented_defaults": {"OIDC_SCOPE": "openid"},
+            "examples": {"OIDC_JWT_SIGNING_KEY": "your-signing-key"},
+            "required_vars": ["OIDC_ISSUER"],
+        }
+        g.validate_presentation_keys(presentation, vars_)
+
+    def test_a_presentation_missing_a_map_entirely_passes(self):
+        """An absent map means "nothing declared", not "everything invalid" —
+        `config-presentation.yml` need not carry all five keys at once."""
+        vars_ = [self._var("DEMO_MCP_BASE_URL")]
+        g.validate_presentation_keys({}, vars_)
+
+    def test_a_gated_off_vars_entry_counts_as_known(self):
+        """A var declared under `vars:` whose `when_answer` gate is
+        currently false (e.g. an authorization var on a render with
+        `enable_authorization: false`) is absent from the collected `vars_`
+        but is still a legitimate key in these maps for the renders where
+        the gate is on."""
+        vars_: list[g.Var] = []
+        presentation = {
+            "vars": [{"name": "AUTHZ_SCOPES", "when_answer": "enable_authorization"}],
+            "required_vars": ["AUTHZ_SCOPES"],
+        }
+        g.validate_presentation_keys(presentation, vars_)
