@@ -100,6 +100,46 @@ def domain_project(fake_project):
 
 
 @pytest.fixture
+def domain_project_field_shapes(fake_project):
+    """A project whose ``ProjectConfig`` covers the three §4.3 field shapes:
+
+    a field with a real default, a field with a real default of ``None``
+    (an ordinary optional field), and a field with neither a ``default`` nor
+    a ``default_factory`` at all (genuinely required). Fields without a
+    default must precede fields with one in a dataclass, so ``token`` (the
+    no-default field) is declared first.
+    """
+    cfg = fake_project / "src" / "demo_mcp" / "config.py"
+    cfg.write_text(
+        "from __future__ import annotations\n\n"
+        "from dataclasses import dataclass, field\n\n"
+        "from fastmcp_pvl_core import env\n\n\n"
+        "@dataclass(frozen=True)\n"
+        "class ProjectConfig:\n"
+        "    token: str = field(\n"
+        '        metadata={"help": "Auth token.", "tags": ("auth",)},\n'
+        "    )\n"
+        "    vault_path: str = field(\n"
+        '        default="/data",\n'
+        '        metadata={"help": "Vault root.", "tags": ("persistence",)},\n'
+        "    )\n"
+        "    api_key: str | None = field(\n"
+        "        default=None,\n"
+        '        metadata={"help": "Optional API key.", "tags": ("auth",)},\n'
+        "    )\n\n"
+        "    @classmethod\n"
+        "    def from_env(cls) -> ProjectConfig:\n"
+        "        return cls(\n"
+        '            token=env("DEMO_MCP", "TOKEN") or "",\n'
+        '            vault_path=env("DEMO_MCP", "VAULT_PATH") or "/data",\n'
+        '            api_key=env("DEMO_MCP", "API_KEY"),\n'
+        "        )\n",
+        encoding="utf-8",
+    )
+    return fake_project
+
+
+@pytest.fixture
 def runnable_project(fake_project, template_root):
     """A fixture project that can run its own copy of the generator.
 
@@ -568,6 +608,183 @@ class TestDiscoverDomainVars:
         assert not any(v.provenance == "domain" for v in other_vars)
 
         assert frozenset(sys.modules) == before
+
+
+class TestNoDefaultSentinelIsRequired:
+    """§4.3: `_is_required`'s domain branch must key on `_NO_DEFAULT` (no
+    default declared at all), not on `var.default is None` (a real default
+    of `None`, an ordinary optional field). Direct `Var` construction, no
+    fixture project needed — this is `_is_required` in isolation."""
+
+    def _domain_var(self, *, default: object) -> g.Var:
+        return g.Var(
+            name="DEMO_MCP_X",
+            suffix="X",
+            provenance="domain",
+            type_name="str",
+            default=default,
+            help="",
+            tags=("domain",),
+            inferred=False,
+            wizard={},
+        )
+
+    def test_a_real_default_is_not_required(self):
+        """`vault_path: str = field(default="/data")` — has a default."""
+        var = self._domain_var(default="/data")
+        assert g._is_required(var, required_names=None) is False
+
+    def test_an_explicit_none_default_is_not_required(self):
+        """`api_key: str | None = None` — the headline regression: a real
+        default of `None` is a normal optional field, not a required one."""
+        var = self._domain_var(default=None)
+        assert g._is_required(var, required_names=None) is False
+
+    def test_no_default_declared_at_all_is_required(self):
+        """`api_key: str = field(metadata={...})` — neither `default` nor
+        `default_factory`: genuinely required."""
+        var = self._domain_var(default=g._NO_DEFAULT)
+        assert g._is_required(var, required_names=None) is True
+
+    def test_non_domain_provenance_still_keys_on_none(self):
+        """`_NO_DEFAULT` is only ever produced by `_discover_domain_vars` for
+        `domain`-provenance vars; a core/template/external var's fallback
+        must stay exactly `var.default is None`, unchanged by this fix."""
+        var = g.Var(
+            name="X_Y",
+            suffix="Y",
+            provenance="template",
+            type_name="str",
+            default=None,
+            help="",
+            tags=(),
+            inferred=False,
+            wizard={},
+        )
+        assert g._is_required(var, required_names=None) is True
+
+
+class TestDiscoverDomainVarsFieldShapes:
+    """§4.3's three field shapes, as discovered by `_discover_domain_vars`
+    through the real AST-scan + dataclass-field path (not a hand-built
+    `Var`) — the actual bug location."""
+
+    def test_field_with_a_default_carries_it(self, domain_project_field_shapes):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        vault_path = next(v for v in vars_ if v.suffix == "VAULT_PATH")
+        assert vault_path.default == "/data"
+
+    def test_field_with_an_explicit_none_default_carries_none(
+        self, domain_project_field_shapes
+    ):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        api_key = next(v for v in vars_ if v.suffix == "API_KEY")
+        assert api_key.default is None
+
+    def test_field_with_no_default_at_all_carries_the_sentinel(
+        self, domain_project_field_shapes
+    ):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        token = next(v for v in vars_ if v.suffix == "TOKEN")
+        assert token.default is g._NO_DEFAULT
+
+
+class TestDomainRequiredColumnFieldShapes:
+    """The three §4.3 rows, rendered through `render_md_table`'s `required`
+    column — the reader-facing surface `_is_required` feeds."""
+
+    def _required_cells(self, domain_project_field_shapes):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        domain_vars = [v for v in vars_ if v.provenance == "domain"]
+        table = g.render_md_table(domain_vars, ["variable", "required"])
+        return {
+            ln.split("|")[1].strip(): ln.split("|")[2].strip()
+            for ln in table.splitlines()[2:]
+        }
+
+    def test_default_field_renders_not_required(self, domain_project_field_shapes):
+        cells = self._required_cells(domain_project_field_shapes)
+        assert cells["`DEMO_MCP_VAULT_PATH`"] == "No"
+
+    def test_explicit_none_default_field_renders_not_required(
+        self, domain_project_field_shapes
+    ):
+        """The headline regression this task fixes."""
+        cells = self._required_cells(domain_project_field_shapes)
+        assert cells["`DEMO_MCP_API_KEY`"] == "No"
+
+    def test_no_default_field_renders_required(self, domain_project_field_shapes):
+        cells = self._required_cells(domain_project_field_shapes)
+        assert cells["`DEMO_MCP_TOKEN`"] == "**Yes**"
+
+
+class TestNoDefaultDomainOutputUnchanged:
+    """The invariant §4.3 depends on: the sentinel changes ONLY the
+    required-ness signal. A no-default domain field's env-file line and
+    wizard-spec entry must be byte-identical to the pre-fix `None` output —
+    a blank env-file value (`_format_value` falls back to `example`, which
+    this field has none of) and a plain `text` wizard question with no
+    `default` key at all (the wizard spec has never had one)."""
+
+    def test_no_default_field_env_file_line_is_blank_same_as_none_default(
+        self, domain_project_field_shapes, template_root
+    ):
+        answers = g.load_answers(domain_project_field_shapes)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        lines = text.splitlines()
+        # `.env.example` is a `commented` artifact — every value line is
+        # prefixed `# `.
+        assert "# DEMO_MCP_TOKEN=" in lines
+        assert "# DEMO_MCP_API_KEY=" in lines
+
+    def test_no_default_field_gets_a_plain_text_wizard_question(
+        self, domain_project_field_shapes, template_root
+    ):
+        answers = g.load_answers(domain_project_field_shapes)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        spec = json.loads(g.render_wizard_spec(pres, vars_, answers))
+        token_question = next(
+            q for q in spec["questions"] if q.get("var") == "DEMO_MCP_TOKEN"
+        )
+        assert token_question["type"] == "text"
+        assert "default" not in token_question
+
+    def test_wizard_spec_never_carries_a_default_key_at_all(
+        self, domain_project_field_shapes, template_root
+    ):
+        """The wizard path never reads `Var.default` in the first place, so
+        it can never leak the sentinel — pinned here rather than assumed."""
+        answers = g.load_answers(domain_project_field_shapes)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        spec_text = g.render_wizard_spec(pres, vars_, answers)
+        assert '"default"' not in spec_text
+
+    def test_sentinel_repr_never_leaks_into_any_rendered_artifact(
+        self, domain_project_field_shapes, template_root
+    ):
+        """Mechanical grep-equivalent: whatever `object()`'s default `repr()`
+        looks like must never appear in generated text."""
+        answers = g.load_answers(domain_project_field_shapes)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        env_text = g.render_env_file(pres["files"][".env.example"], vars_, answers)
+        wizard_text = g.render_wizard_spec(pres, vars_, answers)
+        domain_vars = [v for v in vars_ if v.provenance == "domain"]
+        table_text = g.render_md_table(
+            domain_vars, ["variable", "default", "required", "description"]
+        )
+        marker_repr = repr(g._NO_DEFAULT)
+        for rendered in (env_text, wizard_text, table_text):
+            assert marker_repr not in rendered
+            assert "object at 0x" not in rendered
 
 
 class TestWriteArtifacts:
