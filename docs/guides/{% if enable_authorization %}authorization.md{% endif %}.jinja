@@ -18,12 +18,8 @@ that matches how callers authenticate (see the
   its values as the caller's scopes. Set `{{ env_prefix }}_AUTHZ_CLAIM`
   to that claim's name, such as `groups`.
 
-To turn either on: set the relevant `{{ env_prefix }}_*` variables
-and build the matching check in `src/{{ python_module }}/server.py`,
-where it ships commented out (plus the config field it reads in
-`config.py`). Install only one authorization check. For bearer and OIDC
-together, the stub combines them into a single check rather than a
-second one.
+To turn either on, set that mechanism's `{{ env_prefix }}_*` variables,
+described in the sections below.
 
 ## Gating by an OIDC claim
 
