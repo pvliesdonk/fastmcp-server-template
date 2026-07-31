@@ -64,10 +64,13 @@ _skip_if_exists:
   - "packaging/mcpb/build.sh"
   - "scripts/bump_manifests.py"
   - ".gitignore"
-  # pre-commit hook config — users add domain-specific hooks (shellcheck,
-  # yamllint, project-specific linters, etc.) on top of the shipped defaults;
-  # preserve customisation across updates.
-  - ".pre-commit-config.yaml"
+  # .pre-commit-config.yaml is deliberately NOT here (moved out for #254):
+  # it is template-owned with a DOMAIN-HOOKS seam for domain-specific hooks
+  # (shellcheck, yamllint, project linters, etc.), the same hybrid pattern
+  # as CLAUDE.md/README.md below.  While it was seeded, the re-rendered
+  # tests/test_structural_gate.py asserted on a file `copier update` could
+  # never reach, so every pre-existing consumer's structural select string
+  # eventually drifted and turned those tests red.
   # Vale config — users tune rule overrides, add Vocab, pin Packages
   # versions per their docs corpus.  Initial render seeds the file; later
   # template updates leave their tuning intact.
@@ -149,6 +152,10 @@ _skip_if_exists:
 # (index, installation, configuration, tools/index, prompts) moved out in #106.
 # Those docs files use topic-specific DOMAIN-{TOPIC}-{KIND} sentinels
 # rather than the bare DOMAIN-START used in CLAUDE.md / README.md.
+# .pre-commit-config.yaml joined the hybrid set for #254 (its seam is
+# DOMAIN-HOOKS, YAML-comment markers): downstream hooks live between the
+# markers and survive the merge; the template-owned hook pins and gate
+# wiring re-render in lockstep with the tests that assert on them.
 
 # Files in the template repo that should never land in generated projects.
 # Setting _exclude in copier.yml REPLACES copier's default exclude list
