@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.0.1 (2026-07-31)
+
+- #285 docs(authz): drop the implementer-facing enablement instructions from the operator guide
+- #283 fix(update): unblock v3 adoption — gate-clean shipped scripts, no conflict markers in generated files, seamed pre-commit config
+
+
 ## v3.0.0 (2026-07-30)
 
 - #280 ci(claude): grant GitHub MCP tools to the claude workflows; make @claude read-only
