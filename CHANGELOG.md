@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.0.2 (2026-07-31)
+
+- #288 docs: move config-migration out of the operator site; scrub implementer prose from operator pages
+
+
 ## v3.0.1 (2026-07-31)
 
 - #285 docs(authz): drop the implementer-facing enablement instructions from the operator guide
