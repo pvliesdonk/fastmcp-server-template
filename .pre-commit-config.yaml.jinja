@@ -136,3 +136,11 @@ repos:
         # sync with the CI vale_flags glob; template-ci asserts they match.
         files: ^(docs/|README\.md$)
         exclude: ^docs/(superpowers|design|decisions)/
+
+# DOMAIN-HOOKS-START — add domain-specific hooks (shellcheck, yamllint,
+# project linters, etc.) below as full `- repo:` blocks indented to match the
+# `repos:` list above; kept across copier update. Everything OUTSIDE this
+# block is template-owned and re-rendered on update, which keeps the hook
+# pins and the structural-gate wiring above in lockstep with the re-rendered
+# tests that assert on them.
+# DOMAIN-HOOKS-END

@@ -572,10 +572,13 @@ class TestEnsureCoreAvailable:
             recorded["env"] = env
 
         monkeypatch.setattr(g.os, "execvpe", _record_execvpe)
+        monkeypatch.setattr(g.shutil, "which", lambda _cmd: "/fake/bin/uv")
 
         g.ensure_core_available(tmp_path, argv=["--check", "--extra-flag"])
 
-        assert recorded["file"] == "uv"
+        # The exec target is the resolved absolute path, not the bare name —
+        # see ensure_core_available's `shutil.which` step.
+        assert recorded["file"] == "/fake/bin/uv"
         args = recorded["args"]
         assert "uv" in args
         assert "run" in args
@@ -587,6 +590,20 @@ class TestEnsureCoreAvailable:
         assert "--check" in args
         assert "--extra-flag" in args
         assert recorded["env"]["_GEN_CONFIG_BOOTSTRAPPED"] == "1"
+
+    def test_missing_uv_on_path_raises_with_install_pointer(
+        self, tmp_path, monkeypatch
+    ):
+        (tmp_path / "pyproject.toml").write_text(
+            'dependencies = [\n  "fastmcp-pvl-core>=4.5.0,<5",\n]\n', encoding="utf-8"
+        )
+        monkeypatch.setattr(g, "_core_importable", lambda: False)
+        monkeypatch.setattr(g, "_yaml_importable", lambda: False)
+        monkeypatch.delenv("_GEN_CONFIG_BOOTSTRAPPED", raising=False)
+        monkeypatch.setattr(g.shutil, "which", lambda _cmd: None)
+
+        with pytest.raises(SystemExit, match="not on PATH"):
+            g.ensure_core_available(tmp_path)
 
     def test_execvpe_oserror_becomes_a_clear_system_exit(self, tmp_path, monkeypatch):
         (tmp_path / "pyproject.toml").write_text(
@@ -1900,8 +1917,11 @@ class TestRenderSpliceFileMultiRegion:
                 {"id": "B", "tags": ["t"], "required": False, "columns": ["variable"]},
             ]
         }
+        ctx = g.PresentationContext(
+            presentation={"required_vars": ["X_REQ"]}, answers={}
+        )
         once = g.render_splice_file(
-            tmp_path, "doc.md", file_spec, [v_required, v_optional]
+            tmp_path, "doc.md", file_spec, [v_required, v_optional], ctx
         )
         region_a = once.split("GENERATED-ENV-TABLE-A-START")[1].split(
             "GENERATED-ENV-TABLE-A-END"
@@ -1914,7 +1934,7 @@ class TestRenderSpliceFileMultiRegion:
 
         target.write_text(once, encoding="utf-8")
         twice = g.render_splice_file(
-            tmp_path, "doc.md", file_spec, [v_required, v_optional]
+            tmp_path, "doc.md", file_spec, [v_required, v_optional], ctx
         )
         assert twice == once
 
