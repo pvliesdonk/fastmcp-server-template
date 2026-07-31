@@ -56,7 +56,8 @@ _skip_if_exists:
   - "tests/test_cli.py"
   - "CHANGELOG.md"
   - "LICENSE"
-  # .env.example is NOT here — see the "generated, not skip-listed" note below.
+  # .env.example is listed further down, with the other generated config
+  # artifacts — see the "Generated AND skip-listed" note below.
   - "packaging/mcpb/manifest.json.in"
   - "packaging/mcpb/pyproject.toml.in"
   - "packaging/mcpb/src/server.py"
@@ -76,10 +77,11 @@ _skip_if_exists:
   # docs corpus grows; without _skip_if_exists, copier update would wipe
   # those additions on every weekly cron and reseed the template version.
   - ".vale/styles/config/vocabularies/Base/accept.txt"
-  # docs/javascripts/config-wizard/wizard-spec.json is NOT here — see the
-  # "generated, not skip-listed" note below (the wizard *runtime* —
-  # generators.js, wizard.js, config-wizard.css, wizard-spec-schema.json —
-  # stays template-owned and overwritten on update, same as before).
+  # docs/javascripts/config-wizard/wizard-spec.json is listed further down,
+  # with the other generated config artifacts — see the "Generated AND
+  # skip-listed" note below (the wizard *runtime* — generators.js, wizard.js,
+  # config-wizard.css, wizard-spec-schema.json — stays template-owned and
+  # overwritten on update, same as before).
   #
   # Domain presentation config — declares only the vars
   # scripts/gen_config_surface.py's AST scan of ProjectConfig cannot see
@@ -95,23 +97,40 @@ _skip_if_exists:
   # regenerates app.html from it on every copier update; app.html itself is
   # generated, never template-owned.
   - "src/{{ python_module }}/static/app.src.html"
+  # Fully-generated config artifacts — the `_tasks` entry above rewrites all
+  # of them on every `copier copy` AND `copier update`.  They are listed here
+  # NOT for the usual "domain-owned, frozen at first render" reason (they are
+  # neither): `_skip_if_exists` doubles as copier's never-patch-on-update
+  # list, and that is the contract a task-generated file needs.  `copier
+  # update` runs `_tasks` in the destination BEFORE applying the old-render →
+  # project diff, so a patch landing on one of these files can only corrupt
+  # the freshly generated content — for every consumer whose seeded copy
+  # predates the template version being left behind, the update used to
+  # revert the generator's output and leave inline conflict markers (#282).
+  # Skip-listing removes these paths from patch application; the generator's
+  # unconditional rewrite is what keeps them current instead.
+  - ".env.example"
+  - "packaging/env.example"
+  - "examples/*.env"
+  - "docs/javascripts/config-wizard/wizard-spec.json"
 #
-# Generated, not skip-listed: `.env.example`, `packaging/env.example`, and
-# `docs/javascripts/config-wizard/wizard-spec.json` used to live in
-# `_skip_if_exists` above (domain-owned, frozen at first render). They no
-# longer do — the `_tasks` entry above regenerates all three, and
-# `examples/*.env`, on every `copier copy` AND `copier update`, from
+# Generated AND skip-listed: `.env.example`, `packaging/env.example`,
+# `examples/*.env`, and `docs/javascripts/config-wizard/wizard-spec.json`
+# used to live in `_skip_if_exists` as domain-owned files (frozen at first
+# render). Since #264 they are generated instead — the `_tasks` entry above
+# regenerates all of them, on every `copier copy` AND `copier update`, from
 # `fastmcp_pvl_core.server_config_surface()` plus `config-presentation.yml` /
-# `config-presentation.domain.yml`. Regeneration is unconditional: any local
-# edit to these files is overwritten the next time the task runs, and CI's
-# `scripts/gen_config_surface.py --check` step (ci.yml) fails the build if a
-# committed copy has drifted from what the generator would produce. Downstream
-# customisation of the config surface therefore does NOT belong in these
-# files — it belongs in `config.py`'s `CONFIG-FIELDS` field `metadata={"help":
-# ..., "tags": (...)}` (for a var read through `ProjectConfig.from_env`) or in
-# `config-presentation.domain.yml` (for a var the AST scan cannot see: a
-# deprecated alias no longer read inside `from_env`, or a var read outside
-# `from_env` entirely).
+# `config-presentation.domain.yml` — and they stay listed above only for the
+# update-patch mechanics explained inline. Regeneration is unconditional: any
+# local edit to these files is overwritten the next time the task runs, and
+# CI's `scripts/gen_config_surface.py --check` step (ci.yml) fails the build
+# if a committed copy has drifted from what the generator would produce.
+# Downstream customisation of the config surface therefore does NOT belong in
+# these files — it belongs in `config.py`'s `CONFIG-FIELDS` field
+# `metadata={"help": ..., "tags": (...)}` (for a var read through
+# `ProjectConfig.from_env`) or in `config-presentation.domain.yml` (for a var
+# the AST scan cannot see: a deprecated alias no longer read inside
+# `from_env`, or a var read outside `from_env` entirely).
 # Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is

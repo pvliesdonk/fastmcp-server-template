@@ -36,6 +36,7 @@ import importlib
 import json
 import os
 import re
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -606,6 +607,33 @@ def _name_substituter(answers: Mapping[str, object]) -> Callable[[str], str]:
     return _sub
 
 
+def _render_env_section(
+    section: Mapping[str, Any],
+    section_vars: Sequence[Var],
+    sub: Callable[[str], str],
+    value_prefix: str,
+) -> list[str]:
+    """Render one env-file section's title/note/var lines.
+
+    Selection (which vars a section claims, whether it renders at all) stays
+    in `render_env_file` — this renders an already-selected section, so the
+    claim-once-per-file invariant has exactly one owner.
+    """
+    lines: list[str] = []
+    title = section.get("title")
+    if title is not None:
+        lines.append(f"# --- {title} ---")
+    note = section.get("note")
+    if note is not None:
+        for note_line in sub(str(note)).rstrip("\n").split("\n"):
+            lines.append(f"# {note_line}".rstrip())
+    for var in section_vars:
+        for help_line in var.help.splitlines():
+            lines.append(f"# {help_line}".rstrip())
+        lines.append(f"{value_prefix}{var.name}={_format_value(var, sub)}")
+    return lines
+
+
 def render_env_file(
     spec: Mapping[str, Any], vars_: Sequence[Var], answers: Mapping[str, object]
 ) -> str:
@@ -664,23 +692,12 @@ def render_env_file(
             and v.name not in excluded
             and section_tags & set(v.tags)
         ]
-        note = section.get("note")
-        if not section_vars and note is None:
+        if not section_vars and section.get("note") is None:
             continue
         placed.update(v.name for v in section_vars)
 
         _blank()
-        title = section.get("title")
-        if title is not None:
-            lines.append(f"# --- {title} ---")
-        if note is not None:
-            for note_line in _sub(str(note)).rstrip("\n").split("\n"):
-                lines.append(f"# {note_line}".rstrip())
-
-        for var in section_vars:
-            for help_line in var.help.splitlines():
-                lines.append(f"# {help_line}".rstrip())
-            lines.append(f"{value_prefix}{var.name}={_format_value(var, _sub)}")
+        lines.extend(_render_env_section(section, section_vars, _sub, value_prefix))
 
     text = "\n".join(lines).rstrip("\n")
     return f"{text}\n" if text else ""
@@ -1466,13 +1483,42 @@ def _assert_packaging_matches_container(
     )
 
 
+@dataclass(frozen=True)
+class PresentationContext:
+    """The per-run inputs every splice renderer draws on.
+
+    `write_artifacts` builds exactly one of these per run and hands it to
+    each `kind: splice` / `kind: json-splice` renderer, so the renderers
+    take "the run's presentation and answers" as one argument instead of
+    re-growing a parameter list every time a renderer needs one more
+    presentation-derived lookup. The properties resolve the same
+    `config-presentation.yml` keys `write_artifacts` used to resolve inline
+    — absent-key defaults included — so a presentation without them behaves
+    exactly as before.
+    """
+
+    presentation: Mapping[str, Any]
+    answers: Mapping[str, object]
+
+    @property
+    def required_names(self) -> Collection[str]:
+        return self.presentation.get("required_vars", ())
+
+    @property
+    def vocabulary(self) -> Mapping[str, str]:
+        return self.presentation.get("markdown_vocabulary", {}) or {}
+
+    @property
+    def documented_defaults(self) -> Mapping[str, str]:
+        return self.presentation.get("documented_defaults", {}) or {}
+
+
 def render_json_splice_file(
     project_root: Path,
     rel_path: str,
     file_spec: Mapping[str, Any],
     vars_: Sequence[Var],
-    presentation: Mapping[str, Any],
-    answers: Mapping[str, object],
+    ctx: PresentationContext,
 ) -> str:
     """Render one `kind: json-splice` artifact's full on-disk text.
 
@@ -1514,13 +1560,11 @@ def render_json_splice_file(
     except json.JSONDecodeError as exc:
         raise SystemExit(f"ERROR: {rel_path} is not valid JSON: {exc}.") from exc
 
-    sub = _name_substituter(answers)
-    packaging: Mapping[str, Sequence[str]] = presentation.get("packaging") or {}
+    sub = _name_substituter(ctx.answers)
+    packaging: Mapping[str, Sequence[str]] = ctx.presentation.get("packaging") or {}
     _validate_packaging_map(packaging)
-    choices: Mapping[str, Sequence[str]] = presentation.get("choices") or {}
-    documented_defaults: Mapping[str, str] = (
-        presentation.get("documented_defaults") or {}
-    )
+    choices: Mapping[str, Sequence[str]] = ctx.presentation.get("choices") or {}
+    documented_defaults = ctx.documented_defaults
 
     for array_spec in file_spec.get("arrays", ()):
         packaging_id = array_spec["packaging"]
@@ -1895,9 +1939,7 @@ def render_splice_file(
     rel_path: str,
     file_spec: Mapping[str, Any],
     vars_: Sequence[Var],
-    required_names: Collection[str] | None = None,
-    vocabulary: Mapping[str, str] | None = None,
-    documented_defaults: Mapping[str, str] | None = None,
+    ctx: PresentationContext,
 ) -> str:
     """Render one `kind: splice` artifact's full on-disk text.
 
@@ -1907,13 +1949,13 @@ def render_splice_file(
     generator only rewrites the marked region inside an existing file and
     never creates the file itself. Each declared region's vars are chosen
     by `_select_region_vars` (tag intersection, then an optional `required`
-    filter, both driven by *required_names* — `config-presentation.yml`'s
-    `required_vars:` list) and rendered via `render_md_table` using the
-    region's declared `columns` (forwarding *required_names* too, so a
-    region that declares a `required` table column agrees with its own
-    filter). Regions are spliced one after another, each pass operating on
-    the previous pass's output, so multiple regions in one file compose
-    correctly regardless of their relative marker positions.
+    filter, both driven by *ctx*'s `required_vars:` list) and rendered via
+    `render_md_table` using the region's declared `columns` (forwarding the
+    same list too, so a region that declares a `required` table column
+    agrees with its own filter). Regions are spliced one after another,
+    each pass operating on the previous pass's output, so multiple regions
+    in one file compose correctly regardless of their relative marker
+    positions.
     """
     target = project_root / rel_path
     if not target.exists():
@@ -1924,13 +1966,13 @@ def render_splice_file(
         )
     text = target.read_text(encoding="utf-8")
     for region in file_spec.get("regions", ()):
-        region_vars = _select_region_vars(vars_, region, required_names)
+        region_vars = _select_region_vars(vars_, region, ctx.required_names)
         table = render_md_table(
             region_vars,
             region["columns"],
-            required_names=required_names,
-            vocabulary=vocabulary,
-            documented_defaults=documented_defaults,
+            required_names=ctx.required_names,
+            vocabulary=ctx.vocabulary,
+            documented_defaults=ctx.documented_defaults,
         )
         text = splice_region(text, region["id"], table, source=rel_path)
     return text
@@ -1942,10 +1984,10 @@ def render_splice_file(
 # `config-presentation.yml`, where `docs/javascripts/config-wizard/wizard-
 # spec.json` declares only `kind: wizard` and nothing else); `splice`
 # rewrites a marked region inside an otherwise hand-authored file — see
-# `render_splice_file`. `json-splice` additionally takes the whole
-# presentation (for the `packaging:`/`choices:` maps) and the answers (for
-# `{PROJECT_NAME}` substitution inside a placeholder) — see
-# `render_json_splice_file`.
+# `render_splice_file`. Both splice renderers additionally take the run's
+# `PresentationContext` (the `packaging:`/`choices:` maps, the answers for
+# `{PROJECT_NAME}` substitution inside a placeholder, and the Markdown
+# table lookups) — see `render_json_splice_file` / `render_splice_file`.
 _ENV_KIND = "env"
 _WIZARD_KIND = "wizard"
 _SPLICE_KIND = "splice"
@@ -2063,11 +2105,7 @@ def write_artifacts(
         vars_ = collect_vars(project_root, answers)
 
     validate_presentation_keys(presentation, vars_)
-    required_names: Collection[str] = presentation.get("required_vars", ())
-    vocabulary: Mapping[str, str] = presentation.get("markdown_vocabulary", {}) or {}
-    documented_defaults: Mapping[str, str] = (
-        presentation.get("documented_defaults", {}) or {}
-    )
+    ctx = PresentationContext(presentation=presentation, answers=answers)
 
     artifacts: list[tuple[str, str]] = []
     for rel_path, file_spec in presentation.get("files", {}).items():
@@ -2077,18 +2115,10 @@ def write_artifacts(
         elif kind == _WIZARD_KIND:
             text = render_wizard_spec(presentation, vars_, answers)
         elif kind == _SPLICE_KIND:
-            text = render_splice_file(
-                project_root,
-                rel_path,
-                file_spec,
-                vars_,
-                required_names=required_names,
-                vocabulary=vocabulary,
-                documented_defaults=documented_defaults,
-            )
+            text = render_splice_file(project_root, rel_path, file_spec, vars_, ctx)
         elif kind == _JSON_SPLICE_KIND:
             text = render_json_splice_file(
-                project_root, rel_path, file_spec, vars_, presentation, answers
+                project_root, rel_path, file_spec, vars_, ctx
             )
         else:
             raise SystemExit(
@@ -2190,6 +2220,18 @@ def ensure_core_available(
             "and that both packages are resolvable from this environment."
         )
 
+    # Resolved to an absolute path (rather than letting exec search PATH) so a
+    # missing `uv` fails with the install pointer below instead of a bare
+    # FileNotFoundError, and so the exec target is unambiguous (ruff S607).
+    uv_path = shutil.which("uv")
+    if uv_path is None:
+        raise SystemExit(
+            "ERROR: `uv` is not on PATH — install `uv` "
+            "(https://docs.astral.sh/uv/) or run this script inside an "
+            "environment that already has fastmcp-pvl-core and PyYAML "
+            "installed."
+        )
+
     floor = _core_floor(project_root)
     script = str(Path(__file__).resolve())
     extra_argv = list(sys.argv[1:] if argv is None else argv)
@@ -2208,7 +2250,10 @@ def ensure_core_available(
     env = dict(os.environ)
     env["_GEN_CONFIG_BOOTSTRAPPED"] = "1"
     try:
-        os.execvpe("uv", args, env)
+        # A no-shell exec is deliberate: every element of `args` is built
+        # here, none comes from outside input, and adding a shell would only
+        # add quoting/injection surface.
+        os.execvpe(uv_path, args, env)  # noqa: S606
     except OSError as exc:
         raise SystemExit(
             f"ERROR: could not re-exec under `uv run` ({exc}) — install `uv` "
