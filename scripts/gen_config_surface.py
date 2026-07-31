@@ -2252,8 +2252,11 @@ def ensure_core_available(
     try:
         # A no-shell exec is deliberate: every element of `args` is built
         # here, none comes from outside input, and adding a shell would only
-        # add quoting/injection surface.
-        os.execvpe(uv_path, args, env)  # noqa: S606
+        # add quoting/injection surface. S606 (start-process-without-shell)
+        # is per-file-ignored for this script in pyproject.toml — a `noqa`
+        # here would trip RUF100 on the whole-repo lint pass, where `S` is
+        # not selected.
+        os.execvpe(uv_path, args, env)
     except OSError as exc:
         raise SystemExit(
             f"ERROR: could not re-exec under `uv run` ({exc}) — install `uv` "
