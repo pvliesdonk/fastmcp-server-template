@@ -273,11 +273,16 @@ def _discover_domain_vars(
     """Auto-discover domain vars from the project's own ``ProjectConfig``.
 
     Scans the config tree via ``fastmcp_pvl_core.domain_env_surface`` (core
-    ≥ 4.6.0), which AST-walks ``from_env`` in ``ProjectConfig`` *and every
+    ≥ 4.6.1), which AST-walks ``from_env`` in ``ProjectConfig`` *and every
     composed sub-config* and returns one metadata-carrying record per read —
     so a var contributed by a composed section documents with the same
     help/tags/wizard hints and required-ness as a top-level field, without
-    flattening the config. This is best-effort enrichment, not a required
+    flattening the config. Core 4.6.1 also resolves a top-level field read
+    into a local before construction (``x = parse(env(...)); cls(x=x)``) to
+    that field by name, so its metadata survives whether or not the read is
+    inline; a *section* field must still be read inline in its constructor
+    keyword to carry metadata (core cannot unambiguously strip the section
+    prefix). This is best-effort enrichment, not a required
     provenance source: a fresh render has no domain fields (and often no
     venv yet to even import its own package), so `_import_project_config`
     treats the module genuinely not existing as silent "nothing to
@@ -2369,9 +2374,26 @@ def _core_floor(project_root: Path) -> str:
 
 
 def _core_importable() -> bool:
-    """Whether `fastmcp_pvl_core` can be imported in the current interpreter."""
+    """Whether `fastmcp_pvl_core` is importable AND new enough for this generator.
+
+    Checks for the specific symbols this generator imports at runtime, not
+    merely that the package imports. On `copier update`, the project's
+    existing virtualenv may still hold the pre-update `fastmcp-pvl-core`,
+    which imports fine but lacks a symbol a newer generator needs
+    (``domain_env_surface`` landed in core 4.6.0). A bare
+    ``import fastmcp_pvl_core`` would succeed there, so `ensure_core_available`
+    would skip the re-exec and the generator would then hit a hard
+    ``ImportError`` mid-update (#306). Probing the symbols instead makes a
+    too-old core count as "not available", so the bootstrap re-execs under
+    ``uv run`` with the pyproject floor pinned and the generation succeeds.
+    Keep this list in step with the ``from fastmcp_pvl_core import ...`` names
+    the generator relies on at their newest floor.
+    """
     try:
-        import fastmcp_pvl_core  # noqa: F401
+        from fastmcp_pvl_core import (  # noqa: F401
+            domain_env_surface,
+            server_config_surface,
+        )
     except ImportError:
         return False
     return True

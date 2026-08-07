@@ -251,6 +251,36 @@ def domain_project_composed_section(fake_project):
 
 
 @pytest.fixture
+def domain_project_read_into_local(fake_project):
+    """A ``ProjectConfig`` whose ``from_env`` reads a metadata-carrying field
+    into a local in a separate statement, then passes it by bare name to
+    ``cls(...)`` — the #305 shape. The ``cls`` keyword value (a bare Name)
+    holds no literal env read, so ``domain_env_surface`` resolves the
+    READ_ONLY record to ``name=None`` and its help/tags/default would silently
+    vanish from every artifact."""
+    cfg = fake_project / "src" / "demo_mcp" / "config.py"
+    cfg.write_text(
+        "from __future__ import annotations\n\n"
+        "from dataclasses import dataclass, field\n\n"
+        "from fastmcp_pvl_core import env\n\n\n"
+        "def parse_bool(raw: str | None) -> bool:\n"
+        '    return (raw or "").lower() in {"1", "true", "yes"}\n\n\n'
+        "@dataclass(frozen=True)\n"
+        "class ProjectConfig:\n"
+        "    read_only: bool = field(\n"
+        "        default=False,\n"
+        '        metadata={"help": "Hide write tools.", "tags": ("policy",)},\n'
+        "    )\n\n"
+        "    @classmethod\n"
+        "    def from_env(cls) -> ProjectConfig:\n"
+        '        read_only = parse_bool(env("DEMO_MCP", "READ_ONLY"))\n'
+        "        return cls(read_only=read_only)\n",
+        encoding="utf-8",
+    )
+    return fake_project
+
+
+@pytest.fixture
 def domain_project_hostile_help(fake_project):
     """A ``ProjectConfig`` covering the hostile-input matrix for the README
     DOMAIN region: help text carrying a literal pipe, help spanning multiple
@@ -569,15 +599,61 @@ class TestEnsureCoreAvailable:
     def test_matches_the_real_projects_declared_floor(self):
         """Pin against the repo's real pyproject.toml.jinja, not a fixture —
         a fabricated fixture can't notice the declared floor lagging behind
-        the fastmcp-pvl-core version this generator actually needs (4.6.0,
-        for `domain_env_surface`)."""
+        the fastmcp-pvl-core version this generator actually needs (4.6.1, for
+        `domain_env_surface`'s field-name resolution of local-read vars)."""
         real_pyproject = (
             Path(__file__).resolve().parent.parent.parent / "pyproject.toml.jinja"
         )
         floor = g._CORE_FLOOR_RE.search(real_pyproject.read_text(encoding="utf-8"))
         assert floor is not None
-        major, minor = (int(part) for part in floor.group(1).split(".")[:2])
-        assert (major, minor) >= (4, 6)
+        parts = tuple(int(part) for part in floor.group(1).split("."))
+        assert parts >= (4, 6, 1)
+
+    def test_core_importable_false_when_a_needed_symbol_is_missing(self, monkeypatch):
+        """#306: a pre-update core that imports but lacks `domain_env_surface`
+        (the copier-update-to-a-newer-generator case) must count as
+        unavailable, so `ensure_core_available` re-execs under uv rather than
+        letting the generator hit a hard ImportError mid-update."""
+        import types
+
+        stub = types.ModuleType("fastmcp_pvl_core")
+        stub.server_config_surface = lambda: ()  # 4.5.x shape: no domain_env_surface
+        monkeypatch.setitem(sys.modules, "fastmcp_pvl_core", stub)
+        assert g._core_importable() is False
+
+    def test_core_importable_true_when_all_needed_symbols_present(self, monkeypatch):
+        import types
+
+        stub = types.ModuleType("fastmcp_pvl_core")
+        stub.server_config_surface = lambda: ()
+        stub.domain_env_surface = lambda _cls: ()
+        monkeypatch.setitem(sys.modules, "fastmcp_pvl_core", stub)
+        assert g._core_importable() is True
+
+    def test_reexec_pins_the_floor_when_core_is_too_old(self, tmp_path, monkeypatch):
+        """The too-old-core path resolves to a real re-exec with the pyproject
+        floor pinned — end-to-end from the symbol probe, not a stubbed
+        _core_importable."""
+        (tmp_path / "pyproject.toml").write_text(
+            'dependencies = [\n  "fastmcp-pvl-core>=4.6.1,<5",\n]\n', encoding="utf-8"
+        )
+        import types
+
+        stub = types.ModuleType("fastmcp_pvl_core")
+        stub.server_config_surface = lambda: ()  # too old: domain_env_surface absent
+        monkeypatch.setitem(sys.modules, "fastmcp_pvl_core", stub)
+        monkeypatch.setattr(g, "_yaml_importable", lambda: True)
+        monkeypatch.delenv("_GEN_CONFIG_BOOTSTRAPPED", raising=False)
+        monkeypatch.setattr(g.shutil, "which", lambda _cmd: "/fake/bin/uv")
+
+        recorded = {}
+
+        def _record_execvpe(file, args, env):  # noqa: ARG001
+            recorded["args"] = args
+
+        monkeypatch.setattr(g.os, "execvpe", _record_execvpe)
+        g.ensure_core_available(tmp_path)
+        assert "fastmcp-pvl-core==4.6.1" in recorded["args"]
 
     def test_returns_immediately_when_both_deps_are_importable(self, monkeypatch):
         monkeypatch.setattr(g, "_core_importable", lambda: True)
@@ -940,6 +1016,23 @@ class TestComposedSectionMetadata:
         assert domain_suffixes.index("VAULT_PATH") < domain_suffixes.index(
             "TRANSFER_BUCKET"
         )
+
+
+class TestReadIntoLocalResolution:
+    """#305 is fixed upstream: core >= 4.6.1 resolves a top-level field read
+    into a local before construction (`x = parse(env(...)); cls(x=x)`) to that
+    field by name, so its help/tags/default/required-ness survive without the
+    read being inline. The template just consumes that — no template-side
+    guard — so this locks the adopted behavior (and would catch a core
+    regression of the fallback)."""
+
+    def test_read_into_local_keeps_field_metadata(self, domain_project_read_into_local):
+        answers = g.load_answers(domain_project_read_into_local)
+        vars_ = g.collect_vars(domain_project_read_into_local, answers)
+        read_only = next(v for v in vars_ if v.suffix == "READ_ONLY")
+        assert read_only.help == "Hide write tools."
+        assert "policy" in read_only.tags
+        assert read_only.default is False  # a real default, not rendered required
 
 
 class TestUnscannedFromEnvReads:
