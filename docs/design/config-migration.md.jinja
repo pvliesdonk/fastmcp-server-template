@@ -88,6 +88,15 @@ Do not duplicate a var here that already has a `CONFIG-FIELDS` entry, or one
 still read inside `from_env` without a field; either produces a
 duplicate-name error from the generator.
 
+Breaking the literal-read rule inside `from_env` — reading a var through a
+project helper (`opt_int(prefix, "MAX_CHUNK_CHARS")`) or `os.environ`
+instead of `env`/`env_int`/`env_float` — fails generation with an error
+naming the call site, rather than silently dropping the var from every
+generated artifact. Fix it by switching to a literal `env(...)` read (plus
+a value-parsing helper if needed) or by declaring the var here. For a
+flagged string literal that is not an env var at all, list it under
+`scan_ignore:` in `config-presentation.domain.yml`.
+
 The inverse direction raises the same duplicate-name error: a var the scan
 *does* see that the template already declares. `config-presentation.yml`
 declares `{{ env_prefix }}_SERVER_NAME` and `{{ env_prefix }}_INSTRUCTIONS`

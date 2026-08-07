@@ -21,6 +21,19 @@ def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
+def config_contract_env() -> dict[str, str]:
+    """Env vars the template's `test_config_contract.py` presets before it
+    constructs the config via an otherwise env-less ``ProjectConfig.from_env()``.
+
+    A domain whose ``from_env`` hard-requires a variable (a fail-fast startup
+    contract) should return it here, for example::
+
+        return {"{{ env_prefix }}_SOURCE_DIR": "/tmp/vault"}
+    """
+    return {}
+
+
+@pytest.fixture
 async def client() -> AsyncIterator[Client[Any]]:
     """Return an in-memory FastMCP client connected to a fresh server."""
     server = make_server()

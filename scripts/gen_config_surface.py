@@ -31,6 +31,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import ast
 import dataclasses
 import importlib
 import json
@@ -181,8 +182,9 @@ def _load_domain_presentation(
     """Load `config-presentation.domain.yml`, tolerating its absence.
 
     Unlike `load_presentation`'s template-owned file (mandatory in every
-    render), this one is *seeded* — a downstream project owns and edits it,
-    and it is not wired into every render yet. A missing file means
+    render), this one is *seeded* — a downstream project owns and edits it.
+    Its ``vars`` feed `collect_vars` and its ``wizard_routing``/
+    ``wizard_guards`` feed `render_wizard_spec`. A missing file means
     "nothing manually declared" rather than a configuration error.
     """
     import yaml
@@ -378,6 +380,134 @@ def _discover_domain_vars(
             del sys.modules[name]
 
 
+# Helpers whose literal suffix argument the core AST scan
+# (`fastmcp_pvl_core.domain_env_suffixes`) recognizes inside `from_env`.
+_SCANNED_READ_HELPERS = frozenset({"env", "env_int", "env_float"})
+
+# A string literal shaped like an env-var suffix or full name: all-caps with
+# at least one underscore. Single all-caps words ("DEBUG", "INFO") stay out —
+# they are far more often log levels or modes than env suffixes.
+_SUFFIX_LITERAL_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
+
+
+def _unscanned_from_env_reads(
+    project_root: Path, python_module: str
+) -> tuple[tuple[str, str, int], ...]:
+    """Suffix-shaped string literals `from_env` passes to unscanned calls.
+
+    The core scan only recognizes literal ``env``/``env_int``/``env_float``
+    calls; a read through any other helper (``opt_int(prefix,
+    "MAX_CHUNK_CHARS")``, ``os.environ.get(...)``) is invisible to it, and
+    the var silently vanishes from every generated artifact while
+    ``--check`` still passes — the generator's output is self-consistent
+    with what the scan saw. This is the guard for that gap: parse the
+    project's ``config.py`` *source* (no import — it works even when the
+    module can't be imported), find ``from_env``, and return every
+    ``(literal, callee_name, lineno)`` where a suffix-shaped string literal
+    is an argument to a call whose callee is not one of the scanned
+    helpers. `collect_vars` filters the candidates against everything that
+    IS documented before failing, so a helper read of a var that some
+    provenance already declares never fires.
+
+    Purely syntactic best-effort: a missing or unparsable ``config.py``
+    returns nothing (the import path already warns about a broken module),
+    and only ``from_env`` is inspected — reads elsewhere are the domain
+    YAML's documented territory.
+    """
+    config_path = project_root / "src" / python_module / "config.py"
+    if not config_path.exists():
+        return ()
+    try:
+        tree = ast.parse(config_path.read_text(encoding="utf-8"))
+    except SyntaxError:
+        return ()
+
+    from_env: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+    for class_node in ast.walk(tree):
+        if not isinstance(class_node, ast.ClassDef):
+            continue
+        for item in class_node.body:
+            if (
+                isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and item.name == "from_env"
+            ):
+                from_env = item
+                break
+    if from_env is None:
+        return ()
+
+    candidates: list[tuple[str, str, int]] = []
+    for node in ast.walk(from_env):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name):
+            callee = func.id
+        elif isinstance(func, ast.Attribute):
+            callee = func.attr
+        else:
+            callee = "<call>"
+        if callee in _SCANNED_READ_HELPERS:
+            continue
+        args = [*node.args, *(kw.value for kw in node.keywords)]
+        for arg in args:
+            if (
+                isinstance(arg, ast.Constant)
+                and isinstance(arg.value, str)
+                and _SUFFIX_LITERAL_RE.match(arg.value)
+            ):
+                candidates.append((arg.value, callee, node.lineno))
+    return tuple(candidates)
+
+
+def _assert_no_unscanned_from_env_reads(
+    project_root: Path,
+    python_module: str,
+    env_prefix: str,
+    collected: Sequence[Var],
+    scan_ignore: Collection[str],
+) -> None:
+    """`SystemExit` when `from_env` reads a var no provenance documents.
+
+    A candidate survives only when its literal matches no collected var's
+    suffix or full name, is not the project's own ``env_prefix`` (a helper
+    taking the prefix as a literal first argument would otherwise flag the
+    prefix itself), and is not listed under the domain YAML's
+    ``scan_ignore`` — so the failure names exactly the reads that would
+    otherwise drop out of every artifact with no red gate anywhere.
+    """
+    candidates = _unscanned_from_env_reads(project_root, python_module)
+    if not candidates:
+        return
+    known_suffixes = {var.suffix for var in collected if var.suffix}
+    known_names = {var.name for var in collected}
+    ignored = set(scan_ignore)
+    offenders = [
+        (literal, callee, lineno)
+        for literal, callee, lineno in candidates
+        if literal != env_prefix
+        and literal not in known_suffixes
+        and literal not in known_names
+        and literal not in ignored
+    ]
+    if not offenders:
+        return
+    lines = "\n".join(
+        f"  - {literal!r} passed to {callee}() (config.py line {lineno})"
+        for literal, callee, lineno in offenders
+    )
+    raise SystemExit(
+        f"ERROR: {python_module}.config from_env contains env-var reads the "
+        f"AST scan cannot see:\n{lines}\n"
+        "The scan only recognizes literal env()/env_int()/env_float() calls, "
+        "so these vars would silently vanish from every generated artifact. "
+        "Either read the var via env()/env_int()/env_float() inside "
+        "from_env, declare it in config-presentation.domain.yml under "
+        "vars:, or — if the literal is not an env var at all — list it "
+        "under scan_ignore: in that same file."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Provenance merge
 # ---------------------------------------------------------------------------
@@ -514,6 +644,19 @@ def collect_vars(
                 "core, template, external, and domain."
             )
         seen_names[var.name] = var.provenance
+
+    # Runs after every provenance is merged so a helper read of a var that
+    # any source already documents (a dataclass field, a template var, a
+    # domain-YAML declaration) never fires.
+    python_module = answers.get("python_module")
+    if python_module:
+        _assert_no_unscanned_from_env_reads(
+            project_root,
+            str(python_module),
+            env_prefix,
+            collected,
+            scan_ignore=domain_presentation.get("scan_ignore") or (),
+        )
 
     return tuple(sorted(collected, key=lambda v: _PROVENANCE_ORDER.index(v.provenance)))
 
@@ -923,7 +1066,25 @@ def _register_question_id(question_id: str, seen: dict[str, str], source: str) -
     seen[question_id] = source
 
 
-def _wizard_guard(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
+def _require_keys(raw: Mapping[str, Any], keys: Sequence[str], source: str) -> None:
+    """Fail loudly when *raw* is missing any of *keys*, naming *source*.
+
+    The template-owned presentation file gets these keys right by
+    construction, but the domain seed is downstream-edited — a missing key
+    there must name the file and entry rather than surface as a bare
+    `KeyError` from deep inside a render helper.
+    """
+    missing = [key for key in keys if key not in raw]
+    if missing:
+        raise SystemExit(
+            f"ERROR: {source} is missing required key(s) "
+            f"{', '.join(repr(k) for k in missing)}."
+        )
+
+
+def _wizard_guard(
+    raw: Mapping[str, Any], index: int, source: str = "wizard_guards"
+) -> dict[str, Any]:
     """Render one `wizard_guards` entry, rejecting a non-list `when` value.
 
     ``list(scalar_string)`` silently explodes a scalar into one list entry
@@ -931,12 +1092,13 @@ def _wizard_guard(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
     of raising — a guard's `when` must already be a list in YAML (e.g.
     `[server]`), so this checks that rather than coercing.
     """
+    _require_keys(raw, ("level", "message", "when"), f"{source}[{index}]")
     when_raw = raw["when"]
     when: dict[str, list[str]] = {}
     for key, value in when_raw.items():
         if not isinstance(value, list):
             raise SystemExit(
-                f"ERROR: wizard_guards[{index}] has a non-list 'when[{key!r}]' "
+                f"ERROR: {source}[{index}] has a non-list 'when[{key!r}]' "
                 f"value {value!r} — expected a list of strings, e.g. [server]."
             )
         when[key] = list(value)
@@ -944,7 +1106,10 @@ def _wizard_guard(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
 
 
 def render_wizard_spec(
-    pres: Mapping[str, Any], vars_: Sequence[Var], answers: Mapping[str, object]
+    pres: Mapping[str, Any],
+    vars_: Sequence[Var],
+    answers: Mapping[str, object],
+    domain_pres: Mapping[str, Any] | None = None,
 ) -> str:
     """Render the config-wizard spec (`docs/javascripts/config-wizard/wizard-spec.json`).
 
@@ -954,6 +1119,16 @@ def render_wizard_spec(
     ``wizard_labels``, and ``wizard_help`` keys drive the questions, guards,
     and label/help overrides; ``examples`` is not used here (it feeds
     env-file value rendering only, via `_format_value`).
+
+    ``domain_pres`` is the loaded `config-presentation.domain.yml`, whose
+    ``wizard_routing``/``wizard_guards`` sections merge in after the
+    template-owned ones: domain routing questions render after the
+    template's routing questions (still ahead of the per-var questions),
+    domain guards after the template's guards, each in declaration order.
+    A question id colliding across the two files is a `SystemExit` like any
+    other id collision. The file is downstream-edited, so its entries get
+    named-key validation (`config-presentation.domain.yml wizard_routing[…]`
+    in the message) rather than a bare `KeyError`.
 
     ``secretKeys`` is derived from the *emitted questions*, not from
     `vars_` independently — a secret var that later gains `inferred`,
@@ -976,12 +1151,23 @@ def render_wizard_spec(
     labels: Mapping[str, str] = pres.get("wizard_labels") or {}
     help_overrides: Mapping[str, str] = pres.get("wizard_help") or {}
 
+    domain_pres = domain_pres or {}
+    domain_routing_source = "config-presentation.domain.yml wizard_routing"
+    domain_guards_source = "config-presentation.domain.yml wizard_guards"
+
     seen_ids: dict[str, str] = {}
     questions: list[dict[str, Any]] = []
     for raw in pres.get("wizard_routing", ()):
         question = _routing_question(raw)
         _register_question_id(
             question["id"], seen_ids, f"wizard_routing[{raw['id']!r}]"
+        )
+        questions.append(question)
+    for index, raw in enumerate(domain_pres.get("wizard_routing") or ()):
+        _require_keys(raw, ("id", "label", "type"), f"{domain_routing_source}[{index}]")
+        question = _routing_question(raw)
+        _register_question_id(
+            question["id"], seen_ids, f"{domain_routing_source}[{raw['id']!r}]"
         )
         questions.append(question)
     for var in vars_:
@@ -1001,6 +1187,10 @@ def render_wizard_spec(
         _wizard_guard(raw, index)
         for index, raw in enumerate(pres.get("wizard_guards", ()))
     ]
+    guards.extend(
+        _wizard_guard(raw, index, source=domain_guards_source)
+        for index, raw in enumerate(domain_pres.get("wizard_guards") or ())
+    )
 
     spec = {
         "version": 1,
@@ -2100,7 +2290,12 @@ def write_artifacts(
     project_root = Path(project_root)
     answers = load_answers(project_root)
     env_prefix = _require_env_prefix(answers)
-    presentation = load_presentation(_presentation_root(project_root), env_prefix)
+    presentation_root = _presentation_root(project_root)
+    presentation = load_presentation(presentation_root, env_prefix)
+    # Loaded here for its wizard_routing/wizard_guards sections; collect_vars
+    # loads it independently for its vars — the file is a few hundred bytes,
+    # and neither load prints anything, so the double read costs nothing.
+    domain_presentation = _load_domain_presentation(presentation_root, env_prefix)
     if vars_ is None:
         vars_ = collect_vars(project_root, answers)
 
@@ -2113,7 +2308,9 @@ def write_artifacts(
         if kind == _ENV_KIND:
             text = render_env_file(file_spec, vars_, answers)
         elif kind == _WIZARD_KIND:
-            text = render_wizard_spec(presentation, vars_, answers)
+            text = render_wizard_spec(
+                presentation, vars_, answers, domain_pres=domain_presentation
+            )
         elif kind == _SPLICE_KIND:
             text = render_splice_file(project_root, rel_path, file_spec, vars_, ctx)
         elif kind == _JSON_SPLICE_KIND:
