@@ -273,11 +273,16 @@ def _discover_domain_vars(
     """Auto-discover domain vars from the project's own ``ProjectConfig``.
 
     Scans the config tree via ``fastmcp_pvl_core.domain_env_surface`` (core
-    ≥ 4.6.0), which AST-walks ``from_env`` in ``ProjectConfig`` *and every
+    ≥ 4.6.1), which AST-walks ``from_env`` in ``ProjectConfig`` *and every
     composed sub-config* and returns one metadata-carrying record per read —
     so a var contributed by a composed section documents with the same
     help/tags/wizard hints and required-ness as a top-level field, without
-    flattening the config. This is best-effort enrichment, not a required
+    flattening the config. Core 4.6.1 also resolves a top-level field read
+    into a local before construction (``x = parse(env(...)); cls(x=x)``) to
+    that field by name, so its metadata survives whether or not the read is
+    inline; a *section* field must still be read inline in its constructor
+    keyword to carry metadata (core cannot unambiguously strip the section
+    prefix). This is best-effort enrichment, not a required
     provenance source: a fresh render has no domain fields (and often no
     venv yet to even import its own package), so `_import_project_config`
     treats the module genuinely not existing as silent "nothing to
@@ -332,114 +337,40 @@ def _discover_domain_vars(
             )
             return ()
 
-        _assert_no_dropped_field_metadata(
-            records, project_config_cls, python_module, env_prefix
-        )
-
         discovered: list[Var] = []
         seen_suffixes: set[str] = set()
         for record in records:
             if record.suffix in seen_suffixes:
                 continue
             seen_suffixes.add(record.suffix)
-            discovered.append(_domain_var_from_record(record, env_prefix))
+            if record.name is None or record.required:
+                # Tied to no constructor field (no default knowable) or a
+                # field with neither `default` nor `default_factory`: both
+                # mean "no default declared". Must NOT collapse to `None` —
+                # that would be indistinguishable from a real
+                # `x: str | None = None` optional field once both reach
+                # `_is_required`'s domain fallback.
+                default = _NO_DEFAULT
+            else:
+                default = record.default
+            tags = tuple(dict.fromkeys((*record.tags, "domain")))
+            discovered.append(
+                Var(
+                    name=f"{env_prefix}_{record.suffix}",
+                    suffix=record.suffix,
+                    provenance="domain",
+                    type_name=record.type_name or "str",
+                    default=default,
+                    help=_clean_help(record.help),
+                    tags=tags,
+                    inferred=record.inferred,
+                    wizard=dict(record.wizard),
+                )
+            )
         return tuple(discovered)
     finally:
         for name in set(sys.modules) - modules_before:
             del sys.modules[name]
-
-
-def _domain_var_from_record(record: Any, env_prefix: str) -> Var:
-    """Build a domain `Var` from one `DomainEnvVar` record.
-
-    A ``name=None`` record (read tied to no single constructor field) or a
-    ``required`` one both carry no knowable default, so they get `_NO_DEFAULT`
-    — which must NOT collapse to `None`, else it is indistinguishable from a
-    real ``x: str | None = None`` optional field once both reach
-    `_is_required`'s domain fallback.
-    """
-    default = _NO_DEFAULT if record.name is None or record.required else record.default
-    tags = tuple(dict.fromkeys((*record.tags, "domain")))
-    return Var(
-        name=f"{env_prefix}_{record.suffix}",
-        suffix=record.suffix,
-        provenance="domain",
-        type_name=record.type_name or "str",
-        default=default,
-        help=_clean_help(record.help),
-        tags=tags,
-        inferred=record.inferred,
-        wizard=dict(record.wizard),
-    )
-
-
-def _assert_no_dropped_field_metadata(
-    records: Sequence[Any],
-    project_config_cls: type,
-    python_module: str,
-    env_prefix: str,
-) -> None:
-    """`SystemExit` when a read's field metadata is silently dropped (#305).
-
-    `domain_env_surface` links a var to its field only when the ``cls(...)``
-    keyword's value is a single literal env read; a read assigned to a local
-    first (``x = parse(env(...))`` … ``cls(x=x)``) resolves to ``name=None``
-    with neutral metadata. When a same-named top-level field carries real
-    metadata, the artifacts silently lose its help/tags/default/required-ness
-    and secret masking — a mechanically detectable contradiction, so fail
-    loudly rather than ship the degraded surface. `--check` then catches it
-    instead of passing on self-consistent-but-wrong output.
-    """
-    top_fields = {f.name.upper(): f for f in dataclasses.fields(project_config_cls)}
-    top_qualname = project_config_cls.__qualname__
-    dropped: list[str] = []
-    seen: set[str] = set()
-    for record in records:
-        if record.suffix in seen or record.name is not None:
-            continue
-        seen.add(record.suffix)
-        field = top_fields.get(record.suffix)
-        if (
-            record.source == top_qualname
-            and field is not None
-            and _field_output_would_degrade(field)
-        ):
-            dropped.append(record.suffix)
-    if not dropped:
-        return
-    names = ", ".join(f"{env_prefix}_{suffix}" for suffix in dropped)
-    raise SystemExit(
-        f"ERROR: {python_module}.config from_env reads these vars into a local "
-        f"before constructing the config, so their field metadata (help, "
-        f"default, required-ness, secret masking) is dropped from every "
-        f"generated artifact:\n  {names}\n"
-        "Inline each read into its constructor keyword — "
-        'cls(field=env(_ENV_PREFIX, "SUFFIX"), ...), using env_int/env_float '
-        "for parsed values — so the scan links it to its field. A read that "
-        "genuinely cannot be inlined (a deprecation remap) belongs in "
-        "__post_init__; see docs/design/config-migration.md."
-    )
-
-
-def _field_output_would_degrade(field: dataclasses.Field[Any]) -> bool:
-    """Whether linking *field* would change generated output versus the neutral
-    metadata a ``name=None`` record carries.
-
-    True when the field declares help, tags, a wizard hint, or a real default
-    (``default`` or ``default_factory``) — anything that visibly reaches the
-    env files, README table, wizard spec, or server.json. A bare field with
-    none of these loses only its type name when left unlinked, which is not
-    worth failing a build over, so this returns False for it.
-    """
-    metadata = field.metadata
-    has_default = (
-        field.default is not dataclasses.MISSING
-        or field.default_factory is not dataclasses.MISSING
-    )
-    return (
-        bool(metadata.get("help") or metadata.get("tags") or metadata.get("wizard"))
-        or has_default
-    )
 
 
 # Helpers whose literal suffix argument the core AST scan

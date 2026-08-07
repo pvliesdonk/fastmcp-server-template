@@ -599,15 +599,15 @@ class TestEnsureCoreAvailable:
     def test_matches_the_real_projects_declared_floor(self):
         """Pin against the repo's real pyproject.toml.jinja, not a fixture —
         a fabricated fixture can't notice the declared floor lagging behind
-        the fastmcp-pvl-core version this generator actually needs (4.6.0,
-        for `domain_env_surface`)."""
+        the fastmcp-pvl-core version this generator actually needs (4.6.1, for
+        `domain_env_surface`'s field-name resolution of local-read vars)."""
         real_pyproject = (
             Path(__file__).resolve().parent.parent.parent / "pyproject.toml.jinja"
         )
         floor = g._CORE_FLOOR_RE.search(real_pyproject.read_text(encoding="utf-8"))
         assert floor is not None
-        major, minor = (int(part) for part in floor.group(1).split(".")[:2])
-        assert (major, minor) >= (4, 6)
+        parts = tuple(int(part) for part in floor.group(1).split("."))
+        assert parts >= (4, 6, 1)
 
     def test_core_importable_false_when_a_needed_symbol_is_missing(self, monkeypatch):
         """#306: a pre-update core that imports but lacks `domain_env_surface`
@@ -635,7 +635,7 @@ class TestEnsureCoreAvailable:
         floor pinned — end-to-end from the symbol probe, not a stubbed
         _core_importable."""
         (tmp_path / "pyproject.toml").write_text(
-            'dependencies = [\n  "fastmcp-pvl-core>=4.6.0,<5",\n]\n', encoding="utf-8"
+            'dependencies = [\n  "fastmcp-pvl-core>=4.6.1,<5",\n]\n', encoding="utf-8"
         )
         import types
 
@@ -653,7 +653,7 @@ class TestEnsureCoreAvailable:
 
         monkeypatch.setattr(g.os, "execvpe", _record_execvpe)
         g.ensure_core_available(tmp_path)
-        assert "fastmcp-pvl-core==4.6.0" in recorded["args"]
+        assert "fastmcp-pvl-core==4.6.1" in recorded["args"]
 
     def test_returns_immediately_when_both_deps_are_importable(self, monkeypatch):
         monkeypatch.setattr(g, "_core_importable", lambda: True)
@@ -1018,61 +1018,21 @@ class TestComposedSectionMetadata:
         )
 
 
-class TestReadIntoLocalGuard:
-    """#305: a metadata-carrying field read into a local (so `domain_env_surface`
-    resolves name=None) must fail loudly instead of silently shipping a
-    degraded surface — help/default/required-ness/secret masking stripped."""
+class TestReadIntoLocalResolution:
+    """#305 is fixed upstream: core >= 4.6.1 resolves a top-level field read
+    into a local before construction (`x = parse(env(...)); cls(x=x)`) to that
+    field by name, so its help/tags/default/required-ness survive without the
+    read being inline. The template just consumes that — no template-side
+    guard — so this locks the adopted behavior (and would catch a core
+    regression of the fallback)."""
 
-    def test_read_into_local_fails_naming_the_var(self, domain_project_read_into_local):
+    def test_read_into_local_keeps_field_metadata(self, domain_project_read_into_local):
         answers = g.load_answers(domain_project_read_into_local)
-        with pytest.raises(SystemExit) as excinfo:
-            g.collect_vars(domain_project_read_into_local, answers)
-        assert "DEMO_MCP_READ_ONLY" in str(excinfo.value)
-
-    def test_inline_read_of_the_same_field_links_and_keeps_metadata(self, fake_project):
-        (fake_project / "src" / "demo_mcp" / "config.py").write_text(
-            "from __future__ import annotations\n\n"
-            "from dataclasses import dataclass, field\n\n"
-            "from fastmcp_pvl_core import env\n\n\n"
-            "@dataclass(frozen=True)\n"
-            "class ProjectConfig:\n"
-            "    read_only: bool = field(\n"
-            "        default=False,\n"
-            '        metadata={"help": "Hide write tools.", "tags": ("policy",)},\n'
-            "    )\n\n"
-            "    @classmethod\n"
-            "    def from_env(cls) -> ProjectConfig:\n"
-            '        return cls(read_only=bool(env("DEMO_MCP", "READ_ONLY")))\n',
-            encoding="utf-8",
-        )
-        answers = g.load_answers(fake_project)
-        vars_ = g.collect_vars(fake_project, answers)
+        vars_ = g.collect_vars(domain_project_read_into_local, answers)
         read_only = next(v for v in vars_ if v.suffix == "READ_ONLY")
         assert read_only.help == "Hide write tools."
         assert "policy" in read_only.tags
-        assert read_only.default is False
-
-    def test_bare_field_without_metadata_read_into_local_does_not_fire(
-        self, fake_project
-    ):
-        """A field with no help/tags/wizard and no default loses only its type
-        name when unlinked — not worth failing a build, so the guard stays
-        quiet (only its READ_ONLY-style metadata loss is worth blocking)."""
-        (fake_project / "src" / "demo_mcp" / "config.py").write_text(
-            "from __future__ import annotations\n\n"
-            "from dataclasses import dataclass\n\n"
-            "from fastmcp_pvl_core import env\n\n\n"
-            "@dataclass(frozen=True)\n"
-            "class ProjectConfig:\n"
-            "    token: str\n\n"
-            "    @classmethod\n"
-            "    def from_env(cls) -> ProjectConfig:\n"
-            '        raw = env("DEMO_MCP", "TOKEN")\n'
-            '        return cls(token=raw or "")\n',
-            encoding="utf-8",
-        )
-        answers = g.load_answers(fake_project)
-        g.collect_vars(fake_project, answers)  # no SystemExit
+        assert read_only.default is False  # a real default, not rendered required
 
 
 class TestUnscannedFromEnvReads:
