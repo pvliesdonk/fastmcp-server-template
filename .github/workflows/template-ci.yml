@@ -1417,9 +1417,21 @@ jobs:
         # pyproject.toml carries, so it matches exactly what a downstream sees.
         # Template-only scripts (scripts/tests/, check_render_hygiene.py,
         # check_update_regression.py) are excluded from render and so omitted.
+        #
+        # The thresholds are pinned explicitly to the same values
+        # pyproject.toml.jinja's `[tool.ruff.lint.mccabe]` / `[...pylint]`
+        # blocks set. They equal ruff's current defaults, so this repo (which
+        # has no root pyproject/ruff.toml) would apply them by fallback anyway
+        # — but pinning keeps the template-side gate from silently diverging
+        # from the downstream gate if a future ruff changes those defaults.
         run: |
           uv run --with ruff ruff check \
             --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
             --per-file-ignores "scripts/gen_config_surface.py:S606" \
+            --config "lint.mccabe.max-complexity=10" \
+            --config "lint.pylint.max-args=5" \
+            --config "lint.pylint.max-branches=12" \
+            --config "lint.pylint.max-returns=6" \
+            --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             scripts/gen_config_surface.py scripts/copier_update_aggregator.py
