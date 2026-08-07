@@ -251,6 +251,36 @@ def domain_project_composed_section(fake_project):
 
 
 @pytest.fixture
+def domain_project_read_into_local(fake_project):
+    """A ``ProjectConfig`` whose ``from_env`` reads a metadata-carrying field
+    into a local in a separate statement, then passes it by bare name to
+    ``cls(...)`` — the #305 shape. The ``cls`` keyword value (a bare Name)
+    holds no literal env read, so ``domain_env_surface`` resolves the
+    READ_ONLY record to ``name=None`` and its help/tags/default would silently
+    vanish from every artifact."""
+    cfg = fake_project / "src" / "demo_mcp" / "config.py"
+    cfg.write_text(
+        "from __future__ import annotations\n\n"
+        "from dataclasses import dataclass, field\n\n"
+        "from fastmcp_pvl_core import env\n\n\n"
+        "def parse_bool(raw: str | None) -> bool:\n"
+        '    return (raw or "").lower() in {"1", "true", "yes"}\n\n\n'
+        "@dataclass(frozen=True)\n"
+        "class ProjectConfig:\n"
+        "    read_only: bool = field(\n"
+        "        default=False,\n"
+        '        metadata={"help": "Hide write tools.", "tags": ("policy",)},\n'
+        "    )\n\n"
+        "    @classmethod\n"
+        "    def from_env(cls) -> ProjectConfig:\n"
+        '        read_only = parse_bool(env("DEMO_MCP", "READ_ONLY"))\n'
+        "        return cls(read_only=read_only)\n",
+        encoding="utf-8",
+    )
+    return fake_project
+
+
+@pytest.fixture
 def domain_project_hostile_help(fake_project):
     """A ``ProjectConfig`` covering the hostile-input matrix for the README
     DOMAIN region: help text carrying a literal pipe, help spanning multiple
@@ -578,6 +608,52 @@ class TestEnsureCoreAvailable:
         assert floor is not None
         major, minor = (int(part) for part in floor.group(1).split(".")[:2])
         assert (major, minor) >= (4, 6)
+
+    def test_core_importable_false_when_a_needed_symbol_is_missing(self, monkeypatch):
+        """#306: a pre-update core that imports but lacks `domain_env_surface`
+        (the copier-update-to-a-newer-generator case) must count as
+        unavailable, so `ensure_core_available` re-execs under uv rather than
+        letting the generator hit a hard ImportError mid-update."""
+        import types
+
+        stub = types.ModuleType("fastmcp_pvl_core")
+        stub.server_config_surface = lambda: ()  # 4.5.x shape: no domain_env_surface
+        monkeypatch.setitem(sys.modules, "fastmcp_pvl_core", stub)
+        assert g._core_importable() is False
+
+    def test_core_importable_true_when_all_needed_symbols_present(self, monkeypatch):
+        import types
+
+        stub = types.ModuleType("fastmcp_pvl_core")
+        stub.server_config_surface = lambda: ()
+        stub.domain_env_surface = lambda _cls: ()
+        monkeypatch.setitem(sys.modules, "fastmcp_pvl_core", stub)
+        assert g._core_importable() is True
+
+    def test_reexec_pins_the_floor_when_core_is_too_old(self, tmp_path, monkeypatch):
+        """The too-old-core path resolves to a real re-exec with the pyproject
+        floor pinned — end-to-end from the symbol probe, not a stubbed
+        _core_importable."""
+        (tmp_path / "pyproject.toml").write_text(
+            'dependencies = [\n  "fastmcp-pvl-core>=4.6.0,<5",\n]\n', encoding="utf-8"
+        )
+        import types
+
+        stub = types.ModuleType("fastmcp_pvl_core")
+        stub.server_config_surface = lambda: ()  # too old: domain_env_surface absent
+        monkeypatch.setitem(sys.modules, "fastmcp_pvl_core", stub)
+        monkeypatch.setattr(g, "_yaml_importable", lambda: True)
+        monkeypatch.delenv("_GEN_CONFIG_BOOTSTRAPPED", raising=False)
+        monkeypatch.setattr(g.shutil, "which", lambda _cmd: "/fake/bin/uv")
+
+        recorded = {}
+
+        def _record_execvpe(file, args, env):  # noqa: ARG001
+            recorded["args"] = args
+
+        monkeypatch.setattr(g.os, "execvpe", _record_execvpe)
+        g.ensure_core_available(tmp_path)
+        assert "fastmcp-pvl-core==4.6.0" in recorded["args"]
 
     def test_returns_immediately_when_both_deps_are_importable(self, monkeypatch):
         monkeypatch.setattr(g, "_core_importable", lambda: True)
@@ -940,6 +1016,63 @@ class TestComposedSectionMetadata:
         assert domain_suffixes.index("VAULT_PATH") < domain_suffixes.index(
             "TRANSFER_BUCKET"
         )
+
+
+class TestReadIntoLocalGuard:
+    """#305: a metadata-carrying field read into a local (so `domain_env_surface`
+    resolves name=None) must fail loudly instead of silently shipping a
+    degraded surface — help/default/required-ness/secret masking stripped."""
+
+    def test_read_into_local_fails_naming_the_var(self, domain_project_read_into_local):
+        answers = g.load_answers(domain_project_read_into_local)
+        with pytest.raises(SystemExit) as excinfo:
+            g.collect_vars(domain_project_read_into_local, answers)
+        assert "DEMO_MCP_READ_ONLY" in str(excinfo.value)
+
+    def test_inline_read_of_the_same_field_links_and_keeps_metadata(self, fake_project):
+        (fake_project / "src" / "demo_mcp" / "config.py").write_text(
+            "from __future__ import annotations\n\n"
+            "from dataclasses import dataclass, field\n\n"
+            "from fastmcp_pvl_core import env\n\n\n"
+            "@dataclass(frozen=True)\n"
+            "class ProjectConfig:\n"
+            "    read_only: bool = field(\n"
+            "        default=False,\n"
+            '        metadata={"help": "Hide write tools.", "tags": ("policy",)},\n'
+            "    )\n\n"
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            '        return cls(read_only=bool(env("DEMO_MCP", "READ_ONLY")))\n',
+            encoding="utf-8",
+        )
+        answers = g.load_answers(fake_project)
+        vars_ = g.collect_vars(fake_project, answers)
+        read_only = next(v for v in vars_ if v.suffix == "READ_ONLY")
+        assert read_only.help == "Hide write tools."
+        assert "policy" in read_only.tags
+        assert read_only.default is False
+
+    def test_bare_field_without_metadata_read_into_local_does_not_fire(
+        self, fake_project
+    ):
+        """A field with no help/tags/wizard and no default loses only its type
+        name when unlinked — not worth failing a build, so the guard stays
+        quiet (only its READ_ONLY-style metadata loss is worth blocking)."""
+        (fake_project / "src" / "demo_mcp" / "config.py").write_text(
+            "from __future__ import annotations\n\n"
+            "from dataclasses import dataclass\n\n"
+            "from fastmcp_pvl_core import env\n\n\n"
+            "@dataclass(frozen=True)\n"
+            "class ProjectConfig:\n"
+            "    token: str\n\n"
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            '        raw = env("DEMO_MCP", "TOKEN")\n'
+            '        return cls(token=raw or "")\n',
+            encoding="utf-8",
+        )
+        answers = g.load_answers(fake_project)
+        g.collect_vars(fake_project, answers)  # no SystemExit
 
 
 class TestUnscannedFromEnvReads:

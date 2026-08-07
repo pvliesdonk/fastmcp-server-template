@@ -332,12 +332,39 @@ def _discover_domain_vars(
             )
             return ()
 
+        # For the metadata-drop guard below: a same-named top-level field
+        # whose metadata a `name=None` record would silently discard.
+        top_fields = {
+            field.name.upper(): field
+            for field in dataclasses.fields(project_config_cls)
+        }
+        top_qualname = project_config_cls.__qualname__
+        unlinked_with_metadata: list[str] = []
+
         discovered: list[Var] = []
         seen_suffixes: set[str] = set()
         for record in records:
             if record.suffix in seen_suffixes:
                 continue
             seen_suffixes.add(record.suffix)
+            if record.name is None:
+                # `domain_env_surface` only links a var to its field when the
+                # `cls(...)` keyword's value is a single literal env read; a
+                # read assigned to a local first (`x = parse(env(...))` …
+                # `cls(x=x)`) resolves to `name=None` with neutral metadata.
+                # When a same-named top-level field carries real metadata, the
+                # artifacts silently lose its help/tags/default/required-ness
+                # and secret masking (#305) — a mechanically detectable
+                # contradiction, so fail loudly rather than ship the degraded
+                # surface. `--check` then catches it instead of passing on
+                # self-consistent-but-wrong output.
+                field = top_fields.get(record.suffix)
+                if (
+                    record.source == top_qualname
+                    and field is not None
+                    and _field_output_would_degrade(field)
+                ):
+                    unlinked_with_metadata.append(record.suffix)
             if record.name is None or record.required:
                 # Tied to no constructor field (no default knowable) or a
                 # field with neither `default` nor `default_factory`: both
@@ -362,10 +389,47 @@ def _discover_domain_vars(
                     wizard=dict(record.wizard),
                 )
             )
+        if unlinked_with_metadata:
+            names = ", ".join(
+                f"{env_prefix}_{suffix}" for suffix in unlinked_with_metadata
+            )
+            raise SystemExit(
+                f"ERROR: {python_module}.config from_env reads these vars into "
+                f"a local before constructing the config, so their field "
+                f"metadata (help, default, required-ness, secret masking) is "
+                f"dropped from every generated artifact:\n  {names}\n"
+                "Inline each read into its constructor keyword — "
+                'cls(field=env(_ENV_PREFIX, "SUFFIX"), ...), using '
+                "env_int/env_float for parsed values — so the scan links it to "
+                "its field. A read that genuinely cannot be inlined (a "
+                "deprecation remap) belongs in __post_init__; see "
+                "docs/design/config-migration.md."
+            )
         return tuple(discovered)
     finally:
         for name in set(sys.modules) - modules_before:
             del sys.modules[name]
+
+
+def _field_output_would_degrade(field: dataclasses.Field[Any]) -> bool:
+    """Whether linking *field* would change generated output versus the neutral
+    metadata a ``name=None`` record carries.
+
+    True when the field declares help, tags, a wizard hint, or a real default
+    (``default`` or ``default_factory``) — anything that visibly reaches the
+    env files, README table, wizard spec, or server.json. A bare field with
+    none of these loses only its type name when left unlinked, which is not
+    worth failing a build over, so this returns False for it.
+    """
+    metadata = field.metadata
+    has_default = (
+        field.default is not dataclasses.MISSING
+        or field.default_factory is not dataclasses.MISSING
+    )
+    return (
+        bool(metadata.get("help") or metadata.get("tags") or metadata.get("wizard"))
+        or has_default
+    )
 
 
 # Helpers whose literal suffix argument the core AST scan
@@ -2369,9 +2433,26 @@ def _core_floor(project_root: Path) -> str:
 
 
 def _core_importable() -> bool:
-    """Whether `fastmcp_pvl_core` can be imported in the current interpreter."""
+    """Whether `fastmcp_pvl_core` is importable AND new enough for this generator.
+
+    Checks for the specific symbols this generator imports at runtime, not
+    merely that the package imports. On `copier update`, the project's
+    existing virtualenv may still hold the pre-update `fastmcp-pvl-core`,
+    which imports fine but lacks a symbol a newer generator needs
+    (``domain_env_surface`` landed in core 4.6.0). A bare
+    ``import fastmcp_pvl_core`` would succeed there, so `ensure_core_available`
+    would skip the re-exec and the generator would then hit a hard
+    ``ImportError`` mid-update (#306). Probing the symbols instead makes a
+    too-old core count as "not available", so the bootstrap re-execs under
+    ``uv run`` with the pyproject floor pinned and the generation succeeds.
+    Keep this list in step with the ``from fastmcp_pvl_core import ...`` names
+    the generator relies on at their newest floor.
+    """
     try:
-        import fastmcp_pvl_core  # noqa: F401
+        from fastmcp_pvl_core import (  # noqa: F401
+            domain_env_surface,
+            server_config_surface,
+        )
     except ImportError:
         return False
     return True
