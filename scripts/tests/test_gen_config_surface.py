@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import jsonschema
 import pytest
@@ -843,6 +844,121 @@ class TestDiscoverDomainVarsFieldShapes:
         assert token.default is g._NO_DEFAULT
 
 
+class TestUnscannedFromEnvReads:
+    """A from_env read through anything other than a literal env()/env_int()/
+    env_float() call is invisible to the core scan; unless some provenance
+    documents the var anyway, generation must fail naming the read instead
+    of silently dropping the var from every artifact."""
+
+    _CONFIG_HEADER = (
+        "from __future__ import annotations\n\n"
+        "import os\n"
+        "from dataclasses import dataclass, field\n\n"
+        "from fastmcp_pvl_core import env\n\n\n"
+        "def opt_int(prefix: str, name: str) -> int | None:\n"
+        '    raw = os.environ.get(prefix + "_" + name)\n'
+        "    return int(raw) if raw else None\n\n\n"
+        "@dataclass(frozen=True)\n"
+        "class ProjectConfig:\n"
+    )
+
+    def _write_config(self, fake_project, body: str) -> None:
+        (fake_project / "src" / "demo_mcp" / "config.py").write_text(
+            self._CONFIG_HEADER + body, encoding="utf-8"
+        )
+
+    def test_helper_read_of_an_undocumented_var_fails_naming_the_call(
+        self, fake_project
+    ):
+        self._write_config(
+            fake_project,
+            "    max_chunk: int | None = None\n\n"
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            '        return cls(max_chunk=opt_int("DEMO_MCP", "MAX_CHUNK_CHARS"))\n',
+        )
+        answers = g.load_answers(fake_project)
+        with pytest.raises(SystemExit) as excinfo:
+            g.collect_vars(fake_project, answers)
+        message = str(excinfo.value)
+        assert "MAX_CHUNK_CHARS" in message
+        assert "opt_int" in message
+
+    def test_scanned_env_reads_never_fire(self, domain_project_field_shapes):
+        answers = g.load_answers(domain_project_field_shapes)
+        vars_ = g.collect_vars(domain_project_field_shapes, answers)
+        assert any(v.suffix == "VAULT_PATH" for v in vars_)
+
+    def test_single_word_caps_literal_is_not_suffix_shaped(self, fake_project):
+        self._write_config(
+            fake_project,
+            '    mode: str = "simple"\n\n'
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            '        return cls(mode=(env("DEMO_MCP", "MODE") or "SIMPLE").lower())\n',
+        )
+        answers = g.load_answers(fake_project)
+        g.collect_vars(fake_project, answers)
+
+    def test_domain_yaml_declaration_documents_the_read(
+        self, fake_project, template_root
+    ):
+        self._write_config(
+            fake_project,
+            "    max_chunk: int | None = None\n\n"
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            '        return cls(max_chunk=opt_int("DEMO_MCP", "MAX_CHUNK_CHARS"))\n',
+        )
+        (fake_project / "config-presentation.yml").write_text(
+            (template_root / "config-presentation.yml").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (fake_project / "config-presentation.domain.yml").write_text(
+            "vars:\n"
+            '  - name: "{PREFIX}_MAX_CHUNK_CHARS"\n'
+            "    type_name: int\n"
+            "    default: null\n"
+            "    help: Maximum characters per chunk.\n",
+            encoding="utf-8",
+        )
+        answers = g.load_answers(fake_project)
+        vars_ = g.collect_vars(fake_project, answers)
+        assert any(v.name == "DEMO_MCP_MAX_CHUNK_CHARS" for v in vars_)
+
+    def test_scan_ignore_allowlists_a_false_positive(self, fake_project, template_root):
+        self._write_config(
+            fake_project,
+            '    mode: str = "a"\n\n'
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            "        return cls(mode=str.removeprefix("
+            'env("DEMO_MCP", "MODE") or "", "LEGACY_PREFIX"))\n',
+        )
+        (fake_project / "config-presentation.yml").write_text(
+            (template_root / "config-presentation.yml").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (fake_project / "config-presentation.domain.yml").write_text(
+            "scan_ignore: [LEGACY_PREFIX]\n", encoding="utf-8"
+        )
+        answers = g.load_answers(fake_project)
+        g.collect_vars(fake_project, answers)
+
+    def test_without_the_allowlist_the_same_literal_fails(self, fake_project):
+        self._write_config(
+            fake_project,
+            '    mode: str = "a"\n\n'
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            "        return cls(mode=str.removeprefix("
+            'env("DEMO_MCP", "MODE") or "", "LEGACY_PREFIX"))\n',
+        )
+        answers = g.load_answers(fake_project)
+        with pytest.raises(SystemExit, match="LEGACY_PREFIX"):
+            g.collect_vars(fake_project, answers)
+
+
 class TestDomainRequiredColumnFieldShapes:
     """The three domain field-shape rows, rendered through `render_md_table`'s `required`
     column — the reader-facing surface `_is_required` feeds."""
@@ -1528,6 +1644,152 @@ class TestQuestionIdCollision:
         )
         with pytest.raises(SystemExit, match="auth"):
             g.render_wizard_spec(pres, (*vars_, colliding), answers)
+
+
+class TestDomainWizardSections:
+    """The seeded `config-presentation.domain.yml` promises wizard_routing /
+    wizard_guards sections; `render_wizard_spec` merges them in after the
+    template-owned ones."""
+
+    _ROUTING: ClassVar[dict] = {
+        "id": "storage",
+        "label": "Storage backend",
+        "type": "select",
+        "options": [
+            {"value": "local", "label": "Local disk"},
+            {"value": "s3", "label": "S3", "emit": {"DEMO_MCP_BACKEND": "s3"}},
+        ],
+    }
+    _GUARD: ClassVar[dict] = {
+        "when": {"deployment": ["server"]},
+        "level": "warning",
+        "message": "domain guard fired",
+    }
+
+    def _render(self, fake_project, template_root, domain):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(fake_project, answers)
+        return json.loads(
+            g.render_wizard_spec(pres, vars_, answers, domain_pres=domain)
+        )
+
+    def test_domain_routing_lands_after_template_routing_before_var_questions(
+        self, fake_project, template_root
+    ):
+        spec = self._render(
+            fake_project, template_root, {"wizard_routing": [self._ROUTING]}
+        )
+        ids = [q["id"] for q in spec["questions"]]
+        first_var = next(i for i, q in enumerate(spec["questions"]) if "var" in q)
+        assert ids.index("auth") < ids.index("storage") < first_var
+
+    def test_domain_guard_appends_after_the_template_guards(
+        self, fake_project, template_root
+    ):
+        spec = self._render(
+            fake_project, template_root, {"wizard_guards": [self._GUARD]}
+        )
+        assert len(spec["guards"]) >= 2, "template's own guard went missing"
+        assert spec["guards"][-1]["message"] == "domain guard fired"
+
+    def test_no_domain_pres_renders_identically_to_empty_sections(
+        self, fake_project, template_root
+    ):
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        vars_ = g.collect_vars(fake_project, answers)
+        assert g.render_wizard_spec(pres, vars_, answers) == g.render_wizard_spec(
+            pres,
+            vars_,
+            answers,
+            domain_pres={"wizard_routing": [], "wizard_guards": []},
+        )
+
+    def test_domain_question_id_colliding_with_template_names_the_domain_file(
+        self, fake_project, template_root
+    ):
+        colliding = dict(self._ROUTING, id="deployment")
+        with pytest.raises(SystemExit, match=r"config-presentation\.domain\.yml"):
+            self._render(fake_project, template_root, {"wizard_routing": [colliding]})
+
+    def test_domain_routing_missing_keys_fails_naming_the_entry(
+        self, fake_project, template_root
+    ):
+        with pytest.raises(
+            SystemExit, match=r"wizard_routing\[0\] is missing required key"
+        ):
+            self._render(
+                fake_project, template_root, {"wizard_routing": [{"id": "storage"}]}
+            )
+
+    def test_domain_guard_missing_keys_fails_naming_the_entry(
+        self, fake_project, template_root
+    ):
+        with pytest.raises(
+            SystemExit,
+            match=r"config-presentation.domain.yml wizard_guards\[0\] is missing",
+        ):
+            self._render(
+                fake_project,
+                template_root,
+                {"wizard_guards": [{"when": {"deployment": ["server"]}}]},
+            )
+
+    def test_spec_with_domain_sections_still_validates_against_schema(
+        self, fake_project, template_root
+    ):
+        schema = json.loads(
+            (
+                template_root
+                / "docs"
+                / "javascripts"
+                / "config-wizard"
+                / "wizard-spec-schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        spec = self._render(
+            fake_project,
+            template_root,
+            {"wizard_routing": [self._ROUTING], "wizard_guards": [self._GUARD]},
+        )
+        jsonschema.validate(instance=spec, schema=schema)
+
+    def test_write_artifacts_reads_the_seeded_domain_file_with_prefix_substitution(
+        self, fake_project, template_root
+    ):
+        # A project-local config-presentation.yml makes _presentation_root
+        # resolve to the project, so the domain file beside it is the one read.
+        (fake_project / "config-presentation.yml").write_text(
+            (template_root / "config-presentation.yml").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (fake_project / "config-presentation.domain.yml").write_text(
+            "wizard_routing:\n"
+            "  - id: storage\n"
+            "    label: Storage backend\n"
+            "    type: select\n"
+            "    options:\n"
+            '      - {value: s3, label: S3, emit: {"{PREFIX}_BACKEND": s3}}\n'
+            "wizard_guards:\n"
+            "  - when: {storage: [s3]}\n"
+            "    level: warning\n"
+            "    message: domain guard fired\n",
+            encoding="utf-8",
+        )
+        g.write_artifacts(fake_project, check=False)
+        spec = json.loads(
+            (
+                fake_project
+                / "docs"
+                / "javascripts"
+                / "config-wizard"
+                / "wizard-spec.json"
+            ).read_text(encoding="utf-8")
+        )
+        storage = next(q for q in spec["questions"] if q["id"] == "storage")
+        assert storage["options"][0]["emit"] == {"DEMO_MCP_BACKEND": "s3"}
+        assert spec["guards"][-1]["message"] == "domain guard fired"
 
 
 class TestUnknownFileKind:

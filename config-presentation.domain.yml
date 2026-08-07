@@ -14,8 +14,28 @@
 # or give it `default: null` (or a real default) to mark it optional.
 vars: []
 
-# Extra wizard questions specific to this project.
+# The generator fails when from_env passes a suffix-shaped string literal
+# (ALL_CAPS_WITH_UNDERSCORES) to anything other than env()/env_int()/
+# env_float() and nothing documents that var — such a read is invisible to
+# the AST scan, so the var would silently vanish from every generated
+# artifact. List a literal here only when it is NOT an env var at all
+# (a dict key, a mode name) and the failure is a false positive.
+scan_ignore: []
+
+# Extra wizard questions specific to this project.  Rendered after the
+# template's routing questions, ahead of the per-var questions.  Same shape
+# as the template-owned wizard_routing, e.g.:
+#   - id: storage
+#     label: "Storage backend"
+#     type: select
+#     options:
+#       - {value: local, label: "Local disk", emit: {"{PREFIX}_BACKEND": local}}
+#       - {value: s3, label: "S3", emit: {"{PREFIX}_BACKEND": s3}}
 wizard_routing: []
 
-# Extra wizard guards specific to this project.
+# Extra wizard guards specific to this project, appended after the
+# template's.  Same shape as the template-owned wizard_guards, e.g.:
+#   - when: {storage: [s3]}
+#     level: warning
+#     message: "S3 storage needs credentials via the standard AWS env vars."
 wizard_guards: []
