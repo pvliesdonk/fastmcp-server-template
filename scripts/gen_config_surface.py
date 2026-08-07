@@ -44,7 +44,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+    from collections.abc import (
+        Callable,
+        Collection,
+        Iterable,
+        Iterator,
+        Mapping,
+        Sequence,
+    )
     from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -332,14 +339,9 @@ def _discover_domain_vars(
             )
             return ()
 
-        # For the metadata-drop guard below: a same-named top-level field
-        # whose metadata a `name=None` record would silently discard.
-        top_fields = {
-            field.name.upper(): field
-            for field in dataclasses.fields(project_config_cls)
-        }
-        top_qualname = project_config_cls.__qualname__
-        unlinked_with_metadata: list[str] = []
+        _assert_no_dropped_field_metadata(
+            records, project_config_cls, python_module, env_prefix
+        )
 
         discovered: list[Var] = []
         seen_suffixes: set[str] = set()
@@ -347,68 +349,83 @@ def _discover_domain_vars(
             if record.suffix in seen_suffixes:
                 continue
             seen_suffixes.add(record.suffix)
-            if record.name is None:
-                # `domain_env_surface` only links a var to its field when the
-                # `cls(...)` keyword's value is a single literal env read; a
-                # read assigned to a local first (`x = parse(env(...))` …
-                # `cls(x=x)`) resolves to `name=None` with neutral metadata.
-                # When a same-named top-level field carries real metadata, the
-                # artifacts silently lose its help/tags/default/required-ness
-                # and secret masking (#305) — a mechanically detectable
-                # contradiction, so fail loudly rather than ship the degraded
-                # surface. `--check` then catches it instead of passing on
-                # self-consistent-but-wrong output.
-                field = top_fields.get(record.suffix)
-                if (
-                    record.source == top_qualname
-                    and field is not None
-                    and _field_output_would_degrade(field)
-                ):
-                    unlinked_with_metadata.append(record.suffix)
-            if record.name is None or record.required:
-                # Tied to no constructor field (no default knowable) or a
-                # field with neither `default` nor `default_factory`: both
-                # mean "no default declared". Must NOT collapse to `None` —
-                # that would be indistinguishable from a real
-                # `x: str | None = None` optional field once both reach
-                # `_is_required`'s domain fallback.
-                default = _NO_DEFAULT
-            else:
-                default = record.default
-            tags = tuple(dict.fromkeys((*record.tags, "domain")))
-            discovered.append(
-                Var(
-                    name=f"{env_prefix}_{record.suffix}",
-                    suffix=record.suffix,
-                    provenance="domain",
-                    type_name=record.type_name or "str",
-                    default=default,
-                    help=_clean_help(record.help),
-                    tags=tags,
-                    inferred=record.inferred,
-                    wizard=dict(record.wizard),
-                )
-            )
-        if unlinked_with_metadata:
-            names = ", ".join(
-                f"{env_prefix}_{suffix}" for suffix in unlinked_with_metadata
-            )
-            raise SystemExit(
-                f"ERROR: {python_module}.config from_env reads these vars into "
-                f"a local before constructing the config, so their field "
-                f"metadata (help, default, required-ness, secret masking) is "
-                f"dropped from every generated artifact:\n  {names}\n"
-                "Inline each read into its constructor keyword — "
-                'cls(field=env(_ENV_PREFIX, "SUFFIX"), ...), using '
-                "env_int/env_float for parsed values — so the scan links it to "
-                "its field. A read that genuinely cannot be inlined (a "
-                "deprecation remap) belongs in __post_init__; see "
-                "docs/design/config-migration.md."
-            )
+            discovered.append(_domain_var_from_record(record, env_prefix))
         return tuple(discovered)
     finally:
         for name in set(sys.modules) - modules_before:
             del sys.modules[name]
+
+
+def _domain_var_from_record(record: Any, env_prefix: str) -> Var:
+    """Build a domain `Var` from one `DomainEnvVar` record.
+
+    A ``name=None`` record (read tied to no single constructor field) or a
+    ``required`` one both carry no knowable default, so they get `_NO_DEFAULT`
+    — which must NOT collapse to `None`, else it is indistinguishable from a
+    real ``x: str | None = None`` optional field once both reach
+    `_is_required`'s domain fallback.
+    """
+    default = _NO_DEFAULT if record.name is None or record.required else record.default
+    tags = tuple(dict.fromkeys((*record.tags, "domain")))
+    return Var(
+        name=f"{env_prefix}_{record.suffix}",
+        suffix=record.suffix,
+        provenance="domain",
+        type_name=record.type_name or "str",
+        default=default,
+        help=_clean_help(record.help),
+        tags=tags,
+        inferred=record.inferred,
+        wizard=dict(record.wizard),
+    )
+
+
+def _assert_no_dropped_field_metadata(
+    records: Iterable[Any],
+    project_config_cls: type,
+    python_module: str,
+    env_prefix: str,
+) -> None:
+    """`SystemExit` when a read's field metadata is silently dropped (#305).
+
+    `domain_env_surface` links a var to its field only when the ``cls(...)``
+    keyword's value is a single literal env read; a read assigned to a local
+    first (``x = parse(env(...))`` … ``cls(x=x)``) resolves to ``name=None``
+    with neutral metadata. When a same-named top-level field carries real
+    metadata, the artifacts silently lose its help/tags/default/required-ness
+    and secret masking — a mechanically detectable contradiction, so fail
+    loudly rather than ship the degraded surface. `--check` then catches it
+    instead of passing on self-consistent-but-wrong output.
+    """
+    top_fields = {f.name.upper(): f for f in dataclasses.fields(project_config_cls)}
+    top_qualname = project_config_cls.__qualname__
+    dropped: list[str] = []
+    seen: set[str] = set()
+    for record in records:
+        if record.suffix in seen or record.name is not None:
+            continue
+        seen.add(record.suffix)
+        field = top_fields.get(record.suffix)
+        if (
+            record.source == top_qualname
+            and field is not None
+            and _field_output_would_degrade(field)
+        ):
+            dropped.append(record.suffix)
+    if not dropped:
+        return
+    names = ", ".join(f"{env_prefix}_{suffix}" for suffix in dropped)
+    raise SystemExit(
+        f"ERROR: {python_module}.config from_env reads these vars into a local "
+        f"before constructing the config, so their field metadata (help, "
+        f"default, required-ness, secret masking) is dropped from every "
+        f"generated artifact:\n  {names}\n"
+        "Inline each read into its constructor keyword — "
+        'cls(field=env(_ENV_PREFIX, "SUFFIX"), ...), using env_int/env_float '
+        "for parsed values — so the scan links it to its field. A read that "
+        "genuinely cannot be inlined (a deprecation remap) belongs in "
+        "__post_init__; see docs/design/config-migration.md."
+    )
 
 
 def _field_output_would_degrade(field: dataclasses.Field[Any]) -> bool:
