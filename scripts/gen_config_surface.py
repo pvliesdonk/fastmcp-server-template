@@ -220,7 +220,7 @@ def _import_project_config(project_root: Path, python_module: str) -> type | Non
 
     Only ``sys.path`` is restored before returning. ``sys.modules`` is
     deliberately left alone here: `typing.get_type_hints` (used inside
-    `fastmcp_pvl_core.domain_env_suffixes`, which the caller runs against the
+    `fastmcp_pvl_core.domain_env_surface`, which the caller runs against the
     returned class right after this) resolves a class's annotations via
     ``sys.modules[cls.__module__]``, so popping the module before that scan
     runs would turn every annotation lookup into a `NameError`. The caller
