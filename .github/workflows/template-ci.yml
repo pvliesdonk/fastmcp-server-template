@@ -1401,3 +1401,25 @@ jobs:
         run: |
           uv run --with ruff ruff format --check --line-length 88 \
             scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/tests/
+
+      - name: Structural gate on shipped scripts (matches downstream diff-gate)
+        # The scripts that render into every project (gen_config_surface.py,
+        # copier_update_aggregator.py) must satisfy the SAME structural rules
+        # the downstream diff-gate enforces (CLAUDE.md gate #5 / the `structure`
+        # job): C901 + the PLR complexity family + S. The `Lint aggregator`
+        # step above intentionally mirrors only the base whole-repo `select`,
+        # which omits these — so a complexity regression in a shipped script
+        # (e.g. #303: `_unscanned_from_env_reads` reaching C901's 11 > 10) used
+        # to ship green and then fail the diff-gate on the very `copier update`
+        # that delivered it, in a downstream whose own diff was clean. This
+        # gate runs whole-file (the template ships the whole script, not a
+        # diff) with the same per-file `S606` ignore the rendered
+        # pyproject.toml carries, so it matches exactly what a downstream sees.
+        # Template-only scripts (scripts/tests/, check_render_hygiene.py,
+        # check_update_regression.py) are excluded from render and so omitted.
+        run: |
+          uv run --with ruff ruff check \
+            --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
+            --per-file-ignores "scripts/gen_config_surface.py:S606" \
+            --line-length 88 \
+            scripts/gen_config_surface.py scripts/copier_update_aggregator.py
