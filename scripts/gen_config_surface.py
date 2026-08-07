@@ -44,14 +44,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        Callable,
-        Collection,
-        Iterable,
-        Iterator,
-        Mapping,
-        Sequence,
-    )
+    from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
     from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -381,7 +374,7 @@ def _domain_var_from_record(record: Any, env_prefix: str) -> Var:
 
 
 def _assert_no_dropped_field_metadata(
-    records: Iterable[Any],
+    records: Sequence[Any],
     project_config_cls: type,
     python_module: str,
     env_prefix: str,
