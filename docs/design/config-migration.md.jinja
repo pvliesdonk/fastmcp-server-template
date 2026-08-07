@@ -20,9 +20,12 @@ is changing now.
 All four files are now `generated`, produced by
 `scripts/gen_config_surface.py` from
 `fastmcp_pvl_core.server_config_surface()` plus `config-presentation.yml`,
-and re-run on every `copier copy` and `copier update`. The first `copier
-update` that pulls this change **overwrites whatever you hand-wrote in those
-four files** with the generator's own output.
+and re-run on every `copier copy` (as a post-copy task) and at the end of
+every `copier update` (as an after-stage migration, once the update has
+restored your domain `config.py` — so the regenerated artifacts always
+reflect your real domain fields). The first `copier update` that pulls
+this change **overwrites whatever you hand-wrote in those four files**
+with the generator's own output.
 
 If you customised the help text or example value of a **core** var (as
 opposed to adding a domain var), there is no preservation path at all:
