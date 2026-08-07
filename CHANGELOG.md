@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.1.0 (2026-08-07)
+
+- #302 fix(update): regenerate the config surface AFTER the update diff, not against the mid-update skeleton
+- #301 feat(config): document composed sub-config vars with their own field metadata (core 4.6.0)
+- #300 fix(renovate): exact-pin the unresolvable @v46 + implement the four decided adoption-findings fixes
+- #298 fix: address v3.0.x adoption findings — release lockfile bump, gate/doc corrections
+
+
 ## v3.0.2 (2026-07-31)
 
 - #288 docs: move config-migration out of the operator site; scrub implementer prose from operator pages
