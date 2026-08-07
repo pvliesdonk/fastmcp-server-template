@@ -207,6 +207,50 @@ def domain_project_field_shapes(fake_project):
 
 
 @pytest.fixture
+def domain_project_composed_section(fake_project):
+    """A ``ProjectConfig`` composing a metadata-carrying sub-config section —
+    the shape whose vars used to render `Required: Yes` with empty help
+    because only top-level fields were consulted for metadata."""
+    cfg = fake_project / "src" / "demo_mcp" / "config.py"
+    cfg.write_text(
+        "from __future__ import annotations\n\n"
+        "from dataclasses import dataclass, field\n\n"
+        "from fastmcp_pvl_core import env, env_int\n\n\n"
+        "@dataclass(frozen=True)\n"
+        "class TransferSection:\n"
+        "    bucket: str = field(\n"
+        '        metadata={"help": "Storage bucket name.", "tags": ("transfer",)},\n'
+        "    )\n"
+        "    ttl_default_s: int = field(\n"
+        "        default=3600,\n"
+        '        metadata={"help": "Default link TTL in seconds.",'
+        ' "tags": ("transfer",)},\n'
+        "    )\n\n"
+        "    @classmethod\n"
+        "    def from_env(cls, prefix: str) -> TransferSection:\n"
+        "        return cls(\n"
+        '            bucket=env(prefix, "TRANSFER_BUCKET") or "",\n'
+        '            ttl_default_s=env_int(prefix, "TRANSFER_TTL_DEFAULT_S", 3600),\n'
+        "        )\n\n\n"
+        "@dataclass(frozen=True)\n"
+        "class ProjectConfig:\n"
+        "    vault_path: str = field(\n"
+        '        default="/data",\n'
+        '        metadata={"help": "Vault root.", "tags": ("persistence",)},\n'
+        "    )\n"
+        "    transfer: TransferSection | None = None\n\n"
+        "    @classmethod\n"
+        "    def from_env(cls) -> ProjectConfig:\n"
+        "        return cls(\n"
+        '            vault_path=env("DEMO_MCP", "VAULT_PATH") or "/data",\n'
+        '            transfer=TransferSection.from_env("DEMO_MCP"),\n'
+        "        )\n",
+        encoding="utf-8",
+    )
+    return fake_project
+
+
+@pytest.fixture
 def domain_project_hostile_help(fake_project):
     """A ``ProjectConfig`` covering the hostile-input matrix for the README
     DOMAIN region: help text carrying a literal pipe, help spanning multiple
@@ -525,14 +569,15 @@ class TestEnsureCoreAvailable:
     def test_matches_the_real_projects_declared_floor(self):
         """Pin against the repo's real pyproject.toml.jinja, not a fixture —
         a fabricated fixture can't notice the declared floor lagging behind
-        the fastmcp-pvl-core version this generator actually needs (4.5.0)."""
+        the fastmcp-pvl-core version this generator actually needs (4.6.0,
+        for `domain_env_surface`)."""
         real_pyproject = (
             Path(__file__).resolve().parent.parent.parent / "pyproject.toml.jinja"
         )
         floor = g._CORE_FLOOR_RE.search(real_pyproject.read_text(encoding="utf-8"))
         assert floor is not None
         major, minor = (int(part) for part in floor.group(1).split(".")[:2])
-        assert (major, minor) >= (4, 5)
+        assert (major, minor) >= (4, 6)
 
     def test_returns_immediately_when_both_deps_are_importable(self, monkeypatch):
         monkeypatch.setattr(g, "_core_importable", lambda: True)
@@ -844,6 +889,59 @@ class TestDiscoverDomainVarsFieldShapes:
         assert token.default is g._NO_DEFAULT
 
 
+class TestComposedSectionMetadata:
+    """Vars contributed by a composed sub-config section carry that section's
+    field metadata — help, tags, required-ness — instead of rendering as
+    `Required: Yes` with an empty description."""
+
+    def _vars(self, domain_project_composed_section):
+        answers = g.load_answers(domain_project_composed_section)
+        return g.collect_vars(domain_project_composed_section, answers)
+
+    def test_section_field_help_and_tags_flow_through(
+        self, domain_project_composed_section
+    ):
+        bucket = next(
+            v
+            for v in self._vars(domain_project_composed_section)
+            if v.suffix == "TRANSFER_BUCKET"
+        )
+        assert bucket.help == "Storage bucket name."
+        assert "transfer" in bucket.tags
+        assert "domain" in bucket.tags
+
+    def test_section_required_field_carries_the_sentinel(
+        self, domain_project_composed_section
+    ):
+        bucket = next(
+            v
+            for v in self._vars(domain_project_composed_section)
+            if v.suffix == "TRANSFER_BUCKET"
+        )
+        assert bucket.default is g._NO_DEFAULT
+
+    def test_section_defaulted_field_carries_its_default(
+        self, domain_project_composed_section
+    ):
+        ttl = next(
+            v
+            for v in self._vars(domain_project_composed_section)
+            if v.suffix == "TRANSFER_TTL_DEFAULT_S"
+        )
+        assert ttl.default == 3600
+        assert ttl.help == "Default link TTL in seconds."
+
+    def test_own_reads_come_before_section_reads(self, domain_project_composed_section):
+        domain_suffixes = [
+            v.suffix
+            for v in self._vars(domain_project_composed_section)
+            if v.provenance == "domain"
+        ]
+        assert domain_suffixes.index("VAULT_PATH") < domain_suffixes.index(
+            "TRANSFER_BUCKET"
+        )
+
+
 class TestUnscannedFromEnvReads:
     """A from_env read through anything other than a literal env()/env_int()/
     env_float() call is invisible to the core scan; unless some provenance
@@ -944,6 +1042,28 @@ class TestUnscannedFromEnvReads:
         )
         answers = g.load_answers(fake_project)
         g.collect_vars(fake_project, answers)
+
+    def test_a_sections_from_env_is_scanned_too(self, fake_project):
+        """Every class-level from_env in config.py is inspected — a composed
+        section's helper read is exactly as droppable as ProjectConfig's."""
+        (fake_project / "src" / "demo_mcp" / "config.py").write_text(
+            self._CONFIG_HEADER
+            + '    mode: str = "a"\n\n'
+            + "    @classmethod\n"
+            + "    def from_env(cls) -> ProjectConfig:\n"
+            + '        return cls(mode=env("DEMO_MCP", "MODE") or "a")\n\n\n'
+            + "@dataclass(frozen=True)\n"
+            + "class TransferSection:\n"
+            + "    timeout_s: int = 30\n\n"
+            + "    @classmethod\n"
+            + "    def from_env(cls, prefix: str) -> TransferSection:\n"
+            + "        return cls("
+            + 'timeout_s=opt_int(prefix, "TRANSFER_TIMEOUT_S") or 30)\n',
+            encoding="utf-8",
+        )
+        answers = g.load_answers(fake_project)
+        with pytest.raises(SystemExit, match="TRANSFER_TIMEOUT_S"):
+            g.collect_vars(fake_project, answers)
 
     def test_without_the_allowlist_the_same_literal_fails(self, fake_project):
         self._write_config(
