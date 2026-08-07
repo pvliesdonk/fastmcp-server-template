@@ -219,6 +219,10 @@ build_command = "python scripts/bump_manifests.py"
 # and ".claude-plugin/plugin/.mcp.json" once your project scaffolds them.
 assets = [
     "server.json",
+    # bump_manifests.py also refreshes uv.lock's self-version entry, so the
+    # release commit carries a consistent lockfile instead of leaving drift
+    # for the next `uv run` to re-sync as a side effect.
+    "uv.lock",
 ]
 
 [tool.semantic_release.changelog]

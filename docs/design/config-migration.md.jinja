@@ -88,6 +88,17 @@ Do not duplicate a var here that already has a `CONFIG-FIELDS` entry, or one
 still read inside `from_env` without a field; either produces a
 duplicate-name error from the generator.
 
+The inverse direction raises the same duplicate-name error: a var the scan
+*does* see that the template already declares. `config-presentation.yml`
+declares `{{ env_prefix }}_SERVER_NAME` and `{{ env_prefix }}_INSTRUCTIONS`
+with template provenance, so a literal `env(...)` read of either inside
+`from_env` gets discovered as a domain var too, and the generator exits with
+the duplicate-name error. If your project honors either var (an anticipated
+pattern since the template started honoring them), keep the field but move
+the read outside `from_env` — for example a module-level helper your server
+assembly calls. The scan only walks `from_env`, so the read stays invisible
+to it while runtime behavior is unchanged.
+
 ### 4. Run the generator and diff
 
 ```bash
@@ -235,6 +246,19 @@ key in the document, including `version` and the `oci` package's
 `identifier`, untouched. Those two keys are rewritten separately by
 `scripts/bump_manifests.py` on release, so keeping the generator off them
 is intentional, not an oversight.
+
+**Merge hazard for the release-managed keys:** `copier update` can leave
+conflict hunks in `server.json` whose template side carries the
+fresh-scaffold values — `"version": "0.1.0"` and an `oci` identifier
+ending `:v0.1.0`. Resolving toward the template side (natural, since the
+env-var arrays get regenerated anyway) silently regresses those
+release-managed keys, and no shipped gate catches it: the generator
+leaves both keys alone by design, and `gen_config_surface.py --check`
+passes either way. When resolving such a conflict, keep your side's
+`version` and `oci` `identifier` (or restore them from the pre-update
+commit), and diff `server.json` against your default branch before
+committing. A regressed identifier ships a wrong manifest until the next
+release re-bumps it.
 
 **Overwrite hazard:** if you hand-edited entries inside either
 `environmentVariables` array, the next `gen_config_surface.py --check`
