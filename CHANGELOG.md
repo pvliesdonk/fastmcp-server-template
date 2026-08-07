@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.1.1 (2026-08-07)
+
+- #307 fix(config): re-exec on too-old core (#306); adopt core 4.6.1's local-read resolution (#305)
+- #304 fix(config): decompose _unscanned_from_env_reads under C901; gate shipped scripts structurally
+
+
 ## v3.1.0 (2026-08-07)
 
 - #302 fix(update): regenerate the config surface AFTER the update diff, not against the mid-update skeleton
