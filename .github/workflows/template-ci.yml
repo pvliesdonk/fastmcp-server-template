@@ -1341,6 +1341,33 @@ jobs:
             stat -c "%U" /data/state/fastmcp | grep -qx appuser
           '
 
+  update-regression:
+    name: Copier-update keeps domain vars
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The check renders a released tag from a fresh clone of this
+          # checkout, and copier describes HEAD against tags to order the
+          # update — both need full history and the release tags.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: "0.6"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Run the copier-update regression check
+        # Guards the update-time generation ordering: renders v3.0.2,
+        # injects a domain var, commits, `copier update`s to HEAD, and
+        # asserts the var survived in the generated artifacts (the
+        # pre-#302 task ordering silently stripped it).
+        run: python3 scripts/check_update_regression.py
+
   aggregator-tests:
     name: Aggregator script unit tests
     runs-on: ubuntu-latest
@@ -1368,9 +1395,9 @@ jobs:
             --select E,W,F,I,B,C4,UP,ARG,SIM,TC,PTH,RUF \
             --ignore E501 \
             --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/gen_config_surface.py scripts/tests/
+            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/tests/
 
       - name: Format check aggregator (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/gen_config_surface.py scripts/tests/
+            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/tests/

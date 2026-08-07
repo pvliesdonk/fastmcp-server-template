@@ -3,17 +3,23 @@
 # Spec: docs/superpowers/specs/2026-04-20-fastmcp-copier-scaffold-design.md
 # (markdown-vault-mcp repo).
 
-_min_copier_version: "9.0"
+# 9.4 floor: `_copier_operation` (used to gate the config-surface task to
+# `copier copy`) entered the task-rendering context in copier 9.4.0, and the
+# plain-string `_migrations` form with its default after-stage condition is
+# also a 9.x-line feature the update-time regeneration relies on.
+_min_copier_version: "9.4"
 _answers_file: .copier-answers.yml
 _templates_suffix: .jinja
 
-# Post-generation tasks. Both run on `copier copy` AND `copier update`.
+# Post-generation tasks.
 #
 # 1. Vendor the MCP Apps SDK into static/app.html.  The task value is
 #    Jinja-rendered; it collapses to an empty string (skipped) for non-apps
 #    projects — regenerates app.html from the project's (possibly customized)
 #    app.src.html.  Requires network (downloads @modelcontextprotocol/ext-apps).
-#    Both CI paths pass --trust.
+#    Both CI paths pass --trust.  Runs on `copier copy` AND `copier update`:
+#    its input (app.src.html) is `_skip_if_exists`, so the update never
+#    replaces it and the mid-update run sees the project's real source.
 # 2. Generate the config-surface artifacts (.env.example, packaging/env.example,
 #    examples/*.env, docs/javascripts/config-wizard/wizard-spec.json) from
 #    fastmcp_pvl_core.server_config_surface() plus config-presentation.yml /
@@ -25,8 +31,27 @@ _templates_suffix: .jinja
 #    version pin here would drift from the floor in pyproject.toml. That
 #    self-bootstrap must never create a persistent virtualenv, since
 #    template-ci renders the template twice and diffs the results.
+#
+#    Runs on `copier copy` ONLY.  On `copier update`, `_tasks` execute after
+#    template-owned files are re-rendered but BEFORE the old-render → project
+#    diff restores the domain content — so config.py is the domain-less
+#    skeleton at that moment, and a mid-update run would rewrite every
+#    (skip-listed, hence never-patched) artifact with the domain vars
+#    stripped, silently.  The `_migrations` entry below is the update-time
+#    counterpart: after-stage migrations run at the very end of the update,
+#    once the diff has restored config.py.
 _tasks:
   - "{% if include_mcp_apps_scaffold %}python scripts/vendor_spa.py{% endif %}"
+  - "{% if _copier_operation == 'copy' %}python scripts/gen_config_surface.py{% endif %}"
+
+# Update-time regeneration of the config-surface artifacts.  A plain-string
+# migration entry carries copier's default condition `_stage == "after"` and
+# no version constraint, so it runs on EVERY `copier update`, after the
+# old-render → project diff has been applied — i.e. against the project's
+# restored config.py, where domain discovery actually sees the domain
+# fields.  Migrations never run on `copier copy`; the `_tasks` entry above
+# covers that path.
+_migrations:
   - "python scripts/gen_config_surface.py"
 
 # Starter files: written once on first `copier copy`, protected from
@@ -100,18 +125,21 @@ _skip_if_exists:
   # regenerates app.html from it on every copier update; app.html itself is
   # generated, never template-owned.
   - "src/{{ python_module }}/static/app.src.html"
-  # Fully-generated config artifacts — the `_tasks` entry above rewrites all
-  # of them on every `copier copy` AND `copier update`.  They are listed here
-  # NOT for the usual "domain-owned, frozen at first render" reason (they are
-  # neither): `_skip_if_exists` doubles as copier's never-patch-on-update
-  # list, and that is the contract a task-generated file needs.  `copier
-  # update` runs `_tasks` in the destination BEFORE applying the old-render →
-  # project diff, so a patch landing on one of these files can only corrupt
-  # the freshly generated content — for every consumer whose seeded copy
-  # predates the template version being left behind, the update used to
-  # revert the generator's output and leave inline conflict markers (#282).
-  # Skip-listing removes these paths from patch application; the generator's
-  # unconditional rewrite is what keeps them current instead.
+  # Fully-generated config artifacts — regenerated on every `copier copy`
+  # (the `_tasks` entry above) and at the END of every `copier update` (the
+  # `_migrations` entry above).  They are listed here NOT for the usual
+  # "domain-owned, frozen at first render" reason (they are neither):
+  # `_skip_if_exists` doubles as copier's never-patch-on-update list, and
+  # that is the contract a generator-owned file needs.  `copier update`
+  # applies the old-render → project diff on top of the fresh render, so a
+  # patch landing on one of these files can only corrupt the freshly
+  # generated content — for every consumer whose seeded copy predates the
+  # template version being left behind, the update used to revert the
+  # generator's output and leave inline conflict markers (#282).
+  # Skip-listing removes these paths from patch application; the
+  # after-migration's rewrite (which runs once the diff has restored the
+  # project's config.py, so domain discovery sees the real fields) is what
+  # keeps them current instead.
   - ".env.example"
   - "packaging/env.example"
   - "examples/*.env"
@@ -120,8 +148,8 @@ _skip_if_exists:
 # Generated AND skip-listed: `.env.example`, `packaging/env.example`,
 # `examples/*.env`, and `docs/javascripts/config-wizard/wizard-spec.json`
 # used to live in `_skip_if_exists` as domain-owned files (frozen at first
-# render). Since #264 they are generated instead — the `_tasks` entry above
-# regenerates all of them, on every `copier copy` AND `copier update`, from
+# render). Since #264 they are generated instead — on every `copier copy`
+# (`_tasks`) and at the end of every `copier update` (`_migrations`), from
 # `fastmcp_pvl_core.server_config_surface()` plus `config-presentation.yml` /
 # `config-presentation.domain.yml` — and they stay listed above only for the
 # update-patch mechanics explained inline. Regeneration is unconditional: any
@@ -187,6 +215,7 @@ _exclude:
   - "uv.lock"                                 # generated projects create their own
   - "scripts/tests"                            # aggregator unit tests — template-only
   - "scripts/check_render_hygiene.py"          # template-ci render guard — template-only
+  - "scripts/check_update_regression.py"       # template-ci update guard — template-only
   - "schemas"                                  # vendored server.json schema — template-ci gate only
   # Scaffold files that projects routinely have their own version of
   # (different docs layout, different test organisation).  Excluding
