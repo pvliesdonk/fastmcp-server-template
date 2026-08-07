@@ -55,6 +55,14 @@ For every domain env var you found in step 1, add or update its field in
     )
 ```
 
+A composed sub-config section works as well: a `ProjectConfig` field whose
+type is a dataclass with its own `from_env` (core's `TransferConfig`, or a
+project-local section) contributes its vars with each *section* field's own
+`metadata` — no need to flatten the section into top-level fields. This
+needs `fastmcp-pvl-core` 4.6.0 or later, and each section read must stay
+inline in its constructor keyword (`field=env(prefix, "LITERAL")`) for the
+scan to attach the field's metadata.
+
 **This step needs a human or a capable agent, not mechanical substitution.**
 Deciding which sentence in a paragraph holds the actual help text, as
 opposed to surrounding narrative that stays in prose docs, or a caveat that

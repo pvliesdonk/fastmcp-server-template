@@ -272,40 +272,42 @@ def _discover_domain_vars(
 ) -> tuple[Var, ...]:
     """Auto-discover domain vars from the project's own ``ProjectConfig``.
 
-    AST-scans ``ProjectConfig.from_env`` via
-    ``fastmcp_pvl_core.domain_env_suffixes`` and pulls each field's
-    ``help``/``tags`` from its dataclass ``metadata``. This is best-effort
-    enrichment, not a required provenance source: a fresh render has no
-    domain fields (and often no venv yet to even import its own package), so
-    `_import_project_config` treats the module genuinely not existing as
-    silent "nothing to discover" — but any other import-time failure (a
-    broken third-party import, a mid-edit `SyntaxError`) prints a warning
-    there instead of vanishing. A failure *during the scan itself* (the
-    module imported fine but `domain_env_suffixes` couldn't resolve it — e.g.
-    a type hint referencing something not importable at module scope) is not
-    swallowed silently either: `domain_env_suffixes`'s own contract is that
-    such a failure must propagate rather than yield a silently-incomplete
-    set, so this prints a warning naming the exception and returns no domain
-    vars, rather than letting `--check` report "up to date" while every
-    domain var is actually missing.
+    Scans the config tree via ``fastmcp_pvl_core.domain_env_surface`` (core
+    ≥ 4.6.0), which AST-walks ``from_env`` in ``ProjectConfig`` *and every
+    composed sub-config* and returns one metadata-carrying record per read —
+    so a var contributed by a composed section documents with the same
+    help/tags/wizard hints and required-ness as a top-level field, without
+    flattening the config. This is best-effort enrichment, not a required
+    provenance source: a fresh render has no domain fields (and often no
+    venv yet to even import its own package), so `_import_project_config`
+    treats the module genuinely not existing as silent "nothing to
+    discover" — but any other import-time failure (a broken third-party
+    import, a mid-edit `SyntaxError`) prints a warning there instead of
+    vanishing. A failure *during the scan itself* (the module imported fine
+    but `domain_env_surface` couldn't resolve it — e.g. a type hint
+    referencing something not importable at module scope) is not swallowed
+    silently either: the scan's own contract is that such a failure must
+    propagate rather than yield a silently-incomplete set, so this prints a
+    warning naming the exception and returns no domain vars, rather than
+    letting `--check` report "up to date" while every domain var is
+    actually missing.
 
     Every discovered var is tagged ``domain`` (in addition to whatever tags
     its field metadata declares) so it always lands in a file spec's
     ``tags: [domain]`` section regardless of the field author's own tag
-    choices. Declaration order is contractual for every other provenance;
-    suffixes with a matching dataclass field are ordered the same way the
-    field is declared, and any suffix `domain_env_suffixes` found with no
-    matching field (e.g. read directly rather than through a field) is
-    appended afterwards, sorted, so the whole result stays deterministic.
+    choices. Ordering follows the scan's own deterministic contract:
+    depth-first over the config tree, a class's own reads (in source
+    position) before its sub-configs'. A suffix read by more than one class
+    yields one Var — the first record wins, matching how the pre-4.6.0
+    frozenset de-duplicated it.
 
     Every ``sys.modules`` entry gained while importing and introspecting the
     project's config module — including any side-effect submodules it pulls
     in along the way — is removed before returning, once every use of the
-    class (the `domain_env_suffixes` scan and the `dataclasses.fields` walk)
-    is finished. That cleanup runs on every exit path, including the early
-    returns above, so a later call against a different project that happens
-    to share the same module name never resolves against a stale cached
-    package from an earlier call in the same process.
+    class is finished. That cleanup runs on every exit path, including the
+    early returns above, so a later call against a different project that
+    happens to share the same module name never resolves against a stale
+    cached package from an earlier call in the same process.
     """
     python_module = answers.get("python_module")
     if not python_module:
@@ -318,10 +320,10 @@ def _discover_domain_vars(
         if project_config_cls is None:
             return ()
 
-        from fastmcp_pvl_core import domain_env_suffixes
+        from fastmcp_pvl_core import domain_env_surface
 
         try:
-            suffixes = domain_env_suffixes(project_config_cls)
+            records = domain_env_surface(project_config_cls)
         except Exception as exc:
             print(
                 f"WARNING: domain env-var discovery failed for "
@@ -330,48 +332,34 @@ def _discover_domain_vars(
             )
             return ()
 
-        fields = dataclasses.fields(project_config_cls)
-        fields_by_suffix = {f.name.upper(): f for f in fields}
-        ordered_suffixes = [
-            f.name.upper() for f in fields if f.name.upper() in suffixes
-        ]
-        ordered_suffixes.extend(sorted(suffixes.difference(ordered_suffixes)))
-
         discovered: list[Var] = []
-        for suffix in ordered_suffixes:
-            field_info = fields_by_suffix.get(suffix)
-            metadata = field_info.metadata if field_info is not None else {}
-            if field_info is None:
-                # No matching dataclass field at all (read directly rather
-                # than through a field) — no default is knowable either, so
-                # this is "no default declared" just like the ladder's final
-                # rung below, not a real value of `None`.
-                default = _NO_DEFAULT
-            elif field_info.default is not dataclasses.MISSING:
-                default = field_info.default
-            elif field_info.default_factory is not dataclasses.MISSING:
-                default = field_info.default_factory()
-            else:
-                # Neither `default` nor `default_factory` declared: a
-                # genuinely required field. Must NOT collapse to
-                # `None` — that would be indistinguishable from a real
+        seen_suffixes: set[str] = set()
+        for record in records:
+            if record.suffix in seen_suffixes:
+                continue
+            seen_suffixes.add(record.suffix)
+            if record.name is None or record.required:
+                # Tied to no constructor field (no default knowable) or a
+                # field with neither `default` nor `default_factory`: both
+                # mean "no default declared". Must NOT collapse to `None` —
+                # that would be indistinguishable from a real
                 # `x: str | None = None` optional field once both reach
                 # `_is_required`'s domain fallback.
                 default = _NO_DEFAULT
-            tags = tuple(dict.fromkeys((*metadata.get("tags", ()), "domain")))
+            else:
+                default = record.default
+            tags = tuple(dict.fromkeys((*record.tags, "domain")))
             discovered.append(
                 Var(
-                    name=f"{env_prefix}_{suffix}",
-                    suffix=suffix,
+                    name=f"{env_prefix}_{record.suffix}",
+                    suffix=record.suffix,
                     provenance="domain",
-                    type_name=(
-                        str(field_info.type) if field_info is not None else "str"
-                    ),
+                    type_name=record.type_name or "str",
                     default=default,
-                    help=_clean_help(str(metadata.get("help", ""))),
+                    help=_clean_help(record.help),
                     tags=tags,
-                    inferred=False,
-                    wizard=dict(metadata.get("wizard", {})),
+                    inferred=record.inferred,
+                    wizard=dict(record.wizard),
                 )
             )
         return tuple(discovered)
@@ -381,7 +369,7 @@ def _discover_domain_vars(
 
 
 # Helpers whose literal suffix argument the core AST scan
-# (`fastmcp_pvl_core.domain_env_suffixes`) recognizes inside `from_env`.
+# (`fastmcp_pvl_core.domain_env_surface`) recognizes inside `from_env`.
 _SCANNED_READ_HELPERS = frozenset({"env", "env_int", "env_float"})
 
 # A string literal shaped like an env-var suffix or full name: all-caps with
@@ -411,8 +399,10 @@ def _unscanned_from_env_reads(
 
     Purely syntactic best-effort: a missing or unparsable ``config.py``
     returns nothing (the import path already warns about a broken module),
-    and only ``from_env`` is inspected — reads elsewhere are the domain
-    YAML's documented territory.
+    and only ``from_env`` methods are inspected — every class-level one in
+    the file, since a composed sub-config section's ``from_env`` is scanned
+    (and so silently droppable) exactly like ``ProjectConfig``'s; reads
+    elsewhere are the domain YAML's documented territory.
     """
     config_path = project_root / "src" / python_module / "config.py"
     if not config_path.exists():
@@ -422,41 +412,37 @@ def _unscanned_from_env_reads(
     except SyntaxError:
         return ()
 
-    from_env: ast.FunctionDef | ast.AsyncFunctionDef | None = None
-    for class_node in ast.walk(tree):
-        if not isinstance(class_node, ast.ClassDef):
-            continue
-        for item in class_node.body:
-            if (
-                isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and item.name == "from_env"
-            ):
-                from_env = item
-                break
-    if from_env is None:
-        return ()
+    from_envs = [
+        item
+        for class_node in ast.walk(tree)
+        if isinstance(class_node, ast.ClassDef)
+        for item in class_node.body
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and item.name == "from_env"
+    ]
 
     candidates: list[tuple[str, str, int]] = []
-    for node in ast.walk(from_env):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        if isinstance(func, ast.Name):
-            callee = func.id
-        elif isinstance(func, ast.Attribute):
-            callee = func.attr
-        else:
-            callee = "<call>"
-        if callee in _SCANNED_READ_HELPERS:
-            continue
-        args = [*node.args, *(kw.value for kw in node.keywords)]
-        for arg in args:
-            if (
-                isinstance(arg, ast.Constant)
-                and isinstance(arg.value, str)
-                and _SUFFIX_LITERAL_RE.match(arg.value)
-            ):
-                candidates.append((arg.value, callee, node.lineno))
+    for from_env in from_envs:
+        for node in ast.walk(from_env):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Name):
+                callee = func.id
+            elif isinstance(func, ast.Attribute):
+                callee = func.attr
+            else:
+                callee = "<call>"
+            if callee in _SCANNED_READ_HELPERS:
+                continue
+            args = [*node.args, *(kw.value for kw in node.keywords)]
+            for arg in args:
+                if (
+                    isinstance(arg, ast.Constant)
+                    and isinstance(arg.value, str)
+                    and _SUFFIX_LITERAL_RE.match(arg.value)
+                ):
+                    candidates.append((arg.value, callee, node.lineno))
     return tuple(candidates)
 
 
