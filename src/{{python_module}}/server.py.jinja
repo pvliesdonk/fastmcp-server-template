@@ -153,6 +153,53 @@ def make_server(
     # transforms, mode toggles, alternative middleware, additional registrations);
     # kept across copier update. Leave empty for projects that don't customise
     # make_server() beyond the standard scaffold.
+    #
+    # -- Transfer subsystem (capability-link upload + download) ----------------
+    #
+    # Two patterns for wiring the /transfer/{token} route and link-creation
+    # tools.  Both require HTTP transport with base_url set: the route needs an
+    # HTTP server, and register_transfer_routes raises ConfigurationError
+    # without it.  Compose a TransferConfig into ProjectConfig first (see
+    # config.py.jinja's CONFIG-FIELDS block).
+    #
+    # Path 1 — use pvl-core's generic tools as-is (the common case):
+    #
+    # if transport != "stdio" and config.server.base_url:
+    #     from fastmcp_pvl_core import register_transfer_routes
+    #
+    #     register_transfer_routes(
+    #         mcp,
+    #         config.server,
+    #         config.transfer,          # TransferConfig composed into ProjectConfig
+    #         sink=_my_transfer_sink,   # implements TransferSink (read/write)
+    #         validate=_my_validator,   # TransferValidator: (ref, kind) -> handle
+    #     )
+    #
+    # Path 2 — build domain-specific tools on the primitives when you need
+    # custom tool names, titles, icons, or descriptions instead of the generic
+    # create_download_link / create_upload_link.  Mount the /transfer/{token}
+    # route yourself and register your own tools on the store, fetch_url, and
+    # decode_base64_capped:
+    #
+    # if transport != "stdio" and config.server.base_url:
+    #     from fastmcp_pvl_core import fetch_url, decode_base64_capped
+    #     from fastmcp_pvl_core._transfer.routes import make_transfer_handler
+    #     from fastmcp_pvl_core._transfer.store import TransferStore
+    #
+    #     store = TransferStore.from_config(
+    #         config.server,
+    #         lease_seconds=config.transfer.lease_s,
+    #         grace_seconds=config.transfer.grace_ttl_s,
+    #     )
+    #     mcp.custom_route("/transfer/{token}", methods=["GET", "POST", "PUT"])(
+    #         make_transfer_handler(
+    #             store, _my_transfer_sink,
+    #             max_upload_bytes=config.transfer.max_upload_bytes,
+    #         )
+    #     )
+    #     # Register your own tools on store.mint / store.claim / fetch_url /
+    #     # decode_base64_capped instead of the generic create_download_link /
+    #     # create_upload_link.
     # DOMAIN-WIRING-END
 
     return mcp
