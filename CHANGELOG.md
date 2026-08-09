@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.1.3 (2026-08-09)
+
+- #313 fix(workflows): grant Task so Claude reviews can fan out into subagents
+- #310 experiment(claude): grant Task + show_full_output to test fan-out
+
+
 ## v3.1.2 (2026-08-09)
 
 - #309 feat(server): add transfer subsystem wiring examples to DOMAIN-WIRING block
