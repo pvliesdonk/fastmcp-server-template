@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.1.2 (2026-08-09)
+
+- #309 feat(server): add transfer subsystem wiring examples to DOMAIN-WIRING block
+
+
 ## v3.1.1 (2026-08-07)
 
 - #307 fix(config): re-exec on too-old core (#306); adopt core 4.6.1's local-read resolution (#305)
