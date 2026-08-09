@@ -47,23 +47,19 @@ jobs:
           display_report: true
           include_fix_links: false
 
-          # EXPERIMENT (revert after): surface the full SDK stream so a triggered
-          # run prints every tool call and permission denial by name. The action
-          # otherwise hides it ("full output hidden for security"), which is why
-          # the fan-out denials were only ever a count, never a tool list.
-          show_full_output: true
-
           # Grant the built-in GitHub MCP servers' read/search/CI tools, the
-          # inline-comment tool, and `gh api` for read-only GitHub access. These
-          # ADD to the action's defaults (Edit/Write/git stay available), but
-          # `contents: read` above is what keeps this workflow from committing.
+          # inline-comment tool, `gh api` for read-only GitHub access, and Task.
+          # These ADD to the action's defaults (Edit/Write/git stay available),
+          # but `contents: read` above is what keeps this workflow from committing.
           #
-          # EXPERIMENT (revert after): `Task` is added to test the fan-out
-          # hypothesis. The /code-review plugin — and any explicit "fan out"
-          # instruction — spawns subagents via the Task tool, which is NOT in
-          # tag mode's fixed allow-set; under acceptEdits + headless (no prompt
-          # handler) an un-listed tool is silently denied. If granting Task lets
-          # subagents spawn and run, Task-denial was the fan-out blocker.
+          # Task lets @claude fan out into parallel subagents. It dispatches them
+          # via the Task tool, which tag mode's fixed allow-set omits, so under
+          # --permission-mode acceptEdits + headless (no prompt handler) every
+          # dispatch silently falls through to "ask" and is denied — the run then
+          # stalls mid-review. Subagents still inherit this same curated allow-set
+          # under `contents: read`, so Task grants delegation, not new capability.
+          # (Verified: a fan-out run went from a stall to 0 permission denials the
+          # moment Task was granted.)
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           claude_args: |
             --allowedTools "Task,mcp__github__get_*,mcp__github__list_*,mcp__github__search_*,mcp__github_ci__*,mcp__github_inline_comment__*,Bash(gh api *)"
