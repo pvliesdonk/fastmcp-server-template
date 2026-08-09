@@ -153,6 +153,56 @@ def make_server(
     # transforms, mode toggles, alternative middleware, additional registrations);
     # kept across copier update. Leave empty for projects that don't customise
     # make_server() beyond the standard scaffold.
+    #
+    # -- Transfer subsystem (capability-link upload + download) ----------------
+    #
+    # Wiring the /transfer/{token} route needs HTTP transport (the route cannot
+    # be served under stdio) and, at build time, base_url — pvl-core raises
+    # ConfigurationError when it is unset, so gate only on the transport and let
+    # that error surface a misconfigured deployment rather than silently
+    # dropping the feature. Requires fastmcp-pvl-core >= 4.8.0.
+    #
+    # First compose a TransferConfig into ProjectConfig (config.py): add
+    # ``TransferConfig`` to its ``from fastmcp_pvl_core import (...)`` block, then
+    # a ``transfer: TransferConfig = field(default_factory=TransferConfig)`` field
+    # in CONFIG-FIELDS and ``transfer=TransferConfig.from_env(_ENV_PREFIX),`` in
+    # CONFIG-FROM-ENV. The second line is required — without it the
+    # {{ env_prefix }}_TRANSFER_* env vars are ignored and the defaults always win.
+    #
+    # Path 1 — the generic tools, the common case. Registers create_download_link
+    # and create_upload_link with pvl-core's shared metadata (names, icons, tags):
+    #
+    # if transport != "stdio":
+    #     from fastmcp_pvl_core import register_transfer_routes
+    #
+    #     register_transfer_routes(
+    #         mcp,
+    #         config.server,
+    #         config.transfer,          # TransferConfig composed into ProjectConfig
+    #         sink=_my_transfer_sink,   # implements TransferSink (read/write)
+    #         validate=_my_validator,   # TransferValidator: (ref, kind) -> handle
+    #         # download_note/upload_note (optional) append a domain sentence to
+    #         # the generic tool descriptions — context only, no shape change.
+    #     )
+    #
+    # Path 2 — your own tool over the same capability-link machinery, when the
+    # generic pair cannot express it (a different name, a domain-accurate
+    # description, domain-specific parameters). build_transfer_links mounts the
+    # route and returns a minter, registering no tools; your tool validates the
+    # caller ref itself, then mints over the already-validated sink handle:
+    #
+    # if transport != "stdio":
+    #     from fastmcp_pvl_core import build_transfer_links
+    #
+    #     links = build_transfer_links(
+    #         mcp, config.server, config.transfer, sink=_my_transfer_sink
+    #     )
+    #
+    #     @mcp.tool
+    #     async def share_document(doc_id: str) -> dict[str, object]:
+    #         """Mint a one-shot download link for a document."""
+    #         handle = _resolve_and_check(doc_id)  # your validation -> sink handle
+    #         return await links.mint_download(handle)
     # DOMAIN-WIRING-END
 
     return mcp
