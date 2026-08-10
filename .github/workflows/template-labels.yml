@@ -1,0 +1,54 @@
+name: Ensure repository labels
+
+# Creates the issue-form labels this repo's issue templates reference, plus
+# the `dependencies` label Renovate applies to its PRs. GitHub silently drops
+# labels that don't exist, so the templates' `labels:` only work if these
+# exist here.
+#
+# Idempotent: `--force` converges to the same state on every run. Runs on the
+# first push to main that changes this file, and on demand via dispatch.
+#
+# This workflow is template-repo-only, excluded from downstream copies (see
+# `_exclude` in copier.yml). Downstream gets its labels from the `labels` job
+# in bootstrap.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/template-labels.yml
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    name: Ensure repository labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh label create bug \
+            --color d73a4a \
+            --description "Something isn't working" \
+            --force
+          gh label create feature \
+            --color a2eeef \
+            --description "New feature or request" \
+            --force
+          gh label create decay \
+            --color fbca04 \
+            --description "Structural debt worth refactoring later" \
+            --force
+          gh label create question \
+            --color d876e3 \
+            --description "Further information is requested" \
+            --force
+          gh label create dependencies \
+            --color 0366d6 \
+            --description "Pull requests that update a dependency" \
+            --force
