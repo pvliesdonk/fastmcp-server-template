@@ -15,6 +15,7 @@ from importlib.metadata import version as _pkg_version
 from fastmcp import FastMCP
 from fastmcp_pvl_core import (
     ServerConfig,  # noqa: F401  — re-exported for downstream projects' convenience
+    apply_tool_visibility,
     build_auth,
     build_event_store,  # noqa: F401  — re-exported for downstream projects' convenience
     build_instructions,
@@ -204,5 +205,12 @@ def make_server(
     #         handle = _resolve_and_check(doc_id)  # your validation -> sink handle
     #         return await links.mint_download(handle)
     # DOMAIN-WIRING-END
+
+    # Operator tool visibility ({{ env_prefix }}_TOOLS_ALLOW /
+    # {{ env_prefix }}_TOOLS_DENY) applies last: fastmcp resolves visibility
+    # transforms in call order, so the operator's lists win over any
+    # visibility calls in the wiring above, and pvl-core's zero-tools-exposed
+    # diagnostic judges the full registered tool set.
+    apply_tool_visibility(mcp, config.server)
 
     return mcp

@@ -21,6 +21,21 @@ instructions, with no configuration beyond the variable itself:
   text. Unset, the scaffold builds the default (which advertises this
   override).
 
+## Tool visibility
+
+Operators can trim which tools this instance exposes. Each variable takes a
+comma-separated list of explicit tool names:
+
+- `{{ env_prefix }}_TOOLS_ALLOW`: expose *only* the listed tools.
+- `{{ env_prefix }}_TOOLS_DENY`: hide the listed tools.
+
+Hidden tools disappear from `tools/list` and are rejected on `tools/call`;
+resources and prompts are unaffected. Setting both variables, or setting one
+to a value with no names in it, is a startup error. A name matching no
+registered tool is ignored, but an allowlist that matches nothing logs a
+startup `WARNING` since the instance then exposes zero tools. See
+`fastmcp-pvl-core`'s README for the full semantics.
+
 <!-- DOMAIN-CONFIG-VARS-START -->
 ## Domain variables
 
