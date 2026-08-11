@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.1.4 (2026-08-11)
+
+- #320 fix(review): pin CLA 2.1.197 to run the full /code-review skill (fixes silent no-op reviews)
+- #316 chore(deps): update dependency renovatebot/github-action to v46.2.2
+- #315 Add issue/PR templates + contributing guide for downstream (dogfooded here)
+
+
 ## v3.1.3 (2026-08-09)
 
 - #313 fix(workflows): grant Task so Claude reviews can fan out into subagents
