@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.2.0 (2026-08-11)
+
+- #322 feat(server): wire operator tool visibility (TOOLS_ALLOW/TOOLS_DENY)
+
+
 ## v3.1.4 (2026-08-11)
 
 - #320 fix(review): pin CLA 2.1.197 to run the full /code-review skill (fixes silent no-op reviews)
