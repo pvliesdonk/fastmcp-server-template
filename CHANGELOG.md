@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.2.1 (2026-08-12)
+
+- #324 fix(wizard): surface TOOLS_ALLOW/TOOLS_DENY as wizard questions and server.json env vars
+
+
 ## v3.2.0 (2026-08-11)
 
 - #322 feat(server): wire operator tool visibility (TOOLS_ALLOW/TOOLS_DENY)
