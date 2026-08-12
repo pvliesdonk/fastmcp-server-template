@@ -1826,6 +1826,48 @@ class TestWizardHintValidation:
             g._validate_wizard_hint(self._var(control="delete"))
 
 
+class TestWizardHintOverrides:
+    def test_tools_visibility_vars_surface_as_tools_group_questions(
+        self, fake_project, template_root
+    ):
+        """Core 4.10.1 ships TOOLS_ALLOW/TOOLS_DENY as `"wizard": "inferred"`
+        although nothing derives their values (#321/#322 wired the runtime
+        behaviour but the vars never reached the wizard). The template-owned
+        `wizard_hints` override must surface both as ordinary questions."""
+        answers = g.load_answers(fake_project)
+        pres = g.load_presentation(template_root, str(answers["env_prefix"]))
+        spec = json.loads(
+            g.render_wizard_spec(pres, g.collect_vars(fake_project, answers), answers)
+        )
+        by_var = {q.get("var"): q for q in spec["questions"]}
+        for name in ("DEMO_MCP_TOOLS_ALLOW", "DEMO_MCP_TOOLS_DENY"):
+            assert name in by_var, f"{name} produced no wizard question"
+            assert by_var[name]["advancedGroup"] == "Tools"
+            # No `when`: tool visibility applies over stdio too, so the
+            # question must not be gated on the server deployment choice.
+            assert "showIf" not in by_var[name]
+        assert by_var["DEMO_MCP_TOOLS_ALLOW"]["label"] == "Tool allowlist (CSV)"
+        assert by_var["DEMO_MCP_TOOLS_DENY"]["label"] == "Tool denylist (CSV)"
+
+    def test_override_clears_the_inferred_shorthand(self, fake_project):
+        vars_ = g.collect_vars(fake_project, g.load_answers(fake_project))
+        overridden = [v for v in vars_ if v.suffix in ("TOOLS_ALLOW", "TOOLS_DENY")]
+        assert len(overridden) == 2
+        assert all(not v.inferred for v in overridden)
+        # AUTH_MODE is genuinely inferred (auto-detected from which auth vars
+        # are set) and has no override — it must stay question-less.
+        auth_mode = next(v for v in vars_ if v.suffix == "AUTH_MODE")
+        assert auth_mode.inferred
+
+    def test_entry_naming_an_uncollected_var_fails_loudly(self, fake_project):
+        (fake_project / "config-presentation.yml").write_text(
+            'vars: []\nwizard_hints:\n  "{PREFIX}_NO_SUCH_VAR": {group: Ghost}\n',
+            encoding="utf-8",
+        )
+        with pytest.raises(SystemExit, match="DEMO_MCP_NO_SUCH_VAR"):
+            g.collect_vars(fake_project, g.load_answers(fake_project))
+
+
 class TestSecretKeysSubsetOfQuestions:
     def test_secret_keys_are_a_subset_of_emitted_question_vars(
         self, fake_project, template_root
