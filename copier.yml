@@ -87,8 +87,27 @@ _skip_if_exists:
   - "packaging/mcpb/pyproject.toml.in"
   - "packaging/mcpb/src/server.py"
   - "packaging/mcpb/build.sh"
-  - "scripts/bump_manifests.py"
   - ".gitignore"
+  # scripts/bump_manifests.py is deliberately NOT here (moved out for #325):
+  # it is template-owned with DOMAIN-MANIFESTS-HELPERS / DOMAIN-MANIFESTS
+  # seams for a project's extra versioned manifests, the same hybrid pattern
+  # as .pre-commit-config.yaml below.  While it was seeded, the script was
+  # coupled to a file that DOES re-render — `pyproject.toml`'s
+  # `[tool.semantic_release] assets` — so half of a fix could land: v3.1.0
+  # (#298) added `uv.lock` to `assets` *and* a `_bump_lockfile()` to the
+  # script, and every instance with a pre-existing extended copy took the
+  # assets half only.  Their release commits then shipped a lockfile whose
+  # self-version lagged `pyproject.toml`, so `uv lock --check` failed on main
+  # and every `uv sync` rewrote `uv.lock` as a side effect (#325, #326).
+  # Adoption note, verified by rendering v3.0.2 and v3.2.1, extending the
+  # seeded script, and running a real `copier update` to HEAD: copier's 3-way
+  # merge delivers the missing half (`_bump_lockfile` and its call, for an
+  # instance whose copy predates #298) AND keeps the local extension, with no
+  # conflict and no .rej.  The surviving extension lands OUTSIDE the new
+  # seams, though, so it is only safe until the template next edits that
+  # region — move it inside DOMAIN-MANIFESTS as part of accepting the update.
+  # A local edit overlapping a region the template also changed conflicts
+  # instead, which is the loud failure the silent half-delivery never gave.
   # .pre-commit-config.yaml is deliberately NOT here (moved out for #254):
   # it is template-owned with a DOMAIN-HOOKS seam for domain-specific hooks
   # (shellcheck, yamllint, project linters, etc.), the same hybrid pattern
@@ -184,6 +203,10 @@ _skip_if_exists:
 # DOMAIN-HOOKS, YAML-comment markers): downstream hooks live between the
 # markers and survive the merge; the template-owned hook pins and gate
 # wiring re-render in lockstep with the tests that assert on them.
+# scripts/bump_manifests.py joined for #325 (seams: DOMAIN-MANIFESTS-HELPERS,
+# DOMAIN-MANIFESTS, Python-comment markers) — same reasoning, with
+# `pyproject.toml`'s `[tool.semantic_release] assets` as the file it must stay
+# in lockstep with; tests/test_release_contract.py asserts that coupling.
 
 # Files in the template repo that should never land in generated projects.
 # Setting _exclude in copier.yml REPLACES copier's default exclude list

@@ -1128,7 +1128,9 @@ jobs:
           check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->'
           check_anchor 3 ' Kept across copier update.'
           check_anchor 1 ' on top of the shipped defaults survive `copier update`.'
-          check_anchor 1 ' are preserved across `copier update`.'
+          # 2: the `Dockerfile` sentinels and the `scripts/bump_manifests.py`
+          # DOMAIN-MANIFESTS sentinels (#325).
+          check_anchor 2 ' are preserved across `copier update`.'
           check_anchor 2 'The block is preserved across `copier update`.'
           check_anchor 1 ' on every `copier copy`/`copier update` and re-verified by'
           [ "$preflight_fail" = "0" ] \
@@ -1239,7 +1241,7 @@ jobs:
             fi
           }
           check_replacement 1 ' on top of the shipped defaults are yours to maintain.'
-          check_replacement 1 ' are domain-owned.'
+          check_replacement 2 ' are domain-owned.'
           check_replacement 2 'The block is domain-owned.'
           check_replacement 1 ' whenever config fields change, and re-verified by'
           [ "$replacement_fail" = "0" ] \
