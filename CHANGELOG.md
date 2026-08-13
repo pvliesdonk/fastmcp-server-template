@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.3.0 (2026-08-13)
+
+- #329 feat(tasks): wire pvl-core 4.11.0's background-task backend
+
+
 ## v3.2.2 (2026-08-13)
 
 - #327 fix(release): template-own bump_manifests.py; stop CI syncs mutating uv.lock
