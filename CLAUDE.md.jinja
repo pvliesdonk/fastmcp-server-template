@@ -225,7 +225,7 @@ These sentinel blocks in `Dockerfile` are preserved across `copier update`. Add 
 
 ### Release manifest extension points
 
-`scripts/bump_manifests.py` is template-owned and re-rendered on `copier update`; it bumps `server.json` and refreshes `uv.lock`'s self-version entry inside the release commit. If this project ships more version-coupled manifests (a Claude Code `plugin.json`, an `.mcp.json`, another lockstep JSON/TOML), extend it only inside its sentinels:
+`scripts/bump_manifests.py` bumps `server.json` and refreshes `uv.lock`'s self-version entry inside the release commit, so the tag never points at a manifest whose version lags it. These sentinel blocks in that script are preserved across `copier update`. Add bumps for this project's own version-coupled manifests (a Claude Code `plugin.json`, an `.mcp.json`, another lockstep JSON/TOML) inside them:
 
 - `# DOMAIN-MANIFESTS-HELPERS-START` / `-END` — module-level helpers (use `_load` / `_dump` for JSON so the byte format matches what `scripts/gen_config_surface.py` asserts)
 - `# DOMAIN-MANIFESTS-START` / `-END` — the calls, inside `main()`, where `version` is in scope
