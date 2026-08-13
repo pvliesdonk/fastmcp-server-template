@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.2.2 (2026-08-13)
+
+- #327 fix(release): template-own bump_manifests.py; stop CI syncs mutating uv.lock
+
+
 ## v3.2.1 (2026-08-12)
 
 - #324 fix(wizard): surface TOOLS_ALLOW/TOOLS_DENY as wizard questions and server.json env vars
