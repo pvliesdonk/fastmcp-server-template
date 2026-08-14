@@ -72,6 +72,12 @@ _migrations:
 # one-time creation on first weekly cron; `_skip_if_exists` preserves
 # thereafter.
 _skip_if_exists:
+  # Claude Code plugin channel starters: seeded once, then project-owned.
+  # plugin.json / .mcp.json carry the live release version (bumped by
+  # scripts/bump_manifests.py + PSR), so re-rendering them on update would
+  # reset the version to the 0.0.0 seed; env wiring and skills are domain
+  # content.
+  - ".claude-plugin/**"
   - "src/{{python_module}}/tools.py"
   - "src/{{python_module}}/resources.py"
   - "src/{{python_module}}/prompts.py"
@@ -308,6 +314,11 @@ include_mcp_apps_scaffold:
   type: bool
   default: false
   help: "Include MCP Apps SPA scaffold (hash-routed app-only tools, inline HTML placeholder); leave off for projects without a visual UI"
+
+include_claude_plugin:
+  type: bool
+  default: false
+  help: "Scaffold the Claude Code plugin channel (.claude-plugin/plugin: plugin.json + exec-form .mcp.json seeded once, version-bumped by scripts/bump_manifests.py in every release commit). The release workflow's marketplace publish job already keys on the directory existing at the tag, so turning this on is what makes marketplace publishing take effect. Leave off for servers not distributed as a Claude Code plugin."
 
 enable_authorization:
   type: bool
