@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.5.0 (2026-08-14)
+
+- #339 feat(plugin): scaffold the Claude Code plugin channel behind include_claude_plugin
+
+
 ## v3.4.0 (2026-08-14)
 
 - #338 feat(ci): pre-release workflow_dispatch smoke test for the mcpb bundle
