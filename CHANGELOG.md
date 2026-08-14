@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.4.0 (2026-08-14)
+
+- #338 feat(ci): pre-release workflow_dispatch smoke test for the mcpb bundle
+- #337 feat(gen-config): generate the mcpb user_config install screen from the config surface
+- #336 fix(gen-config): bootstrap with the project's full core constraint, not ==floor
+- #334 feat(release): publish marketplace catalog entry by direct push, not an unmerged PR
+
+
 ## v3.3.0 (2026-08-13)
 
 - #329 feat(tasks): wire pvl-core 4.11.0's background-task backend
