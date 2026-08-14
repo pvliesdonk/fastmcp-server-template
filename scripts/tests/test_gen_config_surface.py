@@ -564,37 +564,37 @@ class TestCollectVars:
 
 
 class TestEnsureCoreAvailable:
-    def test_parses_the_core_floor_from_pyproject(self, tmp_path):
+    def test_parses_the_full_core_constraint_from_pyproject(self, tmp_path):
         (tmp_path / "pyproject.toml").write_text(
             'dependencies = [\n  "fastmcp-pvl-core>=4.5.0,<5",\n]\n', encoding="utf-8"
         )
-        assert g._core_floor(tmp_path) == "4.5.0"
+        assert g._core_constraint(tmp_path) == ">=4.5.0,<5"
 
-    def test_parses_the_floor_past_an_extras_marker(self, tmp_path):
+    def test_parses_the_constraint_past_an_extras_marker(self, tmp_path):
         """A KV backend answer renders `fastmcp-pvl-core[redis]>=4.5.0,<5` —
-        the extras marker must not defeat the floor match."""
+        the extras marker must not defeat the constraint match."""
         (tmp_path / "pyproject.toml").write_text(
             'dependencies = [\n  "fastmcp-pvl-core[redis]>=4.5.0,<5",\n]\n',
             encoding="utf-8",
         )
-        assert g._core_floor(tmp_path) == "4.5.0"
+        assert g._core_constraint(tmp_path) == ">=4.5.0,<5"
 
     def test_parses_a_two_part_floor(self, tmp_path):
         (tmp_path / "pyproject.toml").write_text(
             'dependencies = [\n  "fastmcp-pvl-core>=4.5,<5",\n]\n', encoding="utf-8"
         )
-        assert g._core_floor(tmp_path) == "4.5"
+        assert g._core_constraint(tmp_path) == ">=4.5,<5"
 
-    def test_missing_floor_fails_loudly(self, tmp_path):
+    def test_missing_constraint_fails_loudly(self, tmp_path):
         (tmp_path / "pyproject.toml").write_text(
             "dependencies = []\n", encoding="utf-8"
         )
         with pytest.raises(SystemExit, match="fastmcp-pvl-core"):
-            g._core_floor(tmp_path)
+            g._core_constraint(tmp_path)
 
     def test_missing_pyproject_fails_loudly(self, tmp_path):
         with pytest.raises(SystemExit, match=r"pyproject\.toml"):
-            g._core_floor(tmp_path)
+            g._core_constraint(tmp_path)
 
     def test_matches_the_real_projects_declared_floor(self):
         """Pin against the repo's real pyproject.toml.jinja, not a fixture —
@@ -604,7 +604,11 @@ class TestEnsureCoreAvailable:
         real_pyproject = (
             Path(__file__).resolve().parent.parent.parent / "pyproject.toml.jinja"
         )
-        floor = g._CORE_FLOOR_RE.search(real_pyproject.read_text(encoding="utf-8"))
+        constraint = g._CORE_CONSTRAINT_RE.search(
+            real_pyproject.read_text(encoding="utf-8")
+        )
+        assert constraint is not None
+        floor = re.search(r">=\s*([0-9]+(?:\.[0-9]+)*)", constraint.group(1))
         assert floor is not None
         parts = tuple(int(part) for part in floor.group(1).split("."))
         assert parts >= (4, 6, 1)
@@ -630,10 +634,12 @@ class TestEnsureCoreAvailable:
         monkeypatch.setitem(sys.modules, "fastmcp_pvl_core", stub)
         assert g._core_importable() is True
 
-    def test_reexec_pins_the_floor_when_core_is_too_old(self, tmp_path, monkeypatch):
-        """The too-old-core path resolves to a real re-exec with the pyproject
-        floor pinned — end-to-end from the symbol probe, not a stubbed
-        _core_importable."""
+    def test_reexec_uses_the_project_constraint_when_core_is_too_old(
+        self, tmp_path, monkeypatch
+    ):
+        """The too-old-core path resolves to a real re-exec constrained the
+        way the project venv resolves — end-to-end from the symbol probe,
+        not a stubbed _core_importable."""
         (tmp_path / "pyproject.toml").write_text(
             'dependencies = [\n  "fastmcp-pvl-core>=4.6.1,<5",\n]\n', encoding="utf-8"
         )
@@ -653,7 +659,7 @@ class TestEnsureCoreAvailable:
 
         monkeypatch.setattr(g.os, "execvpe", _record_execvpe)
         g.ensure_core_available(tmp_path)
-        assert "fastmcp-pvl-core==4.6.1" in recorded["args"]
+        assert "fastmcp-pvl-core>=4.6.1,<5" in recorded["args"]
 
     def test_returns_immediately_when_both_deps_are_importable(self, monkeypatch):
         monkeypatch.setattr(g, "_core_importable", lambda: True)
@@ -705,7 +711,7 @@ class TestEnsureCoreAvailable:
         assert "uv" in args
         assert "run" in args
         assert "--no-project" in args
-        assert "fastmcp-pvl-core==4.5.0" in args
+        assert "fastmcp-pvl-core>=4.5.0,<5" in args
         assert "pyyaml" in args
         assert args.count("--with") == 2
         # Original script arguments must survive into the re-exec's argv.

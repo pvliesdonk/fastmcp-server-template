@@ -87,9 +87,12 @@ _NO_DEFAULT = object()
 # then by declaration order within each provenance.
 _PROVENANCE_ORDER = ("core", "template", "external", "domain")
 
-_CORE_FLOOR_RE = re.compile(
-    r"fastmcp-pvl-core(?:\[[^\]]*\])?\s*>=\s*([0-9]+(?:\.[0-9]+)*)"
-)
+# Captures the full version constraint (e.g. ">=4.11.0,<5"), not just the
+# floor: the bootstrap re-exec must resolve the SAME version `uv sync` will
+# resolve for the project venv, or copy-time generation and a later venv
+# regeneration disagree the moment a core release changes any help text
+# (#335). A bare `==floor` pin did exactly that.
+_CORE_CONSTRAINT_RE = re.compile(r"fastmcp-pvl-core(?:\[[^\]]*\])?\s*([><=!~][^\"']*)")
 
 
 def _clean_help(help_text: str) -> str:
@@ -2389,24 +2392,27 @@ def write_artifacts(
 # ---------------------------------------------------------------------------
 
 
-def _core_floor(project_root: Path) -> str:
-    """Parse the `fastmcp-pvl-core>=X.Y.Z` floor from the project's pyproject.toml.
+def _core_constraint(project_root: Path) -> str:
+    """Parse the full `fastmcp-pvl-core` version constraint from pyproject.toml.
 
-    Tolerates an extras marker (`fastmcp-pvl-core[redis]>=4.5.0,<5`) and a
-    floor with fewer than three components (`>=4.5`) — both appear in real
-    rendered `pyproject.toml`s, so a strict `X.Y.Z`-only, no-extras regex
-    would raise here and kill the `_tasks` bootstrap re-exec entirely.
+    Returns the constraint exactly as the project declares it (e.g.
+    `>=4.11.0,<5`), so the bootstrap re-exec resolves the same core version
+    `uv sync` resolves for the project venv — pinning only the floor made
+    copy-time generation and check-time regeneration disagree whenever a
+    newer core changed any surface text (#335). Tolerates an extras marker
+    (`fastmcp-pvl-core[redis]>=4.5.0,<5`) and a floor with fewer than three
+    components (`>=4.5`) — both appear in real rendered `pyproject.toml`s.
     """
     pyproject_path = project_root / "pyproject.toml"
     if not pyproject_path.exists():
         raise SystemExit(f"ERROR: {pyproject_path} not found.")
     text = pyproject_path.read_text(encoding="utf-8")
-    match = _CORE_FLOOR_RE.search(text)
+    match = _CORE_CONSTRAINT_RE.search(text)
     if match is None:
         raise SystemExit(
             f"ERROR: no 'fastmcp-pvl-core>=X.Y.Z' dependency found in {pyproject_path}"
         )
-    return match.group(1)
+    return match.group(1).strip()
 
 
 def _core_importable() -> bool:
@@ -2452,9 +2458,12 @@ def ensure_core_available(
     copier's ``_tasks`` run before any virtualenv exists for the freshly
     rendered project, so this script cannot assume its dependencies are
     installed. When either import fails, re-exec the whole process under
-    ``uv run --no-project`` with the core library and PyYAML pinned ad hoc —
-    this must NOT create a persistent virtualenv, since template-ci renders
-    the template twice and diffs the results.
+    ``uv run --no-project`` with the core library constrained exactly as the
+    project's pyproject.toml declares it — the same resolution ``uv sync``
+    performs later, so copy-time generation and a venv regeneration cannot
+    disagree (#335) — and PyYAML added ad hoc. This must NOT create a
+    persistent virtualenv, since template-ci renders the template twice and
+    diffs the results.
 
     ``_GEN_CONFIG_BOOTSTRAPPED`` guards against re-exec'ing more than once:
     if the dependencies are still missing right after a re-exec, that is a
@@ -2486,7 +2495,7 @@ def ensure_core_available(
             "installed."
         )
 
-    floor = _core_floor(project_root)
+    constraint = _core_constraint(project_root)
     script = str(Path(__file__).resolve())
     extra_argv = list(sys.argv[1:] if argv is None else argv)
     args = [
@@ -2494,7 +2503,7 @@ def ensure_core_available(
         "run",
         "--no-project",
         "--with",
-        f"fastmcp-pvl-core=={floor}",
+        f"fastmcp-pvl-core{constraint}",
         "--with",
         "pyyaml",
         "python",
