@@ -1,0 +1,21 @@
+# {{ human_name }} — Claude Code plugin
+
+Installs the `{{ project_name }}` MCP server into Claude Code as a plugin.
+The server itself is launched with `uvx` from the released PyPI package
+pinned in `.mcp.json`; both that pin and `.claude-plugin/plugin.json`'s
+`version` are bumped automatically in every release commit by
+`scripts/bump_manifests.py`, so the plugin always installs the release it
+shipped with.
+
+## Configuration
+
+`.mcp.json`'s `env` block is this project's to own: add the environment
+variables the server needs at launch. Values may reference plugin
+`userConfig` entries as `${user_config.<id>}` — declare those in
+`plugin.json` (exec-form substitution only; shell-form command strings
+reject them).
+
+## Skills
+
+Drop skill directories under `skills/` (each with a `SKILL.md`) to ship
+agent guidance alongside the server. None are scaffolded by default.

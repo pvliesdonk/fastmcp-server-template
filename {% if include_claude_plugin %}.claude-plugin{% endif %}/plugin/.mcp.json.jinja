@@ -1,0 +1,12 @@
+{
+  "{{ project_name }}": {
+    "command": "uvx",
+    "args": [
+      "--from",
+      "{{ pypi_name }}[all]==0.0.0",
+      "{{ project_name }}",
+      "serve"
+    ],
+    "env": {}
+  }
+}

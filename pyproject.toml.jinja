@@ -228,14 +228,19 @@ tag_format = "v{version}"
 build_command = "python scripts/bump_manifests.py"
 # PSR stages and commits files listed in `assets` together with pyproject.toml
 # and CHANGELOG.md, so the release tag points at a single commit containing
-# all version-coupled files.  Add ".claude-plugin/plugin/.claude-plugin/plugin.json"
-# and ".claude-plugin/plugin/.mcp.json" once your project scaffolds them.
+# all version-coupled files.
 assets = [
     "server.json",
     # bump_manifests.py also refreshes uv.lock's self-version entry, so the
     # release commit carries a consistent lockfile instead of leaving drift
     # for the next `uv run` to re-sync as a side effect.
     "uv.lock",
+{% if include_claude_plugin %}
+    # The Claude Code plugin channel's manifests, bumped by
+    # scripts/bump_manifests.py in the same release commit.
+    ".claude-plugin/plugin/.claude-plugin/plugin.json",
+    ".claude-plugin/plugin/.mcp.json",
+{% endif %}
 ]
 
 [tool.semantic_release.changelog]
