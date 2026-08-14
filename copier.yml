@@ -167,7 +167,11 @@ _skip_if_exists:
 # Generated AND skip-listed: `.env.example`, `packaging/env.example`,
 # `examples/*.env`, and `docs/javascripts/config-wizard/wizard-spec.json`
 # used to live in `_skip_if_exists` as domain-owned files (frozen at first
-# render). Since #264 they are generated instead — on every `copier copy`
+# render). Since #264 they are generated instead; since #330
+# `packaging/mcpb/manifest.json.in` joins them — its `user_config` and
+# `server.mcp_config.env` objects are regenerated from the config surface
+# (curated via `files:` in the presentation layer), while the rest of the
+# manifest stays seeded and hand-editable. All are generated — on every `copier copy`
 # (`_tasks`) and at the end of every `copier update` (`_migrations`), from
 # `fastmcp_pvl_core.server_config_surface()` plus `config-presentation.yml` /
 # `config-presentation.domain.yml` — and they stay listed above only for the

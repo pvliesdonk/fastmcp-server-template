@@ -74,6 +74,7 @@ def fake_project(tmp_path):
         encoding="utf-8",
     )
     _seed_server_json(tmp_path)
+    _seed_mcpb_manifest(tmp_path)
     return tmp_path
 
 
@@ -120,6 +121,54 @@ def _seed_server_json(project_root: Path) -> None:
         )
         + "\n",
         encoding="utf-8",
+    )
+
+
+def _seed_mcpb_manifest(project_root: Path) -> None:
+    """A minimal mcpb manifest carrying the keys the splice must leave untouched.
+
+    `kind: mcpb-user-config` is a spliced artifact: the file must already
+    exist, since the generator replaces exactly the `user_config` and
+    `server.mcp_config.env` objects and owns none of the surrounding
+    manifest. Both objects are seeded with a STALE entry so a test can prove
+    they were genuinely replaced, and `version`/the `--from` pin keep their
+    `${VERSION}` placeholders so a test can prove envsubst templating
+    survives the round-trip.
+    """
+    mcpb_dir = project_root / "packaging" / "mcpb"
+    mcpb_dir.mkdir(parents=True, exist_ok=True)
+    (mcpb_dir / "manifest.json.in").write_text(
+        json.dumps(
+            {
+                "manifest_version": "0.4",
+                "name": "demo-mcp",
+                "version": "${VERSION}",
+                "server": {
+                    "type": "uv",
+                    "entry_point": "src/server.py",
+                    "mcp_config": {
+                        "command": "uvx",
+                        "args": ["--from", "demo-mcp[all]==${VERSION}", "demo-mcp"],
+                        "env": {"STALE": "${user_config.stale}"},
+                    },
+                },
+                "user_config": {
+                    "stale": {"type": "string", "title": "Gone", "required": False}
+                },
+                "compatibility": {"claude_desktop": ">=0.10.0"},
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _mcpb_manifest(project_root: Path) -> dict:
+    return json.loads(
+        (project_root / "packaging" / "mcpb" / "manifest.json.in").read_text(
+            encoding="utf-8"
+        )
     )
 
 
@@ -3356,3 +3405,187 @@ class TestValidatePresentationKeys:
             "required_vars": ["AUTHZ_SCOPES"],
         }
         g.validate_presentation_keys(presentation, vars_)
+
+
+class TestMcpbUserConfig:
+    """`kind: mcpb-user-config` — the generated Claude Desktop install screen."""
+
+    def test_baseline_fields_replace_stale_screen_and_env(self, fake_project):
+        g.write_artifacts(fake_project, check=False)
+        manifest = _mcpb_manifest(fake_project)
+        # The seeded STALE field and env entry are gone — replaced, not merged.
+        assert set(manifest["user_config"]) == {"server_name", "log_level"}
+        env = manifest["server"]["mcp_config"]["env"]
+        assert env == {
+            "DEMO_MCP_SERVER_NAME": "${user_config.server_name}",
+            "FASTMCP_LOG_LEVEL": "${user_config.log_level}",
+        }
+        # Screen metadata falls back to the var's own surface metadata.
+        server_name = manifest["user_config"]["server_name"]
+        assert server_name["type"] == "string"
+        assert server_name["title"] == "Server name"
+        assert server_name["required"] is False
+        assert server_name["description"]
+        # The envsubst placeholders the release flow owns survive untouched.
+        assert manifest["version"] == "${VERSION}"
+        assert "${VERSION}" in manifest["server"]["mcp_config"]["args"][1]
+        assert manifest["compatibility"] == {"claude_desktop": ">=0.10.0"}
+
+    def test_domain_overlay_adds_overrides_and_removes(self, fake_project, monkeypatch):
+        def _domain_presentation(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [
+                    {
+                        "name": "DEMO_MCP_SOURCE_DIR",
+                        "provenance": "external",
+                        "type_name": "Path",
+                        "default": None,
+                        "help": "Root directory of the vault.",
+                        "tags": ["domain"],
+                        "wizard": {"group": "Domain"},
+                    },
+                    {
+                        "name": "DEMO_MCP_GIT_TOKEN",
+                        "provenance": "external",
+                        "type_name": "str",
+                        "default": None,
+                        "help": "Token for git sync.",
+                        "tags": ["domain"],
+                        "wizard": {"group": "Domain"},
+                    },
+                ],
+                "files": {
+                    "packaging/mcpb/manifest.json.in": {
+                        "fields": {
+                            "DEMO_MCP_SOURCE_DIR": {
+                                "id": "source_dir",
+                                "type": "directory",
+                                "required": True,
+                                "default": "${DOCUMENTS}/Vault",
+                            },
+                            "DEMO_MCP_GIT_TOKEN": {
+                                "id": "git_token",
+                                "sensitive": True,
+                            },
+                            # Curation can also drop a template baseline field.
+                            "FASTMCP_LOG_LEVEL": None,
+                        }
+                    }
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _domain_presentation)
+        g.write_artifacts(fake_project, check=False)
+        manifest = _mcpb_manifest(fake_project)
+        assert list(manifest["user_config"]) == [
+            "server_name",
+            "source_dir",
+            "git_token",
+        ]
+        source_dir = manifest["user_config"]["source_dir"]
+        assert source_dir["type"] == "directory"
+        assert source_dir["required"] is True
+        assert source_dir["default"] == "${DOCUMENTS}/Vault"
+        assert manifest["user_config"]["git_token"]["sensitive"] is True
+        env = manifest["server"]["mcp_config"]["env"]
+        assert env["DEMO_MCP_SOURCE_DIR"] == "${user_config.source_dir}"
+        assert "FASTMCP_LOG_LEVEL" not in env
+
+    def test_generation_is_idempotent(self, fake_project):
+        g.write_artifacts(fake_project, check=False)
+        assert g.write_artifacts(fake_project, check=True) == []
+
+    def test_field_naming_unknown_var_fails(self, fake_project, monkeypatch):
+        def _domain_presentation(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [],
+                "files": {
+                    "packaging/mcpb/manifest.json.in": {
+                        "fields": {"DEMO_MCP_TYPO_VAR": {"id": "typo"}}
+                    }
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _domain_presentation)
+        with pytest.raises(SystemExit, match="DEMO_MCP_TYPO_VAR"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_duplicate_id_fails(self, fake_project, monkeypatch):
+        def _domain_presentation(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [],
+                "files": {
+                    "packaging/mcpb/manifest.json.in": {
+                        # server_name is the template baseline's id.
+                        "fields": {"FASTMCP_LOG_LEVEL": {"id": "server_name"}}
+                    }
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _domain_presentation)
+        with pytest.raises(SystemExit, match="server_name"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_domain_overlay_cannot_rekind_a_template_entry(
+        self, fake_project, monkeypatch
+    ):
+        def _domain_presentation(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [],
+                "files": {
+                    "packaging/mcpb/manifest.json.in": {
+                        "kind": "env",
+                        "fields": {},
+                    }
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _domain_presentation)
+        with pytest.raises(SystemExit, match="template-owned"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_missing_manifest_fails_loudly(self, fake_project):
+        (fake_project / "packaging" / "mcpb" / "manifest.json.in").unlink()
+        with pytest.raises(SystemExit, match="mcpb-user-config"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_domain_declared_file_is_taken_wholesale(self, fake_project, monkeypatch):
+        """A rel_path only the domain overlay declares renders like any
+        template-declared entry — the hook a project's own install channel
+        (e.g. a Claude Code plugin manifest) hangs off."""
+        plugin = fake_project / ".claude-plugin" / "manifest.json"
+        plugin.parent.mkdir(parents=True)
+        plugin.write_text(
+            json.dumps(
+                {
+                    "server": {"mcp_config": {"env": {}}},
+                    "user_config": {},
+                    "version": "${VERSION}",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def _domain_presentation(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [],
+                "files": {
+                    ".claude-plugin/manifest.json": {
+                        "kind": "mcpb-user-config",
+                        "fields": {"DEMO_MCP_SERVER_NAME": {"id": "server_name"}},
+                    }
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _domain_presentation)
+        g.write_artifacts(fake_project, check=False)
+        rendered = json.loads(plugin.read_text(encoding="utf-8"))
+        assert list(rendered["user_config"]) == ["server_name"]
+        assert rendered["version"] == "${VERSION}"
