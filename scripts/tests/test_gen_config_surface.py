@@ -3589,3 +3589,159 @@ class TestMcpbUserConfig:
         rendered = json.loads(plugin.read_text(encoding="utf-8"))
         assert list(rendered["user_config"]) == ["server_name"]
         assert rendered["version"] == "${VERSION}"
+
+
+class TestClaudePluginUserConfig:
+    """`claude-plugin-user-config` + `claude-plugin-env` — the split-file pair."""
+
+    @staticmethod
+    def _seed_plugin_files(project_root):
+        plugin_dir = project_root / ".claude-plugin" / "plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps(
+                {
+                    "name": "demo-mcp",
+                    "version": "3.1.0",
+                    "userConfig": {"stale": {"type": "string", "title": "Gone"}},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (plugin_dir / ".mcp.json").write_text(
+            json.dumps(
+                {
+                    "demo-mcp": {
+                        "command": "uvx",
+                        "args": ["--from", "demo-mcp[all]==3.1.0", "demo-mcp"],
+                        "env": {"STALE": "${STALE:-old}"},
+                    }
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _domain_presentation_with_pair():
+        def _fake(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [
+                    {
+                        "name": "DEMO_MCP_SOURCE_DIR",
+                        "provenance": "external",
+                        "type_name": "Path",
+                        "default": None,
+                        "help": "Root directory of the vault.",
+                        "tags": ["domain"],
+                        "wizard": {"group": "Domain"},
+                    },
+                ],
+                "files": {
+                    ".claude-plugin/plugin/.claude-plugin/plugin.json": {
+                        "kind": "claude-plugin-user-config",
+                        "fields": {
+                            "DEMO_MCP_SOURCE_DIR": {
+                                "id": "source_dir",
+                                "type": "directory",
+                                "required": True,
+                            },
+                            "DEMO_MCP_SERVER_NAME": {"id": "server_name"},
+                        },
+                    },
+                    ".claude-plugin/plugin/.mcp.json": {
+                        "kind": "claude-plugin-env",
+                        "fields_from": (
+                            ".claude-plugin/plugin/.claude-plugin/plugin.json"
+                        ),
+                    },
+                },
+            }
+
+        return _fake
+
+    def test_pair_renders_screen_and_env_from_one_fields_map(
+        self, fake_project, monkeypatch
+    ):
+        self._seed_plugin_files(fake_project)
+        monkeypatch.setattr(
+            g, "_load_domain_presentation", self._domain_presentation_with_pair()
+        )
+        g.write_artifacts(fake_project, check=False)
+
+        plugin = json.loads(
+            (
+                fake_project
+                / ".claude-plugin"
+                / "plugin"
+                / ".claude-plugin"
+                / "plugin.json"
+            ).read_text(encoding="utf-8")
+        )
+        # Claude Code's key is camelCase userConfig; the stale field is gone
+        # and the release-flow-owned version survives.
+        assert list(plugin["userConfig"]) == ["source_dir", "server_name"]
+        assert plugin["userConfig"]["source_dir"]["type"] == "directory"
+        assert plugin["userConfig"]["source_dir"]["required"] is True
+        assert plugin["version"] == "3.1.0"
+
+        mcp = json.loads(
+            (fake_project / ".claude-plugin" / "plugin" / ".mcp.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        server = mcp["demo-mcp"]
+        assert server["env"] == {
+            "DEMO_MCP_SOURCE_DIR": "${user_config.source_dir}",
+            "DEMO_MCP_SERVER_NAME": "${user_config.server_name}",
+        }
+        # Exec-form launch and its version pin survive untouched.
+        assert server["command"] == "uvx"
+        assert server["args"][1] == "demo-mcp[all]==3.1.0"
+
+    def test_pair_generation_is_idempotent(self, fake_project, monkeypatch):
+        self._seed_plugin_files(fake_project)
+        monkeypatch.setattr(
+            g, "_load_domain_presentation", self._domain_presentation_with_pair()
+        )
+        g.write_artifacts(fake_project, check=False)
+        assert g.write_artifacts(fake_project, check=True) == []
+
+    def test_fields_from_must_name_a_user_config_entry(self, fake_project, monkeypatch):
+        self._seed_plugin_files(fake_project)
+
+        def _fake(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [],
+                "files": {
+                    ".claude-plugin/plugin/.mcp.json": {
+                        "kind": "claude-plugin-env",
+                        "fields_from": "nonexistent.json",
+                    }
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _fake)
+        with pytest.raises(SystemExit, match="fields_from"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_env_kind_requires_fields_from(self, fake_project, monkeypatch):
+        self._seed_plugin_files(fake_project)
+
+        def _fake(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [],
+                "files": {
+                    ".claude-plugin/plugin/.mcp.json": {"kind": "claude-plugin-env"}
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _fake)
+        with pytest.raises(SystemExit, match="fields_from"):
+            g.write_artifacts(fake_project, check=False)
