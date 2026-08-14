@@ -400,18 +400,41 @@ jobs:
             --clobber \
             --repo "{% raw %}${{ github.repository }}{% endraw %}"
 
-  publish-claude-plugin-pr:
+  # Publishes the marketplace catalog entry by committing straight to the
+  # catalog's default branch — a release must not end at an open PR awaiting
+  # a human merge (fastmcp-server-template#333; 15 such PRs once went stale).
+  # The plugin-artifact check guards against publishing a git-subdir entry
+  # whose path does not exist at the tag, which is uninstallable; projects
+  # without a .claude-plugin/plugin directory skip with a warning rather
+  # than failing the release.
+  publish-claude-plugin:
     needs: release
     if: needs.release.outputs.released == 'true' && !inputs.prerelease
     runs-on: ubuntu-latest
     steps:
+      - name: Check plugin artifact exists at tag
+        id: plugin_check
+        env:
+          GH_TOKEN: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+          TAG: {% raw %}${{ needs.release.outputs.tag }}{% endraw %}
+        run: |
+          if gh api --silent \
+            "repos/{% raw %}${{ github.repository }}{% endraw %}/contents/.claude-plugin/plugin/.claude-plugin/plugin.json?ref=${TAG}"
+          then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::.claude-plugin/plugin missing at ${TAG} — skipping marketplace publish; a git-subdir entry pointing at a missing path would be uninstallable"
+          fi
       - name: Checkout catalog repo
+        if: steps.plugin_check.outputs.present == 'true'
         uses: actions/checkout@v7
         with:
           repository: {{ github_org }}/claude-plugins
           token: {% raw %}${{ secrets.RELEASE_TOKEN }}{% endraw %}
           path: catalog
       - name: Bump marketplace.json entry
+        if: steps.plugin_check.outputs.present == 'true'
         env:
           VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
         run: |
@@ -443,18 +466,45 @@ jobs:
             )
           ' marketplace.json > marketplace.json.tmp
           mv marketplace.json.tmp marketplace.json
-      - name: Create pull request
-        uses: peter-evans/create-pull-request@v8
-        with:
-          path: catalog
-          token: {% raw %}${{ secrets.RELEASE_TOKEN }}{% endraw %}
-          branch: bump/{{ project_name }}-{% raw %}${{ needs.release.outputs.version }}{% endraw %}
-          title: "chore: bump {{ project_name }} to v{% raw %}${{ needs.release.outputs.version }}{% endraw %}"
-          body: |
-            Auto-generated bump from [{{ project_name }} {% raw %}${{ needs.release.outputs.tag }}{% endraw %}](https://github.com/{{ github_org }}/{{ project_name }}/releases/tag/{% raw %}${{ needs.release.outputs.tag }}{% endraw %}).
-          commit-message: "chore: bump {{ project_name }} to v{% raw %}${{ needs.release.outputs.version }}{% endraw %}"
-          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          # The catalog must never be pushed malformed or with a mismatched
+          # entry: validate before anything is committed.
+          jq empty marketplace.json
+          jq -e --arg name "{{ project_name }}" --arg v "$VERSION" '
+            .plugins[] | select(.name == $name)
+            | select(.version == $v and .source.ref == ("v" + $v))
+          ' marketplace.json > /dev/null
+      - name: Commit and push to catalog
+        if: steps.plugin_check.outputs.present == 'true'
+        env:
+          VERSION: {% raw %}${{ needs.release.outputs.version }}{% endraw %}
+        run: |
+          cd catalog
+          if git diff --quiet -- marketplace.json; then
+            echo "marketplace.json already at v${VERSION}; nothing to publish"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          git add marketplace.json
+          git commit -m "chore: bump {{ project_name }} to v${VERSION}"
+          # Concurrent sibling releases race on the same file; rebase-retry
+          # instead of failing. Bumping existing entries touches distinct
+          # lines and rebases cleanly; only two simultaneous *first*
+          # releases (both appending at the array tail) can conflict, and
+          # that fails loudly below for a manual job re-run.
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:${BRANCH}"; then
+              exit 0
+            fi
+            if ! git pull --rebase origin "${BRANCH}"; then
+              git rebase --abort || true
+              echo "::error::concurrent catalog change conflicts with this bump; re-run this job"
+              exit 1
+            fi
+          done
+          echo "::error::could not push marketplace bump after 5 attempts"
+          exit 1
 
   publish-registry:
     needs: [release, publish-pypi, publish-docker]
