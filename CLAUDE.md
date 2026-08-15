@@ -123,6 +123,17 @@ deciding whether that input must be `major`.  `CONTRIBUTING.md` and
 policy in `CLAUDE.md`" — in this repo that is this section; in a
 generated project it is the rendered section from `CLAUDE.md.jinja`.
 
+## Repository protection
+
+`.github/rulesets/*.json` ship to generated projects, where the rendered
+`bootstrap.yml` applies them (posture documented in
+`docs/deployment/repository-protection.md.jinja`).  They hard-code the
+generated `ci.yml`'s aggregate `CI Success` check as the required status
+context.  This template repo itself does NOT run bootstrap and has no
+aggregate check — `template-ci.yml` exposes per-job contexts instead — so
+its own protection is managed by hand: reuse the JSON files as a starting
+point, but swap the required check contexts for the template-ci job names.
+
 ## Release
 
 Run `template-release.yml` via `workflow_dispatch` with `bump` input

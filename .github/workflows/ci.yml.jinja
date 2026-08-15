@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
-    branches: [main]
+    # release/** keeps backport PRs CI-gated: the shipped rulesets
+    # (.github/rulesets/) require the CI Success check on release/* exactly
+    # as on main, which deadlocks unless CI actually runs there.
+    branches: [main, "release/**"]
   workflow_dispatch:
 
 jobs:
