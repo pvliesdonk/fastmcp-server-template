@@ -64,6 +64,13 @@ PR may close multiple issues (`Closes #A, closes #B`); the rule is "no orphan
 PRs", not "one PR per issue". Trivial exceptions: pure typo fixes and
 automated dependency bumps (Renovate) may skip the issue.
 
+Mark a commit breaking (`feat!:` / `BREAKING CHANGE:`) only under the
+breaking-change policy in `CLAUDE.md`: the change must break the operator
+surface (env var, config file, CLI flag, deployment layout, on-disk state)
+or the public library interface, assessed against the **last stable
+release**, not the previous commit. MCP tool-surface changes are not
+breaking on their own.
+
 State what the PR deliberately does **not** do, with each deferral's tracking
 issue. A change that says what it left out is easier to trust than one that
 appears to have found nothing.
