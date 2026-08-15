@@ -98,6 +98,27 @@ argument list, so a new render step belongs in both places.  The
 idempotence render (`/tmp/smoke2`) is deliberately excluded: it is already
 asserted byte-identical to the default render.
 
+## Breaking changes
+
+The canonical breaking-change policy ships in the generated project's
+`CLAUDE.md` — see "Breaking Changes and the `!` Marker" in
+`CLAUDE.md.jinja`.  In short: a change is breaking only if it breaks
+the operator surface (env var, config file, CLI flag, deployment
+layout, on-disk state) or the public library interface, assessed
+against the last stable release; MCP tool-surface changes are not
+breaking on their own.
+
+The same test governs this repo, one level up: a template change is
+breaking when it breaks a surface that generated projects' *users*
+hold — renaming an env var in the config skeleton, moving a state
+directory the Dockerfile ships, dropping a sentinel block projects
+extend.  This repo's releases are cut manually via
+`template-release.yml`'s `bump` input; apply the same test when
+deciding whether that input must be `major`.  `CONTRIBUTING.md` and
+`.github/PULL_REQUEST_TEMPLATE.md` point at "the breaking-change
+policy in `CLAUDE.md`" — in this repo that is this section; in a
+generated project it is the rendered section from `CLAUDE.md.jinja`.
+
 ## Release
 
 Run `template-release.yml` via `workflow_dispatch` with `bump` input
