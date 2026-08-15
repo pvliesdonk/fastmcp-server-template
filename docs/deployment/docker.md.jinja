@@ -8,6 +8,23 @@ docker compose up -d
 
 The server listens on port 8000 with HTTP transport by default.
 
+## Image tags
+
+| Tag | Contents | Updated by |
+|-----|----------|------------|
+| `latest` | Newest stable release | Each stable release |
+| `vX.Y.Z` | That exact release | Never (immutable) |
+| `vX.Y`, `vX` | Newest stable release in that series | Each stable release in the series |
+| `unstable` | Newest pre-release | Each pre-release |
+| `edge` | Newest commit on `main` | Every merge to `main` |
+
+`edge` and `unstable` are different channels: `edge` follows `main` continuously and carries no version identity, while `unstable` follows tagged pre-releases. To find the commit behind an `edge` image, read its `org.opencontainers.image.revision` label:
+
+```bash
+docker inspect --format {% raw %}'{{ index .Config.Labels "org.opencontainers.image.revision" }}'{% endraw %} \
+  {{ docker_registry }}/{{ project_name }}:edge
+```
+
 ## Environment variables
 
 | Variable | Default | Description |
