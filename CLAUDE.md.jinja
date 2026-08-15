@@ -259,7 +259,16 @@ Every path bumped there must also appear in `pyproject.toml`'s `[tool.semantic_r
 
 To generate the plugin's configuration screen from the config surface instead of hand-editing it, declare a `files:` pair in `config-presentation.domain.yml`: the plugin.json path with `kind: claude-plugin-user-config` and a `fields:` map (same field specs as the mcpb screen above), plus the `.mcp.json` path with `kind: claude-plugin-env` and `fields_from:` naming the first entry. One fields map then drives both the `userConfig` object and the `${user_config.<id>}` env wiring, and `scripts/gen_config_surface.py --check` gates the pair against drift.
 
-{% endif %}## Pre-release artifact smoke test
+{% endif %}## Public import surface guard
+
+`tests/test_import_surface.py` (template-owned, re-rendered on template updates) asserts the set of public names importable from the `{{ python_module }}` package root against the project-owned snapshot `tests/public_import_surface.txt` (seeded once, never re-rendered by template updates — yours). The surface is enumerated in a fresh interpreter — every non-underscore name in `dir(package)` or `__all__` that resolves via `getattr` — so lazy `__getattr__` re-exports count, incidental submodule imports from earlier tests do not, and a root holding only a docstring and `__version__` has an empty surface. When the test fails:
+
+- **A name disappeared** — that is a breaking change to the public library interface. Either restore the name, or regenerate the snapshot (`uv run python tests/test_import_surface.py --update`) **and** mark the commit/PR breaking (`feat!:` / `fix!:`, or a `BREAKING CHANGE:` footer) per the versioning policy's public-library-interface tier (pvliesdonk/fastmcp-server-template#342).
+- **A name appeared** — not breaking; regenerate the snapshot and commit it alongside the change, so the snapshot diff stays the reviewable record of every surface change.
+
+The guard covers the package root only — submodule paths, env vars, and CLI flags are out of its scope.
+
+## Pre-release artifact smoke test
 
 The `Pre-release check` workflow (Actions tab, `workflow_dispatch`) builds and validates the mcpb bundle from any branch at a caller-supplied version (default `0.0.0-dev`), uploads it as a workflow artifact for manual install testing, and can optionally attach it to a deletable `v<version>-rc` pre-release. It runs the exact same steps a real release runs — both call the shared `.github/actions/build-mcpb` composite — so a green pre-release check means the release path's bundle build is green too. Project-specific artifact assertions (extra bundles, plugin manifests) belong in `packaging/pre-release-checks.sh` — an executable script the workflow runs when present, with `VERSION` and `BUNDLE` exported; the file is project-owned, and template updates never touch it.
 
