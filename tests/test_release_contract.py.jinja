@@ -15,10 +15,24 @@ commits shipped a lockfile whose self entry lagged `pyproject.toml`, which made
 mutation (#325, #326).  The script is template-owned now, with
 `DOMAIN-MANIFESTS` seams for a project's own manifests; these tests are what
 keeps the two halves honest for anything added through those seams.
+
+A second invariant joined in template#345: the bumper must never pin a version
+the release will not publish.  Pre-releases skip PyPI, the MCP registry, and
+the marketplace publish, so on a pre-release run the manifests that name a
+published artifact (`server.json` and the Claude Code plugin pair) must stay
+at the last published stable, while `uv.lock` — which tracks `pyproject.toml`,
+not PyPI — must still move.  The behavioral tests below run the real script
+against a sandbox repo root and assert both directions: a stable version moves
+everything, a pre-release version moves only the lockfile.
 """
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -28,6 +42,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUMPER = REPO_ROOT / "scripts" / "bump_manifests.py"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
+{%- if include_claude_plugin %}
+PLUGIN_JSON = Path(".claude-plugin/plugin/.claude-plugin/plugin.json")
+MCP_JSON = Path(".claude-plugin/plugin/.mcp.json")
+{%- endif %}
 
 # Manifests the template itself bumps, mapped to the marker that proves the
 # bumper still handles them.  A domain manifest added through the
@@ -127,3 +145,100 @@ def test_domain_manifest_calls_sentinel_lives_inside_main() -> None:
     end = text.index("# DOMAIN-MANIFESTS-END")
     assert main_def < start < end
     assert text.index("_bump_lockfile(version)") < start
+
+
+def _run_bumper(workdir: Path, version: str) -> subprocess.CompletedProcess[str]:
+    """Run the real bumper against ``workdir`` with ``NEW_VERSION`` set."""
+    return subprocess.run(
+        [sys.executable, str(BUMPER)],
+        cwd=workdir,
+        env={**os.environ, "NEW_VERSION": version},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.fixture
+def release_sandbox(tmp_path: Path) -> Path:
+    """A minimal repo root the bumper can rewrite without touching this repo.
+
+    `server.json`{% if include_claude_plugin %} and the plugin manifests are{% else %} is{% endif %} copied verbatim so the test exercises the
+    real manifest shapes; `pyproject.toml` and `uv.lock` are minimal stand-ins
+    carrying only what `_bump_lockfile` reads.
+    """
+    shutil.copy(REPO_ROOT / "server.json", tmp_path / "server.json")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "sandbox-pkg"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    (tmp_path / "uv.lock").write_text(
+        '[[package]]\nname = "sandbox-pkg"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+{%- if include_claude_plugin %}
+    for manifest in (PLUGIN_JSON, MCP_JSON):
+        (tmp_path / manifest).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(REPO_ROOT / manifest, tmp_path / manifest)
+{%- endif %}
+    return tmp_path
+
+
+def test_stable_release_bumps_every_published_version_field(
+    release_sandbox: Path,
+) -> None:
+    """A stable version moves every manifest the release publishes."""
+    result = _run_bumper(release_sandbox, "9.9.9")
+    assert result.returncode == 0, result.stderr
+
+    server = json.loads((release_sandbox / "server.json").read_text(encoding="utf-8"))
+    assert server["version"] == "9.9.9"
+    pypi = [p for p in server["packages"] if p.get("registryType") == "pypi"]
+    assert pypi and all(p["version"] == "9.9.9" for p in pypi)
+    oci = [p for p in server["packages"] if p.get("registryType") == "oci"]
+    assert all(p["identifier"].endswith(":v9.9.9") for p in oci)
+
+    lock = (release_sandbox / "uv.lock").read_text(encoding="utf-8")
+    assert 'version = "9.9.9"' in lock
+{%- if include_claude_plugin %}
+
+    plugin = json.loads((release_sandbox / PLUGIN_JSON).read_text(encoding="utf-8"))
+    assert plugin["version"] == "9.9.9"
+    mcp = json.loads((release_sandbox / MCP_JSON).read_text(encoding="utf-8"))
+    pins = [
+        arg
+        for server_cfg in mcp.values()
+        for arg in server_cfg.get("args", [])
+        if "==" in arg
+    ]
+    assert pins and all(pin.endswith("==9.9.9") for pin in pins)
+{%- endif %}
+
+
+@pytest.mark.parametrize("version", ["9.9.9-rc.1", "9.9.9-rc.12"])
+def test_prerelease_leaves_published_version_fields_untouched(
+    release_sandbox: Path, version: str
+) -> None:
+    """A pre-release run must not pin versions PyPI/the registry never get.
+
+    `publish-pypi`, `publish-registry`, and the marketplace publish are all
+    gated on `!inputs.prerelease`, so a pre-release version never exists on
+    those channels — pinning it would leave `main` naming an uninstallable
+    version between stables (template#345).  `uv.lock` still moves: it tracks
+    `pyproject.toml`, and lagging there breaks `uv lock --check` on `main`.
+    """
+    before_server = (release_sandbox / "server.json").read_bytes()
+{%- if include_claude_plugin %}
+    before_plugin = (release_sandbox / PLUGIN_JSON).read_bytes()
+    before_mcp = (release_sandbox / MCP_JSON).read_bytes()
+{%- endif %}
+
+    result = _run_bumper(release_sandbox, version)
+    assert result.returncode == 0, result.stderr
+    assert "pre-release" in result.stdout
+
+    assert (release_sandbox / "server.json").read_bytes() == before_server
+{%- if include_claude_plugin %}
+    assert (release_sandbox / PLUGIN_JSON).read_bytes() == before_plugin
+    assert (release_sandbox / MCP_JSON).read_bytes() == before_mcp
+{%- endif %}
+    lock = (release_sandbox / "uv.lock").read_text(encoding="utf-8")
+    assert f'version = "{version}"' in lock

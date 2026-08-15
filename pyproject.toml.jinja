@@ -237,7 +237,9 @@ assets = [
     "uv.lock",
 {% if include_claude_plugin %}
     # The Claude Code plugin channel's manifests, bumped by
-    # scripts/bump_manifests.py in the same release commit.
+    # scripts/bump_manifests.py in the same release commit (stable releases
+    # only — pre-releases leave them at the last published stable, since the
+    # PyPI version they pin is never published for a pre-release).
     ".claude-plugin/plugin/.claude-plugin/plugin.json",
     ".claude-plugin/plugin/.mcp.json",
 {% endif %}
