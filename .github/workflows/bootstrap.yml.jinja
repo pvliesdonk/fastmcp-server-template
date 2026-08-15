@@ -3,8 +3,10 @@ name: Bootstrap repo
 # Seeds repository state that checked-in config references but GitHub does not
 # create on its own:
 #   1. The `dependencies` label Renovate applies to its PRs, plus the
-#      `bug`/`feature`/`decay`/`question` labels the issue forms reference
-#      (GitHub silently drops labels that don't exist).
+#      `bug`/`feature`/`decay`/`question`/`epic` labels the issue forms
+#      reference (GitHub silently drops labels that don't exist) and the
+#      `ships-atomically` label the epic workflow uses as the fallback
+#      release-cut signal when no milestone names the target release.
 #   2. Repository settings that make Renovate auto-merge SAFE — "Allow
 #      auto-merge" plus branch protection requiring the `CI Success` check.
 #      Without a required check, enabling auto-merge on a PR merges it
@@ -57,6 +59,14 @@ jobs:
           gh label create question \
             --color d876e3 \
             --description "Further information is requested" \
+            --force
+          gh label create epic \
+            --color 3e4b9e \
+            --description "Multi-feature effort that ships as one user-facing story" \
+            --force
+          gh label create ships-atomically \
+            --color b60205 \
+            --description "No release may be cut while this epic is mid-flight (fallback for a release milestone)" \
             --force
 
   settings:
