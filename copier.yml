@@ -72,6 +72,16 @@ _migrations:
 # one-time creation on first weekly cron; `_skip_if_exists` preserves
 # thereafter.
 _skip_if_exists:
+  # .claude/skills/ (the contributor-facing authoring skill) is deliberately
+  # NOT listed here: it follows the CLAUDE.md ownership pattern — template-
+  # owned, re-rendered on every update, with a DOMAIN-AUTHORING sentinel
+  # block for project-specific additions — so contribution-hygiene fixes
+  # reach existing consumers instead of freezing at first render.  Contrast
+  # with `.claude-plugin/**` below, whose skills are USER-facing content.
+  # NOTE: .gitignore (seeded once, below) gained the `.claude/*` +
+  # `!.claude/skills/` pattern together with this skill; a consumer whose
+  # .gitignore predates it must apply that change by hand, or the rendered
+  # skill stays untracked (git add skips ignored paths).
   # Claude Code plugin channel starters: seeded once, then project-owned.
   # plugin.json / .mcp.json carry the live release version (bumped by
   # scripts/bump_manifests.py + PSR), so re-rendering them on update would

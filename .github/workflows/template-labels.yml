@@ -48,6 +48,14 @@ jobs:
             --color d876e3 \
             --description "Further information is requested" \
             --force
+          gh label create epic \
+            --color 3e4b9e \
+            --description "Multi-feature effort that ships as one user-facing story" \
+            --force
+          gh label create ships-atomically \
+            --color b60205 \
+            --description "No release may be cut while this epic is mid-flight (fallback for a release milestone)" \
+            --force
           gh label create dependencies \
             --color 0366d6 \
             --description "Pull requests that update a dependency" \

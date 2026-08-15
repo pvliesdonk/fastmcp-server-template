@@ -10,8 +10,19 @@ Use the issue templates in `.github/ISSUE_TEMPLATE/`:
 
 - **Bug report** — something isn't working as expected.
 - **Feature request** — a new capability or enhancement.
+- **Epic** — a multi-feature effort that ships as one user-facing story.
+  See [Epics](#epics) below.
 - **Decay / structural debt** — refactor-later observations.
 - **Question / support** — questions and support requests.
+
+Before filing, search the target repo's existing issues — open **and**
+closed — for the same observation. If it is already on file, comment there
+rather than opening a duplicate.
+
+The `authoring-issues-prs` skill (`.claude/skills/authoring-issues-prs/`)
+walks this guide's routing and filing procedure and performs the follow-up
+steps issue forms cannot (sub-issue links, milestones). It points back at
+this file; this file stays the single source of the rules.
 
 ### Observation, not work order
 
@@ -54,6 +65,35 @@ a separate issue for it.
 | A cause asserted without a `[verified]` or `[unverified]` marker | Add the marker; add "I have not verified the cause" if unverified |
 | An "Additional context" section that introduces new problems | Open a separate issue |
 | Implementation steps (a numbered list of code changes) | Remove entirely |
+
+### Epics
+
+An epic is not just a bigger issue. It is the unit that answers two
+questions nothing else answers: **what story does this tell a user**, and
+**does it ship as a whole**. File one with the Epic form and:
+
+- **Write "What changes for the user" at epic creation**, before any code
+  exists. It becomes the release-notes highlight for the whole epic, so the
+  release editor verifies it against what landed instead of reconstructing
+  intent from merged PRs.
+- **Link children as native GitHub sub-issues, not markdown task lists.**
+  Sub-issues make the grouping queryable (parent, children, and progress
+  are API fields); a checklist is prose. Issue forms cannot create the link
+  at filing time — use the issue sidebar ("Create sub-issue" / "Add
+  existing issue") or the sub-issues API after filing. The
+  `authoring-issues-prs` skill performs this mechanically.
+- **If the epic ships atomically** (no release may be cut mid-epic), make
+  that queryable too. Preferred: assign the epic and its children to the
+  **milestone** named for the target release — "safe to cut" then reduces
+  to "no open issues in that milestone". Milestones are per-repo and
+  one-per-issue; for a cross-repo epic the milestone lives in the repo
+  where the release is cut. Fallback: apply the **`ships-atomically`
+  label** when no target release is named yet, or in the repos of a
+  cross-repo epic that do not cut the release. The form's yes/no field
+  records intent; only the milestone or label is what release tooling can
+  query.
+
+Existing epics tracked as hand-written checklists need no migration.
 
 ## Pull requests
 
