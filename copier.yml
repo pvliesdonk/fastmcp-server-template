@@ -85,6 +85,15 @@ _skip_if_exists:
   - "tests/conftest.py"
   - "tests/test_smoke.py"
   - "tests/test_cli.py"
+  # Public import-surface snapshot (#352) — the domain-owned expected-names
+  # list consumed by the template-owned tests/test_import_surface.py, same
+  # split as conftest.py's config_contract_env seam.  Seeded with the
+  # scaffold's empty surface (the skeleton root exports only `__version__`,
+  # a dunder); each project's real surface is domain content, so
+  # re-rendering on update would wipe it back to empty and turn the guard
+  # red on every downstream.  Regenerate via
+  # `uv run python tests/test_import_surface.py --update`.
+  - "tests/public_import_surface.txt"
   - "CHANGELOG.md"
   - "LICENSE"
   # .env.example is listed further down, with the other generated config
