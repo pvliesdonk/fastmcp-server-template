@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.6.0 (2026-08-15)
+
+- #340 feat(gen-config): generate the Claude Code plugin userConfig screen as a split-file pair
+
+
 ## v3.5.0 (2026-08-14)
 
 - #339 feat(plugin): scaffold the Claude Code plugin channel behind include_claude_plugin
