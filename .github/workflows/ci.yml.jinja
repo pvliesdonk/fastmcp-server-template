@@ -418,18 +418,13 @@ jobs:
         run: git fetch origin {% raw %}${{ github.base_ref }}{% endraw %} --depth=50
 
       - name: Structural quality (changed lines only)
+        # One implementation, shared with the pre-push hook. The explicit
+        # STRUCTURAL_GATE_BASE pins the PR's actual base branch (main or a
+        # release/X.Y for backport PRs); the script's no-Python skip and the
+        # diff-quality invocation live in the script.
         env:
-          BASE_REF: {% raw %}${{ github.base_ref }}{% endraw %}
-        run: |
-          # Skip when the diff touches no Python — mirrors the diff-cover guard.
-          HAS_PY=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -c '\.py$' || true)
-          if [ "$HAS_PY" -eq 0 ]; then
-            echo "No Python source changes — skipping structural diff gate"
-            exit 0
-          fi
-          uv run diff-quality --violations=ruff.check \
-            --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
-            --compare-branch="origin/${BASE_REF}" --fail-under=100
+          STRUCTURAL_GATE_BASE: origin/{% raw %}${{ github.base_ref }}{% endraw %}
+        run: bash scripts/structural_gate.sh
 {% endif %}
 
   ci-success:

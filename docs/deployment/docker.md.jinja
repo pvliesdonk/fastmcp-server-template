@@ -12,13 +12,12 @@ The server listens on port 8000 with HTTP transport by default.
 
 | Tag | Contents | Updated by |
 |-----|----------|------------|
-| `latest` | Newest stable release | Each stable release |
-| `vX.Y.Z` | That exact release | Never (immutable) |
-| `vX.Y`, `vX` | Newest stable release in that series | Each stable release in the series |
-| `unstable` | Newest pre-release | Each pre-release |
+| `latest` | Newest stable release | Each stable release that is newest across all series |
+| `vX.Y.Z` | That exact release (pre-releases included, as `vX.Y.Z-rc.N`) | Never (immutable) |
+| `vX.Y`, `vX` | Newest stable release in that series | Each stable release that is newest in its series |
 | `edge` | Newest commit on `main` | Every merge to `main` |
 
-`edge` and `unstable` are different channels: `edge` follows `main` continuously and carries no version identity, while `unstable` follows tagged pre-releases. To find the commit behind an `edge` image, read its `org.opencontainers.image.revision` label:
+Rolling tags are ordering-aware: a patch release cut from an old `release/X.Y` branch after a newer stable has shipped updates its own series tags but never `latest`. A pre-release pushes only its immutable `vX.Y.Z-rc.N` tag. To run the latest merged code, use `edge`, which follows `main` continuously and carries no version identity. To find the commit behind an `edge` image, read its `org.opencontainers.image.revision` label:
 
 ```bash
 docker inspect --format {% raw %}'{{ index .Config.Labels "org.opencontainers.image.revision" }}'{% endraw %} \

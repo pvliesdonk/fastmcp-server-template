@@ -55,11 +55,9 @@ Every PR must pass **all** of the following before merge. Do not open or push a 
 {% if enable_structural_gate %}
 5. **Structural quality (diff) passes** — new/changed code must introduce no new structural violations (complexity, too-many-*, security). Enforced on the diff only, so pre-existing code is never blocked. Run before pushing:
    ```bash
-   uv run diff-quality --violations=ruff.check \
-     --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" \
-     --compare-branch=origin/main --fail-under=100
+   bash scripts/structural_gate.sh
    ```
-   `# noqa: C901` (etc.) with a one-line justification is the escape hatch for genuinely irreducible new code.
+   The script derives its compare branch (nearest of `origin/main` and `origin/release/*`; override with `STRUCTURAL_GATE_BASE`) and runs `diff-quality --violations=ruff.check --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" --fail-under=100` against it. `# noqa: C901` (etc.) with a one-line justification is the escape hatch for genuinely irreducible new code.
 6. **Docs updated** — `README.md` and `docs/**` reflect any user-facing changes in the same commit
 7. **Manifest version lockstep** — `server.json`, `.claude-plugin/plugin/.claude-plugin/plugin.json`, and `.claude-plugin/plugin/.mcp.json` must all carry the same version: the latest *stable* release. Stable releases bump them atomically via PSR; pre-releases deliberately leave them untouched, because the versions they name are only published for stable releases. Manual touches require updating all three.
 {% else %}
@@ -74,7 +72,7 @@ This project ships a `.pre-commit-config.yaml` that runs ruff (check + format), 
 - **Install once per clone:** `uv run pre-commit install`.
 - **Run on demand before pushing:** `uv run pre-commit run --all-files`. A green run is a precondition for gates #2 and #3 above.
 {% if enable_structural_gate %}
-- **Structural gate runs at push time:** the `structural-diff-gate` hook (pre-push stage) runs the command above automatically. `uv run pre-commit install` wires it via `default_install_hook_types`. A clean local push implies a clean CI `structure` job — same command, same range, as long as your PR targets `main` (the hook hardcodes `origin/main`; CI compares against the PR's actual base branch).
+- **Structural gate runs at push time:** the `structural-diff-gate` hook (pre-push stage) runs `scripts/structural_gate.sh` automatically. `uv run pre-commit install` wires it via `default_install_hook_types`. A clean local push implies a clean CI `structure` job — CI runs the same script, pinning the compare branch to the PR's actual base, while the hook derives it (nearest of `origin/main` and `origin/release/*`), so backport branches targeting a release branch are measured against the right base locally too.
 {% endif %}
 - **Never bypass with `--no-verify`.** A failing hook means the same check will fail in CI; fix the underlying issue rather than silencing it.
 
@@ -274,7 +272,15 @@ The `Pre-release check` workflow (Actions tab, `workflow_dispatch`) builds and v
 
 ## Unstable channel (rolling `edge` image)
 
-The `Unstable channel` workflow (`.github/workflows/unstable.yml`) runs on every push to `main` (plus manual dispatch for seeding) and rebuilds two artifacts from that commit: the container image, pushed to `ghcr.io/{{ github_org }}/{{ project_name }}:edge` — a fixed rolling tag whose contents each merge replaces — and an mcpb bundle built through the same shared `.github/actions/build-mcpb` composite the release path uses, uploaded as the `mcpb-bundle-edge` workflow artifact at the constant version `0.0.0-dev`. The channel is deliberately versionless: no git tag, no GitHub release, no version bump, no manifest change. "Run the latest merged code" costs one build-and-push and leaves nothing behind; the image's `org.opencontainers.image.revision` label carries the exact commit. Cutting a version-numbered pre-release (rc) remains `release.yml`'s job, and its `unstable` image tag is that channel's rolling tag — a different producer on a different trigger, which is why this workflow uses `edge` rather than sharing the name.
+The `Unstable channel` workflow (`.github/workflows/unstable.yml`) runs on every push to `main` (plus manual dispatch for seeding) and rebuilds two artifacts from that commit: the container image, pushed to `ghcr.io/{{ github_org }}/{{ project_name }}:edge` — a fixed rolling tag whose contents each merge replaces — and an mcpb bundle built through the same shared `.github/actions/build-mcpb` composite the release path uses, uploaded as the `mcpb-bundle-edge` workflow artifact at the constant version `0.0.0-dev`. The channel is deliberately versionless: no git tag, no GitHub release, no version bump, no manifest change. "Run the latest merged code" costs one build-and-push and leaves nothing behind; the image's `org.opencontainers.image.revision` label carries the exact commit. The docs site's rolling `unstable` version deploys from the same trigger (`docs.yml`), so it tracks merged code the way `edge` does. Cutting a version-numbered pre-release (rc) remains `release.yml`'s job, from a `release/X.Y` branch (see the release machinery section below); rc images ship only under their immutable `vX.Y.Z-rc.N` tags — `edge` is the sole rolling unstable tag.
+
+## Release machinery (branches, rcs, merge-back)
+
+Prerelease-ness is a property of the **branch**, not of a dispatch flag: `[tool.semantic_release.branches]` maps `main` to stable releases and `release/.*` to rc pre-releases (token `rc`), and every publish gate in `release.yml` derives from PSR's own outputs (`is_prerelease`, tag ordering) — there is no pre-release checkbox to desync. Dispatching Release on `main` cuts a stable; on a short-lived `release/X.Y` stabilisation branch it cuts the next rc, or the final stable `X.Y.Z` when the `finalize` input is checked (implemented as a one-run generated config override, because PSR's CLI can force prerelease on but not off). The `force` input is main-only — a release branch's target is fixed at cut time. Branches matching neither group cannot release; PSR refuses them.
+
+Rolling channels are ordering-aware: Docker `latest`/`vX`/`vX.Y`, the GitHub latest-release pointer, the docs `latest` alias, the marketplace entry, and the registry entry only follow a release that is the newest in the relevant series, so a backport patch cut from an old `release/X.Y` never repoints them backwards.
+
+**After any release cut from a `release/*` branch, the branch must merge back into `main`.** The `merge-back` job does this automatically via `scripts/merge_back.sh` (version-coupled files resolve to `main`'s side; real conflicts fail loudly for a manual `git merge --no-ff release/X.Y`). This is a hard requirement, not hygiene: with the release tag unreachable from `main`, PSR recomputes the same version from `main`'s own history, finds the tag taken repo-globally, and reports "already released" forever. When to cut a branch at all — and the default of releasing from a quiescent trunk without one — is release-model documentation, not machinery (tracked upstream as fastmcp-server-template#346).
 
 ## Tool Registration Checklist
 

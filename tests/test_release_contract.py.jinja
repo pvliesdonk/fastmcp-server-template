@@ -220,10 +220,11 @@ def test_prerelease_leaves_published_version_fields_untouched(
     """A pre-release run must not pin versions PyPI/the registry never get.
 
     `publish-pypi`, `publish-registry`, and the marketplace publish are all
-    gated on `!inputs.prerelease`, so a pre-release version never exists on
-    those channels — pinning it would leave `main` naming an uninstallable
-    version between stables (template#345).  `uv.lock` still moves: it tracks
-    `pyproject.toml`, and lagging there breaks `uv lock --check` on `main`.
+    gated on PSR's `is_prerelease` output, so a pre-release version never
+    exists on those channels — pinning it would leave the branch naming an
+    uninstallable version between stables (template#345).  `uv.lock` still
+    moves: it tracks `pyproject.toml`, and lagging there breaks
+    `uv lock --check` on `main`.
     """
     before_server = (release_sandbox / "server.json").read_bytes()
 {%- if include_claude_plugin %}

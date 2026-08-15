@@ -3,10 +3,10 @@
 # workflow artifact. No git tag, no GitHub release, no version bump, no
 # manifest churn — this channel answers "let me run the latest merged code"
 # without release machinery. Version-numbered pre-releases (rc) remain
-# release.yml's job; its `unstable` image tag is that separate channel's
-# rolling tag, which is why this workflow does NOT reuse the name: one tag
-# must have exactly one producer, or its contents depend on which of two
-# unordered runs finished last.
+# release.yml's job, cut from short-lived release/X.Y stabilisation branches
+# and published only under their immutable vX.Y.Z-rc.N image tags (the
+# rc-fed rolling `unstable` tag is retired; `edge` is the one rolling
+# unstable tag, and one tag must have exactly one producer).
 name: Unstable channel
 
 on:
