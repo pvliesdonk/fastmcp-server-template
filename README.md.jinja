@@ -141,7 +141,7 @@ CI workflows reference three repository secrets. Configure them via **Settings â
 
 | Secret | Used by | How to generate |
 |---|---|---|
-| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap sets branch protection + auto-merge). Scoped to this repo. |
+| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap applies the repository rulesets + auto-merge). Must belong to a repository admin: the shipped rulesets grant bypass to the admin role, and the release workflow's direct pushes rely on it. Scoped to this repo. |
 | `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io>: sign in with GitHub and add the repo. The upload token is on its settings page. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
 
@@ -153,9 +153,11 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN
 
 > Dependency updates are handled by **Renovate** (`renovate.yml`), which reuses
 > `RELEASE_TOKEN`. It maintains `uv.lock` and auto-merges patch/minor bumps once
-> the `CI Success` check is green; `bootstrap.yml` enables auto-merge and branch
-> protection on first push. GitHub Actions are updated in the copier template
-> and arrive via `copier update`, not per-repo.
+> the `CI Success` check is green; `bootstrap.yml` enables auto-merge and applies
+> the repository rulesets (`.github/rulesets/`) on first push. See
+> [Repository Protection](docs/deployment/repository-protection.md) for the
+> per-branch posture and bypass model. GitHub Actions are updated in the copier
+> template and arrive via `copier update`, not per-repo.
 
 `GITHUB_TOKEN` is auto-provided; no action needed.
 
