@@ -113,6 +113,14 @@ _skip_if_exists:
   # re-rendered tests/test_release_contract.py fails loudly (naming the line)
   # until it is present.
   - "CHANGELOG.md"
+  # Release-notes surface (template#347): the index landing page is seeded
+  # once and thereafter owned by the notes pipeline (the generator inserts a
+  # list entry per minor between its markers) and by humans editing merged
+  # pages.  The per-minor pages themselves only ever exist downstream, but
+  # the glob keeps a future template-side releases/* file from clobbering a
+  # project's accumulated release history — same rationale as CHANGELOG.md
+  # directly above.
+  - "docs/releases/**"
   - "LICENSE"
   # .env.example is listed further down, with the other generated config
   # artifacts — see the "Generated AND skip-listed" note below.

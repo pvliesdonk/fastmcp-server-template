@@ -1072,7 +1072,8 @@ jobs:
           # --- Step 2: prune template-origin CI + fleet review wiring ---
           rm -f .github/workflows/copier-update.yml \
                 .github/workflows/claude.yml \
-                .github/workflows/claude-code-review.yml
+                .github/workflows/claude-code-review.yml \
+                .github/workflows/release-notes.yml
           rm -f scripts/copier_update_aggregator.py
           rm -rf scripts/copier_update_prompts
           # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
@@ -1122,8 +1123,8 @@ jobs:
               preflight_fail=1
             fi
           }
-          check_anchor 2 '<!-- TEMPLATE-TRACKING-START -->'
-          check_anchor 2 '<!-- TEMPLATE-TRACKING-END -->'
+          check_anchor 3 '<!-- TEMPLATE-TRACKING-START -->'
+          check_anchor 3 '<!-- TEMPLATE-TRACKING-END -->'
           check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS BELOW'
           check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->'
           check_anchor 3 ' Kept across copier update.'
@@ -1179,6 +1180,8 @@ jobs:
             && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
           grep -qF 'bot reviewer (claude-review)' CLAUDE.md \
             && { echo "::error::bot-reviewer paragraph survived the scrub"; exit 1; } || true
+          grep -qE '^## Release notes pages$' CLAUDE.md \
+            && { echo "::error::Release notes pages section survived the scrub"; exit 1; } || true
           # Neutral guidance must remain. The scrub is a sed range-delete, so the
           # only "deleted too much" failure mode (given the pristine-render
           # marker-count guard already holds 2 balanced pairs) is a misplaced
@@ -1186,8 +1189,11 @@ jobs:
           # boundaries. Every boundary is bracketed by a must-survive assertion:
           #   pair 1 START → ## PR Discipline (above)
           #   pair 1 END   → ## GitHub Review Types (below)
-          #   pair 2 START → ## Server Info Tool (above)
-          #   pair 2 END   → ## Key Design Decisions (below; the TEMPLATE-OWNED
+          #   pair 2 START → ## Logging Standard family / release machinery
+          #                  sections (above; the release-notes-pages pair)
+          #   pair 2 END   → ## Tool Registration Checklist (below)
+          #   pair 3 START → ## Server Info Tool (above)
+          #   pair 3 END   → ## Key Design Decisions (below; the TEMPLATE-OWNED
           #                  END fence that used to sit here is removed by the
           #                  scrub, so ## Key Design Decisions is now the sole
           #                  below-the-boundary over-run guard)
@@ -1200,6 +1206,7 @@ jobs:
               '^## Config & Customization Contract$' \
               '^## Server Info Tool' \
               '^## GitHub Review Types$' \
+              '^## Tool Registration Checklist$' \
               '^## Key Design Decisions$'; do
             grep -qE "$kept_section" CLAUDE.md \
               || { echo "::error::neutral section '$kept_section' lost — scrub deleted too much"; exit 1; }
@@ -1251,6 +1258,7 @@ jobs:
               .github/workflows/copier-update.yml \
               .github/workflows/claude.yml \
               .github/workflows/claude-code-review.yml \
+              .github/workflows/release-notes.yml \
               scripts/copier_update_aggregator.py \
               scripts/copier_update_prompts; do
             [ ! -e "$gone" ] \
@@ -1262,7 +1270,8 @@ jobs:
               .github/workflows/codeql.yml \
               .github/workflows/coverage-status.yml \
               .github/workflows/docs.yml \
-              .github/workflows/release.yml; do
+              .github/workflows/release.yml \
+              .github/workflows/release-notes-publish.yml; do
             [ -f "$kept" ] \
               || { echo "::error::$kept was removed but should be kept"; exit 1; }
           done

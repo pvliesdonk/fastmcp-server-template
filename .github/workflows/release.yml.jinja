@@ -175,10 +175,13 @@ jobs:
       # The compare link spans the cycle since the previous STABLE tag — one
       # definition of "what belongs in this release" for stables and rcs
       # alike.  Tags are complete here (see the ordering step above).
-      # NOTES-GENERATOR SEAM (template#347): the release-notes generator
-      # replaces the interim summary below with the synthesised narrative and
-      # a deep link into the versioned docs/releases page; keep the compare
-      # and CHANGELOG pointers.
+      # NOTES-GENERATOR SEAM (template#347): consumed. The body written here
+      # is the at-release interim state; after the Release Notes workflow's
+      # agent-drafted docs/releases page merges, release-notes-publish.yml
+      # replaces the interim summary with the page's marked summary block and
+      # a deep link into the versioned docs/releases page, keeping the
+      # compare and CHANGELOG pointers. The closing line below doubles as the
+      # upgrade-once marker that workflow keys on — reword them together.
       - name: Set release body (summary + docs pointers)
         if: steps.release.outputs.released == 'true'
         env:

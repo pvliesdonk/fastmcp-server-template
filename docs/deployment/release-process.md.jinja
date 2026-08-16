@@ -70,3 +70,22 @@ Each release is described in three places with distinct jobs:
 - **`CHANGELOG.md`** in the repository is the machine-written,
   commit-level audit trail, generated from conventional commits by the
   release tooling.
+
+### How the notes pages are produced
+
+The pages under [Release Notes](../releases/index.md) cover one minor
+series each; a patch release adds a dated section to its series page.
+After every stable release, the **Release Notes** workflow drafts the
+page: an agent researches the release range through the GitHub API (the
+linked issues and pull requests, not commit subjects) and opens a pull
+request against `main`. Every causal claim in a page must cite a linked
+issue or pull request, and the draft must pass the same prose lint as the
+rest of this site before the pull request opens.
+
+A maintainer merge is the publication step. Nothing lands on the site
+without review, and until the merge the release keeps the short interim
+body the release workflow wrote; a failed or unconvincing draft never
+blocks or alters a release. On merge, the **Release Notes Publish**
+workflow updates the GitHub release body from the page's summary and
+redeploys that minor's versioned docs so the body's deep link resolves.
+Later hand edits to a merged page redeploy the docs the same way.
