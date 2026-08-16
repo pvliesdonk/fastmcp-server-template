@@ -92,13 +92,19 @@ jobs:
               [ -n "$num" ] || continue
               kids=$(gh api "repos/$REPO/issues/$num/sub_issues" \
                 --jq '[.[] | select(.state == "open")] | length' 2>/dev/null || echo '?')
+              # A still-open epic whose children are all closed is quiescent —
+              # no warning. '?' (the sub-issues query failed) is unknown, so it
+              # still warns rather than staying silent on a real risk.
+              [ "$kids" = "0" ] && continue
               echo "::warning::Open ships-atomically epic #$num ($title) — $kids open child issue(s). Releasing $REPO@main ships HEAD mid-story; consider a release/X.Y branch cut from before the epic started."
             done || true
           fi
-          # (2) The preferred signal: a release-named milestone (X.Y) that
-          #     still has open issues — that version is not yet quiescent.
+          # (2) The preferred signal: a release-named milestone that still has
+          #     open issues — that version is not yet quiescent. Accepts X.Y,
+          #     optionally v-prefixed and/or with a patch component
+          #     (v3.2 / 3.2.0 / v3.2.0), not bare X.Y alone.
           milestones=$(gh api "repos/$REPO/milestones?state=open&per_page=100" \
-            --jq '.[] | select(.open_issues > 0) | select(.title | test("^[0-9]+[.][0-9]+$")) | "\(.title): \(.open_issues) open issue(s)"' 2>/dev/null || true)
+            --jq '.[] | select(.open_issues > 0) | select(.title | test("^v?[0-9]+[.][0-9]+([.][0-9]+)?$")) | "\(.title): \(.open_issues) open issue(s)"' 2>/dev/null || true)
           if [ -n "$milestones" ]; then
             printf '%s\n' "$milestones" | while IFS= read -r ms; do
               [ -n "$ms" ] || continue

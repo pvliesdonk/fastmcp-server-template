@@ -253,6 +253,36 @@ def test_committed_manifest_pins_are_stable_versions() -> None:
     )
 
 
+def test_committed_manifest_pins_are_in_lockstep() -> None:
+    """Every committed published-manifest pins the same version.
+
+    ``test_committed_manifest_pins_are_stable_versions`` proves none is a
+    pre-release and ``test_committed_server_version_matches_a_released_tag``
+    ties ``server.json`` to a tag, but neither compares the pins to *each
+    other*.  The "Manifest version lockstep" rule requires all of them to name
+    one version; a hand edit or half-applied ``copier update`` that leaves one
+    file at an older but still-stable version would satisfy both other tests
+    while breaking lockstep (the markdown-vault-mcp#1053 failure, one notch
+    narrower).
+
+    Self-skipping before the first stable release: the bumper leaves the
+    published manifests at their ``0.0.0`` last-published-stable placeholder
+    on pre-release runs, so a freshly generated project legitimately carries
+    ``server.json`` at its initial version while the plugin pair sits at
+    ``0.0.0``. The lockstep-to-latest-stable rule only binds once a stable
+    has actually shipped.
+    """
+    if not _stable_release_tags():
+        pytest.skip("no stable release yet — manifests not yet in lockstep")
+    versions = _published_manifest_versions()
+    distinct = set(versions.values())
+    assert len(distinct) == 1, (
+        "the manifest-lockstep rule requires every committed published-manifest "
+        "to pin one version, but these differ: "
+        + ", ".join(f"{where} = {ver}" for where, ver in sorted(versions.items()))
+    )
+
+
 def _stable_release_tags() -> list[str] | None:
     """Stable ``vX.Y.Z`` tags in this repo, or ``None`` when git is absent.
 
