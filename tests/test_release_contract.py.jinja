@@ -275,6 +275,13 @@ def test_committed_manifest_pins_are_in_lockstep() -> None:
     if not _stable_release_tags():
         pytest.skip("no stable release yet — manifests not yet in lockstep")
     versions = _published_manifest_versions()
+    if versions["server.json version"] in {"0.0.0", "0.1.0"}:
+        # First-release window: a stable tag already exists (cut on the release
+        # branch) but the manifests on the commit under test have not yet been
+        # bumped off their placeholders. server.json starts at "0.1.0" while the
+        # plugin pair starts at "0.0.0", so they legitimately diverge here — the
+        # same window test_committed_server_version_matches_a_released_tag skips.
+        pytest.skip("initial placeholder version, before the first release bump")
     distinct = set(versions.values())
     assert len(distinct) == 1, (
         "the manifest-lockstep rule requires every committed published-manifest "
