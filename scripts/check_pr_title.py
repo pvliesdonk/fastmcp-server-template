@@ -55,9 +55,19 @@ _TITLE_RE = re.compile(
     r"(?P<subject>\S.*)$"
 )
 
-# GitHub's "Revert" button titles the pull request `Revert "<original>"`,
-# which no conventional-commit parser recognises.
-_GITHUB_REVERT_RE = re.compile(r'^Revert\s+"(?P<original>.+)"\s*$')
+# `git revert` and GitHub's revert button both produce `Revert "<original>"`.
+# That is the wider ecosystem's shape, not a GitHub quirk, and Conventional
+# Commits deliberately leaves revert handling open -- so it is accepted rather
+# than second-guessed.  The greedy `.+` also accepts the stacked form a revert
+# of a revert produces: `Revert "Revert "feat: x""`.
+#
+# It does carry a cost, and the caller is told about it rather than left to
+# find out: python-semantic-release has no revert handling in any parser (both
+# `angular` and `conventional` return ParseError for this shape), so a commit
+# with this subject does not reach CHANGELOG.md.  The release-notes page is
+# where such a change gets narrated -- its research runs off merged pull
+# requests and linked issues, not commit subjects.
+_GIT_REVERT_RE = re.compile(r'^Revert\s+".+"\s*$')
 
 _TYPES_LINE = ", ".join(ALLOWED_TYPES)
 
@@ -77,6 +87,29 @@ def _example() -> str:
     )
 
 
+#: Emitted for an accepted title that the release parser still cannot read.
+REVERT_CAVEAT = (
+    'Accepted: this is the Revert "..." form git and GitHub generate. '
+    "python-semantic-release cannot parse it, though, so the commit will not "
+    "appear in CHANGELOG.md. Title it 'revert: ORIGINAL SUBJECT' instead if "
+    "you want it there; either way the release-notes page narrates it, since "
+    "that research runs off merged pull requests rather than commit subjects."
+)
+
+
+def is_git_revert(title: str) -> bool:
+    """Report whether a title is the ``Revert "..."`` form git generates.
+
+    Args:
+        title: The pull-request title, as GitHub reports it.
+
+    Returns:
+        ``True`` for the git/GitHub revert shape, including the stacked form
+        a revert of a revert produces (``Revert`` applied twice).
+    """
+    return _GIT_REVERT_RE.match(title.strip()) is not None
+
+
 def check_title(title: str) -> str | None:
     """Validate a pull-request title.
 
@@ -91,16 +124,8 @@ def check_title(title: str) -> str | None:
     if not stripped:
         return f"The pull-request title is empty.\n{_example()}\n{_HOW_TO_FIX}"
 
-    github_revert = _GITHUB_REVERT_RE.match(stripped)
-    if github_revert:
-        original = github_revert.group("original")
-        return (
-            'GitHub\'s revert button titles the pull request Revert "...", '
-            "which the release parser cannot read -- the revert would be "
-            "missing from CHANGELOG.md.\n"
-            f"Retitle it to: revert: {original}\n"
-            f"{_HOW_TO_FIX}"
-        )
+    if is_git_revert(stripped):
+        return None
 
     match = _TITLE_RE.match(stripped)
     if not match:
@@ -145,6 +170,9 @@ def main(argv: list[str]) -> int:
     problem = check_title(argv[0])
     if problem is None:
         print(f"Pull-request title OK: {argv[0]}")
+        if is_git_revert(argv[0]):
+            print(REVERT_CAVEAT)
+            print(f"::warning title=Revert title::{REVERT_CAVEAT}")
         return 0
 
     print(problem, file=sys.stderr)

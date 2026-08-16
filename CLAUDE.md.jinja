@@ -33,10 +33,19 @@ subject, and a type it does not recognise is dropped from `CHANGELOG.md`
 without a warning — no fallback heading, no entry at all. A commit that never
 reaches the changelog never reaches the release notes that link into it.
 
-Two practical notes. Retitling is enough — the job reads the current title
-from the API, so re-running it after a retitle clears the check with no push.
-And GitHub's revert button produces `Revert "..."`, which no parser reads;
-retitle it to `revert: ...` so the revert survives in the audit trail.
+Retitling is enough to clear a failure — the job reads the current title from
+the API, so re-running it after a retitle needs no push.
+
+**Reverts are the one accepted title with a caveat.** `Revert "..."`, the
+shape `git revert` and GitHub's revert button generate, passes: it is the
+ecosystem's convention, and Conventional Commits deliberately leaves reverts
+unspecified. But no python-semantic-release parser reads it — `angular` and
+`conventional` both fail on it — so such a commit does **not** reach
+`CHANGELOG.md`. The job says so with a warning annotation rather than letting
+you find out at release time. `revert: ORIGINAL SUBJECT` is the form that does
+reach the changelog. Either way the revert is narrated on the
+`docs/releases/` page, whose research runs off merged pull requests and linked
+issues rather than commit subjects.
 
 The accepted set lives in `pyproject.toml` under
 `[tool.semantic_release.commit_parser_options] allowed_tags`.

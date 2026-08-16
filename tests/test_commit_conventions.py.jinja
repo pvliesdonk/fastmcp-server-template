@@ -87,6 +87,8 @@ def test_ci_runs_the_checker_and_gates_on_it() -> None:
         "feat(config)!: drop the deprecated env alias",
         "chore(deps): update dependency ruff to v0.9.0",
         "revert: feat(search): add hybrid ranking",
+        'Revert "feat: add a thing"',
+        'Revert "Revert "feat: add a thing""',
         "perf: reuse the compiled pattern",
         "docs: document the new env var",
     ],
@@ -102,7 +104,7 @@ def test_accepted_titles(title: str) -> None:
         "diag(review): pin the reviewer action",
         "experiment(review): show full output",
         "Modify CI workflow to handle Renovate PRs",
-        'Revert "feat: add a thing"',
+        'Reverted "feat: add a thing"',
         "Feat: capitalised type",
         "fix:no space after the colon",
         "feat: ",
@@ -122,8 +124,23 @@ def test_rejection_names_the_accepted_types() -> None:
     assert ", ".join(_checker_types()) in result.stderr
 
 
-def test_github_revert_titles_suggest_the_conventional_form() -> None:
-    """GitHub's revert button produces a title no parser reads."""
+def test_git_revert_titles_pass_but_warn_about_the_changelog() -> None:
+    """The git/GitHub revert form is accepted; its cost is stated, not hidden.
+
+    Neither of python-semantic-release 10.5.3's parsers reads that shape --
+    both return ParseError -- so the commit never reaches CHANGELOG.md. The
+    check accepts the title (it is what git itself generates) and annotates
+    the run rather than leaving the author to discover the gap at release
+    time.
+    """
     result = _run_checker('Revert "feat: add a thing"')
-    assert result.returncode == 1
-    assert "revert: feat: add a thing" in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert "::warning" in result.stdout
+    assert "CHANGELOG.md" in result.stdout
+
+
+def test_conventional_revert_titles_pass_without_a_warning() -> None:
+    """`revert:` is in allowed_tags, so that form does reach the changelog."""
+    result = _run_checker("revert: feat: add a thing")
+    assert result.returncode == 0, result.stderr
+    assert "::warning" not in result.stdout
