@@ -119,6 +119,17 @@ Run a local code-review pass on the cumulative diff before `gh pr create`.
 Code without matching docs is incomplete; check `README.md`, the `docs/`
 site, `docs/design/`, and inline docstrings.
 
+## Releases
+
+Merging is not releasing. When a release is cut, and from where, is
+governed by the release model in `CLAUDE.md`: releases normally come
+straight from a quiescent trunk, and a short-lived `release/X.Y` branch
+is the exception tool for excluding unfinished work or patching a
+shipped release. The ships-atomically signal recorded on epics
+(milestone preferred, label fallback; see [Epics](#epics)) is the input
+that judgement consumes: an open atomic epic with unclosed children
+means the release comes from before it started, or waits.
+
 ## Where to send fixes
 
 - **Library-level fix** (anything you'd change in `fastmcp_pvl_core`): open a
