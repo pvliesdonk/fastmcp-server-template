@@ -265,7 +265,21 @@ match = "release/.*"
 prerelease = true
 prerelease_token = "rc"
 
+# PSR's changelog runs in `update` mode (the v10 default, pinned here so the
+# contract is visible): each release inserts its version section at the
+# insertion flag in CHANGELOG.md and preserves everything else in the file
+# verbatim.  Both halves are explicit because the flag is load-bearing — a
+# changelog without the flag line is silently never written (template#350).
+# CHANGELOG.md is seeded with the flag; a project whose CHANGELOG.md predates
+# it must add the flag line once, by hand (tests/test_release_contract.py
+# fails with the exact line until it is present).
 [tool.semantic_release.changelog]
+mode = "update"
+insertion_flag = "<!-- version list -->"
+
+# `changelog_file` lives under `default_templates` (its supported location
+# since PSR v9.11); the bare `changelog.changelog_file` key is deprecated.
+[tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGELOG.md"
 
 [tool.semantic_release.commit_parser_options]

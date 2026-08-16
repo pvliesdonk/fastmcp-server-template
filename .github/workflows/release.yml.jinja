@@ -165,6 +165,60 @@ jobs:
             echo "is_latest_minor=$is_latest_minor"
           } >> "$GITHUB_OUTPUT"
 
+      # Release-body contract (template#350, settled jointly with
+      # template#347): the body is a user-facing summary plus pointers — the
+      # docs site is canonical, and commit-level detail stays behind the
+      # compare link and CHANGELOG.md.  Composing the body here (overwriting
+      # PSR's default commit-list notes) makes it independent of the
+      # tag-to-tag commit range, so a stable that finalises an rc series gets
+      # the same body as any other release instead of an empty-range one.
+      # The compare link spans the cycle since the previous STABLE tag — one
+      # definition of "what belongs in this release" for stables and rcs
+      # alike.  Tags are complete here (see the ordering step above).
+      # NOTES-GENERATOR SEAM (template#347): the release-notes generator
+      # replaces the interim summary below with the synthesised narrative and
+      # a deep link into the versioned docs/releases page; keep the compare
+      # and CHANGELOG pointers.
+      - name: Set release body (summary + docs pointers)
+        if: steps.release.outputs.released == 'true'
+        env:
+          GH_TOKEN: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+          TAG: {% raw %}${{ steps.release.outputs.tag }}{% endraw %}
+          IS_PRERELEASE: {% raw %}${{ steps.release.outputs.is_prerelease }}{% endraw %}
+          REPO: {% raw %}${{ github.repository }}{% endraw %}
+        run: |
+          ver="${TAG#v}"
+          minor="${ver%%-*}"
+          minor="${minor%.*}"
+          # Highest stable tag strictly below this release (series-aware via
+          # sort -V; empty on a project's very first release).
+          prev=$(
+            { git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+                | grep -Fvx "$TAG"; echo "$TAG"; } \
+              | sort -V | awk -v t="$TAG" '$0 == t { print p; exit } { p = $0 }'
+          )
+          {
+            if [ "$IS_PRERELEASE" = "true" ]; then
+              echo "Release candidate ${ver}: a branch-scoped stabilisation build for the upcoming v${minor} stable. Install it only to help test that release."
+              echo
+              # The stable's versioned docs publish when the stable ships;
+              # rcs deploy no docs, so point at the site root instead of a
+              # not-yet-existing /X.Y/ page.
+              echo "- Documentation: https://{{ github_org }}.github.io/{{ project_name }}/ (the v${minor} pages publish when the stable ships)"
+            else
+              echo "{{ project_name }} ${ver}."
+              echo
+              echo "- Documentation: https://{{ github_org }}.github.io/{{ project_name }}/${minor}/"
+            fi
+            if [ -n "$prev" ]; then
+              echo "- All changes since ${prev}: https://github.com/${REPO}/compare/${prev}...${TAG}"
+            fi
+            echo "- Commit-level detail: [CHANGELOG.md](https://github.com/${REPO}/blob/${TAG}/CHANGELOG.md)"
+            echo
+            echo "Release notes will move to a versioned notes page on the documentation site; until then, the links above carry the full change record."
+          } > release-body.md
+          gh release edit "$TAG" --notes-file release-body.md
+
       # GitHub auto-marks the newest non-prerelease as the repo's "latest
       # release", which would repoint /releases/latest (and the versionless
       # .deb/.rpm URLs) at a backport patch cut after a newer stable. Demote it.

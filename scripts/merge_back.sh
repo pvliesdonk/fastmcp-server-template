@@ -39,7 +39,12 @@ import tomllib
 with open("pyproject.toml", "rb") as fh:
     cfg = tomllib.load(fh)["tool"]["semantic_release"]
 files = {"pyproject.toml"}
-files.add(cfg.get("changelog", {}).get("changelog_file", "CHANGELOG.md"))
+changelog_cfg = cfg.get("changelog", {})
+files.add(
+    changelog_cfg.get("default_templates", {}).get("changelog_file")
+    or changelog_cfg.get("changelog_file")  # pre-v9.11 deprecated location
+    or "CHANGELOG.md"
+)
 files.update(str(asset) for asset in cfg.get("assets", []))
 print("\n".join(sorted(files)))
 PY

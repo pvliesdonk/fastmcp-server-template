@@ -104,6 +104,14 @@ _skip_if_exists:
   # red on every downstream.  Regenerate via
   # `uv run python tests/test_import_surface.py --update`.
   - "tests/public_import_surface.txt"
+  # Seeded once, then PSR-owned: python-semantic-release inserts version
+  # sections at the seed's `<!-- version list -->` insertion flag on every
+  # release, so re-rendering on update would clobber a project's accumulated
+  # release history — the seed must stay skip-listed.  Migration for projects
+  # whose CHANGELOG.md predates the flag (template#350): add the flag line
+  # once, by hand — PSR's `update` mode writes nothing without it, and the
+  # re-rendered tests/test_release_contract.py fails loudly (naming the line)
+  # until it is present.
   - "CHANGELOG.md"
   - "LICENSE"
   # .env.example is listed further down, with the other generated config
