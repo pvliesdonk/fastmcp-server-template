@@ -1448,3 +1448,31 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             scripts/gen_config_surface.py scripts/copier_update_aggregator.py
+
+  pr-title:
+    name: PR Title
+    # The template dogfoods the check it ships. Its own release notes are
+    # built from merged pull-request titles verbatim (see the "Collect merged
+    # PR titles since latest tag" step in template-release.yml), so the same
+    # discipline applies here — and a check nobody runs on the repo that
+    # authors it is a check nobody trusts.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check pull-request title
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        # Reads the CURRENT title rather than the event payload's, so a
+        # re-run after a retitle clears the check without a push.
+        run: |
+          set -euo pipefail
+          TITLE="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq .title)"
+          python3 scripts/check_pr_title.py "$TITLE"
