@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.0.0 (2026-08-16)
+
+- #365 feat(release-notes): agent-written release-notes workflow (per-minor pages, PR-gated)
+- #364 feat(release): compose release bodies as summary + docs pointers; repair PSR changelog writing
+- #363 docs(release): document the release model — channels, cut criterion, branch-on-demand
+- #361 feat(workflows): ship branch/tag rulesets under the branch-aware release model
+- #360 feat(release)!: release from short-lived stabilisation branches; branch-derived rc identity
+- #358 feat(workflows): ship a rolling unstable channel (edge image + mcpb artifact) per merge to main
+- #357 feat: guard the package root's public import surface with a snapshot test
+- #356 feat: ship an Epic issue form and a contributor-facing authoring skill
+- #355 fix: stop bump_manifests pinning pre-release versions never published to PyPI
+- #354 docs: define the breaking-change policy (operator/library surface, not MCP tool surface)
+
+
 ## v3.6.0 (2026-08-15)
 
 - #340 feat(gen-config): generate the Claude Code plugin userConfig screen as a split-file pair
