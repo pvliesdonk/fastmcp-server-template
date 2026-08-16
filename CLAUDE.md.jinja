@@ -131,7 +131,7 @@ Every issue, PR, and code change must consider documentation impact. Before clos
 - **`docs/design/`** — internal design specs and architecture decisions (the authoritative dev reference). Any new feature, changed behavior, or architectural decision must be reflected here. Not part of the published site.
 - **`README.md`** — user-facing documentation. New env vars, tools, resources, prompts, CLI flags, or configuration options must be documented here.
 - **`docs/` site pages** — the published documentation site. New or changed MCP tools/resources/prompts, new env vars, new installation methods or deployment options.
-- **`CHANGELOG.md`** — managed by semantic-release from conventional commits.
+- **`CHANGELOG.md`** — machine-generated audit trail: python-semantic-release inserts each release's version section at the `<!-- version list -->` insertion flag during the release workflow. Never hand-edit version sections or the flag line. If this project was generated before the flag existed, add the flag line to `CHANGELOG.md` once by hand — `tests/test_release_contract.py` fails with the exact line until it is present.
 - **Inline docstrings** — new or changed public API methods need accurate Google-style docstrings.
 
 **Rule: code without matching docs is incomplete.**
