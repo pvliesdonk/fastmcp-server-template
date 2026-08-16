@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.1.0 (2026-08-16)
+
+- #378 fix(release): close release-machinery disclosure gaps
+- #369 feat(ci): gate pull-request titles on the commit types PSR can parse
+
+
 ## v4.0.0 (2026-08-16)
 
 - #365 feat(release-notes): agent-written release-notes workflow (per-minor pages, PR-gated)
