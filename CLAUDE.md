@@ -140,6 +140,14 @@ Run `template-release.yml` via `workflow_dispatch` with `bump` input
 (patch/minor/major).  It tags a new `vX.Y.Z`, updates CHANGELOG.md,
 and creates a GitHub release.
 
+The release *model* that generated projects follow — trunk releases from
+a quiescent commit by default, short-lived `release/X.Y` branches as the
+exception, the three channels — ships in `CLAUDE.md.jinja`'s "Release
+model" section.  `CONTRIBUTING.md` points at "the release model in
+`CLAUDE.md`": in a generated project that resolves to the rendered
+section; in this repo, releases are the manual dispatch above and the
+same trunk-first spirit applies, without the branch machinery.
+
 ## Spec
 
 Full design: [`docs/superpowers/specs/2026-04-20-fastmcp-copier-scaffold-design.md`](https://github.com/pvliesdonk/markdown-vault-mcp/blob/main/docs/superpowers/specs/2026-04-20-fastmcp-copier-scaffold-design.md) (in the markdown-vault-mcp repo).

@@ -270,6 +270,35 @@ The guard covers the package root only — submodule paths, env vars, and CLI fl
 
 The `Pre-release check` workflow (Actions tab, `workflow_dispatch`) builds and validates the mcpb bundle from any branch at a caller-supplied version (default `0.0.0-dev`), uploads it as a workflow artifact for manual install testing, and can optionally attach it to a deletable `v<version>-rc` pre-release. It runs the exact same steps a real release runs — both call the shared `.github/actions/build-mcpb` composite — so a green pre-release check means the release path's bundle build is green too. Project-specific artifact assertions (extra bundles, plugin manifests) belong in `packaging/pre-release-checks.sh` — an executable script the workflow runs when present, with `VERSION` and `BUNDLE` exported; the file is project-owned, and template updates never touch it.
 
+## Release model
+
+`main` is trunk. Everything merges there, and **merging is not releasing**: a merge feeds the rolling `edge` channel (next section) and nothing else. A release is a separate, deliberate event — dispatching the Release workflow — and the sections below say when and from where.
+
+**The default release path is trunk.** When a release is wanted and trunk is quiescent (no atomic epic mid-flight — the cut criterion below), dispatch Release on `main`. It cuts a stable from HEAD: no branch, no ceremony. Most releases should look like this.
+
+**The cut criterion.** An epic that ships atomically makes trunk unreleasable while it is open: releasing `main` ships HEAD, mid-story. Judge quiescence from the queryable signal the epic conventions record (see CONTRIBUTING.md's Epics section): preferably the **release milestone** — safe to cut means no open issues in the target release's milestone — with the **`ships-atomically` label** as the fallback when no milestone names a release yet. An open atomic epic with unclosed children means either release from a commit before the epic started (a `release/X.Y` branch cut from that commit) or wait. The Release workflow's advisory step ("Warn about open ships-atomically epics") surfaces open labelled epics on every `main` dispatch; it warns and never blocks, because the cut may still be intentional.
+
+**The `release/X.Y` branch is the exception tool**, for exactly two cases:
+
+1. **Dirty trunk at cut time** — trunk carries unfinished work that must be excluded from the release. Cut the branch from the last quiescent commit behind HEAD, stabilise there (rcs), and finalize the stable.
+2. **Patching a shipped release** — an already-released version needs a fix while `main` has moved on past it. The branch does not need to exist in advance: create it retroactively from the tag (`git branch release/X.Y vX.Y.Z`), land the fix, release.
+
+Fixes flow trunk → branch only: land on `main` first, cherry-pick to the branch. The automated release merge-back (see the release machinery section below) is the single reverse flow — it carries PSR's release commits, never features.
+
+**Branching cannot defer a structural refactor.** A refactor that changes existing behaviour makes every later cherry-pick across it conflict-prone, so a stabilisation branch buys no room for one. Land structural refactors early in a cycle, far from the next cut — not late, when a branch is about to be needed.
+
+**Cadence: value-triggered, not time-boxed.** No fixed release train — a calendar cadence is wrong for a low-traffic project and adds nothing to a busy one. Release when unreleased user-visible work (features, fixes, and especially security patches) has accumulated, and never hold a release hostage to unfinished work: excluding that work is exactly what the branch tool is for. The failure mode to avoid is drift — weeks of unreleased commits held behind one open epic.
+
+**The three channels and their promises:**
+
+| Channel | Identity | Promise |
+|---|---|---|
+| `edge` | none — the commit is the identity | the newest merged code, rebuilt on every merge to `main`; rolling and disposable |
+| rc | `vX.Y.Z-rc.N`, target fixed at cut time | a stabilisation step toward exactly that version, cut only from `release/X.Y` (a fresh stabilisation branch starts at `X.Y.0-rc.1`) |
+| stable | `vX.Y.Z` | a quiescent-trunk release (the default) or the promotion of a stabilisation branch (`finalize`) |
+
+An rc is not "the latest build with a version number" — that job belongs to `edge`, which costs one build-and-push and leaves no tag, release, or version bump behind. Cut rcs only when genuinely stabilising a specific release.
+
 ## Unstable channel (rolling `edge` image)
 
 The `Unstable channel` workflow (`.github/workflows/unstable.yml`) runs on every push to `main` (plus manual dispatch for seeding) and rebuilds two artifacts from that commit: the container image, pushed to `ghcr.io/{{ github_org }}/{{ project_name }}:edge` — a fixed rolling tag whose contents each merge replaces — and an mcpb bundle built through the same shared `.github/actions/build-mcpb` composite the release path uses, uploaded as the `mcpb-bundle-edge` workflow artifact at the constant version `0.0.0-dev`. The channel is deliberately versionless: no git tag, no GitHub release, no version bump, no manifest change. "Run the latest merged code" costs one build-and-push and leaves nothing behind; the image's `org.opencontainers.image.revision` label carries the exact commit. The docs site's rolling `unstable` version deploys from the same trigger (`docs.yml`), so it tracks merged code the way `edge` does. Cutting a version-numbered pre-release (rc) remains `release.yml`'s job, from a `release/X.Y` branch (see the release machinery section below); rc images ship only under their immutable `vX.Y.Z-rc.N` tags — `edge` is the sole rolling unstable tag.
@@ -280,7 +309,7 @@ Prerelease-ness is a property of the **branch**, not of a dispatch flag: `[tool.
 
 Rolling channels are ordering-aware: Docker `latest`/`vX`/`vX.Y`, the GitHub latest-release pointer, the docs `latest` alias, the marketplace entry, and the registry entry only follow a release that is the newest in the relevant series, so a backport patch cut from an old `release/X.Y` never repoints them backwards.
 
-**After any release cut from a `release/*` branch, the branch must merge back into `main`.** The `merge-back` job does this automatically via `scripts/merge_back.sh` (version-coupled files resolve to `main`'s side; real conflicts fail loudly for a manual `git merge --no-ff release/X.Y`). This is a hard requirement, not hygiene: with the release tag unreachable from `main`, PSR recomputes the same version from `main`'s own history, finds the tag taken repo-globally, and reports "already released" forever. When to cut a branch at all — and the default of releasing from a quiescent trunk without one — is release-model documentation, not machinery (tracked upstream as fastmcp-server-template#346).
+**After any release cut from a `release/*` branch, the branch must merge back into `main`.** The `merge-back` job does this automatically via `scripts/merge_back.sh` (version-coupled files resolve to `main`'s side; real conflicts fail loudly for a manual `git merge --no-ff release/X.Y`). This is a hard requirement, not hygiene: with the release tag unreachable from `main`, PSR recomputes the same version from `main`'s own history, finds the tag taken repo-globally, and reports "already released" forever. When to cut a branch at all — and the default of releasing from a quiescent trunk without one — is the [release model](#release-model) above, not machinery.
 
 ## Tool Registration Checklist
 
