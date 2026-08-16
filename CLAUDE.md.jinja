@@ -311,6 +311,17 @@ Rolling channels are ordering-aware: Docker `latest`/`vX`/`vX.Y`, the GitHub lat
 
 **After any release cut from a `release/*` branch, the branch must merge back into `main`.** The `merge-back` job does this automatically via `scripts/merge_back.sh` (version-coupled files resolve to `main`'s side; real conflicts fail loudly for a manual `git merge --no-ff release/X.Y`). This is a hard requirement, not hygiene: with the release tag unreachable from `main`, PSR recomputes the same version from `main`'s own history, finds the tag taken repo-globally, and reports "already released" forever. When to cut a branch at all — and the default of releasing from a quiescent trunk without one — is the [release model](#release-model) above, not machinery.
 
+<!-- TEMPLATE-TRACKING-START -->
+## Release notes pages
+
+`docs/releases/` is the canonical human-facing release narrative: one page per minor series, patch releases appending a dated section to their series page. The GitHub release body is a summary plus a deep link to the page, and `CHANGELOG.md` stays machine-written — never move narrative prose into it. After every stable release, the **Release Notes** workflow has an agent research the release range through the GitHub API (linked issues and PRs, never commit subjects) and open a PR adding or extending the page; the `writing-release-notes` skill (`.claude/skills/writing-release-notes/SKILL.md`) is the contract it follows. Notes pages always land on `main` via that PR — never by direct push, and never on a `release/*` branch.
+
+Two rules for working with these PRs:
+
+- **The evidence contract governs the page.** Every causal claim must trace to a linked issue or PR; no evidence, no narrative. Review a notes PR as an evidence check — follow the links and verify they support the claims — not as a prose polish; Vale (including the `ai-tells` pack) already gated the prose.
+- **Merging is what publishes.** On merge, the **Release Notes Publish** workflow upgrades the release body from the page's marked summary block and redeploys the minor's versioned docs so the deep link resolves. Notes PRs are tooling-authored and need no separate issue (same class as Renovate bumps).
+<!-- TEMPLATE-TRACKING-END -->
+
 ## Tool Registration Checklist
 
 Every MCP tool you register must carry the full set of metadata below — not just the behaviour. A tool that works but lacks a title, hints, or docs is incomplete. When adding or changing a tool, verify each item:

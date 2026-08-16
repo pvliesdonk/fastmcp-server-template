@@ -153,9 +153,9 @@ CI workflows reference three repository secrets. Configure them via **Settings â
 
 | Secret | Used by | How to generate |
 |---|---|---|
-| `RELEASE_TOKEN` | `release.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap applies the repository rulesets + auto-merge). Must belong to a repository admin: the shipped rulesets grant bypass to the admin role, and the release workflow's direct pushes rely on it. Scoped to this repo. |
+| `RELEASE_TOKEN` | `release.yml`, `release-notes.yml`, `copier-update.yml`, `renovate.yml`, `bootstrap.yml` | Fine-grained PAT at <https://github.com/settings/personal-access-tokens/new> with `contents: write`, `pull_requests: write`, and `administration: write` (bootstrap applies the repository rulesets + auto-merge). Must belong to a repository admin: the shipped rulesets grant bypass to the admin role, and the release workflow's direct pushes rely on it. Scoped to this repo. |
 | `CODECOV_TOKEN` | `ci.yml` | <https://codecov.io>: sign in with GitHub and add the repo. The upload token is on its settings page. |
-| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml` | Run `claude setup-token` locally and paste the result. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml`, `claude-code-review.yml`, `release-notes.yml` | Run `claude setup-token` locally and paste the result. |
 
 ```bash
 gh secret set RELEASE_TOKEN
