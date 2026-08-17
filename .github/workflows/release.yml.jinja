@@ -283,7 +283,7 @@ jobs:
           GH_TOKEN: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
 
       - name: Upload to GitHub Release Assets
-        uses: python-semantic-release/publish-action@v10.5.3
+        uses: python-semantic-release/publish-action@v10.6.1
         if: steps.release.outputs.released == 'true'
         with:
           github_token: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
