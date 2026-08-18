@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.1.0 (2026-08-18)
+
+- #420 feat(release): release notes become part of the release PR — every tag carries its own page
+
+
 ## v5.0.2 (2026-08-18)
 
 - #416 fix(release): injective releasable refs, atomic version reservation, convergent rolling channels, rename-aware promotion guard
