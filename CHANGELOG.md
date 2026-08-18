@@ -1,5 +1,11 @@
 # Changelog
 
+## v5.0.1 (2026-08-18)
+
+- #413 fix(release): gate promotions at prepare time and overlay notes pages into release docs
+- #411 fix(release): repair v5.0.0 flow defects surfaced by the MVM adoption
+
+
 ## v5.0.0 (2026-08-18)
 
 - #409 feat(release)!: swap PSR for the knope release-PR flow (Phase 2)
