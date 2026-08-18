@@ -37,10 +37,13 @@ You are given, or must derive first:
   tag does not exist yet. The evidence rules below are identical either
   way — only the range endpoints move. A prepare-time draft is refreshed
   (branch force-pushed) alongside any re-dispatch of the release PR.
-- Mode — **new page** (first stable of the minor: write the whole page) or
-  **patch append** (the page exists: add one dated section for this patch,
-  inside the patch sentinels; leave the rest of the page alone unless it is
-  factually wrong).
+- Mode — **new page** (the minor's page does not exist: write the whole
+  page), **patch append** (the page exists and the target is a patch
+  release, `Z > 0`: add one dated section inside the patch sentinels; leave
+  the rest of the page alone unless it is factually wrong), or **redraft**
+  (the page exists for an `X.Y.0` target — typically because it was drafted
+  at prepare time: update or extend the page in place, and never append a
+  duplicate section for a release the page already covers).
 
 ## Non-negotiables
 

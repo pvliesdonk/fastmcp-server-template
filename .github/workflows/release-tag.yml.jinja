@@ -1,7 +1,7 @@
 # Release-PR flow, half two of two (knope; fastmcp-server-template#406).
 # Merge = release: when a release PR (head `knope/prepare/<base>`, opened by
-# release-prepare.yml) merges, run knope's tag-release workflow on the base
-# branch head.  Inside knope.toml the same-source promotion guard
+# release-prepare.yml) merges, run knope's tag-release workflow on the PR's
+# merge commit.  Inside knope.toml the same-source promotion guard
 # (scripts/promotion_guard.sh) runs BEFORE the Release step, so a guard
 # refusal fails this job with no tag created (release-vision section 4.4 —
 # tags are immutable; a refusal must leave nothing behind).
@@ -35,10 +35,15 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 15
     steps:
-      - name: Checkout the base branch (full depth, with tags)
+      - name: Checkout the release PR's merge commit (full depth, with tags)
         uses: actions/checkout@v7
         with:
-          ref: {% raw %}${{ github.event.pull_request.base.ref }}{% endraw %}
+          # The MERGE COMMIT, not the base branch head: a commit landing on
+          # the base between merge and checkout must neither get tagged as
+          # the release nor spuriously trip the promotion guard.  The merge
+          # commit is exactly what "merging the release PR is the release"
+          # promises to tag.
+          ref: {% raw %}${{ github.event.pull_request.merge_commit_sha }}{% endraw %}
           # Full history + tags: the promotion guard diffs HEAD against the
           # highest reachable rc tag of the target version.
           fetch-depth: 0

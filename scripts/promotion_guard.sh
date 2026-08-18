@@ -11,7 +11,9 @@
 # The allowed set (M6): the release-stamp files knope + stamp_manifests
 # write, PLUS docs/releases/** — the notes PR for the release being promoted
 # legitimately lands on trunk between rc and stable (notes are release
-# metadata, exactly like the changelog section already in the set).
+# metadata, exactly like the changelog section already in the set) — and the
+# Vale vocabulary subtree, which notes PRs legitimately commit alongside the
+# page (.vale/styles/config/vocabularies/Base/accept.txt; same M6 rationale).
 # Everything else is unconditional: any other commit between the last rc and
 # the promotion forces a new rc.  The plugin-manifest paths are listed
 # unconditionally; on projects without the Claude plugin channel they simply
@@ -58,8 +60,10 @@ for f in "${changed[@]}"; do
   for a in "${ALLOWED[@]}"; do
     [[ "$f" == "$a" ]] && ok=yes && break
   done
-  # Release-notes pages (and their index) are release metadata (M6).
+  # Release-notes pages (and their index) are release metadata (M6), and a
+  # notes PR may add vocabulary entries alongside the page.
   [[ "$f" == docs/releases/* ]] && ok=yes
+  [[ "$f" == .vale/styles/config/vocabularies/* ]] && ok=yes
   [[ "$ok" == no ]] && violations+=("$f")
 done
 

@@ -113,7 +113,11 @@ jobs:
           # Tags inform the release-contract tests (template#387): without
           # them a checkout of a repo that HAS releases looks like a fresh
           # project, and the tag-coupled asserts mis-skip instead of running.
-          # fetch-tags works with the default shallow depth.
+          # Full depth because the pins invariant is REACHABILITY-scoped
+          # (`git tag --merged HEAD`, series-aware on release/* branches) —
+          # on a shallow clone no tag is reachable and the test would
+          # silently skip.
+          fetch-depth: 0
           fetch-tags: true
 
       - name: Install uv

@@ -109,6 +109,14 @@ jobs:
             TAG="v${stable}"
             echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' \
               || { echo "::error::'${TARGET_VERSION}' does not name a version — expected X.Y.Z or X.Y.Z-rc.N"; exit 1; }
+            # Validate the range end EARLY — a typo must fail this cheap
+            # step, not the hour-long agent job.  The checkout holds only
+            # the default branch, so a release-branch source commit may need
+            # fetching; a successful fetch is itself proof the ref exists on
+            # origin.
+            git rev-parse -q --verify "${SOURCE_REF}^{commit}" > /dev/null \
+              || git fetch -q origin "$SOURCE_REF" \
+              || { echo "::error::source_ref '${SOURCE_REF}' is neither a known commit nor fetchable from origin"; exit 1; }
             RANGE_END="$SOURCE_REF"
           else
             if [ -z "$TAG" ]; then
@@ -130,8 +138,19 @@ jobs:
               | sort -V | awk -v t="$TAG" '$0 == t { print p; exit } { p = $0 }'
           )
           page="docs/releases/${minor}.md"
+          # Mode: patch-append only for an actual patch release (X.Y.Z with
+          # Z > 0).  With prepare-time drafting the minor's page can exist
+          # BEFORE the X.Y.0 tag does; appending would duplicate the very
+          # release the page already covers, so an existing page for an
+          # X.Y.0 target is re-drafted in place instead (template#406).
           mode=new
-          [ -f "$page" ] && mode=patch
+          if [ -f "$page" ]; then
+            if [ "${ver##*.}" -gt 0 ]; then
+              mode=patch
+            else
+              mode=redraft
+            fi
+          fi
           {
             echo "tag=$TAG"
             echo "version=$ver"
@@ -204,7 +223,7 @@ jobs:
             - previous stable: {% raw %}${{ steps.ctx.outputs.prev }}{% endraw %} (empty means first release)
             - research range end (RANGE_END): {% raw %}${{ steps.ctx.outputs.range_end }}{% endraw %} (equals the tag after a release; at prepare time it is the open release PR's source commit — the tag does not exist yet)
             - page: {% raw %}${{ steps.ctx.outputs.page }}{% endraw %}
-            - mode: {% raw %}${{ steps.ctx.outputs.mode }}{% endraw %} (new = write the whole page and add it to docs/releases/index.md; patch = append one dated section inside the patch sentinels)
+            - mode: {% raw %}${{ steps.ctx.outputs.mode }}{% endraw %} (new = write the whole page and add it to docs/releases/index.md; patch = append one dated section inside the patch sentinels; redraft = the minor's page already exists — e.g. drafted at prepare time — so update/extend it in place and never append a duplicate section for this release)
 
             The vale binary (packs synced) and `uv run mkdocs build --strict` are available for the skill's quality gates. Write your proposed pull-request body to .release-notes-pr-body.md at the repository root. Do not commit, push, or open a PR yourself — the workflow's next step does that mechanically from your working tree.
           track_progress: true

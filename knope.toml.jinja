@@ -36,10 +36,12 @@ changelog = "CHANGELOG.md"
 # knope counts only feat / fix / breaking changes; these three sections are
 # renamed to today's CHANGELOG.md titles.  Other commit types are invisible
 # to knope by design — richness lives in docs/releases/ (migration M4).
+# Declaration order controls render order: breaking changes lead the
+# changelog section and the release body.
 extra_changelog_sections = [
-  { name = "Bug Fixes", types = ["patch"] },
-  { name = "Features", types = ["minor"] },
   { name = "Breaking Changes", types = ["major"] },
+  { name = "Features", types = ["minor"] },
+  { name = "Bug Fixes", types = ["patch"] },
 ]
 
 [[workflows]]

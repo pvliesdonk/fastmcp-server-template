@@ -96,17 +96,21 @@ def test_knope_declares_the_native_versioned_files() -> None:
 
 
 def test_knope_changelog_config_keeps_todays_section_titles() -> None:
-    """``CHANGELOG.md`` stays the changelog; sections keep today's names."""
+    """``CHANGELOG.md`` stays the changelog; sections keep today's names.
+
+    Order matters: knope renders sections in declaration order, and breaking
+    changes must lead the changelog section and the release body.
+    """
     package = _knope_config()["package"]
     assert package["changelog"] == "CHANGELOG.md"
-    sections = {
-        str(s["name"]): list(s["types"]) for s in package["extra_changelog_sections"]
-    }
-    assert sections == {
-        "Bug Fixes": ["patch"],
-        "Features": ["minor"],
-        "Breaking Changes": ["major"],
-    }
+    sections = [
+        (str(s["name"]), list(s["types"])) for s in package["extra_changelog_sections"]
+    ]
+    assert sections == [
+        ("Breaking Changes", ["major"]),
+        ("Features", ["minor"]),
+        ("Bug Fixes", ["patch"]),
+    ]
 
 
 def test_prepare_workflow_invokes_the_stamp_script() -> None:
@@ -185,6 +189,10 @@ def test_promotion_guard_allows_only_release_metadata() -> None:
         "guard must admit docs/releases/** — notes merged during the rc "
         "window are part of the promotion diff (migration M6)"
     )
+    assert ".vale/styles/config/vocabularies/" in text, (
+        "guard must admit the Vale vocabulary subtree — notes PRs "
+        "legitimately add accept.txt entries alongside the page (M6)"
+    )
 
 
 def test_domain_manifest_sentinels_present_once_and_in_scope() -> None:
@@ -217,7 +225,12 @@ def test_release_workflows_are_interlocked_on_the_psr_block() -> None:
     """
     for workflow in (PREPARE_WORKFLOW, TAG_WORKFLOW):
         text = workflow.read_text(encoding="utf-8")
-        interlock = text.index("semantic_release")
+        # Anchor on the interlock STEP's name, not on the first mention of
+        # semantic_release (header comments mention it too, which would make
+        # the ordering assert vacuous).
+        step_name = "Refuse while python-semantic-release"
+        assert step_name in text, f"{workflow.name}: interlock step missing"
+        interlock = text.index(step_name)
         assert "exit 1" in text[interlock:], f"{workflow.name}: interlock does not fail"
         assert interlock < text.index("knope-dev/action"), (
             f"{workflow.name}: the interlock must run before knope is even installed"
@@ -367,15 +380,15 @@ def test_stamper_without_a_version_argument_refuses(stamp_sandbox: Path) -> None
     assert "usage" in result.stderr
 
 
-def _release_tags() -> list[str] | None:
-    """``v*`` release tags visible in this repo, or ``None`` without git.
+def _git_tags(*extra_args: str) -> list[str] | None:
+    """``v*`` release tags in this repo, or ``None`` without git.
 
     A freshly generated project is not yet a git repository and has no tags,
     so callers skip there rather than failing.
     """
     try:
         completed = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "tag", "--list"],
+            ["git", "-C", str(REPO_ROOT), "tag", "--list", *extra_args],
             capture_output=True,
             text=True,
             check=True,
@@ -384,6 +397,25 @@ def _release_tags() -> list[str] | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return [t for t in completed.stdout.split() if re.match(r"^v\d", t)]
+
+
+def _release_tags() -> list[str] | None:
+    """All ``v*`` tags fetched into this checkout, reachable or not."""
+    return _git_tags()
+
+
+def _reachable_stable_tags() -> list[str] | None:
+    """Stable ``vX.Y.Z`` tags reachable from HEAD (``--merged``).
+
+    Reachability is the load-bearing scope for the pins invariant: on a
+    ``release/X.Y`` backport branch the repo-global newest stable belongs to
+    a LATER series, and pinning against it would turn CI red on a branch
+    whose manifests correctly sit at its own series' stable.
+    """
+    tags = _git_tags("--merged", "HEAD")
+    if tags is None:
+        return None
+    return [t for t in tags if re.fullmatch(r"v\d+\.\d+\.\d+", t)]
 
 
 def _published_pins() -> dict[str, str]:
@@ -415,16 +447,22 @@ def test_committed_pins_name_the_last_stable_or_the_prepared_version() -> None:
     tag-coupled "pins must name a released tag" assert would reject exactly
     that state.  Outside a release PR, pins sit at the last stable and
     ``pyproject.toml`` agrees.
+
+    "Last stable" is REACHABILITY-scoped (highest stable tag reachable from
+    HEAD), not repo-global: on a ``release/X.Y`` backport branch older than
+    the newest stable, the manifests correctly pin that series' own stable,
+    and a repo-global comparison would make the branch unmergeable.
     """
     pins = _published_pins()
     if pins["server.json version"] in {"0.0.0", "0.1.0"}:
         pytest.skip("initial placeholder versions, before the first stable release")
-    tags = _release_tags()
-    stable_tags = [t for t in (tags or []) if re.fullmatch(r"v\d+\.\d+\.\d+", t)]
+    stable_tags = _reachable_stable_tags()
     if not stable_tags:
         # Tag visibility itself is guarded by the changelog-coupled test
-        # below; without stable tags there is no "last stable" to pin.
-        pytest.skip("no stable release tags visible in this checkout")
+        # below; without reachable stable tags there is no "last stable" to
+        # pin (also the shallow-checkout case, where reachability cannot be
+        # computed).
+        pytest.skip("no stable release tags reachable from this checkout's HEAD")
     last_stable = max(
         (t.removeprefix("v") for t in stable_tags),
         key=lambda v: tuple(int(part) for part in v.split(".")),
@@ -434,8 +472,9 @@ def test_committed_pins_name_the_last_stable_or_the_prepared_version() -> None:
     allowed = {last_stable, prepared}
     bad = {where: ver for where, ver in pins.items() if ver not in allowed}
     assert not bad, (
-        f"committed pins must name the last stable ({last_stable}) or the "
-        f"version this diff prepares ({prepared}), but these do neither: "
+        f"committed pins must name the last reachable stable ({last_stable}) "
+        f"or the version this diff prepares ({prepared}), but these do "
+        "neither: "
         + ", ".join(f"{where} = {ver}" for where, ver in sorted(bad.items()))
     )
 
