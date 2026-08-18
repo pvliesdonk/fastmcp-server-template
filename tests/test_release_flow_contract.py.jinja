@@ -138,7 +138,9 @@ def test_prepare_workflow_invokes_the_stamp_script() -> None:
         if "scripts/stamp_manifests.py" in str(step.get("command", ""))
     )
     commit_idx = next(
-        i for i, step in enumerate(steps) if "git commit" in str(step.get("command", ""))
+        i
+        for i, step in enumerate(steps)
+        if "git commit" in str(step.get("command", ""))
     )
     assert prepare_idx < stamp_idx < commit_idx
 

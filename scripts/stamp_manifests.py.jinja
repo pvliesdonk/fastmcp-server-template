@@ -144,9 +144,7 @@ def _stamp_claude_plugin_manifests(version: str) -> list[Path]:
                 args[i + 1] = f"{spec}=={version}"
                 pins += 1
     if pins == 0:
-        raise StampError(
-            f"{mcp_path}: no '--from <pkg>==<version>' pin found to stamp"
-        )
+        raise StampError(f"{mcp_path}: no '--from <pkg>==<version>' pin found to stamp")
     _dump(mcp_path, mcp)
     print(f"stamp_manifests: Claude plugin manifests -> {version}")
     return [plugin_path, mcp_path]
@@ -164,11 +162,16 @@ def _stamp_claude_plugin_manifests(version: str) -> list[Path]:
 
 
 def _git_stage(paths: list[Path]) -> None:
-    """Stage the stamped files so knope's follow-up commit picks them up."""
+    """Stage the stamped files so knope's follow-up commit picks them up.
+
+    ``-f`` because ``.gitignore``'s any-depth ``.mcp.json`` pattern also
+    matches the *tracked* plugin manifest; forcing an explicit path list is
+    safe and keeps the stage from refusing on a fresh clone.
+    """
     if not paths:
         return
     subprocess.run(
-        ["git", "add", "--", *[str(p) for p in paths]],
+        ["git", "add", "-f", "--", *[str(p) for p in paths]],
         check=True,
     )
 
