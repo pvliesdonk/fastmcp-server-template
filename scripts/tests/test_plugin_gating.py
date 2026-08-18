@@ -64,9 +64,9 @@ class TestPluginOff:
             encoding="utf-8"
         )
         assert "_stamp_claude_plugin_manifests" not in stamper
-        contract = (
-            rendered_off / "tests" / "test_release_flow_contract.py"
-        ).read_text(encoding="utf-8")
+        contract = (rendered_off / "tests" / "test_release_flow_contract.py").read_text(
+            encoding="utf-8"
+        )
         assert ".claude-plugin/plugin/.mcp.json" not in contract
 
 
@@ -106,9 +106,9 @@ class TestPluginOn:
             encoding="utf-8"
         )
         assert "_stamp_claude_plugin_manifests(version)" in stamper
-        contract = (
-            rendered_on / "tests" / "test_release_flow_contract.py"
-        ).read_text(encoding="utf-8")
+        contract = (rendered_on / "tests" / "test_release_flow_contract.py").read_text(
+            encoding="utf-8"
+        )
         assert '".claude-plugin/plugin/.claude-plugin/plugin.json"' in contract
         assert '".claude-plugin/plugin/.mcp.json"' in contract
 
@@ -117,9 +117,7 @@ class TestPluginOn:
         # The script stages what it stamps for knope's release commit, so it
         # needs a real git index; the render is not a repo yet.
         if not (rendered_on / ".git").exists():
-            subprocess.run(
-                ["git", "init", "-q"], cwd=rendered_on, check=True
-            )
+            subprocess.run(["git", "init", "-q"], cwd=rendered_on, check=True)
         subprocess.run(
             ["python3", "scripts/stamp_manifests.py", "9.9.9"],
             cwd=rendered_on,
