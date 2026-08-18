@@ -1,5 +1,12 @@
 # Changelog
 
+## v5.0.0 (2026-08-18)
+
+- #409 feat(release)!: swap PSR for the knope release-PR flow (Phase 2)
+- #408 feat(release): add interlocked knope release-PR core (Phase 1)
+- #382 fix(release): correct ships-atomically warn gating and add manifest-lockstep test
+
+
 ## v4.1.0 (2026-08-16)
 
 - #378 fix(release): close release-machinery disclosure gaps
