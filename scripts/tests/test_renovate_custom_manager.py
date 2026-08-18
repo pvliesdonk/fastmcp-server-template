@@ -18,10 +18,19 @@ CONFIG = REPO / ".github" / "renovate.json"
 WORKFLOW_DIR = REPO / ".github" / "workflows"
 
 
-def _matcher() -> re.Pattern[str]:
+def _manager(dep_name: str | None = None) -> dict:
+    """The action-pin manager (default) or the one pinned to *dep_name*."""
     cfg = json.loads(CONFIG.read_text())
-    (manager,) = cfg["customManagers"]
-    (match_string,) = manager["matchStrings"]
+    managers = cfg["customManagers"]
+    if dep_name is None:
+        (manager,) = [m for m in managers if "depNameTemplate" not in m]
+    else:
+        (manager,) = [m for m in managers if m.get("depNameTemplate") == dep_name]
+    return manager
+
+
+def _matcher() -> re.Pattern[str]:
+    (match_string,) = _manager()["matchStrings"]
     # Renovate uses JS/RE2 named groups `(?<name>)`; Python `re` needs `(?P<name>)`.
     return re.compile(match_string.replace("(?<", "(?P<"))
 
@@ -65,3 +74,32 @@ def test_no_sha_or_digest_captured() -> None:
     assert "vale-cli/vale-action" not in dep_names, (
         "SHA-pinned vale-action must not be captured"
     )
+
+
+def test_knope_cli_manager_captures_the_version_input() -> None:
+    """The second manager tracks knope-dev/action's `version:` input.
+
+    The action-pin manager above bumps the `@vX.Y.Z` ref; the CLI version
+    the input names lives on its own line and needs this dedicated manager
+    (depName knope-dev/knope, github-releases datasource). Both release
+    workflows must carry exactly one identical pin, or the prepare and tag
+    halves could run different knope versions.
+    """
+    manager = _manager("knope-dev/knope")
+    (match_string,) = manager["matchStrings"]
+    pat = re.compile(match_string.replace("(?<", "(?P<"))
+    file_pattern = manager["managerFilePatterns"][0].strip("/")
+    pins: dict[str, list[str]] = {}
+    for wf in WORKFLOW_DIR.glob("*.jinja"):
+        if not re.search(file_pattern, f".github/workflows/{wf.name}"):
+            continue
+        found = [m.group("currentValue") for m in pat.finditer(wf.read_text())]
+        if found:
+            pins[wf.name] = found
+    assert set(pins) == {"release-prepare.yml.jinja", "release.yml.jinja"}, (
+        f"knope CLI pin found in: {sorted(pins)}"
+    )
+    values = {v for found in pins.values() for v in found}
+    assert len(values) == 1, f"knope CLI pins disagree across workflows: {pins}"
+    (value,) = values
+    assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value), value
