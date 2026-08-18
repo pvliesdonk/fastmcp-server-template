@@ -5,6 +5,30 @@ steps in generated projects. This file lives only in the template repo (it
 is `_exclude`d from renders); link the relevant section from the template
 release notes when the release ships.
 
+## v5.1 — release notes move into the release PR
+
+Release notes become a generated artifact of release preparation
+(template#419): Release Prepare's new `draft-notes` job commits the
+`docs/releases/` page onto the prep branch, so every release PR — rc and
+stable alike — carries stamps, changelog, and notes in one diff, and every
+tag contains its own page. The `release: published` trigger on the Release
+Notes workflow is gone (its manual dispatch remains as the backfill tool),
+the `<!-- release-notes-pending -->` body-upgrade path is gone, and docs
+deploys build the tag without an overlay. One-time steps:
+
+1. **Nothing to migrate in files** — `copier update` delivers everything;
+   no project-owned file changes shape.
+2. **Check the `CLAUDE_CODE_OAUTH_TOKEN` secret** is present (it already
+   was if the post-stable notes flow ever ran): the drafting agent now
+   runs inside every Release Prepare dispatch.
+3. **An open release PR prepared under v5.0** has no notes commit;
+   re-dispatch Release Prepare after the update and the recreated PR
+   carries its page.
+4. **A stable released under v5.0 whose body still carries the invisible
+   `<!-- release-notes-pending -->` marker** will no longer be upgraded
+   automatically; if its notes page merges later, update the body by hand
+   with `gh release edit`.
+
 ## v5.0 — release system swap: python-semantic-release → knope release PRs
 
 The v5 template releases through reviewed release pull requests (knope)
