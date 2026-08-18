@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Stamp the install-channel manifests with a stable release version.
 
-Successor of ``scripts/bump_manifests.py`` for the knope release-PR flow
-(fastmcp-server-template#406); the PSR-era bumper stays untouched until the
-Phase-2 swap deletes it.  knope's ``prepare-release`` workflow (knope.toml)
-invokes this script as a Command step with the computed ``$version`` after
-``PrepareRelease`` has bumped ``pyproject.toml`` and ``uv.lock`` — those two
-are knope ``versioned_files`` and this script deliberately never touches
-them, a deliberate difference from ``bump_manifests.py``.
+Successor of the PSR-era ``scripts/bump_manifests.py``, which the Phase-2
+swap deleted together with python-semantic-release
+(fastmcp-server-template#406).  knope's ``prepare-release`` workflow
+(knope.toml) invokes this script as a Command step with the computed
+``$version`` after ``PrepareRelease`` has bumped ``pyproject.toml`` and
+``uv.lock`` — those two are knope ``versioned_files`` and this script
+deliberately never touches them, a deliberate difference from the old
+bumper.
 
 Stable-only, per the per-surface resolvability rule (release-vision D12):
 ``server.json`` and the Claude Code plugin pair pin artifacts that are

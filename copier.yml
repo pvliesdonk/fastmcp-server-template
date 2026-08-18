@@ -83,10 +83,10 @@ _skip_if_exists:
   # .gitignore predates it must apply that change by hand, or the rendered
   # skill stays untracked (git add skips ignored paths).
   # Claude Code plugin channel starters: seeded once, then project-owned.
-  # plugin.json / .mcp.json carry the live release version (bumped by
-  # scripts/bump_manifests.py + PSR), so re-rendering them on update would
-  # reset the version to the 0.0.0 seed; env wiring and skills are domain
-  # content.
+  # plugin.json / .mcp.json carry the live release version (stamped by
+  # scripts/stamp_manifests.py inside each stable release PR), so
+  # re-rendering them on update would reset the version to the 0.0.0 seed;
+  # env wiring and skills are domain content.
   - ".claude-plugin/**"
   - "src/{{python_module}}/tools.py"
   - "src/{{python_module}}/resources.py"
@@ -104,14 +104,16 @@ _skip_if_exists:
   # red on every downstream.  Regenerate via
   # `uv run python tests/test_import_surface.py --update`.
   - "tests/public_import_surface.txt"
-  # Seeded once, then PSR-owned: python-semantic-release inserts version
-  # sections at the seed's `<!-- version list -->` insertion flag on every
-  # release, so re-rendering on update would clobber a project's accumulated
-  # release history — the seed must stay skip-listed.  Migration for projects
-  # whose CHANGELOG.md predates the flag (template#350): add the flag line
-  # once, by hand — PSR's `update` mode writes nothing without it, and the
-  # re-rendered tests/test_release_contract.py fails loudly (naming the line)
-  # until it is present.
+  # Seeded once, then release-tool-owned: knope writes each release's
+  # version section into the release PR beneath the seed's
+  # `<!-- version list -->` insertion flag, so re-rendering on update would
+  # clobber a project's accumulated release history — the seed must stay
+  # skip-listed.  Migration for projects whose CHANGELOG.md predates the
+  # flag (template#350): add the flag line once, by hand — the re-rendered
+  # tests/test_release_flow_contract.py fails loudly (naming the line)
+  # until it is present.  Projects adopted from the PSR era also normalize
+  # their headings once (`## vX.Y.Z` → `## X.Y.Z`) — see the template
+  # repo's UPGRADING.md.
   - "CHANGELOG.md"
   # Release-notes surface (template#347): the index landing page is seeded
   # once and thereafter owned by the notes pipeline (the generator inserts a
@@ -129,26 +131,20 @@ _skip_if_exists:
   - "packaging/mcpb/src/server.py"
   - "packaging/mcpb/build.sh"
   - ".gitignore"
-  # scripts/bump_manifests.py is deliberately NOT here (moved out for #325):
-  # it is template-owned with DOMAIN-MANIFESTS-HELPERS / DOMAIN-MANIFESTS
-  # seams for a project's extra versioned manifests, the same hybrid pattern
-  # as .pre-commit-config.yaml below.  While it was seeded, the script was
-  # coupled to a file that DOES re-render — `pyproject.toml`'s
-  # `[tool.semantic_release] assets` — so half of a fix could land: v3.1.0
-  # (#298) added `uv.lock` to `assets` *and* a `_bump_lockfile()` to the
-  # script, and every instance with a pre-existing extended copy took the
-  # assets half only.  Their release commits then shipped a lockfile whose
-  # self-version lagged `pyproject.toml`, so `uv lock --check` failed on main
-  # and every `uv sync` rewrote `uv.lock` as a side effect (#325, #326).
-  # Adoption note, verified by rendering v3.0.2 and v3.2.1, extending the
-  # seeded script, and running a real `copier update` to HEAD: copier's 3-way
-  # merge delivers the missing half (`_bump_lockfile` and its call, for an
-  # instance whose copy predates #298) AND keeps the local extension, with no
-  # conflict and no .rej.  The surviving extension lands OUTSIDE the new
-  # seams, though, so it is only safe until the template next edits that
-  # region — move it inside DOMAIN-MANIFESTS as part of accepting the update.
-  # A local edit overlapping a region the template also changed conflicts
-  # instead, which is the loud failure the silent half-delivery never gave.
+  # scripts/stamp_manifests.py is deliberately NOT here: it is
+  # template-owned with DOMAIN-MANIFESTS-HELPERS / DOMAIN-MANIFESTS seams
+  # for a project's extra versioned manifests, the same hybrid pattern as
+  # .pre-commit-config.yaml below.  The precedent is its PSR-era
+  # predecessor, scripts/bump_manifests.py (deleted in the knope swap):
+  # while THAT script was seeded, it was coupled to a file that DOES
+  # re-render — `pyproject.toml`'s `[tool.semantic_release] assets` — so
+  # half of a fix could land: v3.1.0 (#298) added `uv.lock` to `assets`
+  # *and* a `_bump_lockfile()` to the script, and every instance with a
+  # pre-existing extended copy took the assets half only, shipping release
+  # commits whose lockfile self-version lagged `pyproject.toml` (#325,
+  # #326).  Template-ownership plus the seams is what closed that class;
+  # today the stamp script's invocation partner is knope.toml, and
+  # tests/test_release_flow_contract.py asserts the coupling.
   # .pre-commit-config.yaml is deliberately NOT here (moved out for #254):
   # it is template-owned with a DOMAIN-HOOKS seam for domain-specific hooks
   # (shellcheck, yamllint, project linters, etc.), the same hybrid pattern
@@ -248,10 +244,11 @@ _skip_if_exists:
 # DOMAIN-HOOKS, YAML-comment markers): downstream hooks live between the
 # markers and survive the merge; the template-owned hook pins and gate
 # wiring re-render in lockstep with the tests that assert on them.
-# scripts/bump_manifests.py joined for #325 (seams: DOMAIN-MANIFESTS-HELPERS,
-# DOMAIN-MANIFESTS, Python-comment markers) — same reasoning, with
-# `pyproject.toml`'s `[tool.semantic_release] assets` as the file it must stay
-# in lockstep with; tests/test_release_contract.py asserts that coupling.
+# scripts/stamp_manifests.py carries the same hybrid pattern (seams:
+# DOMAIN-MANIFESTS-HELPERS, DOMAIN-MANIFESTS, Python-comment markers — first
+# introduced on its PSR-era predecessor for #325), with knope.toml's stamp
+# Command as the invocation it must stay in lockstep with;
+# tests/test_release_flow_contract.py asserts that coupling.
 
 # Files in the template repo that should never land in generated projects.
 # Setting _exclude in copier.yml REPLACES copier's default exclude list
@@ -281,6 +278,7 @@ _exclude:
   - ".github/workflows/template-renovate.yml"  # upstream Renovate runner — template-repo only
   - ".github/workflows/template-labels.yml"  # this repo's label-ensure — template-repo only
   - "docs/superpowers"
+  - "UPGRADING.md"                             # template-consumer upgrade notes — template-repo only
   - "uv.lock"                                 # generated projects create their own
   - "scripts/tests"                            # aggregator unit tests — template-only
   - "scripts/check_render_hygiene.py"          # template-ci render guard — template-only
@@ -353,7 +351,7 @@ include_mcp_apps_scaffold:
 include_claude_plugin:
   type: bool
   default: false
-  help: "Scaffold the Claude Code plugin channel (.claude-plugin/plugin: plugin.json + exec-form .mcp.json seeded once, version-bumped by scripts/bump_manifests.py in every release commit). The release workflow's marketplace publish job already keys on the directory existing at the tag, so turning this on is what makes marketplace publishing take effect. Leave off for servers not distributed as a Claude Code plugin."
+  help: "Scaffold the Claude Code plugin channel (.claude-plugin/plugin: plugin.json + exec-form .mcp.json seeded once, version-stamped by scripts/stamp_manifests.py in every stable release PR). The release workflow's marketplace publish job already keys on the directory existing at the tag, so turning this on is what makes marketplace publishing take effect. Leave off for servers not distributed as a Claude Code plugin."
 
 enable_authorization:
   type: bool

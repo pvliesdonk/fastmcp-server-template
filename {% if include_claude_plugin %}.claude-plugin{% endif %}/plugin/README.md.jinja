@@ -3,9 +3,9 @@
 Installs the `{{ project_name }}` MCP server into Claude Code as a plugin.
 The server itself is launched with `uvx` from the released PyPI package
 pinned in `.mcp.json`; both that pin and `.claude-plugin/plugin.json`'s
-`version` are bumped automatically in every release commit by
-`scripts/bump_manifests.py`, so the plugin always installs the release it
-shipped with.
+`version` are stamped automatically into every stable release pull request
+by `scripts/stamp_manifests.py`, so the plugin always installs the release
+it shipped with.
 
 ## Configuration
 

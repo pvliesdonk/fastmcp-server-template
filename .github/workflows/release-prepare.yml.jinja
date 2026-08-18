@@ -3,12 +3,8 @@
 # release, `release/X.Y` for an rc or its promotion).  It computes the
 # version from conventional commits, stamps the version-coupled files, and
 # opens (or refreshes) the release PR against the dispatched ref.  Merging
-# that PR is the release decision — release-tag.yml tags the merge commit.
-#
-# INERT WHILE PSR LIVES (migration P1.0): the interlock step below refuses
-# while `[tool.semantic_release]` still exists in the checked-out
-# `pyproject.toml`.  The Phase-2 swap that deletes the PSR block is the
-# arming action for this flow; until then `release.yml` is the release path.
+# that PR is the release decision — release.yml tags the merge commit and
+# runs the publish fan-out.
 #
 # Operator rules (load-bearing — see release-vision sections 4.1/4.2):
 #   * NEVER use GitHub's "Update branch" button on a release PR — it merges
@@ -30,6 +26,10 @@ on:
           - auto
           - rc
           - stable
+      override_version:
+        description: 'Optional explicit version (X.Y.Z or X.Y.Z-rc.N). Overrides BOTH commit analysis and the channel input — the version is used exactly as given, so include any -rc.N suffix yourself. The remedy for ranges knope counts nothing in (perf/chore-only) and for a version collision after a branch-only release.'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -37,6 +37,10 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # For the advisory quiescence step's issue/milestone reads.
+      issues: read
     # Per-base buckets, mirroring release.yml's release-${ref} buckets: a
     # backport prepare off release/X.Y must not serialise behind (or cancel)
     # a trunk prepare.  cancel-in-progress stays false — a prepare is short
@@ -62,24 +66,94 @@ jobs:
           # template-update PRs use this token.
           token: {% raw %}${{ secrets.RELEASE_TOKEN }}{% endraw %}
 
-      # INTERLOCK (migration P1.0) — must stay the first step after
-      # checkout.  While the PSR block exists, both release paths would be
-      # live at once; deleting `[tool.semantic_release]` from pyproject.toml
-      # (the Phase-2 swap) is what arms this workflow.
+      # Swap-completeness guard (migration P1.0/P2) — must stay the first
+      # step after checkout.  During the additive phase this interlock kept
+      # the knope flow inert while python-semantic-release was still the
+      # release path; the PSR config block is gone now, so it always passes
+      # — and it stays here so the two release models can never both be
+      # live again.  If this fails, a `[tool.semantic_release]` block has
+      # reappeared in pyproject.toml.
       - name: Refuse while python-semantic-release is still the release path
         run: |
           if grep -q '^\[tool\.semantic_release\]' pyproject.toml; then
-            echo "::error::pyproject.toml still carries [tool.semantic_release] — the PSR flow (release.yml) is live and this knope flow is interlocked-inert. The Phase-2 swap that deletes the PSR block is the arming action; until then, release via the Release workflow."
+            echo "::error::pyproject.toml carries a [tool.semantic_release] block — the PSR and knope release flows must never both be live. Remove the block (the knope release-PR flow is this project's release path), or remove the knope machinery before resurrecting PSR."
             exit 1
           fi
           echo "interlock: no [tool.semantic_release] block — knope flow is armed"
 
+      # Only the default branch and release/* branches release (the PSR-era
+      # branch groups' refusal, carried over as an explicit gate): a feature
+      # branch's ancestry would compute a bogus version, and its release PR
+      # would target a branch no publish should ever run from.  release.yml
+      # enforces the same rule on the merged PR's base as defense in depth.
+      - name: Refuse a non-releasable ref
+        env:
+          REF: {% raw %}${{ github.ref_name }}{% endraw %}
+          DEFAULT: {% raw %}${{ github.event.repository.default_branch }}{% endraw %}
+        run: |
+          case "$REF" in
+            "$DEFAULT" | release/*)
+              echo "releasable ref: $REF"
+              ;;
+            *)
+              echo "::error::'${REF}' is not a releasable ref — dispatch Release Prepare on '${DEFAULT}' or a release/X.Y stabilisation branch. Other branches release nothing (their ancestry would compute a bogus version)."
+              exit 1
+              ;;
+          esac
+
+      # Advisory only (never blocks — the cut may be intentional, or belong
+      # on a release/X.Y branch cut from an earlier commit).  Runs at
+      # prepare time, where the release decision is actually being drafted.
+      # Surfaces both queryable quiescence signals the epic conventions
+      # record:
+      #   * the preferred milestone — a release-named milestone (X.Y) with
+      #     open issues means that version is not yet safe to cut; and
+      #   * the ships-atomically label — for each open epic it also counts
+      #     open native sub-issues, which may live in another repo, so a
+      #     cross-repo epic whose children are elsewhere stays visible.
+      # Every gh call is guarded so a failure or an unsupported endpoint
+      # degrades to no warning rather than failing the step under pipefail.
+      - name: Warn about open ships-atomically epics and release milestones
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          GH_TOKEN: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+          REPO: {% raw %}${{ github.repository }}{% endraw %}
+        run: |
+          # (1) Open ships-atomically epics, each with a count of still-open
+          #     children (native sub-issues — cross-repo aware).
+          epics=$(gh issue list --repo "$REPO" --label ships-atomically \
+            --state open --json number,title \
+            --jq '.[] | "\(.number)\t\(.title)"' 2>/dev/null || true)
+          if [ -n "$epics" ]; then
+            printf '%s\n' "$epics" | while IFS="$(printf '\t')" read -r num title; do
+              [ -n "$num" ] || continue
+              kids=$(gh api "repos/$REPO/issues/$num/sub_issues" \
+                --jq '[.[] | select(.state == "open")] | length' 2>/dev/null || echo '?')
+              # A still-open epic whose children are all closed is quiescent —
+              # no warning. '?' (the sub-issues query failed) is unknown, so it
+              # still warns rather than staying silent on a real risk.
+              [ "$kids" = "0" ] && continue
+              echo "::warning::Open ships-atomically epic #$num ($title) — $kids open child issue(s). Releasing $REPO@main ships HEAD mid-story; consider a release/X.Y branch cut from before the epic started."
+            done || true
+          fi
+          # (2) The preferred signal: a release-named milestone that still has
+          #     open issues — that version is not yet quiescent. Accepts X.Y,
+          #     optionally v-prefixed and/or with a patch component
+          #     (v3.2 / 3.2.0 / v3.2.0), not bare X.Y alone.
+          milestones=$(gh api "repos/$REPO/milestones?state=open&per_page=100" \
+            --jq '.[] | select(.open_issues > 0) | select(.title | test("^v?[0-9]+[.][0-9]+([.][0-9]+)?$")) | "\(.title): \(.open_issues) open issue(s)"' 2>/dev/null || true)
+          if [ -n "$milestones" ]; then
+            printf '%s\n' "$milestones" | while IFS= read -r ms; do
+              [ -n "$ms" ] || continue
+              echo "::warning::Release milestone $ms — not yet safe to cut that version from a quiescent trunk."
+            done || true
+          fi
+
       # knope-dev/action installs the pinned knope CLI.  Renovate: the
-      # action ref is picked up natively; the `version:` input below needs a
-      # customManagers regex rule (github-releases, depName knope-dev/knope)
-      # to be bumped automatically — until one exists, bump it by hand in
-      # lockstep with any knope config-schema change (migration section 5,
-      # open question 1).
+      # action ref is covered by the template repo's jinja-workflow regex
+      # manager, and the `version:` input below by its knope-cli regex
+      # manager (github-releases, depName knope-dev/knope) — keep the
+      # `version:` key on its own line so that manager keeps matching.
       - name: Install knope
         uses: knope-dev/action@v2.1.2
         with:
@@ -94,23 +168,34 @@ jobs:
       # channel input overrides.  Deriving the channel PURELY from the
       # branch was live-tested and rejected (release-vision section 4.1): it
       # makes the plain stable promotion run unreachable on the very
-      # release/X.Y branch that needs it.
+      # release/X.Y branch that needs it.  A non-empty override_version
+      # replaces the whole derivation: the version is used exactly as given
+      # (its own -rc.N suffix, or lack of one, is the channel), validated
+      # here so an arbitrary string can never reach the knope command line.
       - name: Derive the release channel
         id: channel
         env:
           CHANNEL: {% raw %}${{ inputs.channel }}{% endraw %}
+          OVERRIDE: {% raw %}${{ inputs.override_version }}{% endraw %}
         run: |
-          case "$CHANNEL" in
-            rc) flags="--prerelease-label rc" ;;
-            stable) flags="" ;;
-            *)
-              flags=""
-              if [[ "$GITHUB_REF_NAME" == release/* ]]; then
-                flags="--prerelease-label rc"
-              fi
-              ;;
-          esac
-          echo "channel resolved: input=$CHANNEL ref=$GITHUB_REF_NAME flags='${flags}'"
+          if [[ -n "$OVERRIDE" ]]; then
+            [[ "$OVERRIDE" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] \
+              || { echo "::error::override_version '${OVERRIDE}' is not a valid version — expected X.Y.Z or X.Y.Z-rc.N"; exit 1; }
+            flags="--override-version ${OVERRIDE}"
+            echo "channel resolved: override_version=${OVERRIDE} (channel input '${CHANNEL}' ignored — the override's form decides rc vs stable)"
+          else
+            case "$CHANNEL" in
+              rc) flags="--prerelease-label rc" ;;
+              stable) flags="" ;;
+              *)
+                flags=""
+                if [[ "$GITHUB_REF_NAME" == release/* ]]; then
+                  flags="--prerelease-label rc"
+                fi
+                ;;
+            esac
+            echo "channel resolved: input=$CHANNEL ref=$GITHUB_REF_NAME flags='${flags}'"
+          fi
           echo "flags=${flags}" >> "$GITHUB_OUTPUT"
 
       # knope 0.23.0's CreatePullRequest `base` is a plain string (not
@@ -134,6 +219,28 @@ jobs:
           branch="knope/prepare/${GITHUB_REF_NAME//\//-}"
           git switch --force-create "$branch"
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      # The version knope is about to prepare must not already carry a tag
+      # ANYWHERE in the repo.  Version computation is ancestry-local and the
+      # port-bookkeeping PR deliberately never ports version stamps, so a
+      # trunk prepare after a branch-only release can recompute an
+      # already-released version — without this gate that collision would
+      # surface only at tag time, after the release PR merged.  The dry run
+      # prints the exact version the real run below would stamp (same
+      # flags, same commits); its output format is pinned by knope 0.23.0.
+      - name: Refuse a version that is already tagged repo-globally
+        run: |
+          version="$(knope prepare-release --dry-run {% raw %}${{ steps.channel.outputs.flags }}{% endraw %} \
+            | sed -n 's/^Would add the following to pyproject.toml: //p' | head -1)"
+          if [ -z "$version" ]; then
+            echo "::error::could not parse the computed version from knope's dry run — the knope pin and this parser must move together"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v${version}" > /dev/null; then
+            echo "::error::v${version} is already tagged in this repository (most likely released from another branch whose version stamps were never ported). Re-dispatch with override_version set to an untaken version, or land a version-stamp port to ${GITHUB_REF_NAME} first."
+            exit 1
+          fi
+          echo "computed version ${version} is untaken — proceeding"
 
       # knope's prepare-release workflow (knope.toml): PrepareRelease bumps
       # pyproject.toml/uv.lock and writes the changelog section, the stamp

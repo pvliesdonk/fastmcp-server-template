@@ -86,7 +86,7 @@ def _seed_server_json(project_root: Path) -> None:
     package and owns none of the surrounding keys. Both packages are seeded
     with a `STALE` entry so a test can prove the array was genuinely replaced
     rather than merely appended to, and `version`/`identifier` are seeded with
-    values `bump_manifests.py` owns so a test can prove they survive.
+    values `stamp_manifests.py` owns so a test can prove they survive.
     """
     (project_root / "server.json").write_text(
         json.dumps(
@@ -2905,7 +2905,7 @@ class TestServerJsonSplice:
             assert _env_names(fake_project, index), f"packages[{index}] emptied"
 
     def test_leaves_version_and_the_oci_identifier_untouched(self, fake_project):
-        """`bump_manifests.py` owns both on every release. The generator
+        """`stamp_manifests.py` owns both on every stable release. The generator
         replaces exactly one array per package and nothing else."""
         g.write_artifacts(fake_project, check=False)
         data = _server_json(fake_project)
@@ -2914,10 +2914,10 @@ class TestServerJsonSplice:
         assert data["packages"][0]["version"] == "9.9.9"
         assert data["packages"][1]["identifier"] == "ghcr.io/demo/demo-mcp:v9.9.9"
 
-    def test_formatting_matches_bump_manifests(self, fake_project):
-        """`bump_manifests.py` rewrites this same file with
-        `json.dump(data, fh, indent=2, ensure_ascii=False)` then one
-        `fh.write("\\n")` (`scripts/bump_manifests.py.jinja`). A mismatch
+    def test_formatting_matches_stamp_manifests(self, fake_project):
+        """`stamp_manifests.py` rewrites this same file with
+        `json.dumps(data, indent=2, ensure_ascii=False)` plus one trailing
+        newline (`scripts/stamp_manifests.py.jinja`). A mismatch
         makes the two tools reformat the file against each other on
         alternate runs: permanent churn, and template-ci's render-twice
         `diff -r` breaks."""
@@ -2928,7 +2928,7 @@ class TestServerJsonSplice:
         assert '\n  "' in text  # a top-level key, indent=2
         assert '\n      "' in text  # a package key, three levels deep
 
-    def test_generated_server_json_is_a_fixed_point_of_bump_manifests_serialization(
+    def test_generated_server_json_is_a_fixed_point_of_stamp_manifests_serialization(
         self, fake_project, template_root
     ):
         """Both halves of the formatting contract, so a format change on
@@ -2936,7 +2936,7 @@ class TestServerJsonSplice:
         re-serialisation with `indent=2, ensure_ascii=False` plus a trailing
         newline, so it is a fixed point of that dump. Second: the release-time
         rewriter still uses exactly that call — asserted against the real
-        `scripts/bump_manifests.py.jinja` source, not a copy of the format
+        `scripts/stamp_manifests.py.jinja` source, not a copy of the format
         inlined here, so the two cannot silently drift and reformat the file
         against each other on alternate runs."""
         g.write_artifacts(fake_project, check=False)
@@ -2946,10 +2946,10 @@ class TestServerJsonSplice:
             json.dumps(json.loads(generated), indent=2, ensure_ascii=False) + "\n"
         )
         assert generated == reserialised
-        bump = (template_root / "scripts" / "bump_manifests.py.jinja").read_text(
+        stamp = (template_root / "scripts" / "stamp_manifests.py.jinja").read_text(
             encoding="utf-8"
         )
-        assert "json.dump(data, fh, indent=2, ensure_ascii=False)" in bump
+        assert "json.dumps(data, indent=2, ensure_ascii=False)" in stamp
 
     def test_packaging_relevance_differs_between_the_two_packages(self, fake_project):
         """The whole point of the two arrays: a stdio/uvx install has no
