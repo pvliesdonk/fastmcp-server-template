@@ -37,7 +37,10 @@ the rewritten contract tests) and **deletes** the old
    ```
 
    Also reword the seed intro if it names python-semantic-release
-   (`CHANGELOG.md` is `_skip_if_exists`, so the update cannot).
+   (`CHANGELOG.md` is `_skip_if_exists`, so the update cannot), and add
+   `knope` to `.vale/styles/config/vocabularies/Base/accept.txt` (also
+   `_skip_if_exists`) — the re-rendered docs pages name the tool and fail
+   the Vale gate without it.
 
 3. **Check `RELEASE_TOKEN`.** The same admin-owned fine-grained PAT
    (`contents: write`, `pull_requests: write`, `administration: write`)
