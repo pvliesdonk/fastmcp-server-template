@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.0.2 (2026-08-18)
+
+- #416 fix(release): injective releasable refs, atomic version reservation, convergent rolling channels, rename-aware promotion guard
+
+
 ## v5.0.1 (2026-08-18)
 
 - #413 fix(release): gate promotions at prepare time and overlay notes pages into release docs
