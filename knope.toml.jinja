@@ -17,6 +17,11 @@
 #     release.  Guard-before-Release ordering is load-bearing (release-vision
 #     section 4.4): a guard refusal must leave no tag behind.
 #
+# The promotion guard runs in BOTH workflows (release-vision D10's two
+# layers): at prepare time — the early gate, so a drifted promotion never
+# becomes a mergeable PR — and pre-tag — the immutable-tag backstop, for
+# drift that lands between prepare and merge.
+#
 # NOTE on `base`: knope 0.23.0's CreatePullRequest `base` is a plain string —
 # it is not templatable (spike-verified).  release-prepare.yml patches it to
 # the dispatching ref with sed at run time; the placeholder below only
@@ -65,6 +70,22 @@ shell = true
 [[workflows.steps]]
 type = "Command"
 command = "git commit -m \"chore: prepare release $version\""
+
+# PREPARE-TIME half of the two-layer same-source guard (release-vision D10:
+# the guard gates the promotion PR at prepare time AND hard pre-tag).  It
+# runs here — after the prep commit exists, so it can read the stamped
+# pyproject version and diff the last reachable rc against HEAD — and
+# BEFORE the push/CreatePullRequest steps, so a drifted promotion refuses
+# with no branch pushed and no PR opened: it never becomes a mergeable PR,
+# and no stamped-but-untagged state is left behind to double-bump a later
+# prepare.  The guard self-skips for prereleases and rc-less trunk
+# releases.  The tag-release run below keeps the same guard as the hard
+# backstop: tags are immutable, so the pre-tag check must hold even if a
+# commit lands on the base between this prepare and the merge.
+[[workflows.steps]]
+type = "Command"
+command = "bash scripts/promotion_guard.sh"
+shell = true
 
 # Push BEFORE CreatePullRequest: the PR API call 422s if the head branch does
 # not exist on the remote yet (knope's own documented recipe ordering).  The

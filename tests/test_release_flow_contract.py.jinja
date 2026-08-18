@@ -22,8 +22,10 @@ release-PR model:
   pin, a pre-release moves ``uv.lock`` alone and leaves the manifests
   byte-identical, and a missing or malformed pin exits non-zero naming the
   file.
-- The promotion guard runs BEFORE knope's Release step (release-vision D10:
-  a refusal must leave no tag behind) and admits only release stamps plus
+- The promotion guard runs in two layers (release-vision D10): at prepare
+  time between the prep commit and the push/PR steps (a drifted promotion
+  never becomes a mergeable PR), and again BEFORE knope's Release step (a
+  refusal must leave no tag behind).  It admits only release stamps plus
   ``docs/releases/**`` (migration M6).
 - Committed pins may equal the last stable release OR the version the
   current diff prepares — a stable release PR is exactly the state the old
@@ -150,11 +152,39 @@ def test_prepare_workflow_invokes_the_stamp_script() -> None:
     assert prepare_idx < stamp_idx < commit_idx
 
 
+def test_prepare_workflow_runs_the_guard_between_commit_and_push() -> None:
+    """The prepare-time half of the two-layer guard (release-vision D10).
+
+    A drifted promotion must refuse at prepare time — after the prep commit
+    exists (the guard reads the stamped pyproject version and diffs the
+    last reachable rc against HEAD) and BEFORE the push and
+    CreatePullRequest steps — so it never becomes a mergeable PR and no
+    stamped branch is left behind.  The tag-release guard below stays as
+    the backstop for drift landing between prepare and merge.
+    """
+    steps = _knope_workflow("prepare-release")["steps"]
+    commands = [str(step.get("command", "")) for step in steps]
+    guard_indices = [
+        i for i, c in enumerate(commands) if "scripts/promotion_guard.sh" in c
+    ]
+    assert guard_indices, "prepare-release never invokes scripts/promotion_guard.sh"
+    commit_idx = next(i for i, c in enumerate(commands) if "git commit" in c)
+    push_idx = next(i for i, c in enumerate(commands) if "git push" in c)
+    pr_idx = next(
+        i for i, step in enumerate(steps) if step.get("type") == "CreatePullRequest"
+    )
+    assert commit_idx < guard_indices[0] < push_idx < pr_idx, (
+        "the prepare-time guard must run after the prep commit and before "
+        "the push/CreatePullRequest steps"
+    )
+
+
 def test_tag_workflow_runs_the_guard_before_release() -> None:
     """Guard-before-Release ordering is load-bearing (release-vision D10).
 
     Tags are immutable: a same-source refusal that fired after tagging would
-    recreate exactly the burned-tag failure class the redesign removes.
+    recreate exactly the burned-tag failure class the redesign removes —
+    this is the hard backstop behind the prepare-time gate above.
     """
     steps = _knope_workflow("tag-release")["steps"]
     guard_indices = [

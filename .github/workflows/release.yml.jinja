@@ -178,7 +178,11 @@ jobs:
       # stable, the notes deep link is CONDITIONAL on the series page
       # existing on the default branch at publish time — notes merged during
       # the rc window (migration M6 admits them into the promotion diff) get
-      # their deep link right here.  A stable published before its notes PR
+      # their deep link right here.  The link resolves regardless of the cut
+      # branch because docs.yml's release deploy overlays the default
+      # branch's docs/releases/ into the deployed minor — the tag itself
+      # (a release/X.Y cut above all) may carry none of the pages.  A
+      # stable published before its notes PR
       # merges instead gets plain pointers plus the invisible
       # `<!-- release-notes-pending -->` marker: release-notes-publish.yml
       # upgrades ONLY bodies carrying that marker (opt-in) and removes it in
