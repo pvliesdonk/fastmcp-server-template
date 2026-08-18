@@ -109,6 +109,12 @@ jobs:
             experimental: true
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Tags inform the release-contract tests (template#387): without
+          # them a checkout of a repo that HAS releases looks like a fresh
+          # project, and the tag-coupled asserts mis-skip instead of running.
+          # fetch-tags works with the default shallow depth.
+          fetch-tags: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.2.0
