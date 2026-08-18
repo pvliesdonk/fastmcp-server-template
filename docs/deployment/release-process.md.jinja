@@ -40,7 +40,11 @@ and `uv.lock` natively, plus the install-channel manifests through
 request against the dispatched branch. The dispatch's `channel` input
 picks the release kind: `auto` prepares a release candidate on
 `release/X.Y` branches and a stable elsewhere, and an explicit `rc` or
-`stable` choice overrides that.
+`stable` choice overrides that. The optional `override_version` input
+replaces the computed version with an explicit one, for the rare range
+whose commits the tool counts nothing in; the workflow refuses a
+dispatch on any branch other than the default branch or `release/X.Y`,
+and refuses a computed version whose tag already exists.
 
 The release pull request is an ordinary pull request: full CI runs on it,
 and the reviewer checks the computed version against the breaking-change
@@ -85,10 +89,12 @@ A short-lived `release/X.Y` branch is the exception tool, for two cases:
    needs to exist in advance of the need.
 
 Fixes flow from trunk to the branch: they land on `main` first and are
-cherry-picked over. After a release cut from a `release/X.Y` branch, an
-automated job opens an ordinary pull request that carries the release's
-changelog section back to `main`, reviewed and CI-gated like any other
-change, with no direct pushes to protected branches.
+cherry-picked over. After a stable release cut from a `release/X.Y`
+branch, an automated job opens an ordinary pull request that carries the
+release's changelog section back to `main`, reviewed and CI-gated like
+any other change, with no direct pushes to protected branches. Release
+candidates port nothing: the stable's changelog section covers the whole
+cycle.
 
 Release branches carry shipped releases, so they get the same protection
 as `main`: pull requests plus green CI, applied by the shipped rulesets.

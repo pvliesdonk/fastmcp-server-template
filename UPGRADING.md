@@ -52,17 +52,21 @@ the rewritten contract tests) and **deletes** the old
 
 4. **Absorb the convention changes.** `perf:` no longer cuts a patch on
    its own — title a genuine performance defect `fix:`, or release with
-   the explicit version override. Neither revert form (`revert: ...` or
+   Release Prepare's `override_version` input. Neither revert form
+   (`revert: ...` or
    `Revert "..."`) reaches `CHANGELOG.md` any more; the `docs/releases/`
    notes page narrates reverts. The changelog shrinks to three sections
    (Breaking Changes / Features / Bug Fixes). Remove any local
    automation, prose, or tests that still expect PSR behavior.
 
 5. **Releasing afterwards:** dispatch **Release Prepare** on the branch to
-   release from, review the release PR, merge it — the merge tags and
-   publishes. There is no `force`/`finalize` input and no merge-back;
-   promotion of an rc series is a plain `channel: stable` prepare, and
-   branch releases get an automated bookkeeping port PR to `main`.
+   release from (only the default branch and `release/*` are accepted),
+   review the release PR, merge it — the merge tags and publishes. There
+   is no `force`/`finalize` input and no merge-back; promotion of an rc
+   series is a plain `channel: stable` prepare, stable branch releases get
+   an automated bookkeeping port PR to `main` (rcs port nothing), and a
+   prepare whose computed version is already tagged repo-globally refuses
+   with the remedy in the message.
 
 Smoke-test the adoption with `knope prepare-release --dry-run` (the
 interlock is gone once the PSR block is deleted, so the dry run exercises

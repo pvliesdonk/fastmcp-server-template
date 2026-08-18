@@ -5,14 +5,16 @@
 #
 #   1. Release-body upgrade — release.yml wrote the machine-changelog body
 #      with pointers at release time (template#350's contract, knope
-#      edition), deep-linking the notes page only when it already existed on
-#      the default branch; this workflow upgrades a not-yet-linked body to
-#      the page's marked summary block plus the deep link, keeping the
-#      compare and CHANGELOG pointers.  The upgrade-once sentinel is the
-#      ABSENCE of the deep-link line (release.yml writes the same line —
-#      reword them together): a body that already carries it — linked at
-#      release time because the notes merged during the rc window, upgraded
-#      earlier, or hand-tuned with the link kept — is left alone.
+#      edition), deep-linking the notes page when it already existed on the
+#      default branch and otherwise appending the invisible
+#      `<!-- release-notes-pending -->` marker; this workflow upgrades a
+#      marked body to the page's marked summary block plus the deep link,
+#      keeping the compare and CHANGELOG pointers.  The upgrade is OPT-IN:
+#      only bodies carrying the marker are touched, and the rewritten body
+#      drops the marker so it fires once — a body without it (deep-linked
+#      at release time, upgraded earlier, or hand-edited) is never
+#      clobbered.  The marker literal appears in release.yml's body step
+#      too — reword them together.
 #   2. Versioned-docs redeploy — mike deployed /X.Y/ at release time, before
 #      the page existed, so the deep link would 404 without a redeploy.  The
 #      minor is redeployed from its newest tag with the default branch's
@@ -24,7 +26,7 @@
 # Deterministic by design: the agent's output was reviewed and merged in the
 # PR; nothing here generates content.  Human edits to a page republish the
 # same way — the docs redeploy re-runs; the body upgrade does not (see the
-# deep-link sentinel rule above; use `gh release edit` for a body fix).
+# opt-in marker rule above; use `gh release edit` for a body fix).
 name: Release Notes Publish
 
 on:
@@ -106,13 +108,15 @@ jobs:
               [ -n "$summary" ] || continue
               body=$(gh release view "$TAG" --json body --jq .body 2>/dev/null || true)
               [ -n "$body" ] || { echo "no GitHub release for ${TAG} — skipping"; continue; }
-              # Upgrade once: only bodies that do NOT yet carry the notes
-              # deep-link line (release.yml writes the same line when the
-              # page exists at publish time — reword them together). A body
-              # that has it was linked at release time, upgraded earlier, or
-              # hand-tuned with the link kept — leave it alone.
-              if printf '%s' "$body" | grep -qF "- Release notes: https://{{ github_org }}.github.io/{{ project_name }}/${minor}/releases/${minor}/"; then
-                echo "${TAG} body already carries the notes deep link — leaving it alone"
+              # Upgrade once, OPT-IN: only bodies carrying the invisible
+              # marker release.yml appends when it publishes a stable whose
+              # notes page does not exist yet (the marker literal lives in
+              # its body step too — reword them together).  The rewrite
+              # below drops the marker, so the upgrade fires once; a body
+              # without it — deep-linked at release time, upgraded earlier,
+              # or hand-edited — is never touched.
+              if ! printf '%s' "$body" | grep -qF '<!-- release-notes-pending -->'; then
+                echo "${TAG} body carries no release-notes-pending marker — leaving it alone"
                 continue
               fi
               ver="${TAG#v}"

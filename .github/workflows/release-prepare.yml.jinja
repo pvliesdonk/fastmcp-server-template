@@ -26,6 +26,10 @@ on:
           - auto
           - rc
           - stable
+      override_version:
+        description: 'Optional explicit version (X.Y.Z or X.Y.Z-rc.N). Overrides BOTH commit analysis and the channel input — the version is used exactly as given, so include any -rc.N suffix yourself. The remedy for ranges knope counts nothing in (perf/chore-only) and for a version collision after a branch-only release.'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -76,6 +80,26 @@ jobs:
             exit 1
           fi
           echo "interlock: no [tool.semantic_release] block — knope flow is armed"
+
+      # Only the default branch and release/* branches release (the PSR-era
+      # branch groups' refusal, carried over as an explicit gate): a feature
+      # branch's ancestry would compute a bogus version, and its release PR
+      # would target a branch no publish should ever run from.  release.yml
+      # enforces the same rule on the merged PR's base as defense in depth.
+      - name: Refuse a non-releasable ref
+        env:
+          REF: {% raw %}${{ github.ref_name }}{% endraw %}
+          DEFAULT: {% raw %}${{ github.event.repository.default_branch }}{% endraw %}
+        run: |
+          case "$REF" in
+            "$DEFAULT" | release/*)
+              echo "releasable ref: $REF"
+              ;;
+            *)
+              echo "::error::'${REF}' is not a releasable ref — dispatch Release Prepare on '${DEFAULT}' or a release/X.Y stabilisation branch. Other branches release nothing (their ancestry would compute a bogus version)."
+              exit 1
+              ;;
+          esac
 
       # Advisory only (never blocks — the cut may be intentional, or belong
       # on a release/X.Y branch cut from an earlier commit).  Runs at
@@ -144,23 +168,34 @@ jobs:
       # channel input overrides.  Deriving the channel PURELY from the
       # branch was live-tested and rejected (release-vision section 4.1): it
       # makes the plain stable promotion run unreachable on the very
-      # release/X.Y branch that needs it.
+      # release/X.Y branch that needs it.  A non-empty override_version
+      # replaces the whole derivation: the version is used exactly as given
+      # (its own -rc.N suffix, or lack of one, is the channel), validated
+      # here so an arbitrary string can never reach the knope command line.
       - name: Derive the release channel
         id: channel
         env:
           CHANNEL: {% raw %}${{ inputs.channel }}{% endraw %}
+          OVERRIDE: {% raw %}${{ inputs.override_version }}{% endraw %}
         run: |
-          case "$CHANNEL" in
-            rc) flags="--prerelease-label rc" ;;
-            stable) flags="" ;;
-            *)
-              flags=""
-              if [[ "$GITHUB_REF_NAME" == release/* ]]; then
-                flags="--prerelease-label rc"
-              fi
-              ;;
-          esac
-          echo "channel resolved: input=$CHANNEL ref=$GITHUB_REF_NAME flags='${flags}'"
+          if [[ -n "$OVERRIDE" ]]; then
+            [[ "$OVERRIDE" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] \
+              || { echo "::error::override_version '${OVERRIDE}' is not a valid version — expected X.Y.Z or X.Y.Z-rc.N"; exit 1; }
+            flags="--override-version ${OVERRIDE}"
+            echo "channel resolved: override_version=${OVERRIDE} (channel input '${CHANNEL}' ignored — the override's form decides rc vs stable)"
+          else
+            case "$CHANNEL" in
+              rc) flags="--prerelease-label rc" ;;
+              stable) flags="" ;;
+              *)
+                flags=""
+                if [[ "$GITHUB_REF_NAME" == release/* ]]; then
+                  flags="--prerelease-label rc"
+                fi
+                ;;
+            esac
+            echo "channel resolved: input=$CHANNEL ref=$GITHUB_REF_NAME flags='${flags}'"
+          fi
           echo "flags=${flags}" >> "$GITHUB_OUTPUT"
 
       # knope 0.23.0's CreatePullRequest `base` is a plain string (not
@@ -184,6 +219,28 @@ jobs:
           branch="knope/prepare/${GITHUB_REF_NAME//\//-}"
           git switch --force-create "$branch"
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      # The version knope is about to prepare must not already carry a tag
+      # ANYWHERE in the repo.  Version computation is ancestry-local and the
+      # port-bookkeeping PR deliberately never ports version stamps, so a
+      # trunk prepare after a branch-only release can recompute an
+      # already-released version — without this gate that collision would
+      # surface only at tag time, after the release PR merged.  The dry run
+      # prints the exact version the real run below would stamp (same
+      # flags, same commits); its output format is pinned by knope 0.23.0.
+      - name: Refuse a version that is already tagged repo-globally
+        run: |
+          version="$(knope prepare-release --dry-run {% raw %}${{ steps.channel.outputs.flags }}{% endraw %} \
+            | sed -n 's/^Would add the following to pyproject.toml: //p' | head -1)"
+          if [ -z "$version" ]; then
+            echo "::error::could not parse the computed version from knope's dry run — the knope pin and this parser must move together"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v${version}" > /dev/null; then
+            echo "::error::v${version} is already tagged in this repository (most likely released from another branch whose version stamps were never ported). Re-dispatch with override_version set to an untaken version, or land a version-stamp port to ${GITHUB_REF_NAME} first."
+            exit 1
+          fi
+          echo "computed version ${version} is untaken — proceeding"
 
       # knope's prepare-release workflow (knope.toml): PrepareRelease bumps
       # pyproject.toml/uv.lock and writes the changelog section, the stamp
