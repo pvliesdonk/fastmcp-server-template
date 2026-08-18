@@ -46,6 +46,30 @@ You are given, or must derive first:
   (the page exists for an `X.Y.0` target — typically because it was drafted
   at prepare time: update or extend the page in place, and never append a
   duplicate section for a release the page already covers).
+- Watermark — an existing page carries an invisible
+  `<!-- notes-range-end: SHA -->` comment recording where its last
+  accepted draft's research ended. This is the incremental-research
+  anchor for the modes below.
+
+## Incremental research (patch and redraft modes)
+
+The accepted page is the cache; do not re-research a range the page
+already covers. When the page carries the watermark:
+
+- If the watermark SHA equals `RANGE_END`, the page is already current:
+  change nothing and say so in your final report — the calling workflow
+  treats an unchanged existing page as success.
+- Otherwise research only `WATERMARK..RANGE_END` (the same fan-out and
+  evidence rules, over the delta), fold the findings into the existing
+  narrative — extend a theme, add one, or leave prose untouched when the
+  delta is stamps and mechanics — and verify claims the delta might have
+  invalidated rather than re-deriving the whole page.
+- Always move the watermark to `RANGE_END` when you touch the page, and
+  write it (once, at the top of the page after the front matter or title)
+  when you create a page.
+
+A page without a watermark predates this contract: research the full
+`PREV..RANGE_END` range once, and add the watermark with the result.
 
 ## Non-negotiables
 

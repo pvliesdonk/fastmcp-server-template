@@ -510,10 +510,14 @@ def test_notes_workflow_is_callable_and_not_release_triggered() -> None:
     assert "--force-with-lease=" in text, (
         "the prep-branch commit must be leased on the expected stamp head"
     )
-    lease_half = text[text.index('if [ -n "$PREP_BRANCH" ]') :]
-    lease_half = lease_half[: lease_half.index("exit 0")]
-    assert "::error::" in lease_half and "skip_notes" in lease_half, (
-        "an empty draft in call mode must fail loudly and name skip_notes"
+    call_half = text[text.index('if [ -n "$PREP_BRANCH" ]') :]
+    call_half = call_half[: call_half.index("# Dispatch mode")]
+    assert "::error::" in call_half and "skip_notes" in call_half, (
+        "an empty draft with no existing page must fail loudly and name skip_notes"
+    )
+    assert "already covers" in call_half, (
+        "an unchanged EXISTING page is the already-current success case "
+        "(the incremental-research contract), not a failure"
     )
 
 
