@@ -12,6 +12,17 @@
       ],
       "datasourceTemplate": "github-tags",
       "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Bump the knope CLI pin passed to knope-dev/action's `version:` input inside the Jinja-templated release workflows. The action ref itself is covered by the manager above; this one tracks the CLI release that input names, which would otherwise be invisible to Renovate.",
+      "managerFilePatterns": ["/^\\.github/workflows/release.*\\.yml\\.jinja$/"],
+      "matchStrings": [
+        "uses:\\s+knope-dev/action@[^\\n]*\\n\\s+with:\\n\\s+version:\\s+(?<currentValue>[0-9][^\\s\"']*)"
+      ],
+      "depNameTemplate": "knope-dev/knope",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
     }
   ],
   "packageRules": [

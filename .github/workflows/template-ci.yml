@@ -407,7 +407,7 @@ jobs:
         # covered by the `--check` run in the step above (one generator
         # writes every declared artifact, server.json included); this step
         # only asserts package membership and that the two fields
-        # scripts/bump_manifests.py owns (version, the OCI identifier)
+        # scripts/stamp_manifests.py owns (version, the OCI identifier)
         # survived the splice untouched.
         working-directory: /tmp/smoke
         run: |
@@ -437,7 +437,7 @@ jobs:
               || { echo "::error::server.json packages[1] (oci) missing $var"; exit 1; }
           done
 
-          # --- identity fields scripts/bump_manifests.py owns must survive
+          # --- identity fields scripts/stamp_manifests.py owns must survive
           # the splice untouched — the whole reason kind: json-splice
           # replaces one array per package rather than the file.
           version=$(jq -r '.version' "$SERVER")
@@ -1131,7 +1131,7 @@ jobs:
           check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->'
           check_anchor 3 ' Kept across copier update.'
           check_anchor 1 ' on top of the shipped defaults survive `copier update`.'
-          # 2: the `Dockerfile` sentinels and the `scripts/bump_manifests.py`
+          # 2: the `Dockerfile` sentinels and the `scripts/stamp_manifests.py`
           # DOMAIN-MANIFESTS sentinels (#325).
           check_anchor 2 ' are preserved across `copier update`.'
           check_anchor 2 'The block is preserved across `copier update`.'
@@ -1272,6 +1272,7 @@ jobs:
               .github/workflows/codeql.yml \
               .github/workflows/coverage-status.yml \
               .github/workflows/docs.yml \
+              .github/workflows/release-prepare.yml \
               .github/workflows/release.yml \
               .github/workflows/release-notes-publish.yml; do
             [ -f "$kept" ] \

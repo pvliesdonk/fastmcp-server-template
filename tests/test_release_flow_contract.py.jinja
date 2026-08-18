@@ -1,13 +1,13 @@
 """Guards for the knope release-PR flow's contract (fastmcp-server-template#406).
 
-Dual-tracked with ``tests/test_release_contract.py``: that file keeps guarding
-the still-live PSR path until the Phase-2 swap deletes it together with the
-machinery; this file guards the additive knope flow, which stays
-interlocked-inert until the same swap removes ``[tool.semantic_release]``
-from ``pyproject.toml``.
+The only release-contract suite since the Phase-2 swap deleted
+python-semantic-release together with its ``tests/test_release_contract.py``:
+this file guards the knope flow, which the same swap armed by removing
+``[tool.semantic_release]`` from ``pyproject.toml`` (an invariant asserted
+below — the workflows' interlock step refuses if the block reappears).
 
-The invariants mirror the PSR suite's intent, respecified for the release-PR
-intermediate state:
+The invariants mirror the retired PSR suite's intent, respecified for the
+release-PR model:
 
 - ``knope.toml`` and ``scripts/stamp_manifests.py`` are two halves of one
   mechanism — knope's ``versioned_files`` own ``pyproject.toml`` and
@@ -50,7 +50,7 @@ KNOPE_TOML = REPO_ROOT / "knope.toml"
 STAMPER = REPO_ROOT / "scripts" / "stamp_manifests.py"
 GUARD = REPO_ROOT / "scripts" / "promotion_guard.sh"
 PREPARE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-prepare.yml"
-TAG_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-tag.yml"
+RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 {%- if include_claude_plugin %}
 PLUGIN_JSON = Path(".claude-plugin/plugin/.claude-plugin/plugin.json")
 MCP_JSON = Path(".claude-plugin/plugin/.mcp.json")
@@ -171,6 +171,42 @@ def test_tag_workflow_runs_the_guard_before_release() -> None:
     assert GUARD.is_file(), f"{GUARD} is missing"
 
 
+def test_pyproject_carries_no_semantic_release_block() -> None:
+    """The PSR config block stays gone — the knope flow's arming condition.
+
+    Both release workflows' interlock step refuses while a
+    ``[tool.semantic_release]`` block exists, so its reappearance would not
+    just resurrect dead config: it would turn every prepare dispatch and
+    every release-PR merge into a refusal.  Two release models must never
+    both be live (migration P1.0/P2).
+    """
+    with (REPO_ROOT / "pyproject.toml").open("rb") as fh:
+        data = tomllib.load(fh)
+    assert "semantic_release" not in data.get("tool", {}), (
+        "pyproject.toml carries [tool.semantic_release] — python-semantic-"
+        "release was removed in the knope swap, and the release workflows' "
+        "interlock refuses while the block exists"
+    )
+
+
+def test_changelog_carries_the_insertion_flag() -> None:
+    """``CHANGELOG.md`` keeps the ``<!-- version list -->`` insertion flag.
+
+    Carried over from the retired PSR contract suite (template#350): the
+    seeded changelog places machine-written version sections below this flag
+    line, and the port-bookkeeping job in release.yml inserts a backported
+    section directly beneath it.  If this project's CHANGELOG.md predates
+    the flag, add the line once, by hand, where version sections should
+    begin (typically after the intro prose).
+    """
+    flag = "<!-- version list -->"
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert flag in changelog, (
+        f"CHANGELOG.md lacks the insertion flag — add this exact line once, "
+        f"where version sections should be inserted: {flag}"
+    )
+
+
 def test_promotion_guard_allows_only_release_metadata() -> None:
     """The guard's allowed set is release stamps + ``docs/releases/**`` (M6).
 
@@ -216,14 +252,16 @@ def test_domain_manifest_sentinels_present_once_and_in_scope() -> None:
 
 
 def test_release_workflows_are_interlocked_on_the_psr_block() -> None:
-    """Both GitHub workflows refuse while PSR is live (migration P1.0).
+    """Both GitHub workflows refuse if the PSR block reappears (P1.0/P2).
 
-    The interlock is what makes this flow safely additive: deleting
-    ``[tool.semantic_release]`` from ``pyproject.toml`` in the Phase-2 swap
-    is the arming action, and until then a dispatch or a merged prep-named
-    PR must exit non-zero before any knope step runs.
+    During the additive phase this interlock kept the knope flow inert;
+    since the Phase-2 swap deleted ``[tool.semantic_release]`` it always
+    passes, and it stays as the permanent swap-completeness guard: two
+    release models must never both be live, so a resurrected PSR block must
+    make a dispatch or a merged release PR exit non-zero before any knope
+    step runs.
     """
-    for workflow in (PREPARE_WORKFLOW, TAG_WORKFLOW):
+    for workflow in (PREPARE_WORKFLOW, RELEASE_WORKFLOW):
         text = workflow.read_text(encoding="utf-8")
         # Anchor on the interlock STEP's name, not on the first mention of
         # semantic_release (header comments mention it too, which would make

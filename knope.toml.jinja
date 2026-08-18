@@ -1,10 +1,10 @@
 # knope configuration for the release-PR flow (fastmcp-server-template#406).
 #
-# INERT WHILE PSR LIVES: the two GitHub workflows that run these knope
-# workflows (release-prepare.yml, release-tag.yml) refuse while
-# `[tool.semantic_release]` still exists in `pyproject.toml`.  The Phase-2
-# swap that deletes the PSR block is the arming action; until then
-# `release.yml` (python-semantic-release) is the only live release path.
+# The two GitHub workflows that run these knope workflows
+# (release-prepare.yml, release.yml) carry a swap-completeness guard: they
+# refuse if a `[tool.semantic_release]` block ever reappears in
+# `pyproject.toml`, so this flow and the retired python-semantic-release
+# flow can never both be live.
 #
 # Two knope workflows:
 #   prepare-release — run by release-prepare.yml on a per-base prep branch
@@ -12,7 +12,7 @@
 #     Computes the version from conventional commits, stamps version-coupled
 #     files, commits, pushes the prep branch, and opens/refreshes the release
 #     PR.  Merging that PR is the release decision.
-#   tag-release — run by release-tag.yml after the release PR merges.  Runs
+#   tag-release — run by release.yml after the release PR merges.  Runs
 #     the same-source promotion guard FIRST, then tags and creates the GitHub
 #     release.  Guard-before-Release ordering is load-bearing (release-vision
 #     section 4.4): a guard refusal must leave no tag behind.
@@ -83,8 +83,8 @@ template = "chore: prepare release $version"
 [workflows.steps.body]
 template = """
 Merging this pull request releases **$version** — the merge is the release
-decision.  On merge, the Release Tag workflow tags the merge commit and
-creates the GitHub release; for a stable promotion the same-source guard
+decision.  On merge, the Release workflow tags the merge commit, creates
+the GitHub release, and runs the publish fan-out; for a stable promotion the same-source guard
 (`scripts/promotion_guard.sh`) runs first, so drifted source refuses with no
 tag created.
 

@@ -140,6 +140,11 @@ Run `template-release.yml` via `workflow_dispatch` with `bump` input
 (patch/minor/major).  It tags a new `vX.Y.Z`, updates CHANGELOG.md,
 and creates a GitHub release.
 
+`UPGRADING.md` (template-repo only, excluded from renders) carries the
+one-time manual steps a `copier update` jump needs in generated projects
+— reference the relevant section from the release notes when such a
+release ships.
+
 The release *model* that generated projects follow — trunk releases from
 a quiescent commit by default, short-lived `release/X.Y` branches as the
 exception, the three channels — ships in `CLAUDE.md.jinja`'s "Release

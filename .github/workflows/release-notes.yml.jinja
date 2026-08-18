@@ -7,11 +7,12 @@
 # this workflow only supplies context, tools, and the mechanical PR.
 #
 # INVARIANT: nothing here gates or blocks the release path.  By the time
-# this runs, the release has shipped with the interim summary+pointers body
-# release.yml wrote (its NOTES-GENERATOR SEAM step).  A failed or junk run
-# leaves that body standing; re-run via workflow_dispatch when wanted.  The
-# body upgrade and the versioned-docs redeploy happen only after a human
-# merges the notes PR — see release-notes-publish.yml.
+# this runs on a release event, the release has shipped with the
+# machine-changelog + pointers body release.yml wrote (deep-linking the
+# notes page only if it already existed).  A failed or junk run leaves that
+# body standing; re-run via workflow_dispatch when wanted.  The body
+# upgrade and the versioned-docs redeploy happen only after a human merges
+# the notes PR — see release-notes-publish.yml.
 #
 # A second dispatch path (target_version + source_ref) drafts notes at
 # release-PR prepare time, before any tag exists — see the input comments

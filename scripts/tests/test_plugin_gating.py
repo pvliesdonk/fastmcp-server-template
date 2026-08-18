@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -60,13 +59,15 @@ class TestPluginOff:
     def test_no_plugin_directory_leaks(self, rendered_off: Path):
         assert not (rendered_off / ".claude-plugin").exists()
 
-    def test_no_bumper_or_assets_entries(self, rendered_off: Path):
-        bumper = (rendered_off / "scripts" / "bump_manifests.py").read_text(
+    def test_no_stamper_helper_or_contract_asserts(self, rendered_off: Path):
+        stamper = (rendered_off / "scripts" / "stamp_manifests.py").read_text(
             encoding="utf-8"
         )
-        assert "_bump_claude_plugin_manifests" not in bumper
-        pyproject = (rendered_off / "pyproject.toml").read_text(encoding="utf-8")
-        assert ".claude-plugin/plugin/.mcp.json" not in pyproject
+        assert "_stamp_claude_plugin_manifests" not in stamper
+        contract = (
+            rendered_off / "tests" / "test_release_flow_contract.py"
+        ).read_text(encoding="utf-8")
+        assert ".claude-plugin/plugin/.mcp.json" not in contract
 
 
 class TestPluginOn:
@@ -81,7 +82,7 @@ class TestPluginOn:
             ).read_text(encoding="utf-8")
         )
         assert plugin_json["name"] == "smoke-mcp"
-        # Seeded at 0.0.0: the live version is owned by bump_manifests.py +
+        # Seeded at 0.0.0: the live version is owned by stamp_manifests.py +
         # the release flow, never by a render.
         assert plugin_json["version"] == "0.0.0"
 
@@ -95,24 +96,33 @@ class TestPluginOn:
         i = server["args"].index("--from")
         assert server["args"][i + 1].endswith("==0.0.0")
 
-    def test_bumper_and_assets_are_paired(self, rendered_on: Path):
-        """The lockstep contract: the bumper helper and the PSR assets
-        entries appear together, so tests/test_release_contract.py in the
-        rendered project holds on a fresh scaffold."""
-        bumper = (rendered_on / "scripts" / "bump_manifests.py").read_text(
+    def test_stamper_and_contract_suite_are_paired(self, rendered_on: Path):
+        """The lockstep contract: the stamp helper and the flow-contract
+        suite's plugin asserts appear together, so
+        tests/test_release_flow_contract.py in the rendered project holds on
+        a fresh scaffold (the promotion guard lists the plugin paths
+        unconditionally by design)."""
+        stamper = (rendered_on / "scripts" / "stamp_manifests.py").read_text(
             encoding="utf-8"
         )
-        assert "_bump_claude_plugin_manifests(version)" in bumper
-        pyproject = (rendered_on / "pyproject.toml").read_text(encoding="utf-8")
-        assert '".claude-plugin/plugin/.claude-plugin/plugin.json"' in pyproject
-        assert '".claude-plugin/plugin/.mcp.json"' in pyproject
+        assert "_stamp_claude_plugin_manifests(version)" in stamper
+        contract = (
+            rendered_on / "tests" / "test_release_flow_contract.py"
+        ).read_text(encoding="utf-8")
+        assert '".claude-plugin/plugin/.claude-plugin/plugin.json"' in contract
+        assert '".claude-plugin/plugin/.mcp.json"' in contract
 
-    def test_bumper_rewrites_both_manifests(self, rendered_on: Path):
-        """Run the rendered bump script for real against the scaffold."""
+    def test_stamper_rewrites_both_manifests(self, rendered_on: Path):
+        """Run the rendered stamp script for real against the scaffold."""
+        # The script stages what it stamps for knope's release commit, so it
+        # needs a real git index; the render is not a repo yet.
+        if not (rendered_on / ".git").exists():
+            subprocess.run(
+                ["git", "init", "-q"], cwd=rendered_on, check=True
+            )
         subprocess.run(
-            ["python3", "scripts/bump_manifests.py"],
+            ["python3", "scripts/stamp_manifests.py", "9.9.9"],
             cwd=rendered_on,
-            env={**os.environ, "NEW_VERSION": "9.9.9"},
             check=True,
             capture_output=True,
             text=True,
