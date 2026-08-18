@@ -26,8 +26,11 @@ the rewritten contract tests) and **deletes** the old
    receives the version as `argv[1]`, runs on stable versions only, must
    raise `StampError` instead of warn-and-continue, and every rewritten
    path must be appended to `stamped` so it is staged into the release
-   commit. Drop any `uv.lock`/`pyproject.toml` handling — knope owns those
-   natively now.
+   commit. Drop any `uv.lock`/`pyproject.toml` handling — knope owns
+   `pyproject.toml` natively, and the template-owned part of the stamp
+   script rewrites `uv.lock`'s self-version entry itself (PEP 440
+   canonical spelling; a legacy-spelled entry is simply restamped on the
+   first prepare).
 
 2. **Normalize `CHANGELOG.md` headings once** (knope writes `## X.Y.Z`,
    PSR wrote `## vX.Y.Z`; keep the `<!-- version list -->` flag line):

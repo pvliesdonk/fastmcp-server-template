@@ -24,13 +24,15 @@
 # (knope's prepare commit stages only the release files).
 
 [package]
+# pyproject.toml is knope's ONLY versioned file.  uv.lock's self-version
+# entry is deliberately NOT here: uv rewrites that entry to the PEP 440
+# canonical spelling (`4.0.0rc1`) on any re-lock, while knope requires its
+# versioned_files to agree with pyproject.toml's SemVer spelling
+# (`4.0.0-rc.1`) — so a re-lock during an rc window would break every later
+# PrepareRelease.  scripts/stamp_manifests.py rewrites the lockfile entry
+# instead, in canonical spelling, on every release (rc included).
 versioned_files = [
   "pyproject.toml",
-  # uv.lock's self-version entry only — a textual stamp, exactly like the
-  # PSR-era `_bump_lockfile`; full dependency re-resolution is never part of
-  # release preparation (release-vision D12).  uv writes the PEP 503-
-  # normalized distribution name into the lockfile.
-  { path = "uv.lock", regex = 'name = "{{ pypi_name | lower | regex_replace('[-_.]+', '-') }}"\nversion = "(?<version>[^"]+)"' },
 ]
 changelog = "CHANGELOG.md"
 # knope counts only feat / fix / breaking changes; these three sections are
@@ -50,9 +52,11 @@ name = "prepare-release"
 [[workflows.steps]]
 type = "PrepareRelease"
 
-# Stable-only stamping of the install-channel manifests (server.json and the
-# Claude plugin pair, when present); pyproject.toml and uv.lock are knope's
-# own `versioned_files` above and the stamp script never touches them.
+# The stamp script runs on EVERY release: it rewrites uv.lock's self-version
+# entry (PEP 440 canonical spelling — see the versioned_files note above)
+# unconditionally, and the install-channel manifests (server.json and the
+# Claude plugin pair, when present) on stable versions only.  pyproject.toml
+# is knope's own `versioned_files` entry and the script never touches it.
 [[workflows.steps]]
 type = "Command"
 command = "python3 scripts/stamp_manifests.py $version"
