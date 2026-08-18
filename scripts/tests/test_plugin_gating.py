@@ -118,6 +118,15 @@ class TestPluginOn:
         # needs a real git index; the render is not a repo yet.
         if not (rendered_on / ".git").exists():
             subprocess.run(["git", "init", "-q"], cwd=rendered_on, check=True)
+        # A render carries no uv.lock (projects create their own), but the
+        # stamper rewrites the lockfile's self-version entry on every
+        # release — seed a minimal one so the real-run covers that path too.
+        lock = rendered_on / "uv.lock"
+        if not lock.exists():
+            lock.write_text(
+                '[[package]]\nname = "smoke-mcp"\nversion = "0.1.0"\n',
+                encoding="utf-8",
+            )
         subprocess.run(
             ["python3", "scripts/stamp_manifests.py", "9.9.9"],
             cwd=rendered_on,
@@ -142,3 +151,4 @@ class TestPluginOn:
         )
         args = mcp_json["smoke-mcp"]["args"]
         assert args[args.index("--from") + 1] == "smoke-mcp[all]==9.9.9"
+        assert 'version = "9.9.9"' in lock.read_text(encoding="utf-8")

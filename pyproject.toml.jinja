@@ -118,6 +118,12 @@ ignore = ["E501"]
 # here the no-shell form is the safer one, and a `# noqa` instead of this
 # entry would trip RUF100 on the whole-repo pass, where `S` isn't selected.
 "scripts/gen_config_surface.py" = ["S606"]
+# The release stamper stages its rewrites with a fixed-argv `git add`
+# (subprocess with a list, never a shell). S607 flags the bare `git` name
+# (a partial executable path) and S603 the subprocess call itself; both are
+# safe here and would otherwise trip every adopter's structural diff-gate
+# the first time an update touches the template-owned parts of the script.
+"scripts/stamp_manifests.py" = ["S603", "S607"]
 {% endif %}
 # PROJECT-RUFF-IGNORES-START — replace, extend, or override the entries below
 # for your project's real source/test paths (split _server_apps.py into

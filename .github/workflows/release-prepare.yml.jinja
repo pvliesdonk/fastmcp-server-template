@@ -243,8 +243,9 @@ jobs:
           echo "computed version ${version} is untaken — proceeding"
 
       # knope's prepare-release workflow (knope.toml): PrepareRelease bumps
-      # pyproject.toml/uv.lock and writes the changelog section, the stamp
-      # Command rewrites the install-channel manifests (stable only), the
+      # pyproject.toml and writes the changelog section, the stamp Command
+      # rewrites uv.lock's self-version entry (every release, PEP 440
+      # canonical spelling) and the install-channel manifests (stable only), the
       # commit + force-push Commands publish the prep branch (name via
       # KNOPE_PREP_BRANCH), and CreatePullRequest opens or refreshes the
       # release PR against the base patched above.
