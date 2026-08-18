@@ -58,8 +58,8 @@ jobs:
           # RELEASE_TOKEN (PAT), persisted for the prep-branch push (M1): a
           # GITHUB_TOKEN-authored release PR triggers no workflows, so the
           # required `CI Success` check would never report and the PR would
-          # be unmergeable forever — the same reason copier-update.yml uses
-          # this token.
+          # be unmergeable forever — the same reason the automated
+          # template-update PRs use this token.
           token: {% raw %}${{ secrets.RELEASE_TOKEN }}{% endraw %}
 
       # INTERLOCK (migration P1.0) — must stay the first step after
