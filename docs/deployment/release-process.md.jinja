@@ -4,7 +4,7 @@
 releasing. A merge feeds the rolling `edge` channel and nothing else. A
 release is a separate, deliberate event: a maintainer dispatches the
 **Release Prepare** workflow, reviews the release pull request it opens,
-and merges it — the merge is what tags and publishes. This page describes
+and merges it. The merge is what tags and publishes. This page describes
 that flow, what each kind of release publishes, and where releases come
 from.
 
@@ -34,9 +34,9 @@ newest in the relevant series, so a patch release cut from an old
 Dispatching **Release Prepare** on the branch to release from has the
 release tool, [knope](https://knope.tech/), compute the next version from
 the conventional commits since the last release in that branch's history.
-It stamps the version-coupled files — `pyproject.toml`, `CHANGELOG.md`,
+It stamps the version-coupled files (`pyproject.toml`, `CHANGELOG.md`,
 and `uv.lock` natively, plus the install-channel manifests through
-`scripts/stamp_manifests.py` on stable prepares — and opens a release pull
+`scripts/stamp_manifests.py` on stable prepares) and opens a release pull
 request against the dispatched branch. The dispatch's `channel` input
 picks the release kind: `auto` prepares a release candidate on
 `release/X.Y` branches and a stable elsewhere, and an explicit `rc` or
@@ -46,8 +46,8 @@ The release pull request is an ordinary pull request: full CI runs on it,
 and the reviewer checks the computed version against the breaking-change
 policy and reads the changelog section in the diff. Merging it is the
 release decision. On merge, the **Release** workflow tags the merge
-commit, creates the GitHub release, and runs the publish fan-out, with
-every publish gate derived from the reviewed version string.
+commit and creates the GitHub release, then hands off to the publish
+fan-out; every publish gate derives from the reviewed version string.
 
 Two rules keep the flow sound:
 
@@ -87,7 +87,7 @@ A short-lived `release/X.Y` branch is the exception tool, for two cases:
 Fixes flow from trunk to the branch: they land on `main` first and are
 cherry-picked over. After a release cut from a `release/X.Y` branch, an
 automated job opens an ordinary pull request that carries the release's
-changelog section back to `main` — reviewed and CI-gated like any other
+changelog section back to `main`, reviewed and CI-gated like any other
 change, with no direct pushes to protected branches.
 
 Release branches carry shipped releases, so they get the same protection
@@ -99,8 +99,8 @@ See [Repository Protection](repository-protection.md).
 Each release is described in three places with distinct jobs:
 
 - **The GitHub release body** carries the release's machine-written
-  changelog section and pointers — to the versioned docs, the compare
-  view, and, once the release's notes page exists, a deep link to it.
+  changelog section and pointers: the versioned docs, the compare view,
+  and, once the release's notes page exists, a deep link to it.
 - **The release notes pages on this docs site** are the canonical
   human-facing narrative of what changed and why it matters.
 - **`CHANGELOG.md`** in the repository is the machine-written audit
