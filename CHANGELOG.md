@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.3.0 (2026-08-19)
+
+- #443 fix: drop read_only= from the build_instructions call site
+
+
 ## v5.2.1 (2026-08-19)
 
 - #441 fix(ci): keep Renovate PRs out of review, and land README-only catalog repairs
