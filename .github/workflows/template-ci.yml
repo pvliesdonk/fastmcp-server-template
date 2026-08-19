@@ -573,7 +573,7 @@ jobs:
             || { echo "::error::claude-code-review.yml lost its workflow-level draft gate — the reviewer would race 'Ready for review' again"; exit 1; }
           grep -qF 'cancel-in-progress: true' .github/workflows/claude-code-review.yml \
             || { echo "::error::claude-code-review.yml lost its per-commit concurrency — the same commit can be reviewed twice"; exit 1; }
-          grep -qF 'group: claude-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}' .github/workflows/claude-code-review.yml \
+          grep -qE '^  group: claude-review-.*pull_request\.number.*pull_request\.head\.sha' .github/workflows/claude-code-review.yml \
             || { echo "::error::claude-code-review.yml's concurrency group no longer keys on the PR and head SHA, so it cannot dedupe per commit"; exit 1; }
 
       - name: release.yml marketplace upsert
