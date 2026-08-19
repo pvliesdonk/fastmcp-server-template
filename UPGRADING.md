@@ -769,7 +769,7 @@ The post-publication body-upgrade path and
 No project-owned file changes shape in this line. Existing notes pages without
 the new range watermark are upgraded by their next accepted draft.
 
-## Unreleased - Rolling `rc` image tag and the marketplace manifest path
+## v5.2 - Rolling `rc` image tag and the marketplace manifest path
 
 Two release-pipeline corrections. Neither changes a project-owned file, and
 both take effect on the next release after the update.
@@ -812,3 +812,7 @@ numbers to follow `rc` instead.
 workflow, and reviews each commit once. No action is needed on update; the
 behaviour change is that a push to a draft pull request no longer starts a
 review run at all, and marking the pull request ready starts exactly one.
+
+## Unreleased
+
+_Nothing yet._

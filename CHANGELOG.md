@@ -1,5 +1,19 @@
 # Changelog
 
+## v5.2.0 (2026-08-19)
+
+- #439 fix(ci): decide review eligibility in the workflow, and review each commit once
+- #437 docs: write UPGRADING.md under `## Unreleased`, and promote it at release time
+- #433 fix(release): bump the catalog where Claude Code reads it, and give rcs a rolling image tag
+- #431 ci: cache Playwright browsers and stop a font install gating the docs job
+- #429 chore(deps): update python docker tag to v3.14
+- #428 chore(deps): update ghcr.io/astral-sh/uv docker tag to v0.12
+- #427 docs: add cumulative template upgrade guide
+- #425 ci: bound the docs workflow's Chromium install so it cannot wedge a runner
+- #422 fix(release): draft-hold until notes land, watermark-verified already-current, publish skips release merges
+- #384 chore(deps): update dependency astral-sh/uv to 0.12
+
+
 ## v5.1.0 (2026-08-18)
 
 - #420 feat(release): release notes become part of the release PR — every tag carries its own page
