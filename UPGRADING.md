@@ -779,9 +779,16 @@ no one reads. Verify with `claude plugin validate .` in a clone of the catalog
 before the first stable release after this update. Projects with
 `include_claude_plugin: false` are unaffected.
 
-A first-time entry now also carries `description` and `homepage`, taken from
-the project's own metadata. Existing entries keep whatever prose the catalog
-holds: the bump still rewrites only `version` and `source.ref`.
+The bump now also writes `description` and `homepage` into this project's
+entry, taken from its own metadata, and rewrites them on every release rather
+than only on the first. The catalog's README plugin list is generated from
+those descriptions, so a blurb hand-edited in the catalog is replaced on the
+next release — curate it here, in the `domain_description` copier answer.
+
+If the catalog ships `scripts/gen_readme.py`, the bump runs it and stages the
+regenerated `README.md` in the same commit, so the catalog's default branch
+never describes a plugin set it no longer serves. A catalog without that
+script is unaffected; the step is guarded on the file existing.
 
 **Pre-releases regain a rolling image tag.** An rc now pushes
 `ghcr.io/<org>/<project>:rc` alongside its immutable `vX.Y.Z-rc.N` tag. The

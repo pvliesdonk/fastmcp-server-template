@@ -813,13 +813,27 @@ jobs:
               },
               version: $version
             }')
+          # The upsert refreshes the blurb as well as the pin: the catalog's
+          # README is generated from these descriptions, and this project —
+          # not the catalog — is where its own one-line description lives.
+          # A hand-edited blurb on this entry is therefore replaced on every
+          # release, deliberately; curate it here, in `domain_description`.
           jq --arg name "{{ project_name }}" \
              --arg v    "$VERSION" \
              --arg ref  "v$VERSION" \
+             --arg desc "$PLUGIN_DESC" \
+             --arg home "$PLUGIN_HOME" \
              --argjson new "$NEW_ENTRY" '
             .plugins |= (
               if any(.[]; .name == $name)
-              then map(if .name == $name then .version = $v | .source.ref = $ref else . end)
+              then map(
+                if .name == $name
+                then .version = $v
+                     | .source.ref = $ref
+                     | .description = $desc
+                     | .homepage = $home
+                else . end
+              )
               else . + [$new]
               end
             )
@@ -831,10 +845,21 @@ jobs:
           jq empty "$MANIFEST"
           jq -e '.name and .owner and (.plugins | type == "array")' "$MANIFEST" > /dev/null \
             || { echo "::error::${MANIFEST} lost a required top-level key (name / owner / plugins) — refusing to publish a manifest Claude Code would reject"; exit 1; }
-          jq -e --arg name "{{ project_name }}" --arg v "$VERSION" '
+          jq -e --arg name "{{ project_name }}" --arg v "$VERSION" \
+                --arg desc "$PLUGIN_DESC" '
             .plugins[] | select(.name == $name)
-            | select(.version == $v and .source.ref == ("v" + $v))
+            | select(.version == $v and .source.ref == ("v" + $v)
+                     and .description == $desc)
           ' "$MANIFEST" > /dev/null
+
+          # The catalog generates its README from the manifest.  Run its own
+          # generator so the bump and the prose it feeds land in one commit,
+          # rather than leaving the catalog's default branch stale (or red)
+          # until a human runs it.  Guarded on the file: a catalog without a
+          # generator, or one that has not adopted it yet, is unaffected.
+          if [ -f scripts/gen_readme.py ]; then
+            python3 scripts/gen_readme.py
+          fi
       - name: Commit and push to catalog
         if: steps.plugin_check.outputs.present == 'true'
         env:
@@ -850,6 +875,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
           git add "$MANIFEST"
+          # Only when the generator actually rewrote it — most bumps change
+          # no prose and leave the README untouched, which keeps concurrent
+          # sibling releases off the same lines in the rebase-retry below.
+          if ! git diff --quiet -- README.md; then
+            git add README.md
+          fi
           git commit -m "chore: bump {{ project_name }} to v${VERSION}"
           # Concurrent sibling releases race on the same file; rebase-retry
           # instead of failing. Bumping existing entries touches distinct
