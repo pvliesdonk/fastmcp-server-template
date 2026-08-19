@@ -560,6 +560,22 @@ jobs:
             [ "$count" = "1" ] || { echo "::error::expected 1 '$marker' sentinel, found $count"; exit 1; }
           done
 
+      - name: claude-code-review draft gate and per-commit concurrency
+        working-directory: /tmp/smoke
+        run: |
+          # Both halves must survive the render, and neither announces its
+          # absence: without the draft gate the reviewer decides eligibility
+          # itself, mid-run, and loses a race against "Ready for review"
+          # (template#437 — two full reviews of one diff); without the
+          # SHA-keyed group two triggers on the same commit each run to
+          # completion. A review that runs twice looks like a working review.
+          grep -qF 'github.event.pull_request.draft == false' .github/workflows/claude-code-review.yml \
+            || { echo "::error::claude-code-review.yml lost its workflow-level draft gate — the reviewer would race 'Ready for review' again"; exit 1; }
+          grep -qF 'cancel-in-progress: true' .github/workflows/claude-code-review.yml \
+            || { echo "::error::claude-code-review.yml lost its per-commit concurrency — the same commit can be reviewed twice"; exit 1; }
+          grep -qE '^  group: claude-review-.*pull_request\.number.*pull_request\.head\.sha' .github/workflows/claude-code-review.yml \
+            || { echo "::error::claude-code-review.yml's concurrency group no longer keys on the PR and head SHA, so it cannot dedupe per commit"; exit 1; }
+
       - name: release.yml marketplace upsert
         working-directory: /tmp/smoke
         run: |
