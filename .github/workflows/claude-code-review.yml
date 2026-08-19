@@ -11,8 +11,13 @@ on:
 # seconds apart — push to a draft, then click "Ready for review" — and each
 # starts its own run.  Keying the group on the PR and its head SHA makes the
 # later trigger supersede the earlier one instead of reviewing the same diff
-# twice.  Cancelling is safe here precisely because the two runs would review
-# identical code; a genuinely new commit gets a new SHA and its own group.
+# twice.  The superseded run loses nothing it could not redo — with one
+# narrow exception: a same-SHA trigger arriving while `claude-review` is
+# already posting (close-and-reopen, no new push) strands that run's partial
+# comments before the winner posts in full.  That is rarer and milder than
+# the duplicate it replaces, and the alternative is worse —
+# `cancel-in-progress: false` queues the second run and posts twice for
+# certain.  A genuinely new commit gets a new SHA and its own group.
 concurrency:
   group: claude-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: true
