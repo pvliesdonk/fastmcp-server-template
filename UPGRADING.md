@@ -5,6 +5,11 @@ This guide is for maintainers updating a generated project with
 Copier cannot do: preserving project-owned files, migrating removed extension
 points, changing repository settings, and checking operational behavior.
 
+Contributors: record migration steps under `## Unreleased` at the end of this
+file, never under a version heading — the version is chosen at release time,
+and `scripts/promote_upgrading.py` rewrites the heading then. See "Writing
+UPGRADING.md" in `CLAUDE.md`.
+
 Read the current minor's section when your target includes a newer patch in
 that line, then read every later minor through the target. This matters for a
 project on v1.2.0: v1.2.1 and v1.2.2 contain migration work recorded in the
@@ -764,7 +769,7 @@ The post-publication body-upgrade path and
 No project-owned file changes shape in this line. Existing notes pages without
 the new range watermark are upgraded by their next accepted draft.
 
-## v5.2 - Rolling `rc` image tag and the marketplace manifest path
+## Unreleased - Rolling `rc` image tag and the marketplace manifest path
 
 Two release-pipeline corrections. Neither changes a project-owned file, and
 both take effect on the next release after the update.

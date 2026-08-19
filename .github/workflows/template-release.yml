@@ -77,6 +77,16 @@ jobs:
           } > CHANGELOG.md.new
           mv CHANGELOG.md.new CHANGELOG.md
 
+      # UPGRADING.md's sections are written before anyone knows which
+      # version they will ship in — the version is this dispatch's `bump`
+      # input.  Contributors write under `## Unreleased`; this turns that
+      # into the real heading (or, for a patch, folds it into the minor's
+      # existing section) so the file cannot drift by hand-guessing.
+      - name: Promote UPGRADING.md's Unreleased section
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+        run: python3 scripts/promote_upgrading.py --version "$NEXT"
+
       - name: Commit, tag, push
         env:
           NEXT: ${{ steps.version.outputs.next }}
@@ -84,7 +94,7 @@ jobs:
           set -euo pipefail
           git config user.email "actions@users.noreply.github.com"
           git config user.name "github-actions"
-          git add CHANGELOG.md
+          git add CHANGELOG.md UPGRADING.md
           git commit -m "chore(release): $NEXT"
           git tag -a "$NEXT" -m "Release $NEXT"
           git push origin main

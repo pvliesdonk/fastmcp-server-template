@@ -1405,6 +1405,21 @@ jobs:
       - name: Run aggregator tests
         run: uv run --with pytest --with pyyaml --with jsonschema --with 'fastmcp-pvl-core>=4.6.1' pytest scripts/tests/ -v
 
+      - name: UPGRADING.md Unreleased section
+        run: |
+          # Two halves, and each is silent without the other. The invariants
+          # (at most one `## Unreleased`, and it is last) keep a second
+          # section from accumulating above already-released ones, where the
+          # release would strand it. The invocation check keeps the promotion
+          # step itself from being dropped: the script and its tests would
+          # stay green while every release quietly left the section behind —
+          # the same coupling the manifest stamper's invocation is gated on.
+          python3 scripts/promote_upgrading.py --check
+          grep -qF 'scripts/promote_upgrading.py --version' .github/workflows/template-release.yml \
+            || { echo "::error::template-release.yml no longer promotes UPGRADING.md's Unreleased section — releases would ship it unpromoted"; exit 1; }
+          grep -qE '^\s+git add .*UPGRADING\.md' .github/workflows/template-release.yml \
+            || { echo "::error::template-release.yml promotes UPGRADING.md but never stages it — the rewrite would be discarded"; exit 1; }
+
       - name: Lint aggregator (ruff check matching downstream's config)
         # Mirror the rendered project's [tool.ruff.lint] block in
         # pyproject.toml.jinja: same `select` list, same `ignore = ["E501"]`,
@@ -1415,12 +1430,12 @@ jobs:
             --select E,W,F,I,B,C4,UP,ARG,SIM,TC,PTH,RUF \
             --ignore E501 \
             --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/tests/
+            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Format check aggregator (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/tests/
+            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
         # The scripts that render into every project (gen_config_surface.py,
