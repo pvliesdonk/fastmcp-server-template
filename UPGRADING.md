@@ -353,10 +353,10 @@ stores, app domain, logging, and domain variables (template#205,
 template#207). The new drift test reports missing and orphaned settings.
 
 Also add `{PREFIX}_SERVER_NAME` and `{PREFIX}_INSTRUCTIONS` to the skip-listed
-`.env.example` if operators should use them.
+`.env.example` if operators should use them (template#206).
 
 Bare `serve --transport http` now follows `ServerConfig.host`, whose default
-is `127.0.0.1` (template#206). A non-container deployment that relied on the
+is `127.0.0.1` (template#207). A non-container deployment that relied on the
 old implicit all-interface bind must set `{PREFIX}_HOST=0.0.0.0` or pass
 `--host 0.0.0.0`. The generated container command already does so explicitly.
 
