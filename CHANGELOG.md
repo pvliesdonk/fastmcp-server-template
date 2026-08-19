@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.2.1 (2026-08-19)
+
+- #441 fix(ci): keep Renovate PRs out of review, and land README-only catalog repairs
+
+
 ## v5.2.0 (2026-08-19)
 
 - #439 fix(ci): decide review eligibility in the workflow, and review each commit once
