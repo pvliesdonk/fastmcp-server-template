@@ -10,13 +10,36 @@ on:
     branches: [main, "release/**"]
     types: [opened, synchronize, ready_for_review, reopened]
 
+# One review per commit, not one per event that mentions it.  `synchronize`
+# and `ready_for_review` fire separately and can land on the SAME head SHA
+# seconds apart — push to a draft, then click "Ready for review" — and each
+# starts its own run.  Keying the group on the PR and its head SHA makes the
+# later trigger supersede the earlier one instead of reviewing the same diff
+# twice.  Cancelling is safe here precisely because the two runs would review
+# identical code; a genuinely new commit gets a new SHA and its own group.
+concurrency:
+  group: claude-review-{% raw %}${{ github.event.pull_request.number }}{% endraw %}-{% raw %}${{ github.event.pull_request.head.sha }}{% endraw %}
+  cancel-in-progress: true
+
 jobs:
   wait-for-ci:
     # Skip PRs from forks: GitHub does not expose repository secrets
     # (including CLAUDE_CODE_OAUTH_TOKEN) to workflows running in fork-PR
     # context, regardless of maintainer approval. Running anyway produces
     # a hard-failing check on every external contribution.
-    if: {% raw %}${{ github.event.pull_request.head.repo.full_name == github.repository }}{% endraw %}
+    # Skip drafts HERE, in the workflow, rather than leaving it to the
+    # reviewer to notice mid-run.  GitHub evaluates this against the event
+    # payload — a snapshot of the PR at trigger time — so the answer cannot
+    # change under us.  The reviewer's own eligibility check reads the PR's
+    # state whenever it gets around to it, which is after `wait-for-ci` has
+    # polled for up to 25 minutes: click "Ready for review" inside that
+    # window and the draft-triggered run sees a non-draft PR and reviews,
+    # while the ready_for_review event starts a second run on the same
+    # commit.  That race produced two full reviews of one diff on
+    # template#437.  `claude-review` skips with this job, per its empty
+    # output (see its `if:` below).
+    if: {% raw %}${{ github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.draft == false }}{% endraw %}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

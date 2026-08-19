@@ -807,3 +807,8 @@ This does not reinstate the v4.0 `:unstable` channel. `edge` remains the
 newest merged commit, `rc` is the newest candidate, and each tag has exactly
 one producing workflow. Update any deployment that has been chasing exact rc
 numbers to follow `rc` instead.
+
+`claude-code-review.yml` now decides draft eligibility itself, in the
+workflow, and reviews each commit once. No action is needed on update; the
+behaviour change is that a push to a draft pull request no longer starts a
+review run at all, and marking the pull request ready starts exactly one.
