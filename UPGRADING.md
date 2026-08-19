@@ -763,3 +763,35 @@ The post-publication body-upgrade path and
 
 No project-owned file changes shape in this line. Existing notes pages without
 the new range watermark are upgraded by their next accepted draft.
+
+## v5.2 - Rolling `rc` image tag and the marketplace manifest path
+
+Two release-pipeline corrections. Neither changes a project-owned file, and
+both take effect on the next release after the update.
+
+**The marketplace publish moves to `.claude-plugin/marketplace.json`**
+(template#383). Claude Code loads a marketplace from that path and no other,
+so the previous root-level `marketplace.json` write produced a catalog nothing
+could install. The catalog at `<org>/claude-plugins` must already carry the
+manifest at the new path, with a top-level `name`, `owner`, and `plugins`
+array; the publish job now fails with a named error instead of bumping a file
+no one reads. Verify with `claude plugin validate .` in a clone of the catalog
+before the first stable release after this update. Projects with
+`include_claude_plugin: false` are unaffected.
+
+A first-time entry now also carries `description` and `homepage`, taken from
+the project's own metadata. Existing entries keep whatever prose the catalog
+holds: the bump still rewrites only `version` and `source.ref`.
+
+**Pre-releases regain a rolling image tag.** An rc now pushes
+`ghcr.io/<org>/<project>:rc` alongside its immutable `vX.Y.Z-rc.N` tag. The
+tag is ordering-gated like `latest`: it moves only while the candidate's
+version is still ahead of the newest stable, so a candidate for an
+already-released version, or one cut on an older `release/X.Y` branch, never
+pulls it backwards. It is not cleared when its release ships, so keep pointing
+production at `latest`.
+
+This does not reinstate the v4.0 `:unstable` channel. `edge` remains the
+newest merged commit, `rc` is the newest candidate, and each tag has exactly
+one producing workflow. Update any deployment that has been chasing exact rc
+numbers to follow `rc` instead.
