@@ -570,6 +570,12 @@ jobs:
             || { echo "::error::release.yml missing .claude-plugin/plugin path — upsert regressed"; exit 1; }
           grep -qF 'any(.[]; .name == $name)' .github/workflows/release.yml \
             || { echo "::error::release.yml missing upsert branch — still silently no-ops on missing entry"; exit 1; }
+          # The manifest path is the defect this guard missed once already
+          # (template#383): the job wrote a root-level marketplace.json,
+          # which Claude Code never reads, and every grep above still
+          # passed.  Assert the only loadable location explicitly.
+          grep -qF '.claude-plugin/marketplace.json' .github/workflows/release.yml \
+            || { echo "::error::release.yml no longer targets .claude-plugin/marketplace.json — the catalog would be bumped at a path Claude Code does not read"; exit 1; }
 
       - name: vale config structural check
         working-directory: /tmp/smoke
