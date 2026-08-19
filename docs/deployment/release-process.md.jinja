@@ -13,7 +13,7 @@ from.
 | Channel | Version identity | What it promises |
 |---|---|---|
 | `edge` | None; the commit is the identity | The newest merged code. Every merge to `main` rebuilds the rolling Docker tag plus an `.mcpb` bundle workflow artifact, and the rolling `unstable` docs version deploys from the same trigger. It leaves no git tag, GitHub release, or PyPI entry behind. |
-| Pre-release | `vX.Y.Z-rc.N`, computed and reviewed in its release pull request | A stabilisation step toward exactly that version, normally cut from a `release/X.Y` branch. Publishes a GitHub release with wheels, `sdist`, `.mcpb` bundle, and SBOM attached, plus a Docker image under its immutable version tag. Skips PyPI, `.deb`/`.rpm` packages, the marketplace and registry entries, and the docs deploy. |
+| Pre-release | `vX.Y.Z-rc.N`, computed and reviewed in its release pull request | A stabilisation step toward exactly that version, normally cut from a `release/X.Y` branch. Publishes a GitHub release with wheels, `sdist`, `.deb`/`.rpm` packages, `.mcpb` bundle, and SBOM attached, plus a Docker image under its immutable version tag. Skips PyPI, the marketplace and registry entries, and the docs deploy. |
 | Stable | `vX.Y.Z` | The full artifact set: PyPI, Docker, Linux packages, GitHub release assets (wheels, `sdist`, `.mcpb` bundle, SBOM), marketplace and registry entries, versioned docs. |
 
 Pre-release and `edge` builds never reach PyPI: PyPI is where every
@@ -134,9 +134,11 @@ narrative included. Every causal claim in a page must cite a linked
 issue or pull request, and the drafting agent runs the same prose lint
 as the rest of this site.
 
-A drafting failure fails the prepare run visibly; re-run the notes job,
-or re-dispatch Release Prepare with `skip_notes` to release without a
-notes refresh. For a release shipped that way, the **Release Notes**
+The release pull request stays a draft until the notes job lands its
+page, so a release without its notes can never merge by accident. A
+drafting failure fails the prepare run visibly and leaves the pull
+request in draft; re-run the notes job, or re-dispatch Release Prepare
+with `skip_notes` to release without a notes refresh. For a release shipped that way, the **Release Notes**
 workflow's manual dispatch drafts a standalone notes pull request as a
 backfill. Later hand edits to a released page redeploy that minor's
 versioned docs through the **Release Notes Publish** workflow.

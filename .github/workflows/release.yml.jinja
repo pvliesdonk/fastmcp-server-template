@@ -243,11 +243,15 @@ jobs:
               | sort -V | awk -v t="$TAG" '$0 == t { print p; exit } { p = $0 }'
           )
           body=$(gh release view "$TAG" --json body --jq .body)
-          # The page's marked summary block for THIS tag, if the page in the
-          # tagged tree carries one (the skill writes one per release).
+          # The page's marked summary block for this release, if the page in
+          # the tagged tree carries one.  The skill keys everything on the
+          # target's STABLE version — an rc drafts its stable's page and
+          # writes `RELEASE-SUMMARY vX.Y.Z START` — so the lookup normalises
+          # the tag the same way (v4.0.0-rc.2 reads the v4.0.0 block).
+          marker_tag="v${ver%%-*}"
           summary=""
           if [ -f "$page" ]; then
-            summary=$(awk -v tag="$TAG" '
+            summary=$(awk -v tag="$marker_tag" '
               index($0, "RELEASE-SUMMARY " tag " START") { f=1; next }
               index($0, "RELEASE-SUMMARY " tag " END")   { f=0 }
               f' "$page" | awk 'NF {p=1} p' | tac | awk 'NF {p=1} p' | tac)
@@ -511,7 +515,10 @@ jobs:
           tags: {% raw %}${{ steps.meta.outputs.tags }}{% endraw %}
           labels: {% raw %}${{ steps.meta.outputs.labels }}{% endraw %}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # ignore-error: this workflow runs on pull_request closed, whose
+          # Actions cache token has no writable scopes — without it the
+          # cache export hard-fails the whole (otherwise successful) build.
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v4
@@ -539,7 +546,10 @@ jobs:
 
   publish-linux-packages:
     needs: release
-    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false'
+    # Runs for rcs too: this only attaches deb/rpm to the version's own
+    # GitHub release — a per-version immutable channel like the wheel and
+    # mcpb assets, not an external publish surface.
+    if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
 
     permissions:
@@ -948,10 +958,34 @@ jobs:
               cp /tmp/released-page.md "$page"
             fi
           fi
+          # The index entry ports by INSERTION, never wholesale copy: a
+          # backport branch's index predates newer minors listed on the
+          # default branch, so copying it would delete their entries.  When
+          # the default branch's index lacks this minor's entry (the
+          # first-stable-of-a-minor branch cut), the released index's entry
+          # lines — the `(minor.md)` line through the entry's continuation
+          # lines — are inserted right after the RELEASE-PAGES-START
+          # sentinel, newest-first like the changelog insertion.
+          index="docs/releases/index.md"
+          if [ -f "$index" ] && ! grep -qF "(${minor}.md)" "$index" \
+            && git show "${MERGE_SHA}:${index}" > /tmp/released-index.md 2>/dev/null \
+            && grep -qF "(${minor}.md)" /tmp/released-index.md; then
+            awk -v ref="(${minor}.md)" '
+              index($0, ref) { f=1; print; next }
+              f && (/^- / || /RELEASE-PAGES-END/) { exit }
+              f { print }
+            ' /tmp/released-index.md > /tmp/index-entry.md
+            awk 'BEGIN { while ((getline l < "/tmp/index-entry.md") > 0) e = e l "\n" }
+                 { print }
+                 /RELEASE-PAGES-START/ { start=1 }
+                 start && !done && /-->[[:space:]]*$/ { printf "%s", e; done=1 }' \
+              "$index" > "${index}.new"
+            mv "${index}.new" "$index"
+          fi
           # status --porcelain, not diff: a newly created page is untracked
           # and would be invisible to git diff.
-          if ! git status --porcelain -- CHANGELOG.md "$page" | grep -q .; then
-            echo "${DEFAULT} already carries both the changelog section and the notes page — nothing to port"
+          if ! git status --porcelain -- CHANGELOG.md docs/releases | grep -q .; then
+            echo "${DEFAULT} already carries the changelog section and the notes pages — nothing to port"
             exit 0
           fi
           git config user.name "github-actions"
@@ -959,7 +993,7 @@ jobs:
           BRANCH="knope/port/${TAG}"
           git switch --force-create "$BRANCH"
           git add CHANGELOG.md
-          [ ! -f "$page" ] || git add "$page"
+          [ ! -d docs/releases ] || git add docs/releases
           git commit -m "chore: port ${TAG} release bookkeeping to ${DEFAULT}"
           git push --force origin "HEAD:${BRANCH}"
           # Skip cleanly when a port PR is already open (the force-push just
