@@ -813,7 +813,7 @@ workflow, and reviews each commit once. No action is needed on update; the
 behaviour change is that a push to a draft pull request no longer starts a
 review run at all, and marking the pull request ready starts exactly one.
 
-## Unreleased - pvl-core 4.11.3 and advertised OIDC scopes
+## v5.3 - pvl-core 4.11.3 and advertised OIDC scopes
 
 The `fastmcp-pvl-core` floor moves to 4.11.3. `copier update` brings the new
 constraint in; run `uv lock` (or `uv sync`) afterwards so the project's
@@ -836,3 +836,7 @@ visible in discovery and cannot be. Where that applies, set the new
 taken verbatim, with the required scopes added on top.
 
 Deployments using bearer tokens, or no authentication, are unaffected.
+
+## Unreleased
+
+_Nothing yet._

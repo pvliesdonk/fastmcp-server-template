@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.3.1 (2026-08-20)
+
+- #446 fix(deps): raise the pvl-core floor to 4.11.3, and document subpath routing on a shared hostname
+
+
 ## v5.3.0 (2026-08-19)
 
 - #443 fix: drop read_only= from the build_instructions call site
