@@ -106,6 +106,11 @@
           "default": "openid"
         },
         {
+          "name": "{{ env_prefix }}_OIDC_ADVERTISED_SCOPES",
+          "description": "Scopes advertised to clients in protected-resource metadata, space- or comma-separated. Overrides the default `openid offline_access`; the required scopes above are always added on top.",
+          "default": "openid offline_access"
+        },
+        {
           "name": "{{ env_prefix }}_OIDC_JWT_SIGNING_KEY",
           "description": "Signing key for issued JWTs; used in oidc-proxy mode only. When unset, the key is derived deterministically from `oidc_client_secret`, so tokens survive a restart — but rotating that secret invalidates every issued token. Set this explicitly to decouple token validity from secret rotation. Generate with `openssl rand -hex 32`.",
           "default": "derived",
