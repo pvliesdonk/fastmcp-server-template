@@ -27,7 +27,7 @@ dependencies = [
     # requested no scopes at all, the grant carried no refresh token, and
     # every session ended at access-token expiry needing a human at a browser.
     #
-    # (4.11.2 was the previous floor, for build_instructions without the
+    # 4.11.2 was the previous floor, for build_instructions without the
     # read_only keyword: 4.11.1 declares that argument required and 4.11.2
     # rejects it, so the floor and the server.py call site had to move in one
     # change (#443).  4.11.2 also makes FetchResult.final_url mandatory, so a
@@ -43,7 +43,7 @@ dependencies = [
     # 4.10.0 that was tagged but never reached PyPI: the generator resolves
     # this whole constraint rather than the floor alone (#335), but a floor
     # naming a release nobody can install is still a trap for anyone pinning
-    # to it.)
+    # to it.
     "fastmcp-pvl-core>=4.11.3,<5",
     "typer>=0.12",
 {% if include_mcp_apps_scaffold %}
