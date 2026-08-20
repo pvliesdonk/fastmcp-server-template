@@ -39,6 +39,8 @@ docker inspect --format {% raw %}'{{ index .Config.Labels "org.opencontainers.im
 
 For OIDC auth variables, see [Authentication](../guides/authentication.md).
 
+Running behind a reverse proxy on a path prefix (`https://mcp.example.com/myservice/mcp`) rather than its own hostname needs two routing rules, one of which sits outside the prefix: see [Subpath Deployments](oidc.md#subpath-deployments).
+
 ## Volumes
 
 | Path | Purpose |
