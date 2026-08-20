@@ -2428,6 +2428,7 @@ class TestSelectRegionVarsWithRequiredNames:
     ):
         names = self._oidc_names(fake_project, template_root, False)
         assert names == {
+            "DEMO_MCP_OIDC_ADVERTISED_SCOPES",
             "DEMO_MCP_OIDC_AUDIENCE",
             "DEMO_MCP_OIDC_JWT_SIGNING_KEY",
             "DEMO_MCP_OIDC_REQUIRED_SCOPES",

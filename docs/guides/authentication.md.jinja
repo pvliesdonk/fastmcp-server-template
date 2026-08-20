@@ -196,7 +196,7 @@ Three independent issues prevent token refresh:
 | Layer | Issue | Impact |
 |-------|-------|--------|
 | **Claude Code** | Stores refresh tokens but never uses them ([claude-code#21333](https://github.com/anthropics/claude-code/issues/21333)) | Refresh tokens are obtained and saved but never sent back to refresh expired access tokens |
-| **Claude Code** | Never requests `offline_access` scope ([claude-code#7744](https://github.com/anthropics/claude-code/issues/7744)) | Most OIDC providers won't issue a refresh token without this scope |
+| **Claude Code** | Does not ask for `offline_access` on its own ([claude-code#7744](https://github.com/anthropics/claude-code/issues/7744)) | Most OIDC providers issue no refresh token without this scope. The server advertises `openid offline_access` in its protected-resource metadata, so a client that requests the advertised set gets a refresh-capable grant; one that ignores the metadata still does not. |
 | **MCP Python SDK** | Token refresh deadlocks inside SSE streams ([python-sdk#1326](https://github.com/modelcontextprotocol/python-sdk/issues/1326)) | Even with a valid refresh token, the SDK hangs when attempting refresh during an active stream |
 
 The server-side refresh architecture (FastMCP's `OAuthProxy.exchange_refresh_token()`) is correctly implemented and would work, but it requires the client to initiate the refresh, which none of the current clients do reliably.
@@ -210,7 +210,7 @@ The server-side refresh architecture (FastMCP's `OAuthProxy.exchange_refresh_tok
 - `access_token: '8h'`: covers a workday
 - `id_token: '8h'`: **must match access_token** when using `verify_id_token` mode (critical for Authelia)
 - `refresh_token: '30d'`: ready for when clients support refresh
-- Include `offline_access` in provider-side scopes; no effect today, but enables refresh when clients are fixed
+- Permit `offline_access` for the registered client; the server advertises it by default, so a client that honours the advertised scopes requests it. Where the client may not hold that scope, narrow what the server advertises with `{{ env_prefix }}_OIDC_ADVERTISED_SCOPES` rather than letting the authorization request fail
 
 ### Tracking
 

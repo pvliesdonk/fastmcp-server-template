@@ -813,6 +813,26 @@ workflow, and reviews each commit once. No action is needed on update; the
 behaviour change is that a push to a draft pull request no longer starts a
 review run at all, and marking the pull request ready starts exactly one.
 
-## Unreleased
+## Unreleased - pvl-core 4.11.3 and advertised OIDC scopes
 
-_Nothing yet._
+The `fastmcp-pvl-core` floor moves to 4.11.3. `copier update` brings the new
+constraint in; run `uv lock` (or `uv sync`) afterwards so the project's
+lockfile resolves a core that satisfies it.
+
+The release changes what an OIDC-authenticated server tells its clients to
+ask for. Protected-resource metadata now advertises `openid offline_access`
+instead of a set derived from `{PREFIX}_OIDC_REQUIRED_SCOPES` — which is
+empty in `multi` mode, so clients asked for no scopes, received no refresh
+token, and lost the session at every access-token expiry.
+
+Check the client registration at your authorization server before deploying:
+a client that is not permitted `offline_access` may have the whole
+authorization request rejected with `invalid_scope`. The server drops a
+default scope the authorization server does not list in its own
+`scopes_supported`, so a provider-level omission is handled for you (with a
+WARNING naming the dropped scope), but a client-level restriction is not
+visible in discovery and cannot be. Where that applies, set the new
+`{PREFIX}_OIDC_ADVERTISED_SCOPES` to the set that client may request; it is
+taken verbatim, with the required scopes added on top.
+
+Deployments using bearer tokens, or no authentication, are unaffected.
