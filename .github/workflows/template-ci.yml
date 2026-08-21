@@ -567,6 +567,23 @@ jobs:
             exit 1
           fi
 
+      - name: ci.yml sets up its environment through the shared composite
+        # The uv + interpreter-cache + `uv sync` sequence lives in
+        # .github/actions/setup-project-env so a change to the uv pin, the
+        # cache key or the sync flags lands once instead of once per job
+        # (#455). A job that inlines its own copy re-opens exactly that decay,
+        # and a downstream domain workflow copying from ci.yml would propagate
+        # it, so assert the rendered ci.yml holds no copy at all.
+        working-directory: /tmp/smoke
+        run: |
+          set -euo pipefail
+          test -f .github/actions/setup-project-env/action.yml \
+            || { echo "::error::setup-project-env composite missing from the render"; exit 1; }
+          ! grep -qF 'astral-sh/setup-uv' .github/workflows/ci.yml \
+            || { echo "::error::ci.yml inlines the uv setup again — call ./.github/actions/setup-project-env instead"; exit 1; }
+          grep -qF 'uses: ./.github/actions/setup-project-env' .github/workflows/ci.yml \
+            || { echo "::error::ci.yml no longer calls the setup-project-env composite"; exit 1; }
+
       - name: Dockerfile sentinel structure
         working-directory: /tmp/smoke
         run: |
