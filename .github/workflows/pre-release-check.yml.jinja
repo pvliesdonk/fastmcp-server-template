@@ -51,10 +51,23 @@ jobs:
             echo "no packaging/pre-release-checks.sh — skipping project-specific checks"
           fi
 
+      - name: Build and smoke-test plugin zip
+        id: plugin
+        uses: ./.github/actions/build-plugin-zip
+        with:
+          version: {% raw %}${{ inputs.version }}{% endraw %}
+
       - uses: actions/upload-artifact@v7
         with:
           name: mcpb-bundle
           path: dist/{{ project_name }}-*.mcpb
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: steps.plugin.outputs.present == 'true'
+        with:
+          name: plugin-zip
+          path: dist/{{ project_name }}-plugin-*.zip
           if-no-files-found: error
 
       - name: Attach to a deletable pre-release
@@ -71,5 +84,13 @@ jobs:
                  --notes "Disposable pre-release for manual install testing — safe to delete along with its tag." \
                  --target "{% raw %}${{ github.sha }}{% endraw %}" \
                  --repo "{% raw %}${{ github.repository }}{% endraw %}"
+          # Both installable artifacts, so a tester can exercise the
+          # Claude Desktop bundle and the Claude Code plugin from one
+          # throwaway release.  The plugin glob is separate because the
+          # mcpb glob deliberately does not match it.
           gh release upload "$tag" dist/{{ project_name }}-*.mcpb --clobber \
             --repo "{% raw %}${{ github.repository }}{% endraw %}"
+          if compgen -G 'dist/{{ project_name }}-plugin-*.zip' > /dev/null; then
+            gh release upload "$tag" dist/{{ project_name }}-plugin-*.zip --clobber \
+              --repo "{% raw %}${{ github.repository }}{% endraw %}"
+          fi

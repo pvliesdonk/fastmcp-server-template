@@ -24,9 +24,13 @@ fi
 if [ -n "$PKG_VERSION" ]; then
     case "$PKG_VERSION" in
         *-rc.*)
-            # Pre-releases never reach PyPI; install the wheel attached to
-            # this version's own GitHub release. The wheel filename carries
-            # the PEP 440 canonical spelling (-rc.N -> rcN).
+            # Install the wheel attached to this version's own GitHub
+            # release. rc wheels do reach PyPI, but the .deb/.rpm shipped
+            # in that release then installs from the same immutable
+            # per-version channel it came from, so a candidate package
+            # stays installable independently of its PyPI publish. The
+            # wheel filename carries the PEP 440 canonical spelling
+            # (-rc.N -> rcN).
             canonical="$(printf '%s' "$PKG_VERSION" | sed 's/-rc\./rc/')"
             "${VENV_DIR}/bin/pip" install --quiet \
                 "{{ pypi_name }} @ https://github.com/{{ github_org }}/{{ project_name }}/releases/download/v${PKG_VERSION}/{{ pypi_name | replace('-', '_') }}-${canonical}-py3-none-any.whl"

@@ -1225,6 +1225,103 @@ def test_docker_cache_export_cannot_fail_a_build() -> None:
         )
 
 
+def test_pypi_publishes_prereleases_too() -> None:
+    """publish-pypi runs for rcs, gated on ``released`` alone.
+
+    The .mcpb bundle is a pointer to PyPI, not a self-contained bundle:
+    ``packaging/mcpb/pyproject.toml.in`` pins ``<pkg>[all]==<version>`` and
+    the manifest launches ``uvx --from`` that same spec.  While rcs were
+    held back from PyPI, every rc bundle packed, validated and uploaded
+    green and then failed at install time in front of the tester —
+    ``no version of <pkg>[all]==X.Y.ZrcN`` — so the candidate could not be
+    tested through the channel the candidate exists to test.
+
+    Re-gating this job on ``is_prerelease`` would restore that, silently:
+    the release stays green and only a human installing the bundle finds
+    out.  Hence the assertion on the gate rather than on an artifact.
+
+    Exposure is bounded by the resolver, not by this gate: PEP 440 keeps
+    pre-releases out of a resolve unless the requirement pins one or
+    ``--pre`` is passed.  The surfaces that would show a candidate to
+    everyone are the rolling ones, and those are asserted stable-gated by
+    the marketplace/registry/docs tests elsewhere in this suite.
+    """
+    block = _release_job_block("publish-pypi", "publish-docker")
+    assert "if: needs.release.outputs.released == 'true'\n" in block, (
+        "publish-pypi must gate on released alone"
+    )
+    assert "is_prerelease" not in block, (
+        "publish-pypi must not skip prereleases — an rc that never reaches "
+        "PyPI ships an uninstallable .mcpb bundle"
+    )
+
+
+def test_plugin_zip_attaches_to_prereleases_too() -> None:
+    """build-plugin-zip runs for rcs, gated on ``released`` alone.
+
+    The zip is the plugin channel's only marketplace-free install path:
+    ``claude plugin install`` resolves names through marketplaces and takes
+    no path, URL or archive, so ``claude --plugin-url <asset>`` is how a
+    candidate's plugin gets exercised before it ships.  An asset that only
+    exists on stable tags cannot serve that purpose.
+
+    The rolling marketplace entry is the surface that stays stable-only, and
+    ``test_marketplace_bump_targets_the_only_loadable_manifest_path`` and its
+    neighbours own that assertion.
+    """
+    block = _release_job_block("build-plugin-zip", "publish-plugin-zip")
+    assert "if: needs.release.outputs.released == 'true'\n" in block, (
+        "build-plugin-zip must gate on released alone"
+    )
+    assert "is_prerelease" not in block, (
+        "build-plugin-zip must not skip prereleases — an rc plugin that is "
+        "never packed cannot be installed for testing"
+    )
+
+
+def test_plugin_zip_is_built_by_the_shared_composite_everywhere() -> None:
+    """Every caller packs the zip through .github/actions/build-plugin-zip.
+
+    Three workflows produce this artifact — the release, the rolling edge
+    channel, and the pre-release dispatch — and the whole point of the
+    composite is that the two rehearsal paths cannot drift from what a real
+    release executes.  An inlined `zip -r` in any of them would pack an
+    archive nothing had vendored or verified.
+    """
+    workflows = REPO_ROOT / ".github" / "workflows"
+    for name in ("release.yml", "unstable.yml", "pre-release-check.yml"):
+        text = (workflows / name).read_text(encoding="utf-8")
+        assert "uses: ./.github/actions/build-plugin-zip" in text, (
+            f"{name} must build the plugin zip through the shared composite"
+        )
+
+
+def test_plugin_zip_vendors_the_wheel_rather_than_pinning_pypi() -> None:
+    """The packed zip launches from ${CLAUDE_PLUGIN_ROOT}, not from an index.
+
+    This is the property that makes the asset worth having.  The marketplace
+    entry is a thin PyPI pointer and stays that way; the zip is thick, so it
+    installs at a version PyPI has never seen — every rc, and the constant
+    ``0.0.0-dev`` edge build that no publishing policy could ever serve.
+
+    Asserted on the scripts rather than on a built artifact because the
+    failure is silent: a zip whose ``--from`` still names a PyPI version
+    packs, uploads and installs fine from a stable tag, and fails only for
+    whoever tries the candidate.
+    """
+    action = (REPO_ROOT / ".github" / "actions" / "build-plugin-zip").resolve()
+    vendor = (action / "vendor.py").read_text(encoding="utf-8")
+    verify = (action / "verify.py").read_text(encoding="utf-8")
+    assert "CLAUDE_PLUGIN_ROOT" in vendor, (
+        "vendor.py must repin --from onto the vendored wheel"
+    )
+    assert "CLAUDE_PLUGIN_ROOT" in verify, "verify.py must assert the repin happened"
+    # Both scripts refuse rather than warn: a half-vendored zip is worse than
+    # no zip, because it looks installable right up until launch.
+    assert "VendorError" in vendor and "raise" in vendor
+    assert "VerifyError" in verify and "raise" in verify
+
+
 def test_linux_packages_attach_to_prereleases_too() -> None:
     """publish-linux-packages runs for rcs, gated on ``released`` alone.
 
@@ -1245,7 +1342,9 @@ def test_linux_packages_attach_to_prereleases_too() -> None:
     )
     assert "*-rc.*" in postinstall and "releases/download" in postinstall, (
         "an rc package's postinstall must install the wheel from the"
-        " version's own GitHub release — rc versions never reach PyPI"
+        " version's own GitHub release: the .deb/.rpm candidate then"
+        " installs from the same immutable per-version channel it shipped"
+        " in, independently of whether that rc's PyPI publish landed"
     )
 
 
