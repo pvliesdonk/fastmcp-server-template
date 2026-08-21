@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.4.0 (2026-08-21)
+
+- #456 feat: versioned llms.txt links, a shared CI setup composite, and a required-check seam
+
+
 ## v5.3.2 (2026-08-21)
 
 - #451 feat(notes): net-delta and upstream-bump rules, full_redraft override, Vale-safe heading, call-mode lock
