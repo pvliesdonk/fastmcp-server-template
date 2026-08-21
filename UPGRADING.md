@@ -837,6 +837,37 @@ taken verbatim, with the required scopes added on top.
 
 Deployments using bearer tokens, or no authentication, are unaffected.
 
-## Unreleased
+## Unreleased - Release candidates publish to PyPI
 
-_Nothing yet._
+Release candidates now publish their wheel to PyPI. Before this, the
+`publish-pypi` job skipped pre-releases, which made every rc `.mcpb` bundle
+uninstallable: the bundle carries no code, it pins
+`<your-package>[all]==<version>` and has `uvx` fetch that from PyPI on first
+launch. Claude Desktop therefore failed the install with *"there is no
+version of `<your-package>[all]==X.Y.ZrcN`"*, and a candidate could not be
+tested through the channel candidates exist to test.
+
+Check your `pypi` deployment environment before cutting the next rc. Open
+**Settings → Environments → pypi** in the project repository. If it has
+required reviewers, a wait timer, or a deployment branch rule that admits
+only `main`, every rc release will now block or fail at that job where it
+previously skipped it. Either widen the rule to cover `release/*` branches
+and the tags you release from, or accept that each rc needs the same
+approval a stable does.
+
+Confirm the PyPI trusted publisher matches too. It is keyed on workflow file
+and environment name, neither of which changed, so an existing publisher
+keeps working — but a project that scoped its publisher more narrowly should
+re-check it.
+
+Nothing changes for people installing your package. A PEP 440 resolver skips
+pre-releases unless the requirement pins one or `--pre` is passed, so
+`pip install <your-package>` and `uv add <your-package>` still resolve to the
+newest stable. The rolling surfaces that would expose a candidate to everyone
+— the marketplace and MCP registry entries, the Docker `latest` tag, the docs
+deploy — stay stable-only, and `scripts/stamp_manifests.py` still leaves
+`server.json` and the Claude plugin manifests at the last published stable on
+an rc prepare.
+
+One consequence is permanent: PyPI versions cannot be deleted and reused. Each
+rc you cut occupies its version number on PyPI forever.

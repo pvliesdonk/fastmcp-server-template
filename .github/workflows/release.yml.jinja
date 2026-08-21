@@ -281,7 +281,18 @@ jobs:
           fi
           {
             if [ "$IS_PRERELEASE" = "true" ]; then
+              # PyPI knows the candidate by its PEP 440 canonical spelling,
+              # not the SemVer spelling the tag carries.  Print the command
+              # that actually works: a resolver ignores pre-releases unless
+              # the requirement pins one, so `pip install {{ pypi_name }}`
+              # will not find this build.
               echo "Release candidate ${ver}: a stabilisation build toward the upcoming v${minor} stable. Install it only to help test that release."
+              echo
+              echo '```bash'
+              echo "pip install {{ pypi_name }}==${ver/-rc./rc}"
+              echo '```'
+              echo
+              echo "The \`.mcpb\` bundle below installs in Claude Desktop the same way a stable one does — it fetches that same version from PyPI on first launch."
               echo
             fi
             if [ -n "$summary" ]; then
@@ -370,10 +381,28 @@ jobs:
 
   publish-pypi:
     needs: release
-    # Every stable, including a backport patch from an old release/X.Y: PyPI
-    # versions are immutable and unordered, and installers pinned below a
-    # newer major are exactly who a backport serves.
-    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false'
+    # Every release, rc included.  PyPI versions are immutable and unordered,
+    # so a backport patch from an old release/X.Y publishes too: installers
+    # pinned below a newer major are exactly who a backport serves.
+    #
+    # rcs publish because the .mcpb bundle is a POINTER to PyPI, not a
+    # self-contained bundle.  packaging/mcpb/pyproject.toml.in pins
+    # `{{ pypi_name }}[all]==${VERSION}` and the manifest launches `uvx --from`
+    # the same spec, so a candidate whose wheel never reached PyPI packs,
+    # validates and uploads fine, then fails in front of the tester at install
+    # time with "no version of {{ pypi_name }}[all]==X.Y.ZrcN".  Same for the
+    # `uvx`/`pip` install lines a candidate's release notes hand out.  Holding
+    # rc wheels back made every rc bundle uninstallable, which defeats the
+    # point of cutting a candidate.
+    #
+    # This does not put candidates in front of ordinary installers.  A PEP 440
+    # resolver excludes pre-releases unless the requirement itself pins one —
+    # which the bundle's pin does — or `--pre` is passed, so `pip install
+    # {{ pypi_name }}` and `uv add {{ pypi_name }}` keep resolving to the newest
+    # stable.  The surfaces that would genuinely expose a candidate to
+    # everyone are the rolling ones — the marketplace and MCP registry entries,
+    # the `latest` Docker tag, the docs deploy — and those stay stable-gated.
+    if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
