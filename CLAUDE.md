@@ -125,14 +125,22 @@ generated project it is the rendered section from `CLAUDE.md.jinja`.
 
 ## Repository protection
 
-`.github/rulesets/*.json` ship to generated projects, where the rendered
+`.github/rulesets/*` ship to generated projects, where the rendered
 `bootstrap.yml` applies them (posture documented in
-`docs/deployment/repository-protection.md.jinja`).  They hard-code the
-generated `ci.yml`'s aggregate `CI Success` check as the required status
-context.  This template repo itself does NOT run bootstrap and has no
-aggregate check — `template-ci.yml` exposes per-job contexts instead — so
-its own protection is managed by hand: reuse the JSON files as a starting
-point, but swap the required check contexts for the template-ci job names.
+`docs/deployment/repository-protection.md.jinja`).  The two branch rulesets
+are `.json.jinja`: they require the generated `ci.yml`'s aggregate
+`CI Success` check plus whatever the project listed in the
+`extra_required_checks` answer, the seam that lets a domain check outside
+`ci.yml` be merge-blocking without forking a template-owned file (#454).
+`scripts/tests/test_ruleset_required_checks.py` guards both halves — an
+empty answer must render the single-context form every existing downstream
+already has, and a non-empty one must still render valid JSON.  The tag
+ruleset has no status checks and stays plain JSON.
+
+This template repo itself does NOT run bootstrap and has no aggregate
+check — `template-ci.yml` exposes per-job contexts instead — so its own
+protection is managed by hand: reuse the ruleset files as a starting point,
+but swap the required check contexts for the template-ci job names.
 
 ## Release
 

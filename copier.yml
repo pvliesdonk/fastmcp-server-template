@@ -369,3 +369,8 @@ structural_gate_assert_clean_tree:
   default: true
   when: "{{ enable_structural_gate }}"
   help: "Also assert the project's EXISTING src/ + tests/ tree is already clean under the structural overlay (the test_shipped_code_passes_the_structural_overlay_cleanly check). True is correct for new projects and the template's own CI. Set to false when ADOPTING the gate onto a brownfield codebase that already carries structural debt: you still get the diff-scoped gate, pre-push hook, CI 'structure' job, and the behavioural tests — only the whole-tree clean assertion is dropped, so enabling the gate does not force refactoring or blanket-noqa of all legacy debt first (the diff-scoped gate still grandfathers it and blocks new debt). Only asked when the structural gate is on."
+
+extra_required_checks:
+  type: yaml
+  default: []
+  help: "Extra status-check contexts the branch rulesets require before a pull request can merge, on top of ci.yml's aggregate 'CI Success'. Use this to make a check that lives OUTSIDE the template-owned ci.yml — a domain workflow the project added itself, or a third-party app that posts a commit status — merge-blocking without forking a template-owned file (#454). The value is a list of check names exactly as they appear on the pull request, e.g. ['SPA sources', 'Vendored assets']. Every name listed must report on EVERY pull request to a protected branch: a required check that a paths: filter skips never reports at all, and the merge waits for it forever. Takes effect when bootstrap.yml next applies the rulesets (a push touching .github/rulesets/ or a manual dispatch). Leave empty unless the project has such a check."

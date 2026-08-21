@@ -545,6 +545,67 @@ jobs:
           region DOMAIN | grep -qF '| Variable | Default | Required | Description |' \
             || { echo "::error::$README DOMAIN region missing its table header row"; exit 1; }
 
+      - name: README doc-site links resolve on a versioned deployment
+        # docs.yml publishes with mike, which serves every file under a
+        # version path plus a `latest` alias. The site ROOT redirects to that
+        # alias, so a bare `…github.io/<project>/` link works — but any deeper
+        # link must carry the version segment itself, or it 404s on a real
+        # deployment while looking perfectly fine in review. #453 is the
+        # instance: the llms.txt badge and its Links entry both pointed at the
+        # unversioned root and had never resolved on any generated project.
+        working-directory: /tmp/smoke
+        run: |
+          set -euo pipefail
+          # Every doc-site URL in the README, minus the two forms that work:
+          # the bare root, and anything already under `latest/`.
+          bad=$(grep -oE 'https://[A-Za-z0-9_.-]+\.github\.io/[A-Za-z0-9_.-]+/[^)"[:space:]]*' README.md \
+            | grep -vE '\.github\.io/[A-Za-z0-9_.-]+/$' \
+            | grep -vE '\.github\.io/[A-Za-z0-9_.-]+/latest/' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::README doc-site deep link(s) missing the version segment — these 404 under mike; use /latest/:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: rendered rulesets are valid and require CI Success
+        # The branch rulesets render `extra_required_checks` into their
+        # required-checks array (#454), and bootstrap.yml feeds each file
+        # straight to `gh api --input`. A render that produced malformed JSON,
+        # or that dropped the aggregate context, would only surface as a failed
+        # apply — or worse, as protection that silently requires less than it
+        # claims. The smoke answers leave the seam empty, so this also pins the
+        # property that costs downstreams nothing: with no extra checks, the
+        # rendered files are exactly the single-context form they already have.
+        working-directory: /tmp/smoke
+        run: |
+          set -euo pipefail
+          for file in .github/rulesets/*.json; do
+            jq empty "$file" || { echo "::error::$file is not valid JSON"; exit 1; }
+          done
+          for file in .github/rulesets/protect-main.json .github/rulesets/protect-release-branches.json; do
+            contexts=$(jq -c '[.rules[] | select(.type == "required_status_checks")
+                               | .parameters.required_status_checks[].context]' "$file")
+            [ "$contexts" = '["CI Success"]' ] \
+              || { echo "::error::$file requires $contexts, expected [\"CI Success\"] on a render with no extra_required_checks"; exit 1; }
+          done
+
+      - name: ci.yml sets up its environment through the shared composite
+        # The uv + interpreter-cache + `uv sync` sequence lives in
+        # .github/actions/setup-project-env so a change to the uv pin, the
+        # cache key or the sync flags lands once instead of once per job
+        # (#455). A job that inlines its own copy re-opens exactly that decay,
+        # and a downstream domain workflow copying from ci.yml would propagate
+        # it, so assert the rendered ci.yml holds no copy at all.
+        working-directory: /tmp/smoke
+        run: |
+          set -euo pipefail
+          test -f .github/actions/setup-project-env/action.yml \
+            || { echo "::error::setup-project-env composite missing from the render"; exit 1; }
+          ! grep -qF 'astral-sh/setup-uv' .github/workflows/ci.yml \
+            || { echo "::error::ci.yml inlines the uv setup again — call ./.github/actions/setup-project-env instead"; exit 1; }
+          grep -qF 'uses: ./.github/actions/setup-project-env' .github/workflows/ci.yml \
+            || { echo "::error::ci.yml no longer calls the setup-project-env composite"; exit 1; }
+
       - name: Dockerfile sentinel structure
         working-directory: /tmp/smoke
         run: |
@@ -1419,7 +1480,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Run aggregator tests
-        run: uv run --with pytest --with pyyaml --with jsonschema --with 'fastmcp-pvl-core>=4.6.1' pytest scripts/tests/ -v
+        run: uv run --with pytest --with pyyaml --with jsonschema --with jinja2 --with 'fastmcp-pvl-core>=4.6.1' pytest scripts/tests/ -v
 
       - name: UPGRADING.md Unreleased section
         run: |
