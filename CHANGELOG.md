@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.3.2 (2026-08-21)
+
+- #451 feat(notes): net-delta and upstream-bump rules, full_redraft override, Vale-safe heading, call-mode lock
+
+
 ## v5.3.1 (2026-08-20)
 
 - #446 fix(deps): raise the pvl-core floor to 4.11.3, and document subpath routing on a shared hostname
