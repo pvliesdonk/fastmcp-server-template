@@ -672,6 +672,31 @@ def test_notes_dispatch_offers_a_full_redraft_override() -> None:
     assert "full redraft:" in prompt, (
         "the drafting prompt no longer threads the full_redraft flag to the agent"
     )
+    # The rewrite must be mechanically reachable (template#463): the
+    # agent's only mutation tool is path-scoped Edit, which writes whole
+    # pages reliably only into seeded EMPTY files — so a full redraft
+    # empties the page, and only AFTER the pre-draft snapshot copied it,
+    # or the landing overlay would lose the baseline that attributes the
+    # rewrite to this draft.
+    seed_step = text[
+        text.index("Seed and snapshot the notes surface") : text.index(
+            "Upload the pre-draft snapshot"
+        )
+    ]
+    assert (
+        'if [ "$FULL_REDRAFT" = "true" ]' in seed_step and ': > "$PAGE"' in seed_step
+    ), (
+        "the seed step no longer empties the page on a full redraft — "
+        "in-place prose replacement is not reachable in the drafting "
+        "sandbox (152 denied bulk-edit attempts on the first live run)"
+    )
+    assert seed_step.index('cp -R docs/releases "$PRE/releases"') < seed_step.index(
+        'if [ "$FULL_REDRAFT" = "true" ]'
+    ), (
+        "the page must be emptied AFTER the snapshot copies it — "
+        "truncating first would snapshot the empty file and break the "
+        "landing overlay's change attribution"
+    )
 
 
 def test_ready_lift_retries_the_stale_pr_head_read() -> None:
