@@ -1256,6 +1256,72 @@ def test_pypi_publishes_prereleases_too() -> None:
     )
 
 
+def test_plugin_zip_attaches_to_prereleases_too() -> None:
+    """build-plugin-zip runs for rcs, gated on ``released`` alone.
+
+    The zip is the plugin channel's only marketplace-free install path:
+    ``claude plugin install`` resolves names through marketplaces and takes
+    no path, URL or archive, so ``claude --plugin-url <asset>`` is how a
+    candidate's plugin gets exercised before it ships.  An asset that only
+    exists on stable tags cannot serve that purpose.
+
+    The rolling marketplace entry is the surface that stays stable-only, and
+    ``test_marketplace_bump_targets_the_only_loadable_manifest_path`` and its
+    neighbours own that assertion.
+    """
+    block = _release_job_block("build-plugin-zip", "publish-plugin-zip")
+    assert "if: needs.release.outputs.released == 'true'\n" in block, (
+        "build-plugin-zip must gate on released alone"
+    )
+    assert "is_prerelease" not in block, (
+        "build-plugin-zip must not skip prereleases — an rc plugin that is "
+        "never packed cannot be installed for testing"
+    )
+
+
+def test_plugin_zip_is_built_by_the_shared_composite_everywhere() -> None:
+    """Every caller packs the zip through .github/actions/build-plugin-zip.
+
+    Three workflows produce this artifact — the release, the rolling edge
+    channel, and the pre-release dispatch — and the whole point of the
+    composite is that the two rehearsal paths cannot drift from what a real
+    release executes.  An inlined `zip -r` in any of them would pack an
+    archive nothing had vendored or verified.
+    """
+    workflows = REPO_ROOT / ".github" / "workflows"
+    for name in ("release.yml", "unstable.yml", "pre-release-check.yml"):
+        text = (workflows / name).read_text(encoding="utf-8")
+        assert "uses: ./.github/actions/build-plugin-zip" in text, (
+            f"{name} must build the plugin zip through the shared composite"
+        )
+
+
+def test_plugin_zip_vendors_the_wheel_rather_than_pinning_pypi() -> None:
+    """The packed zip launches from ${CLAUDE_PLUGIN_ROOT}, not from an index.
+
+    This is the property that makes the asset worth having.  The marketplace
+    entry is a thin PyPI pointer and stays that way; the zip is thick, so it
+    installs at a version PyPI has never seen — every rc, and the constant
+    ``0.0.0-dev`` edge build that no publishing policy could ever serve.
+
+    Asserted on the scripts rather than on a built artifact because the
+    failure is silent: a zip whose ``--from`` still names a PyPI version
+    packs, uploads and installs fine from a stable tag, and fails only for
+    whoever tries the candidate.
+    """
+    action = (REPO_ROOT / ".github" / "actions" / "build-plugin-zip").resolve()
+    vendor = (action / "vendor.py").read_text(encoding="utf-8")
+    verify = (action / "verify.py").read_text(encoding="utf-8")
+    assert "CLAUDE_PLUGIN_ROOT" in vendor, (
+        "vendor.py must repin --from onto the vendored wheel"
+    )
+    assert "CLAUDE_PLUGIN_ROOT" in verify, "verify.py must assert the repin happened"
+    # Both scripts refuse rather than warn: a half-vendored zip is worse than
+    # no zip, because it looks installable right up until launch.
+    assert "VendorError" in vendor and "raise" in vendor
+    assert "VerifyError" in verify and "raise" in verify
+
+
 def test_linux_packages_attach_to_prereleases_too() -> None:
     """publish-linux-packages runs for rcs, gated on ``released`` alone.
 

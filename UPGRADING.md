@@ -837,7 +837,7 @@ taken verbatim, with the required scopes added on top.
 
 Deployments using bearer tokens, or no authentication, are unaffected.
 
-## Unreleased - Release candidates publish to PyPI
+## Unreleased - Release candidates publish to PyPI, and ship an installable plugin zip
 
 Release candidates now publish their wheel to PyPI. Before this, the
 `publish-pypi` job skipped pre-releases, which made every rc `.mcpb` bundle
@@ -871,3 +871,36 @@ an rc prepare.
 
 One consequence is permanent: PyPI versions cannot be deleted and reused. Each
 rc you cut occupies its version number on PyPI forever.
+
+### The Claude Code plugin now ships as a release asset
+
+Projects with `include_claude_plugin` on now attach
+`<project>-plugin-<version>.zip` to every GitHub release, and publish the same
+archive as the `plugin-zip-edge` workflow artifact on each merge to `main`.
+The zip vendors the project's own wheel and launches it from
+`${CLAUDE_PLUGIN_ROOT}`, so it installs at versions PyPI does not serve.
+
+No action is needed on update. The marketplace entry is unchanged: it stays a
+thin PyPI pointer that follows stable releases only, so nothing about
+`/plugin install` changes for your users.
+
+Two things to know before the next release:
+
+The packing job runs `uv build --wheel`, so a project whose wheel build needs
+credentials or a network service will now hit that in one more job. Every
+project already builds the same wheel in the `release` job, so this is a
+repeat of work that succeeds today rather than a new requirement.
+
+A project without a `.claude-plugin/plugin` directory skips the whole thing
+with a warning, exactly as the marketplace publish already does. Turning
+`include_claude_plugin` on is still what enables the channel.
+
+To try a candidate's plugin without installing it:
+
+```bash
+claude --plugin-url <the release asset URL>
+```
+
+That loads it for one session and leaves no install record. It is the only
+marketplace-free way to load a plugin: `claude plugin install` resolves names
+through marketplaces and accepts no path, URL, or archive.
