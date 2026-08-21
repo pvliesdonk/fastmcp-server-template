@@ -1504,6 +1504,132 @@ def _published_pins() -> dict[str, str]:
     return pins
 
 
+# A freshly rendered project, before its first release, carries seed
+# versions rather than a coherent one: `server.json` is seeded 0.1.0 (to
+# match `pyproject.toml`){% if include_claude_plugin %} while the plugin pair
+# is seeded 0.0.0{% endif %}. They are placeholders, not a claim about a
+# release, so the pin assertions below do not apply to that state.
+_SEED_PINS = frozenset({"0.0.0", "0.1.0"})
+
+
+def _is_pre_release_state(pins: dict[str, str]) -> bool:
+    """Whether *pins* are all still placeholders, so no pin rule applies.
+
+    Keyed on **every** pin being a seed value, not on `server.json`'s
+    top-level one alone (#472).  Keying it on a single pin meant a mixed
+    state — one manifest reseeded to its placeholder by a `copier update`
+    while the rest sit at a real released version — skipped the whole
+    assertion instead of failing it.  That mixed state is the one most worth
+    catching: these are published surfaces, so a placeholder among them
+    tells the MCP registry or the marketplace a version that was never
+    released.
+
+    Pure, and separate from the IO, so the decision is exercised by the unit
+    tests below even in a freshly rendered project where the assertions that
+    consume it skip.
+    """
+    return bool(pins) and all(ver in _SEED_PINS for ver in pins.values())
+
+
+def _lockstep_violation(pins: dict[str, str]) -> str | None:
+    """A message naming the disagreeing pins, or `None` when they agree."""
+    distinct = sorted(set(pins.values()))
+    if len(distinct) <= 1:
+        return None
+    return (
+        "committed manifests must all pin the same version, but they "
+        f"disagree ({', '.join(distinct)}): "
+        + ", ".join(f"{where} = {ver}" for where, ver in sorted(pins.items()))
+    )
+
+
+def _pins_or_skip() -> dict[str, str]:
+    """The committed pins, skipping a project that has not released yet."""
+    pins = _published_pins()
+    if _is_pre_release_state(pins):
+        pytest.skip("initial placeholder versions, before the first stable release")
+    return pins
+
+
+def test_committed_pins_agree_with_each_other() -> None:
+    """Every committed manifest pins the same version.
+
+    `CLAUDE.md`'s "Manifest version lockstep" rule is that `server.json`{% if include_claude_plugin %},
+    the Claude plugin `plugin.json` and its `.mcp.json`{% endif %} all carry
+    one version, and `scripts/stamp_manifests.py` moves them together.  The
+    neighbouring test checks each pin against the *release history*, which
+    is the stronger check in most states but admits two values during a
+    release PR — the last stable and the version being prepared — so a
+    half-stamped tree, some manifests moved and some not, satisfies it while
+    violating lockstep (#472).
+
+    This asserts the rule directly and needs no tag visibility to do it, so
+    it still bites on the shallow checkouts where the history-scoped test
+    skips.
+    """
+    violation = _lockstep_violation(_pins_or_skip())
+    assert violation is None, violation
+
+
+class TestPinRuleLogic:
+    """The pin rules on synthetic pin maps.
+
+    The two assertions above read this repo's real manifests, so in a
+    freshly rendered project they skip — correctly, but that would leave the
+    logic they encode shipping untested in every downstream until its first
+    release. These exercise the decisions directly.
+    """
+
+    def test_a_fresh_render_is_a_pre_release_state(self) -> None:
+        """Seeds deliberately differ from each other: `server.json` is
+        seeded to match `pyproject.toml` (0.1.0){% if include_claude_plugin %},
+        the plugin pair to 0.0.0{% endif %}. All are placeholders, so this
+        must read as pre-release rather than as a lockstep violation."""
+        assert _is_pre_release_state(
+            {"server.json version": "0.1.0", "plugin.json version": "0.0.0"}
+        )
+
+    def test_a_reseeded_manifest_beside_a_released_one_is_not(self) -> None:
+        """The #472 gap. A `copier update` reseeds one manifest while the
+        project sits at a real release; keying the skip on `server.json`
+        alone let this pass unexamined."""
+        assert not _is_pre_release_state(
+            {"server.json version": "0.1.0", "plugin.json version": "1.9.0"}
+        )
+        # ...and in the other direction, which is the reported instance:
+        # server.json released, its own pypi package pin left at the seed.
+        assert not _is_pre_release_state(
+            {"server.json version": "1.9.0", "server.json pypi x": "0.1.0"}
+        )
+
+    def test_no_pins_at_all_is_not_a_pre_release_state(self) -> None:
+        """An empty map means the collector found nothing to check, which is
+        a broken collector rather than a project before its first release —
+        `all()` over an empty iterable would call it pre-release and skip."""
+        assert not _is_pre_release_state({})
+
+    def test_agreeing_pins_pass(self) -> None:
+        assert (
+            _lockstep_violation(
+                {"server.json version": "1.9.0", "plugin.json version": "1.9.0"}
+            )
+            is None
+        )
+
+    def test_disagreeing_pins_are_named_in_the_message(self) -> None:
+        """A half-stamped release PR: some manifests moved to the prepared
+        version, some still at the last stable. Both values are admissible
+        to the history-scoped test, so only lockstep catches it."""
+        violation = _lockstep_violation(
+            {"server.json version": "1.9.0", "plugin.json version": "2.0.0"}
+        )
+        assert violation is not None
+        # The message has to name which pin is which — a bare "they
+        # disagree" leaves the reader diffing four files by hand.
+        assert "server.json version = 1.9.0" in violation
+        assert "plugin.json version = 2.0.0" in violation
+
+
 def test_committed_pins_name_the_last_stable_or_the_prepared_version() -> None:
     """Pins equal the last stable release OR the version this diff prepares.
 
@@ -1526,9 +1652,7 @@ def test_committed_pins_name_the_last_stable_or_the_prepared_version() -> None:
     marketplace never publish (the markdown-vault-mcp#1053 class the
     stamper's rc skip exists to prevent).
     """
-    pins = _published_pins()
-    if pins["server.json version"] in {"0.0.0", "0.1.0"}:
-        pytest.skip("initial placeholder versions, before the first stable release")
+    pins = _pins_or_skip()
     stable_tags = _reachable_stable_tags()
     if not stable_tags:
         # Tag visibility itself is guarded by the changelog-coupled test
