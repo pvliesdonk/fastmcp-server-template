@@ -40,6 +40,11 @@ on:
         description: 'The prep-branch head the draft was cut against; the push is leased on it so a newer Release Prepare re-dispatch is never clobbered.'
         type: string
         required: true
+      full_redraft:
+        description: 'Force rewrite (template#452/#460): ignore the page''s notes-range-end watermark and re-derive its prose under the current skill contract. Defaults to false, so a prepare-time refresh stays incremental unless the operator set the flag on the Release Prepare dispatch.'
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       tag:
@@ -62,9 +67,11 @@ on:
       # Force rewrite (template#452): the incremental-research contract
       # treats the accepted page as a cache, so a change to the skill's
       # own rules never reaches a range the page already covers.  This
-      # flag is the operator's override — a deliberate dispatch, never
-      # the prepare-time default; the draft still lands through the
-      # normal review paths (release PR diff or standalone notes PR).
+      # flag is the operator's override — always an explicit choice,
+      # never the default: here on the dispatch, or threaded through
+      # the call from Release Prepare's own full_redraft input
+      # (template#460).  The draft still lands through the normal
+      # review paths (release PR diff or standalone notes PR).
       full_redraft:
         description: 'Force rewrite: ignore the page''s notes-range-end watermark, research the full range the page covers, and re-derive its prose under the current skill contract. Valid in tag mode and target_version mode alike.'
         type: boolean
