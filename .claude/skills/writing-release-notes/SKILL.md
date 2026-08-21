@@ -52,6 +52,8 @@ You are given, or must derive first:
   `<!-- notes-range-end: SHA -->` comment recording where its last
   accepted draft's research ended. This is the incremental-research
   anchor for the modes below.
+- Full-redraft flag — a manual dispatch may set it; it suspends the
+  watermark's cache role for that one run (see the override below).
 
 ## Incremental research (patch and redraft modes)
 
@@ -76,6 +78,21 @@ already covers. When the page carries the watermark:
 
 A page without a watermark predates this contract: research the full
 `PREV..RANGE_END` range once, and add the watermark with the result.
+
+**Full-redraft override.** When the run's inputs say full redraft, the
+watermark loses its cache role for that run only: research the full
+range the page covers — from the highest stable tag strictly below the
+minor's first release (`X.Y.0`, series-aware via the tags API; the
+whole history on a first series) through `RANGE_END` — and re-derive
+the page's prose under the current contract, keeping only claims the
+evidence still supports. The page's structure is unchanged (summary
+markers, patch sentinels, index entry all stay), and the watermark
+still moves to `RANGE_END`. This is the operator's remedy when this
+skill's own rules changed after a page was accepted: the incremental
+path above deliberately preserves accepted prose, so contract
+improvements never reach an already-covered range without this
+override. It exists only on the manual dispatch — a prepare-time
+refresh is always incremental.
 
 ## Non-negotiables
 
