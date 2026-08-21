@@ -13,6 +13,7 @@ _spec.loader.exec_module(copier_update_notes)
 
 parse_minor = copier_update_notes.parse_minor
 select_sections = copier_update_notes.select_sections
+pick_target = copier_update_notes.pick_target
 
 UPGRADING = """# Upgrading generated projects
 
@@ -93,6 +94,47 @@ def test_sections_keep_their_bodies_and_file_order() -> None:
     assert notes.index("## v3.1") < notes.index("## v3.2") < notes.index("## v4.0")
 
 
+TAGS = [
+    "v3.1.2",
+    "v3.1.3",
+    "v3.2.0",
+    "v4.0.0",
+    "v4.1.0",
+    "v4.1.1",
+    "v5.0.0",
+    "v5.4.0",
+    "v5.5.0-rc.1",
+]
+
+
+def test_pick_target_steps_one_major_to_its_newest_stable_tag() -> None:
+    assert pick_target("v3.1.1", TAGS) == "v4.1.1"
+    assert pick_target("v4.0.0", TAGS) == "v5.4.0"
+
+
+def test_pick_target_defers_to_copier_default_within_a_major() -> None:
+    """Minor/patch drift only: print nothing, copier's latest-tag default
+    already does the right thing."""
+    assert pick_target("v5.0.0", TAGS) == ""
+
+
+def test_pick_target_skips_release_candidates() -> None:
+    """v5.5.0-rc.1 must never become an automated target."""
+    assert pick_target("v4.1.1", TAGS) == "v5.4.0"
+
+
+def test_pick_target_bridges_a_missing_major() -> None:
+    """A fleet that never shipped a v4: from v3, the smallest major ahead
+    is v5."""
+    tags = ["v3.6.0", "v5.0.0", "v5.1.0"]
+    assert pick_target("v3.6.0", tags) == "v5.1.0"
+
+
+def test_pick_target_on_unversioned_previous_prints_nothing() -> None:
+    assert pick_target("deadbeef", TAGS) == ""
+    assert pick_target("", TAGS) == ""
+
+
 def _run_cli(tmp_path: Path, monkeypatch, *extra: str) -> Path:
     upgrading = tmp_path / "UPGRADING.md"
     upgrading.write_text(UPGRADING, encoding="utf-8")
@@ -101,6 +143,7 @@ def _run_cli(tmp_path: Path, monkeypatch, *extra: str) -> Path:
         "sys.argv",
         [
             "copier_update_notes.py",
+            "notes",
             "--upgrading",
             str(upgrading),
             "--previous",
@@ -130,3 +173,23 @@ def test_cli_replaces_an_oversized_selection_with_a_note(
     text = output.read_text(encoding="utf-8")
     assert "too long to embed" in text
     assert "## v3.1" not in text
+
+
+def test_cli_pick_target_prints_the_chosen_ref(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    tags_file = tmp_path / "tags.txt"
+    tags_file.write_text("\n".join(TAGS) + "\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "copier_update_notes.py",
+            "pick-target",
+            "--previous",
+            "v3.1.1",
+            "--tags",
+            str(tags_file),
+        ],
+    )
+    assert copier_update_notes.main() == 0
+    assert capsys.readouterr().out.strip() == "v4.1.1"

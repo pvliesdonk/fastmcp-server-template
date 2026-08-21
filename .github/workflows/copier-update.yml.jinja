@@ -8,7 +8,13 @@ name: Copier Update
 # Deterministic by design: the run applies the update, commits any conflict
 # markers for the operator, and composes the PR body from facts alone — the
 # ref delta, the template's release notes and UPGRADING.md sections for the
-# jump, the conflict list, and the diff stat.  No agent analysis: an earlier
+# jump, the conflict list, and the diff stat.  Automated runs step at most
+# ONE major at a time: a multi-major jump becomes a sequence of per-major
+# update PRs (merge one, the next scheduled run opens the next), so each PR
+# carries one major's migration notes and CI validates each stage.  An
+# explicit `vcs_ref` dispatch input jumps straight to the asked ref.
+#
+# No agent analysis: an earlier
 # incarnation ran three claude-code agent steps (conflict auto-resolution,
 # changelog triage, excluded-file triage) whose wall-clock cost dwarfed the
 # update itself and whose conflict resolutions drifted toward preserving
@@ -57,10 +63,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Run copier update
-        id: copier
+      - name: Choose target ref (one major per run)
+        id: target
         env:
-          VCS_REF: {{ '${{ inputs.vcs_ref }}' }}
+          INPUT_VCS_REF: {{ '${{ inputs.vcs_ref }}' }}
         run: |
           set -euo pipefail
           # Capture the pre-update `_commit` BEFORE copier rewrites
@@ -72,6 +78,54 @@ jobs:
           prev_ref=$(awk '/^_commit:[[:space:]]/ {print $2; exit}' .copier-answers.yml || true)
           echo "prev_ref=${prev_ref}" >> "$GITHUB_OUTPUT"
 
+          # Derive the template source repo from `_src_path` in .copier-answers.yml
+          # rather than synthesising from `{{ '{{ github_org }}' }}` — `github_org` is the
+          # *consumer's* org (for Docker paths, etc.), not the template source's.
+          # Normalize the common forms copier may have stored ({gh:,https://github.com/,
+          # git@github.com:}org/repo[.git]) down to `org/repo`; local paths or anything
+          # else unrecognised becomes empty and the later steps skip the release-notes,
+          # upgrade-notes, compare-link, and staging logic gracefully.
+          src_path=$(awk '/^_src_path:[[:space:]]/ {print $2; exit}' .copier-answers.yml || true)
+          template_repo=$(printf '%s' "${src_path}" \
+            | sed -E 's|^gh:||; s|^https?://github\.com/||; s|^git@github\.com:||; s|\.git$||; s|/+$||')
+          if ! printf '%s' "${template_repo}" | grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+            template_repo=""
+          fi
+          echo "template_repo=${template_repo}" >> "$GITHUB_OUTPUT"
+
+          # An explicit dispatch input wins outright — the operator asked
+          # for that exact ref, staging does not apply.
+          vcs_ref="${INPUT_VCS_REF}"
+          latest_tag=""
+          if [ -z "${vcs_ref}" ] && [ -n "${template_repo}" ] && [ -n "${prev_ref}" ]; then
+            # Stage automated runs one major at a time: list the template's
+            # tags and let pick-target choose the newest stable tag of the
+            # next major above the current one (empty output = no majors
+            # ahead = copier's latest-tag default is already right).
+            # Best-effort: an ls-remote failure (private template, network)
+            # falls through to the default, same as before staging existed.
+            if git ls-remote --tags --refs \
+                "https://github.com/${template_repo}.git" 2>/dev/null \
+                | awk -F/ '{print $NF}' > /tmp/template-tags.txt; then
+              vcs_ref=$(python3 scripts/copier_update_notes.py pick-target \
+                --previous "${prev_ref}" --tags /tmp/template-tags.txt)
+              # Newest stable tag overall — the PR body compares it against
+              # the chosen target to flag a staged (not-yet-latest) update.
+              latest_tag=$(grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' /tmp/template-tags.txt \
+                | sort -V | tail -1 || true)
+            else
+              echo "::notice::could not list template tags; falling back to copier's latest-tag default"
+            fi
+          fi
+          echo "vcs_ref=${vcs_ref}" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Run copier update
+        id: copier
+        env:
+          VCS_REF: {{ '${{ steps.target.outputs.vcs_ref }}' }}
+        run: |
+          set -euo pipefail
           # `--conflict=inline` runs a real 3-way merge and writes standard
           # `<<<<<<< before updating / ||||||| last update / ======= / >>>>>>> after updating`
           # markers when local edits collide with template changes.  The
@@ -122,21 +176,7 @@ jobs:
           else
             conflict_count=0
           fi
-          # Derive the template source repo from `_src_path` in .copier-answers.yml
-          # rather than synthesising from `{{ '{{ github_org }}' }}` — `github_org` is the
-          # *consumer's* org (for Docker paths, etc.), not the template source's.
-          # Normalize the common forms copier may have stored ({gh:,https://github.com/,
-          # git@github.com:}org/repo[.git]) down to `org/repo`; local paths or anything
-          # else unrecognised becomes empty and the PR step skips the release-notes,
-          # upgrade-notes, and compare-link sections gracefully.
-          src_path=$(awk '/^_src_path:[[:space:]]/ {print $2; exit}' .copier-answers.yml || true)
-          template_repo=$(printf '%s' "${src_path}" \
-            | sed -E 's|^gh:||; s|^https?://github\.com/||; s|^git@github\.com:||; s|\.git$||; s|/+$||')
-          if ! printf '%s' "${template_repo}" | grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
-            template_repo=""
-          fi
           echo "conflict_count=${conflict_count}" >> "$GITHUB_OUTPUT"
-          echo "template_repo=${template_repo}" >> "$GITHUB_OUTPUT"
           # Multiline `conflict_files` needs the heredoc form of $GITHUB_OUTPUT.
           # The `CONFLICT_FILES_EOF` delimiter is safe because git-tracked file paths
           # can't contain newlines, let alone a line that matches that literal string.
@@ -164,8 +204,8 @@ jobs:
         env:
           GH_TOKEN: {{ '${{ secrets.RELEASE_TOKEN }}' }}
           REF: {{ '${{ steps.meta.outputs.ref }}' }}
-          PREV_REF: {{ '${{ steps.copier.outputs.prev_ref }}' }}
-          TEMPLATE_REPO: {{ '${{ steps.meta.outputs.template_repo }}' }}
+          PREV_REF: {{ '${{ steps.target.outputs.prev_ref }}' }}
+          TEMPLATE_REPO: {{ '${{ steps.target.outputs.template_repo }}' }}
         run: |
           set -euo pipefail
           : > /tmp/upgrading-notes.md
@@ -178,7 +218,7 @@ jobs:
             echo "::notice::could not fetch UPGRADING.md at ${REF}; the PR body links the file instead"
             exit 0
           fi
-          python3 scripts/copier_update_notes.py \
+          python3 scripts/copier_update_notes.py notes \
             --upgrading /tmp/upgrading.md \
             --previous "${PREV_REF}" \
             --target "${REF}" \
@@ -246,12 +286,13 @@ jobs:
         env:
           GH_TOKEN: {{ '${{ secrets.RELEASE_TOKEN }}' }}
           REF: {{ '${{ steps.meta.outputs.ref }}' }}
-          PREV_REF: {{ '${{ steps.copier.outputs.prev_ref }}' }}
-          TEMPLATE_REPO: {{ '${{ steps.meta.outputs.template_repo }}' }}
+          PREV_REF: {{ '${{ steps.target.outputs.prev_ref }}' }}
+          TEMPLATE_REPO: {{ '${{ steps.target.outputs.template_repo }}' }}
           CONFLICT_COUNT: {{ '${{ steps.meta.outputs.conflict_count }}' }}
           CONFLICT_FILES: {{ '${{ steps.meta.outputs.conflict_files }}' }}
           DIFF_COUNT: {{ '${{ steps.diff.outputs.diff_count }}' }}
           DIFF_STAT: {{ '${{ steps.diff.outputs.diff_stat }}' }}
+          LATEST_TAG: {{ '${{ steps.target.outputs.latest_tag }}' }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/pr
@@ -281,6 +322,14 @@ jobs:
             fi
           else
             body="## Template update to \`${REF}\`"
+          fi
+
+          # Staged update: automated runs step one major at a time, so when
+          # the chosen target is not the template's newest stable tag, say
+          # so — the operator should expect the next stage, not wonder why
+          # the update stopped short.
+          if [ -n "${LATEST_TAG}" ] && [ "${REF}" != "${LATEST_TAG}" ]; then
+            body+=$'\n\n'"> **Staged update:** automated runs advance one major at a time. The template's newest stable release is \`${LATEST_TAG}\`; merge this PR and the next scheduled run opens the next stage (or dispatch the workflow with \`vcs_ref\` to jump directly)."
           fi
 
           # Release notes in a collapsed block so the PR body stays scannable.

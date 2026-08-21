@@ -1,11 +1,23 @@
 #!/usr/bin/env python3
-"""Select the UPGRADING.md sections a copier-update PR must surface.
+"""Helpers for the copier-update workflow: upgrade notes and staged targets.
+
+Two subcommands, both consumed by ``.github/workflows/copier-update.yml``:
+
+``notes``
+    Select the UPGRADING.md sections a copier-update PR must surface.
+``pick-target``
+    Choose the ref an *automated* update run should target, stepping at
+    most one major at a time so a multi-major jump becomes a sequence of
+    per-major PRs instead of one giant one.
+
+notes
+=====
 
 The template's UPGRADING.md is template-repo only (listed in ``_exclude``),
 so an operator reviewing a copier-update PR does not have it in the project
 tree.  The copier-update workflow fetches the file from the template source
-at the target ref and runs this script to embed exactly the sections the
-jump needs, following the file's own reading instructions: the previous
+at the target ref and runs this subcommand to embed exactly the sections
+the jump needs, following the file's own reading instructions: the previous
 ref's minor section first (later patches in that line may carry migration
 work this project has not done yet), then every later minor through the
 target's.
@@ -28,6 +40,24 @@ Selection rules:
 All of the above exit 0 (an empty output file is a valid outcome the
 workflow renders around); only an unreadable input or unwritable output
 fails.
+
+pick-target
+===========
+
+Reads the template's tag list (one per line, as ``git ls-remote --tags
+--refs`` prints the short names) and the previous ref, and prints the ref
+the run should pass as ``--vcs-ref`` — or nothing, meaning "use copier's
+default" (the latest tag):
+
+- stable tags (``vX.Y.Z``) with a major above the previous ref's exist:
+  print the newest stable tag of the *smallest* such major.  Merging that
+  PR moves ``_commit`` forward, so the next scheduled run picks the next
+  major — stacked update PRs per major, without branch-on-branch mechanics.
+- no majors ahead (only minor/patch drift), or the previous ref is not a
+  version tag: print nothing.  An explicit ``vcs_ref`` dispatch input
+  bypasses this subcommand entirely and jumps straight to the asked ref.
+- release candidates and other non-``vX.Y.Z`` tags never become automated
+  targets.
 """
 
 from __future__ import annotations
@@ -40,6 +70,7 @@ from pathlib import Path
 MINOR_HEADING_RE = re.compile(r"^## v(\d+)\.(\d+)(?:\s|$)")
 UNRELEASED_HEADING_RE = re.compile(r"^## Unreleased(?:\s|$)")
 VERSION_REF_RE = re.compile(r"^v(\d+)\.(\d+)(?:\.\d+)?$")
+STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
 
 def parse_minor(ref: str) -> tuple[int, int] | None:
@@ -103,15 +134,29 @@ def select_sections(text: str, previous: str, target: str) -> str:
     return "\n".join(selected)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--upgrading", required=True, type=Path)
-    parser.add_argument("--previous", required=True)
-    parser.add_argument("--target", required=True)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--max-chars", type=int, default=30000)
-    args = parser.parse_args()
+def pick_target(previous: str, tags: list[str]) -> str:
+    """The ref an automated run should target, or "" for copier's default.
 
+    One major at a time: with stable tags whose major exceeds the previous
+    ref's, the newest tag of the smallest such major is the target.
+    """
+    prev = parse_minor(previous)
+    if prev is None:
+        return ""
+    parsed = [
+        (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        for tag in tags
+        if (m := STABLE_TAG_RE.match(tag.strip())) is not None
+    ]
+    ahead = [version for version in parsed if version[0] > prev[0]]
+    if not ahead:
+        return ""
+    next_major = min(version[0] for version in ahead)
+    newest = max(version for version in ahead if version[0] == next_major)
+    return f"v{newest[0]}.{newest[1]}.{newest[2]}"
+
+
+def _run_notes(args: argparse.Namespace) -> int:
     try:
         text = args.upgrading.read_text(encoding="utf-8")
     except OSError as exc:
@@ -132,6 +177,41 @@ def main() -> int:
         print(f"::error::cannot write {args.output}: {exc}", file=sys.stderr)
         return 1
     return 0
+
+
+def _run_pick_target(args: argparse.Namespace) -> int:
+    try:
+        tags = args.tags.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        print(f"::error::cannot read {args.tags}: {exc}", file=sys.stderr)
+        return 1
+    print(pick_target(args.previous, tags))
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    notes = subparsers.add_parser(
+        "notes", help="select UPGRADING.md sections for the PR body"
+    )
+    notes.add_argument("--upgrading", required=True, type=Path)
+    notes.add_argument("--previous", required=True)
+    notes.add_argument("--target", required=True)
+    notes.add_argument("--output", required=True, type=Path)
+    notes.add_argument("--max-chars", type=int, default=30000)
+    notes.set_defaults(func=_run_notes)
+
+    pick = subparsers.add_parser(
+        "pick-target", help="choose the next automated update ref (one major max)"
+    )
+    pick.add_argument("--previous", required=True)
+    pick.add_argument("--tags", required=True, type=Path)
+    pick.set_defaults(func=_run_pick_target)
+
+    args = parser.parse_args()
+    return int(args.func(args))
 
 
 if __name__ == "__main__":
