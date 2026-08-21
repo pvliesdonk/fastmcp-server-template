@@ -938,6 +938,90 @@ class TestDiscoverDomainVars:
         assert frozenset(sys.modules) == before
 
 
+class TestInstallScreenEntryFromVar:
+    """`_mcpb_user_config_entry` in isolation — the two ways it used to
+    disagree with the rest of the generator about a var it was handed."""
+
+    def _var(self, *, default: object, provenance: str = "domain") -> g.Var:
+        return g.Var(
+            name="DEMO_MCP_X",
+            suffix="X",
+            provenance=provenance,
+            type_name="Path",
+            default=default,
+            help="A path.",
+            tags=("domain",),
+            inferred=False,
+            wizard={},
+        )
+
+    def test_a_path_default_is_written_as_a_string(self):
+        """`cache_dir: Path = field(default=Path("/data/x"))` (#341).
+
+        `Path` is the natural annotation for the directory- and file-valued
+        fields an install screen exists to expose, and every other renderer
+        stringifies on the way out — only these JSON screens handed the raw
+        object to `json.dumps`, which refuses it.
+        """
+        entry = g._mcpb_user_config_entry(
+            self._var(default=Path("/data/scholar-mcp")), {}, "x.json", ()
+        )
+        assert entry["default"] == "/data/scholar-mcp"
+        # The point of the coercion: the entry must survive a JSON round-trip.
+        assert json.loads(json.dumps(entry))["default"] == "/data/scholar-mcp"
+
+    def test_an_unencodable_default_fails_loudly(self):
+        """Anything other than `Path` fails rather than being `str()`d on a
+        guess — a Python repr on an install screen would be found in the
+        rendered dialog, not at generation time."""
+        with pytest.raises(SystemExit, match="DEMO_MCP_X"):
+            g._mcpb_user_config_entry(
+                self._var(default={"not": "encodable"}), {}, "x.json", ()
+            )
+
+    def test_required_falls_back_to_the_vars_own_required_ness(self):
+        """A domain var with no declared default renders required (#471).
+
+        Hardcoding `False` made the install screen the one surface that
+        disagreed with the README table and any spliced region for the same
+        var, and let an installer click past a field the server cannot start
+        without.
+        """
+        entry = g._mcpb_user_config_entry(
+            self._var(default=g._NO_DEFAULT), {}, "x.json", ()
+        )
+        assert entry["required"] is True
+
+    def test_a_declared_default_is_not_required(self):
+        entry = g._mcpb_user_config_entry(self._var(default=None), {}, "x.json", ())
+        assert entry["required"] is False
+
+    def test_a_null_defaulted_core_var_stays_optional(self):
+        """The trap in the obvious fix, pinned.
+
+        `_is_required(var, None)` falls to case 3, which keys a *non-domain*
+        var on a plain `None` default — which that function's own docstring
+        calls out as not evidence of required-ness, since several such vars
+        ship null-defaulted with a working fallback. Passing `None` here
+        would flip every one of them on the screen to required. The run's
+        real `required_vars:` list is the right argument.
+        """
+        var = self._var(default=None, provenance="template")
+        assert g._mcpb_user_config_entry(var, {}, "x.json", ())["required"] is False
+        # Still honours the template's own explicit list.
+        listed = g._mcpb_user_config_entry(var, {}, "x.json", ("DEMO_MCP_X",))
+        assert listed["required"] is True
+
+    @pytest.mark.parametrize("override", [True, False])
+    def test_the_field_spec_still_overrides_in_both_directions(self, override):
+        """The fallback is a default for `spec.get`, not a replacement — the
+        field-spec contract promises a project can force either answer."""
+        entry = g._mcpb_user_config_entry(
+            self._var(default=g._NO_DEFAULT), {"required": override}, "x.json", ()
+        )
+        assert entry["required"] is override
+
+
 class TestNoDefaultSentinelIsRequired:
     """`_is_required`'s domain branch must key on `_NO_DEFAULT` (no
     default declared at all), not on `var.default is None` (a real default
@@ -3512,6 +3596,53 @@ class TestMcpbUserConfig:
         monkeypatch.setattr(g, "_load_domain_presentation", _domain_presentation)
         with pytest.raises(SystemExit, match="DEMO_MCP_TYPO_VAR"):
             g.write_artifacts(fake_project, check=False)
+
+    def test_removing_a_field_that_is_not_on_the_screen_fails(
+        self, fake_project, monkeypatch
+    ):
+        """A misspelled `<VAR>: null` removal is an authoring error (#471).
+
+        Popping it silently left the field the author meant to remove sitting
+        on the screen with nothing to say why, while every neighbouring guard
+        — unknown spec key, unknown mcpb type, a domain entry contributing
+        more than `fields:` — already fails generation for the same class of
+        mistake.
+        """
+
+        def _domain_presentation(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [],
+                "files": {
+                    "packaging/mcpb/manifest.json.in": {
+                        # FASTMCP_LOG_LEVEL is a baseline field; this is not.
+                        "fields": {"FASTMCP_LOGLEVEL": None}
+                    }
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _domain_presentation)
+        with pytest.raises(SystemExit, match="FASTMCP_LOGLEVEL"):
+            g.write_artifacts(fake_project, check=False)
+
+    def test_removing_a_baseline_field_still_works(self, fake_project, monkeypatch):
+        """The guard must not break the legitimate removal it protects."""
+
+        def _domain_presentation(presentation_root, env_prefix):
+            del presentation_root, env_prefix
+            return {
+                "vars": [],
+                "files": {
+                    "packaging/mcpb/manifest.json.in": {
+                        "fields": {"FASTMCP_LOG_LEVEL": None}
+                    }
+                },
+            }
+
+        monkeypatch.setattr(g, "_load_domain_presentation", _domain_presentation)
+        g.write_artifacts(fake_project, check=False)
+        manifest = _mcpb_manifest(fake_project)
+        assert "log_level" not in manifest["user_config"]
 
     def test_duplicate_id_fails(self, fake_project, monkeypatch):
         def _domain_presentation(presentation_root, env_prefix):
