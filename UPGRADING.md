@@ -837,7 +837,7 @@ taken verbatim, with the required scopes added on top.
 
 Deployments using bearer tokens, or no authentication, are unaffected.
 
-## Unreleased - Release candidates publish to PyPI, and ship an installable plugin zip
+## Unreleased - Release candidates publish to PyPI, an installable plugin zip, and config-surface fixes
 
 Release candidates now publish their wheel to PyPI. Before this, the
 `publish-pypi` job skipped pre-releases, which made every rc `.mcpb` bundle
@@ -904,3 +904,55 @@ claude --plugin-url <the release asset URL>
 That loads it for one session and leaves no install record. It is the only
 marketplace-free way to load a plugin: `claude plugin install` resolves names
 through marketplaces and accepts no path, URL, or archive.
+
+### Install screens now inherit a field's required-ness
+
+`scripts/gen_config_surface.py` resolves an install screen's `required` flag
+through the same rule the README table and spliced regions use, instead of
+hardcoding `false`.
+
+This changes generated output in one case: a domain field declared with **no
+default at all** (`api_key: str`, not `api_key: str | None = None`) now renders
+`"required": true` on the mcpb and Claude Code plugin screens. Previously it
+rendered `false`, and an installer could click past a value the server cannot
+start without. Regenerate and review the diff:
+
+```bash
+python3 scripts/gen_config_surface.py
+```
+
+Fields declared with any default, including `None`, are unaffected, as are all
+template-owned fields. If a field is genuinely optional despite having no
+default, say so explicitly in its field spec — `required: false` still wins.
+
+### A field removal naming a non-baseline field now fails generation
+
+Dropping a template baseline field from a screen is spelled `{PREFIX}_VAR: null`
+in `config-presentation.domain.yml`. Misspelling the var name used to be
+silently discarded, leaving the field on the screen with nothing to say why.
+The generator now exits naming the file, the var, and the baseline fields it
+does have.
+
+If you have a typo'd removal, the next generation run fails until you fix the
+spelling or drop the line. A removal that names a field you already removed
+counts as a typo too. This surfaces an existing mistake rather than creating a
+new one — the screen it produced was already not what you asked for.
+
+### `Path`-typed defaults reach install screens
+
+A config field annotated `Path` with a default no longer crashes generation
+with `TypeError: Object of type PosixPath is not JSON serializable`. The
+default is written as its string form.
+
+If you worked around this with an explicit `default:` or `default: null` in the
+field spec, you can drop the workaround and let the field's own default show
+through. Nothing forces you to.
+
+### PyYAML is a declared dev dependency
+
+`scripts/gen_config_surface.py` imports `yaml`, which previously arrived only
+transitively through `mkdocs-material` in the `docs` group. It is now declared
+in the `dev` group, so a plain `uv sync` gets it and the generator uses the
+project environment instead of falling back to its network bootstrap.
+
+Run `uv lock` (or `uv sync`) after updating so the lockfile records it.
