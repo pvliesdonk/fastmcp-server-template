@@ -674,6 +674,28 @@ def test_notes_dispatch_offers_a_full_redraft_override() -> None:
     )
 
 
+def test_ready_lift_retries_the_stale_pr_head_read() -> None:
+    """The ready-lift must ride out its own push's API lag (template#462).
+
+    The landing step reads the PR head right after its own lease-guarded
+    push, and the API's view can still report the pre-push lease head for
+    a moment.  The guard must retry while it sees exactly EXPECTED_HEAD
+    (staleness, not a takeover) and still refuse on any third head — an
+    un-retried read left a complete release PR stuck in draft on the
+    first live rc.6 landing downstream.
+    """
+    text = NOTES_WORKFLOW.read_text(encoding="utf-8")
+    land = text[text.index("\n  land:") :]
+    assert '"$current_head" = "$EXPECTED_HEAD"' in land, (
+        "the ready-lift no longer distinguishes a stale read of its own "
+        "push (the lease head) from a genuinely newer prepare"
+    )
+    assert re.search(r"for attempt in [0-9 ]+; do\n(?:.*\n)*?.*headRefOid", land), (
+        "the PR-head read must sit inside a retry loop — a single read "
+        "races the run's own push"
+    )
+
+
 def test_notes_workflow_is_callable_and_not_release_triggered() -> None:
     """The notes workflow serves the release PR; the post-hoc path is gone.
 
