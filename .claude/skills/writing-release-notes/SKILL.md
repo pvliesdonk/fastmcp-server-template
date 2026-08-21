@@ -52,8 +52,9 @@ You are given, or must derive first:
   `<!-- notes-range-end: SHA -->` comment recording where its last
   accepted draft's research ended. This is the incremental-research
   anchor for the modes below.
-- Full-redraft flag — a manual dispatch may set it; it suspends the
-  watermark's cache role for that one run (see the override below).
+- Full-redraft flag — the operator may set it on either dispatch
+  (Release Prepare threads it through to the notes job); it suspends
+  the watermark's cache role for that one run (see the override below).
 
 ## Incremental research (patch and redraft modes)
 
@@ -91,8 +92,10 @@ still moves to `RANGE_END`. This is the operator's remedy when this
 skill's own rules changed after a page was accepted: the incremental
 path above deliberately preserves accepted prose, so contract
 improvements never reach an already-covered range without this
-override. It exists only on the manual dispatch — a prepare-time
-refresh is always incremental.
+override. The flag is off by default on every entry point — a refresh
+is incremental unless the operator sets it, either on the Release
+Prepare dispatch (threaded through to the notes job) or on the Release
+Notes dispatch directly.
 
 ## Non-negotiables
 

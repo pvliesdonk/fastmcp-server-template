@@ -40,6 +40,11 @@ on:
         description: 'The prep-branch head the draft was cut against; the push is leased on it so a newer Release Prepare re-dispatch is never clobbered.'
         type: string
         required: true
+      full_redraft:
+        description: 'Force rewrite (template#452/#460): ignore the page''s notes-range-end watermark and re-derive its prose under the current skill contract. Defaults to false, so a prepare-time refresh stays incremental unless the operator set the flag on the Release Prepare dispatch.'
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       tag:
@@ -62,9 +67,11 @@ on:
       # Force rewrite (template#452): the incremental-research contract
       # treats the accepted page as a cache, so a change to the skill's
       # own rules never reaches a range the page already covers.  This
-      # flag is the operator's override — a deliberate dispatch, never
-      # the prepare-time default; the draft still lands through the
-      # normal review paths (release PR diff or standalone notes PR).
+      # flag is the operator's override — always an explicit choice,
+      # never the default: here on the dispatch, or threaded through
+      # the call from Release Prepare's own full_redraft input
+      # (template#460).  The draft still lands through the normal
+      # review paths (release PR diff or standalone notes PR).
       full_redraft:
         description: 'Force rewrite: ignore the page''s notes-range-end watermark, research the full range the page covers, and re-derive its prose under the current skill contract. Valid in tag mode and target_version mode alike.'
         type: boolean
@@ -589,7 +596,21 @@ jobs:
               echo "::warning::no open release PR found for ${PREP_BRANCH} — nothing to mark ready"
               exit 0
             fi
-            current_head="$(gh pr view "$pr" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
+            # The API's view of the PR can lag the push this run just
+            # made (observed live: the pre-push head reported ~600ms
+            # after the push, template#462).  While the view still
+            # reports exactly the lease head we pushed on top of, that
+            # is staleness, not a newer prepare — a newer prepare would
+            # have force-recreated the branch to a different stamp
+            # head.  Retry through the lag; any THIRD head is a genuine
+            # takeover and leaves the hold in place immediately.
+            current_head=""
+            for attempt in 1 2 3 4 5; do
+              current_head="$(gh pr view "$pr" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
+              [ "$current_head" = "$accepted_head" ] && break
+              [ "$current_head" = "$EXPECTED_HEAD" ] || break
+              sleep 2
+            done
             if [ "$current_head" != "$accepted_head" ]; then
               echo "::warning::release PR #${pr} head ${current_head} is not the head this run accepted (${accepted_head}) — a newer prepare owns the PR; leaving its draft hold in place"
               exit 0
