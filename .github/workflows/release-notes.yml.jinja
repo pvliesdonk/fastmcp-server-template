@@ -67,6 +67,10 @@ permissions:
 # the draft job release the lock before its landing ran, and GitHub
 # keeps only one pending entry per group — a queued newer draft could
 # replace the pending landing, stranding a finished draft unlanded.
+# This workflow-level key governs DISPATCH runs only: in call mode the
+# run is the caller's, so release-prepare.yml's draft-notes job takes
+# the same group at the job level — the two declarations share one
+# bucket (template#448).
 concurrency:
   group: release-notes-draft
   cancel-in-progress: false
@@ -207,7 +211,12 @@ jobs:
               || { echo "::error::'${TAG}' is not a stable vX.Y.Z tag — notes pages are per stable minor; rcs have no page"; exit 1; }
             git rev-parse -q --verify "refs/tags/${TAG}" > /dev/null \
               || { echo "::error::tag ${TAG} not found"; exit 1; }
-            RANGE_END="$TAG"
+            # Resolve the tag to its commit so RANGE_END is a SHA in BOTH
+            # modes and the page's notes-range-end watermark keeps one
+            # shape across drafts — a prepare-time run compares that
+            # watermark against its own SHA to decide whether the page is
+            # already current, and a tag-name watermark would never match.
+            RANGE_END="$(git rev-parse "refs/tags/${TAG}^{commit}")"
           fi
           ver="${TAG#v}"
           minor="${ver%.*}"
@@ -354,7 +363,7 @@ jobs:
             - repository: {% raw %}${{ github.repository }}{% endraw %}
             - tag: {% raw %}${{ steps.ctx.outputs.tag }}{% endraw %} (version {% raw %}${{ steps.ctx.outputs.version }}{% endraw %}, minor series {% raw %}${{ steps.ctx.outputs.minor }}{% endraw %})
             - previous stable: {% raw %}${{ steps.ctx.outputs.prev }}{% endraw %} (empty means first release)
-            - research range end (RANGE_END): {% raw %}${{ steps.ctx.outputs.range_end }}{% endraw %} (equals the tag after a release; at prepare time it is the open release PR's source commit — the tag does not exist yet)
+            - research range end (RANGE_END): {% raw %}${{ steps.ctx.outputs.range_end }}{% endraw %} (a commit SHA: the tagged commit after a release; at prepare time the open release PR's source commit — the tag does not exist yet)
             - page: {% raw %}${{ steps.ctx.outputs.page }}{% endraw %}
             - mode: {% raw %}${{ steps.ctx.outputs.mode }}{% endraw %} (new = write the whole page and add it to docs/releases/index.md; patch = append one section inside the patch sentinels, dated per the skill's tag-existence gate; redraft = the minor's page already exists — e.g. drafted at prepare time — so update/extend it in place and never append a duplicate section for this release)
 
