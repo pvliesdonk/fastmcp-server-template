@@ -1159,8 +1159,7 @@ jobs:
                 .github/workflows/claude.yml \
                 .github/workflows/claude-code-review.yml \
                 .github/workflows/release-notes.yml
-          rm -f scripts/copier_update_aggregator.py
-          rm -rf scripts/copier_update_prompts
+          rm -f scripts/copier_update_notes.py
           # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
           #     count the scrub expects (issue #199).
           #
@@ -1344,8 +1343,7 @@ jobs:
               .github/workflows/claude.yml \
               .github/workflows/claude-code-review.yml \
               .github/workflows/release-notes.yml \
-              scripts/copier_update_aggregator.py \
-              scripts/copier_update_prompts; do
+              scripts/copier_update_notes.py; do
             [ ! -e "$gone" ] \
               || { echo "::error::$gone not removed by detach"; exit 1; }
           done
@@ -1466,6 +1464,12 @@ jobs:
         run: python3 scripts/check_update_regression.py
 
   aggregator-tests:
+    # Job id + display name predate the removal of the copier-update
+    # aggregator (this job now covers scripts/ generally: unit tests,
+    # UPGRADING.md invariants, downstream-matching lint/format/structural
+    # gates). Both are kept as-is because the display name is a status-check
+    # context this repo's hand-managed branch protection may require —
+    # renaming it would strand PRs until the protection is edited to match.
     name: Aggregator script unit tests
     runs-on: ubuntu-latest
     steps:
@@ -1479,7 +1483,7 @@ jobs:
       - name: Set up Python 3.12
         run: uv python install 3.12
 
-      - name: Run aggregator tests
+      - name: Run script unit tests
         run: uv run --with pytest --with pyyaml --with jsonschema --with jinja2 --with 'fastmcp-pvl-core>=4.6.1' pytest scripts/tests/ -v
 
       - name: UPGRADING.md Unreleased section
@@ -1497,7 +1501,7 @@ jobs:
           grep -qE '^\s+git add .*UPGRADING\.md' .github/workflows/template-release.yml \
             || { echo "::error::template-release.yml promotes UPGRADING.md but never stages it — the rewrite would be discarded"; exit 1; }
 
-      - name: Lint aggregator (ruff check matching downstream's config)
+      - name: Lint scripts (ruff check matching downstream's config)
         # Mirror the rendered project's [tool.ruff.lint] block in
         # pyproject.toml.jinja: same `select` list, same `ignore = ["E501"]`,
         # same line-length 88. Catch regressions here before they surface in
@@ -1507,18 +1511,18 @@ jobs:
             --select E,W,F,I,B,C4,UP,ARG,SIM,TC,PTH,RUF \
             --ignore E501 \
             --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_upgrading.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_upgrading.py scripts/tests/
 
-      - name: Format check aggregator (ruff format matching downstream)
+      - name: Format check scripts (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 \
-            scripts/copier_update_aggregator.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_upgrading.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
         # The scripts that render into every project (gen_config_surface.py,
-        # copier_update_aggregator.py) must satisfy the SAME structural rules
+        # copier_update_notes.py) must satisfy the SAME structural rules
         # the downstream diff-gate enforces (CLAUDE.md gate #5 / the `structure`
-        # job): C901 + the PLR complexity family + S. The `Lint aggregator`
+        # job): C901 + the PLR complexity family + S. The `Lint scripts`
         # step above intentionally mirrors only the base whole-repo `select`,
         # which omits these — so a complexity regression in a shipped script
         # (e.g. #303: `_unscanned_from_env_reads` reaching C901's 11 > 10) used
@@ -1546,7 +1550,7 @@ jobs:
             --config "lint.pylint.max-returns=6" \
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
-            scripts/gen_config_surface.py scripts/copier_update_aggregator.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py
 
   pr-title:
     name: PR Title
