@@ -1,5 +1,12 @@
 # Changelog
 
+## v5.5.0 (2026-08-21)
+
+- #464 fix(notes): a full redraft starts from an emptied page — in-place rewrites are unreachable in the drafting sandbox
+- #461 feat(notes): full_redraft on the Release Prepare dispatch, and a stale-read fix for the ready-lift
+- #459 feat: deterministic copier-update workflow surfacing UPGRADING.md
+
+
 ## v5.4.0 (2026-08-21)
 
 - #456 feat: versioned llms.txt links, a shared CI setup composite, and a required-check seam
