@@ -1,5 +1,11 @@
 # Changelog
 
+## v5.6.2 (2026-08-22)
+
+- #480 fix: unblock publish-pypi and bound the build backend that broke it
+- #478 docs: make the `_skip_if_exists` blind spot actionable in UPGRADING.md
+
+
 ## v5.6.1 (2026-08-22)
 
 - #477 fix: an extras seam for the Linux packages, and a coverage status that always reports

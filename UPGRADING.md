@@ -1077,8 +1077,6 @@ workflow.
 The visible change is that a fork pull request whose coverage artifact is
 missing now shows a failed `codecov/patch` where it previously showed nothing.
 
-## Unreleased - PyPI publishing unblocked
-
 ### Re-run any release that failed at `publish-pypi`
 
 If a release cut before this update failed at the `Publish to PyPI` step with
@@ -1152,3 +1150,7 @@ there is no second copy of this edit to hunt down. It is, though, a good
 example of the general class: a template change that lands in a file copier
 will not touch, with nothing in the update to tell you. The render-and-diff
 recipe under "Before every upgrade" is how to find the others.
+
+## Unreleased
+
+_Nothing yet._
