@@ -18,6 +18,19 @@ if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
 
+# DOMAIN-POSTINSTALL-EXTRAS-START — set EXTRAS to this project's extras
+# specifier (e.g. `[all]`) so the Linux packages install the same dependency
+# set as the container; keep it in step with the `--extra` flags inside the
+# Dockerfile's DOCKERFILE-UV-EXTRAS block. Kept across copier update.
+#
+# One variable rather than three edits, for the reason the Dockerfile block
+# gives about its two layers: the three installs below are the rc, stable and
+# unversioned paths of the same package, and a project that added an extra to
+# only some of them would ship a different dependency set depending on which
+# branch its install took.
+EXTRAS=""
+# DOMAIN-POSTINSTALL-EXTRAS-END
+
 # Upgrade pip and install the package
 "${VENV_DIR}/bin/pip" install --quiet --upgrade pip
 
@@ -33,14 +46,14 @@ if [ -n "$PKG_VERSION" ]; then
             # (-rc.N -> rcN).
             canonical="$(printf '%s' "$PKG_VERSION" | sed 's/-rc\./rc/')"
             "${VENV_DIR}/bin/pip" install --quiet \
-                "{{ pypi_name }} @ https://github.com/{{ github_org }}/{{ project_name }}/releases/download/v${PKG_VERSION}/{{ pypi_name | replace('-', '_') }}-${canonical}-py3-none-any.whl"
+                "{{ pypi_name }}${EXTRAS} @ https://github.com/{{ github_org }}/{{ project_name }}/releases/download/v${PKG_VERSION}/{{ pypi_name | replace('-', '_') }}-${canonical}-py3-none-any.whl"
             ;;
         *)
-            "${VENV_DIR}/bin/pip" install --quiet "{{ pypi_name }}==${PKG_VERSION}"
+            "${VENV_DIR}/bin/pip" install --quiet "{{ pypi_name }}${EXTRAS}==${PKG_VERSION}"
             ;;
     esac
 else
-    "${VENV_DIR}/bin/pip" install --quiet "{{ pypi_name }}"
+    "${VENV_DIR}/bin/pip" install --quiet "{{ pypi_name }}${EXTRAS}"
 fi
 
 # Ensure config directory exists

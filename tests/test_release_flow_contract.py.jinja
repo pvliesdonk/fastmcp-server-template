@@ -64,6 +64,8 @@ NOTES_PUBLISH_WORKFLOW = (
 )
 DOCS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "docs.yml"
 UNSTABLE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "unstable.yml"
+CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+COVERAGE_STATUS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "coverage-status.yml"
 {%- if include_claude_plugin %}
 PLUGIN_JSON = Path(".claude-plugin/plugin/.claude-plugin/plugin.json")
 MCP_JSON = Path(".claude-plugin/plugin/.mcp.json")
@@ -1675,6 +1677,49 @@ def test_committed_pins_name_the_last_stable_or_the_prepared_version() -> None:
         f"or the stable version this diff prepares ({prepared}), but these "
         "do neither: "
         + ", ".join(f"{where} = {ver}" for where, ver in sorted(bad.items()))
+    )
+
+
+@pytest.mark.parametrize(
+    ("workflow", "label"),
+    [
+        (CI_WORKFLOW, "ci.yml (own-branch path)"),
+        (COVERAGE_STATUS_WORKFLOW, "coverage-status.yml (fork-PR fallback)"),
+    ],
+)
+def test_every_codecov_patch_poster_posts_under_all_outcomes(
+    workflow: Path, label: str
+) -> None:
+    """Both posters of ``codecov/patch`` report something, always.
+
+    `extra_required_checks` lets a project make ``codecov/patch`` a required
+    context.  A required check that never reports does not turn a pull request
+    red — it leaves it waiting forever on a status that is not coming, and the
+    only exits are an admin bypass or a ruleset edit.  So "post an ``error``"
+    and "post nothing" are not equivalent failure modes, and the difference is
+    invisible in a green run.
+
+    Two workflows can post this context: `ci.yml` for own-branch pull requests
+    and `coverage-status.yml` for fork ones, where the read-only fork token
+    forces the `workflow_run` detour.  They drifted once (#476): `ci.yml`
+    treated always-report as an invariant while the fallback skipped its
+    posting step whenever the artifact download failed.  Asserted rather than
+    documented, because the two halves live in different files and nothing
+    else couples them.
+    """
+    text = workflow.read_text(encoding="utf-8")
+    poster = text.index("name: Post codecov/patch status")
+    # Look only at the posting step, not the whole workflow: `always()`
+    # elsewhere in the file would satisfy a naive substring check.
+    step = text[poster : poster + 2000]
+    assert "always()" in step, (
+        f"{label}: the codecov/patch posting step must run under all outcomes"
+    )
+    # ...and it must carry a fallback state, or `always()` only guarantees the
+    # step runs, not that it posts a usable status.
+    assert "'error'" in step or '"error"' in step, (
+        f"{label}: the posting step must default to an `error` state when the "
+        "coverage result is missing"
     )
 
 

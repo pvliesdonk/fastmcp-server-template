@@ -987,6 +987,53 @@ python3 scripts/stamp_manifests.py <the version they should all carry>
 A project that has not cut its first release is unaffected: its pins are all
 seeds and the assertions skip, as before.
 
-## Unreleased
+## Unreleased - An extras seam for the Linux packages, and a coverage status that always reports
 
-_Nothing yet._
+### `postinstall.sh` has a sentinel for extras — move any hand-added ones into it
+
+`packaging/scripts/postinstall.sh` now carries a
+`DOMAIN-POSTINSTALL-EXTRAS-START/-END` block holding one `EXTRAS` variable,
+interpolated into all three of its `pip install` invocations. It is the
+counterpart of the `DOCKERFILE-UV-EXTRAS` block, so the Linux packages can
+install the same dependency set as the container.
+
+**If your project added extras to this file by hand, this update conflicts on
+exactly those lines, and resolving it in the template's favour silently drops
+them.** That produces a `.deb`/`.rpm` installing a different dependency set
+than your image and your `.mcpb` bundle, failing only at runtime.
+
+Resolve by taking the template's side, then setting the variable:
+
+```bash
+# DOMAIN-POSTINSTALL-EXTRAS-START
+EXTRAS="[all]"
+# DOMAIN-POSTINSTALL-EXTRAS-END
+```
+
+Match it to the `--extra` flags in your `Dockerfile`'s `DOCKERFILE-UV-EXTRAS`
+block. From this release on the edit lives inside a sentinel, so later updates
+preserve it.
+
+Projects that never added extras need do nothing: the default `EXTRAS=""`
+renders the same three install commands as before.
+
+This does not apply to `packaging/mcpb/pyproject.toml.in`, the mcpb manifest,
+or the Claude plugin's `.mcp.json`. Those are `_skip_if_exists`, so your copies
+are already yours and `copier update` never rewrites them — their `[all]` is a
+seed, not a template-owned line.
+
+### Fork pull requests now always get a `codecov/patch` status
+
+`coverage-status.yml`, the fallback that posts `codecov/patch` for pull
+requests from forks, previously posted nothing when it could not download the
+coverage artifact. It now posts an `error` status instead, matching the
+invariant `ci.yml` already held for the own-branch path.
+
+No action is needed. It matters most if you list `codecov/patch` in
+`extra_required_checks`: a required context that never reported left a fork
+pull request waiting forever on a status that was not coming, exitable only by
+an admin bypass or a ruleset edit. An `error` is recoverable by re-running the
+workflow.
+
+The visible change is that a fork pull request whose coverage artifact is
+missing now shows a failed `codecov/patch` where it previously showed nothing.
