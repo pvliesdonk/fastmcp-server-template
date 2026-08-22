@@ -64,6 +64,47 @@ then leaves them under project ownership. Later template corrections do not
 reach an existing copy. Some newer config files are both skip-listed and
 generator-owned; the generator, not Copier, rewrites those files.
 
+Nothing surfaces that gap for you. A skip-listed file never appears in a
+`copier update` diff, and the update pull request lists it among the regions
+to leave alone, so a template improvement to one can sit unadopted for
+releases without anything saying so. Check for it deliberately, by rendering
+the target with your own answers and comparing the files Copier will not
+touch:
+
+```bash
+uv run --no-project --with copier copier copy --trust --defaults \
+  --vcs-ref=<target> --data-file .copier-answers.yml \
+  gh:pvliesdonk/fastmcp-server-template /tmp/target-render
+
+diff -r /tmp/target-render/.vale/styles/config/vocabularies \
+        .vale/styles/config/vocabularies
+diff -r /tmp/target-render/.claude-plugin .claude-plugin
+```
+
+Then adopt what the template authored and keep what you wrote; this is a read
+and a decision, not a wholesale copy.
+
+`_skip_if_exists` in the template's `copier.yml` is the full list. Most of it
+is yours by construction and will differ every time, which is why a blanket
+diff of all of it is noise: `tools.py`, `resources.py`, `prompts.py`,
+`domain.py`, the seeded tests, `CHANGELOG.md`, `docs/releases/`, `LICENSE`.
+The entries worth reading a diff of are the ones the template still authors
+content for, where a change is a correction rather than your own work:
+
+- `.vale/styles/config/vocabularies/Base/accept.txt` — template prose that
+  arrives in a later release can need vocabulary the seeded file lacks, and
+  the missing terms fail your docs gate rather than the template's
+  (template#366);
+- `.claude-plugin/**` — the plugin scaffold and its README;
+- `packaging/mcpb/` — `manifest.json.in`, `pyproject.toml.in`, `build.sh` and
+  the entry shim, which track the mcpb CLI and manifest version;
+- `.gitignore`, `.vale.ini`, `config-presentation.domain.yml`.
+
+How much this matters depends on how far behind you are, and it is worth
+knowing that it is often nothing. Between v5.0.0 and v5.6.1 no skip-listed
+file changed at all; from v4.0.0 the set is two files. A v3.x jump is the one
+that carries real content.
+
 ## v1.0 - Copier foundation and initial packaging
 
 Template v1.0 replaced the old GitHub-template and `scripts/rename.sh` model
