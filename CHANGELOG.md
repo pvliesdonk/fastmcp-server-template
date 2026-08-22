@@ -1,5 +1,10 @@
 # Changelog
 
+## v5.6.1 (2026-08-22)
+
+- #477 fix: an extras seam for the Linux packages, and a coverage status that always reports
+
+
 ## v5.6.0 (2026-08-22)
 
 - #474 fix: assert the manifest version-lockstep rule directly

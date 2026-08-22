@@ -987,8 +987,6 @@ python3 scripts/stamp_manifests.py <the version they should all carry>
 A project that has not cut its first release is unaffected: its pins are all
 seeds and the assertions skip, as before.
 
-## Unreleased - An extras seam for the Linux packages, and a coverage status that always reports
-
 ### `postinstall.sh` has a sentinel for extras — move any hand-added ones into it
 
 `packaging/scripts/postinstall.sh` now carries a
@@ -1037,3 +1035,7 @@ workflow.
 
 The visible change is that a fork pull request whose coverage artifact is
 missing now shows a failed `codecov/patch` where it previously showed nothing.
+
+## Unreleased
+
+_Nothing yet._
