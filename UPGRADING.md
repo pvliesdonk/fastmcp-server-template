@@ -837,7 +837,7 @@ taken verbatim, with the required scopes added on top.
 
 Deployments using bearer tokens, or no authentication, are unaffected.
 
-## Unreleased - Release candidates publish to PyPI, an installable plugin zip, and config-surface fixes
+## Unreleased - Release candidates publish to PyPI, an installable plugin zip, and stricter config-surface and manifest checks
 
 Release candidates now publish their wheel to PyPI. Before this, the
 `publish-pypi` job skipped pre-releases, which made every rc `.mcpb` bundle
@@ -956,3 +956,33 @@ in the `dev` group, so a plain `uv sync` gets it and the generator uses the
 project environment instead of falling back to its network bootstrap.
 
 Run `uv lock` (or `uv sync`) after updating so the lockfile records it.
+
+### The manifest pin tests now catch a stale or half-stamped version
+
+`tests/test_release_flow_contract.py` asserts the "Manifest version lockstep"
+rule directly: `server.json` and, where the plugin channel is on,
+`plugin.json` and its `.mcp.json` must all pin one version. Two states that
+previously passed now fail.
+
+**A manifest reseeded to its placeholder.** A `copier update` can reset a
+manifest's version to the template seed. Previously the suite skipped the pin
+assertions whenever `server.json`'s top-level version was a seed value, so a
+tree with one placeholder and the rest at a real release went unexamined —
+and `server.json` is the MCP registry manifest, so the registry was being
+told a version that was never published. The skip now requires *every* pin to
+be a seed value, which is the genuine before-first-release state.
+
+**A half-stamped release PR.** The existing history-scoped assertion admits
+two values during a release PR, the last stable and the version being
+prepared, so a tree with some manifests moved and some not satisfied it. The
+new lockstep assertion does not.
+
+If your suite goes red on either after updating, the manifests are telling
+your users something untrue and the test is right. Fix the pins to agree:
+
+```bash
+python3 scripts/stamp_manifests.py <the version they should all carry>
+```
+
+A project that has not cut its first release is unaffected: its pins are all
+seeds and the assertions skip, as before.
