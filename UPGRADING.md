@@ -1122,3 +1122,33 @@ release.
 update` in `pyproject.toml`, which is template-owned; resolve the merge in
 favour of a bounded requirement. An unbounded `hatchling` still builds and
 still passes your CI. It fails only at release time.
+
+### Apply the same bound by hand in `packaging/mcpb/pyproject.toml.in`
+
+`copier update` will not do this one for you. That file is `_skip_if_exists`,
+so your copy is yours and the template never rewrites it. Edit it yourself:
+
+```diff
+ [build-system]
+-requires = ["hatchling"]
++requires = ["hatchling>=1.32,<1.33"]
+ build-backend = "hatchling.build"
+```
+
+This is housekeeping, not a fix. That backend runs only on the bundle's
+fallback launch path, where a host uses `server.type: "uv"` with
+`entry_point` and uv builds the bundle's project on the user's machine. The
+primary path fetches the published wheel and never touches it, and nothing
+`twine check`s this project, so the release failure above cannot happen here.
+The bound keeps an end user's build off whatever backend happens to be newest
+that day, and keeps one story about the build backend rather than two.
+
+Nothing fails if you skip it. No CI check covers this file: a required check
+that a `copier update` cannot satisfy would go red in every project until
+someone hand-edited it, which is a poor trade for a non-functional change.
+
+This is the only `_skip_if_exists` file that declares a build backend, so
+there is no second copy of this edit to hunt down. It is, though, a good
+example of the general class: a template change that lands in a file copier
+will not touch, with nothing in the update to tell you. The render-and-diff
+recipe under "Before every upgrade" is how to find the others.
