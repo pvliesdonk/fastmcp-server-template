@@ -1077,6 +1077,48 @@ workflow.
 The visible change is that a fork pull request whose coverage artifact is
 missing now shows a failed `codecov/patch` where it previously showed nothing.
 
-## Unreleased
+## Unreleased - PyPI publishing unblocked
 
-_Nothing yet._
+### Re-run any release that failed at `publish-pypi`
+
+If a release cut before this update failed at the `Publish to PyPI` step with
+
+```
+ERROR InvalidDistribution: Invalid distribution metadata:
+      '2.5' is not a valid metadata version
+```
+
+then that version was built, tagged and released everywhere except PyPI. Update
+to this template version, then re-run the failed `Release` workflow run for the
+same tag.
+
+**No version was burned.** The error comes from `twine check`, which the
+publisher runs before the upload begins, so nothing reached PyPI and the
+version is still free. The "PyPI versions cannot be deleted and reused" hazard
+in the v5.6 note does not apply: a re-run publishes that exact version.
+
+Check whether the other release artifacts landed before re-running. In the
+observed cases every other job succeeded, so a re-run needs only the PyPI leg;
+a job that publishes to a rolling channel is safe to repeat.
+
+### Why it broke, and what stops it recurring
+
+Two template-owned pins encoded one invariant that nothing asserted: the
+core-metadata version the build backend emits has to be one the publisher's
+twine understands. `pyproject.toml` left `hatchling` unbounded while
+`release.yml` pinned `gh-action-pypi-publish` at v1.14.0, so when hatchling
+1.32 began emitting `Metadata-Version: 2.5`, that action's bundled twine 6.1.0
+refused it. The break arrived on hatchling's release schedule rather than on
+anyone's decision, and it hit every project at once.
+
+Both halves move in this release. The publisher is now pinned to v1.14.2, the
+first release bundling twine 7.0.0, and `hatchling` is bounded `>=1.32,<1.33`
+so the next metadata bump cannot arrive unannounced. `template-ci` now builds
+the rendered project and runs `twine check` against the twine that the pinned
+publisher bundles, so the pair is proven to agree here rather than in your
+release.
+
+**If you pin `hatchling` yourself**, the new bound arrives through `copier
+update` in `pyproject.toml`, which is template-owned; resolve the merge in
+favour of a bounded requirement. An unbounded `hatchling` still builds and
+still passes your CI. It fails only at release time.

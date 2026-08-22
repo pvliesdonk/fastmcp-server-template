@@ -654,6 +654,52 @@ jobs:
           grep -qF '.claude-plugin/marketplace.json' .github/workflows/release.yml \
             || { echo "::error::release.yml no longer targets .claude-plugin/marketplace.json — the catalog would be bumped at a path Claude Code does not read"; exit 1; }
 
+      - name: publish-metadata gate (build backend vs the pinned publisher)
+        # The metadata version the build backend emits and the twine the
+        # publisher bundles are one invariant spread across two files, and
+        # nothing asserted it.  This job builds wheels but never publishes
+        # one, so a green gate here predicted nothing about `publish-pypi`
+        # downstream: hatchling 1.32 began emitting `Metadata-Version: 2.5`,
+        # the pinned action's twine 6.1.0 refused it, and the first signal
+        # was a broken release in a consumer -- for every downstream at once,
+        # at release time, stable and candidate alike (#479).
+        #
+        # `twine check` is offline and needs no credentials, so the invariant
+        # costs a build and a file fetch to assert on the PR that moves
+        # either pin, instead of on someone's release.
+        #
+        # One matrix leg only: the wheel is py3-none-any and twine's verdict
+        # does not depend on the interpreter.
+        if: matrix.python == '3.11'
+        working-directory: /tmp/smoke
+        run: |
+          set -euo pipefail
+          # Extract, never restate (#143/#159).  The twine that matters is
+          # whichever one the PINNED action bundles, so read it out of that
+          # pin.  Naming a version here would create a second pin that drifts
+          # from the first -- the exact shape of the bug this step exists to
+          # catch.  Reading the RENDERED release.yml keeps it honest about
+          # what a downstream actually runs.
+          SHA=$(grep -oE 'pypa/gh-action-pypi-publish@[0-9a-f]{40}' \
+            .github/workflows/release.yml | head -1 | cut -d@ -f2 || true)
+          [ -n "$SHA" ] \
+            || { echo "::error::no pinned gh-action-pypi-publish SHA in rendered release.yml"; exit 1; }
+          curl -fsSL --retry 3 \
+            "https://raw.githubusercontent.com/pypa/gh-action-pypi-publish/${SHA}/requirements/runtime.txt" \
+            -o /tmp/publisher-runtime.txt
+          TWINE=$(grep -E '^twine==' /tmp/publisher-runtime.txt || true)
+          PACKAGING=$(grep -E '^packaging==' /tmp/publisher-runtime.txt || true)
+          [ -n "$TWINE" ] \
+            || { echo "::error::no twine pin in the publisher's runtime.txt at $SHA"; exit 1; }
+          [ -n "$PACKAGING" ] \
+            || { echo "::error::no packaging pin in the publisher's runtime.txt at $SHA"; exit 1; }
+          echo "publisher $SHA bundles $TWINE / $PACKAGING"
+          # --out-dir keeps dist/ out of the shared render: later steps in
+          # this job read that tree, and the detach smoke asserts on it.
+          uv build --out-dir /tmp/publish-check
+          uv run --no-project --with "$TWINE" --with "$PACKAGING" \
+            twine check /tmp/publish-check/*
+
       - name: vale config structural check
         working-directory: /tmp/smoke
         run: |
