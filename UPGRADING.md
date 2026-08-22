@@ -837,7 +837,7 @@ taken verbatim, with the required scopes added on top.
 
 Deployments using bearer tokens, or no authentication, are unaffected.
 
-## Unreleased - Release candidates publish to PyPI, an installable plugin zip, and stricter config-surface and manifest checks
+## v5.6 - Release candidates publish to PyPI, an installable plugin zip, and stricter config-surface and manifest checks
 
 Release candidates now publish their wheel to PyPI. Before this, the
 `publish-pypi` job skipped pre-releases, which made every rc `.mcpb` bundle
@@ -986,3 +986,7 @@ python3 scripts/stamp_manifests.py <the version they should all carry>
 
 A project that has not cut its first release is unaffected: its pins are all
 seeds and the assertions skip, as before.
+
+## Unreleased
+
+_Nothing yet._

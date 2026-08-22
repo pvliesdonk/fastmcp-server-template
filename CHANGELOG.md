@@ -1,5 +1,12 @@
 # Changelog
 
+## v5.6.0 (2026-08-22)
+
+- #474 fix: assert the manifest version-lockstep rule directly
+- #473 fix: config-surface install-screen defects, a stale job name, and two undeclared inputs
+- #467 feat: publish rcs to PyPI, and pack the Claude Code plugin as a zip asset
+
+
 ## v5.5.0 (2026-08-21)
 
 - #464 fix(notes): a full redraft starts from an emptied page — in-place rewrites are unreachable in the drafting sandbox
