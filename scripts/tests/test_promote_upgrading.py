@@ -122,6 +122,15 @@ def test_check_passes_the_repository_s_own_file() -> None:
     assert check(real) == []
 
 
+def test_release_notes_upgrade_does_not_require_the_claude_oauth_token() -> None:
+    """Local release-note authoring must not regain a hosted-agent credential."""
+    real = (SCRIPT.parent.parent / "UPGRADING.md").read_text(encoding="utf-8")
+    release_notes = real.split(
+        "## v5.1 - Release notes move into the release pull request"
+    )[1].split("## v5.2 - Rolling `rc` image tag and the marketplace manifest path")[0]
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in release_notes
+
+
 @pytest.mark.parametrize("version", ["v5.2.0", "5.2.0", "v5.2.3"])
 def test_version_is_read_as_a_minor_series(version: str) -> None:
     """Patch component and `v` prefix are both irrelevant to the heading."""
