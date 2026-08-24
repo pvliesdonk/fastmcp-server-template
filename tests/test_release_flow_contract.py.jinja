@@ -167,9 +167,11 @@ def test_prepare_promotes_notes_before_release_commit() -> None:
     prepare = text[
         text.index('name = "prepare-release"') : text.index('name = "tag-release"')
     ]
-    assert prepare.index("scripts/stamp_manifests.py $version") < prepare.index(
-        "scripts/promote_release_notes.py $version"
-    ) < prepare.index('git commit -m \\"chore: prepare release $version\\"')
+    assert (
+        prepare.index("scripts/stamp_manifests.py $version")
+        < prepare.index("scripts/promote_release_notes.py $version")
+        < prepare.index('git commit -m \\"chore: prepare release $version\\"')
+    )
 
 
 def test_release_prepare_has_no_model_or_notes_bypass() -> None:
