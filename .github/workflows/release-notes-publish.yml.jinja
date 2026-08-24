@@ -1,13 +1,13 @@
 # Versioned-docs refresh for release-notes pages edited AFTER their
 # release shipped (template#347 → #419).  The primary notes flow needs no
-# publish step at all any more: the page travels inside the release PR
-# (release-prepare.yml's draft-notes job), lands in the tagged tree on
-# merge, is deployed with the release's own docs, and release.yml composes
+# publish step at all any more: a maintainer adds the page to the release PR,
+# it lands in the tagged tree on merge, is deployed with the release's own
+# docs, and release.yml composes
 # the release body — summary block, deep link — from the tagged tree at
 # publish time.  What remains here is the one case that path cannot cover:
 # a page on the default branch changing after its release's docs deployed
-# (a hand edit, a backfill notes PR for a skip_notes release, a port PR
-# from a branch cut).  The touched minor is then redeployed from its
+# (a hand edit, a backfill notes PR, a port PR from a branch cut).  The
+# touched minor is then redeployed from its
 # newest tag with the default branch's docs/releases/ overlaid, so the
 # published /X.Y/ docs match the accumulated pages.
 #
@@ -42,8 +42,8 @@ jobs:
           # gh-pages branch (mike) both live outside the pushed commit.
           fetch-depth: 0
 
-      # A release PR's merge changes docs/releases/ too (the notes travel
-      # inside it, template#419), but the RELEASE owns that deploy: docs.yml
+      # A release PR's merge changes docs/releases/ too (a maintainer adds
+      # notes to its diff, template#419), but the RELEASE owns that deploy: docs.yml
       # builds the new tag's own docs on the release event.  Redeploying
       # here would race it — this workflow resolves "the series' newest
       # tag" BEFORE the release workflow has created the new one, so it
