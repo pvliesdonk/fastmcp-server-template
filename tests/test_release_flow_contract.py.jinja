@@ -639,6 +639,37 @@ def test_release_notes_gate_validates_the_prepared_release_summary() -> None:
         assert required in text, f"release-notes gate lost {required!r}"
 
 
+def test_release_prepare_leaves_release_prs_draft_for_maintainers() -> None:
+    """Hosted drafting and review stay absent; a maintainer lifts the hold.
+
+    Restoring either hosted workflow would reintroduce an agent credential and
+    automatic review/drafting path.  Making the PR ready during preparation
+    would let it merge before a human has pushed and validated the notes.
+    """
+    assert not (REPO_ROOT / ".github/workflows/claude-code-review.yml").exists()
+    assert not (REPO_ROOT / ".github/workflows/release-notes.yml").exists()
+
+    prepare = PREPARE_WORKFLOW.read_text(encoding="utf-8")
+    for removed in (
+        "SKIP_NOTES",
+        "skip_notes",
+        "full_redraft",
+        "draft-notes",
+        "release-notes.yml",
+        "secrets: inherit",
+    ):
+        assert removed not in prepare
+
+    step_name = "Set the release PR draft hold"
+    assert step_name in prepare, "release PR draft hold step missing"
+    hold_step = prepare[prepare.index(step_name) :]
+    hold_step = hold_step[: hold_step.index("- name:")] if "- name:" in hold_step else hold_step
+    assert "gh pr ready --undo" in hold_step
+    assert hold_step.count("gh pr ready") == 1, (
+        "the draft hold must be Release Prepare's only PR-state action"
+    )
+
+
 def _release_notes_gate_validation_script() -> str:
     """Extract the real validation step, omitting only external docs checks."""
     workflow = yaml.safe_load(RELEASE_NOTES_GATE_WORKFLOW.read_text(encoding="utf-8"))
