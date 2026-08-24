@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 KNOPE_TOML = REPO_ROOT / "knope.toml"
@@ -636,6 +637,46 @@ def test_release_notes_gate_validates_the_prepared_release_summary() -> None:
         "uv run mkdocs build --strict",
     ):
         assert required in text, f"release-notes gate lost {required!r}"
+
+
+def _release_notes_gate_validation_script() -> str:
+    """Extract the real validation step, omitting only external docs checks."""
+    workflow = yaml.safe_load(RELEASE_NOTES_GATE_WORKFLOW.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["release-notes"]["steps"]
+    validation = next(step["run"] for step in steps if step.get("name") == "Validate release notes")
+    return validation.split("\nvale docs/releases/", maxsplit=1)[0]
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "<!-- RELEASE-SUMMARY v9.9.9 END -->\n"
+        "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
+        "A summary after an invalid marker order.\n",
+        "<!-- RELEASE-SUMMARY v9.9.9 START -->\nAn unclosed summary.\n",
+    ],
+    ids=("end-before-start", "unclosed-block"),
+)
+def test_release_notes_gate_rejects_malformed_summary_blocks(
+    tmp_path: Path, page: str
+) -> None:
+    """Marker counts alone must not admit a reversed or unclosed block."""
+    releases = tmp_path / "docs" / "releases"
+    releases.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nversion = "9.9.9"\n', encoding="utf-8"
+    )
+    (releases / "9.9.md").write_text(page, encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", "-c", _release_notes_gate_validation_script()],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
 
 
 def test_publish_workflow_skips_release_pr_merges() -> None:
