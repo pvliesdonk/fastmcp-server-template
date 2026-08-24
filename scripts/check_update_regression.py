@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression check for the copier-update generation ordering.
 
 The bug class this guards (issue #291 item 4): on ``copier update``,
@@ -51,7 +50,7 @@ _VAR = "SMOKE_MCP_VAULT_PATH"
 
 
 def _run(args: list[str], cwd: Path) -> None:
-    result = subprocess.run(args, cwd=cwd)
+    result = subprocess.run(args, cwd=cwd, check=False)
     if result.returncode != 0:
         raise SystemExit(f"ERROR: {' '.join(args)} exited {result.returncode}")
 
@@ -94,6 +93,17 @@ def _assert_var(project: Path, rel_path: str, *, expected: bool) -> None:
         raise SystemExit(f"ERROR: {_VAR} {state} {rel_path} — update regression")
 
 
+def _assert_review_workflow_default(project: Path) -> None:
+    workflows = project / ".github" / "workflows"
+    if (workflows / "claude-code-review.yml").exists():
+        raise SystemExit(
+            "ERROR: copier update retained automatic Claude review despite "
+            "enable_automatic_claude_review defaulting to false"
+        )
+    if not (workflows / "claude.yml").is_file():
+        raise SystemExit("ERROR: copier update removed the explicit @claude responder")
+
+
 def main() -> int:
     template_root = Path(__file__).resolve().parent.parent
     with tempfile.TemporaryDirectory(prefix="update-regression-") as tmp:
@@ -133,6 +143,7 @@ def main() -> int:
         _git(["commit", "-q", "-m", f"scaffold at {BASE_REF} + domain var"], project)
 
         _copier(["update", "--trust", "--defaults", "--vcs-ref=HEAD"], project)
+        _assert_review_workflow_default(project)
 
         _assert_var(project, ".env.example", expected=True)
         _assert_var(
