@@ -58,7 +58,10 @@ def test_codeql_action_dedupes_to_repo() -> None:
 
 def test_known_pins_captured() -> None:
     pairs = set(_captures())
-    assert ("astral-sh/setup-uv", "v8.2.0") in pairs  # exact pin captured whole
+    setup_uv_values = {v for d, v in pairs if d == "astral-sh/setup-uv"}
+    # Exact semver pin captured whole (not truncated to e.g. "v8"); the literal
+    # value drifts with every Renovate bump, so assert the shape, not a version.
+    assert any(re.fullmatch(r"v\d+\.\d+\.\d+", v) for v in setup_uv_values)
     assert ("actions/checkout", "v7") in pairs  # major-float pin captured
     assert len({d for d, _ in pairs}) >= 15  # sanity: most actions found
 
