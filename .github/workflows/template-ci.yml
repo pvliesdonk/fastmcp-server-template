@@ -113,6 +113,14 @@ jobs:
             --data enable_authorization=false \
             . /tmp/smoke-authz-off
 
+      - name: Render automatic-review variant
+        run: |
+          rm -rf /tmp/smoke-claude-review-on
+          uv run --no-project --with copier copier copy --trust --defaults \
+            --vcs-ref=HEAD --data-file tests/fixtures/smoke-answers.yml \
+            --data enable_automatic_claude_review=true \
+            . /tmp/smoke-claude-review-on
+
       - name: clean-tree opt-out render
         # Split out from the assertion step below and placed here for the same
         # reason as the authorization render above: a variant rendered after the
@@ -187,7 +195,16 @@ jobs:
         run: |
           python3 scripts/check_render_hygiene.py \
             /tmp/smoke /tmp/smoke-gate-off /tmp/smoke-authz-off \
-            /tmp/smoke-cleantree-off
+            /tmp/smoke-claude-review-on /tmp/smoke-cleantree-off
+
+      - name: Claude workflow presence matrix
+        run: |
+          test -f /tmp/smoke/.github/workflows/claude.yml
+          test ! -e /tmp/smoke/.github/workflows/claude-code-review.yml
+          test ! -e /tmp/smoke/.github/workflows/.jinja
+          test -f /tmp/smoke-claude-review-on/.github/workflows/claude.yml
+          test -f /tmp/smoke-claude-review-on/.github/workflows/claude-code-review.yml
+          test ! -e /tmp/smoke-claude-review-on/.github/workflows/.jinja
 
       - name: structural gate clean-tree assertion present (default) / dropped (opt-out)
         # structural_gate_assert_clean_tree gates ONLY the whole-tree clean
@@ -622,7 +639,7 @@ jobs:
           done
 
       - name: claude-code-review draft gate and per-commit concurrency
-        working-directory: /tmp/smoke
+        working-directory: /tmp/smoke-claude-review-on
         run: |
           # Both halves must survive the render, and neither announces its
           # absence: without the draft gate the reviewer decides eligibility
@@ -1201,6 +1218,8 @@ jobs:
           # --- Step 1: stop tracking ---
           rm -f .copier-answers.yml
           # --- Step 2: prune template-origin CI + fleet review wiring ---
+          # claude-code-review.yml is optional; rm -f keeps this idempotent while
+          # still removing it from an opted-in downstream.
           rm -f .github/workflows/copier-update.yml \
                 .github/workflows/claude.yml \
                 .github/workflows/claude-code-review.yml \
@@ -1383,7 +1402,7 @@ jobs:
           check_replacement 1 ' whenever config fields change, and re-verified by'
           [ "$replacement_fail" = "0" ] \
             || { echo "::error::detach scrub ran but did not produce its replacement text — see the errors above"; exit 1; }
-          # stripped files gone:
+          # stripped files gone (claude-code-review.yml is optional before detach):
           for gone in \
               .github/workflows/copier-update.yml \
               .github/workflows/claude.yml \
