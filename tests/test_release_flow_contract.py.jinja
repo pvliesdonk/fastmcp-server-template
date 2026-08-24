@@ -708,6 +708,7 @@ def _run_release_notes_gate(
     tmp_path: Path, page: str | None
 ) -> subprocess.CompletedProcess[str]:
     """Run the gate's real validation script against a controlled release page."""
+    tmp_path.mkdir()
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nversion = "9.9.9"\n', encoding="utf-8"
     )
@@ -845,6 +846,7 @@ def _run_release_body(
     tmp_path: Path, tag: str, page: str | None
 ) -> subprocess.CompletedProcess[str]:
     """Run the real release-body script with only GitHub and git faked."""
+    tmp_path.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     captured = tmp_path / "release-body-captured.md"
