@@ -335,6 +335,18 @@ def test_extra_malformed_watermark_lookalike_refuses(tmp_path: Path) -> None:
         plan_promotion(tmp_path, "2.4.1")
 
 
+def test_malformed_backtick_opener_cannot_hide_extra_watermark(
+    tmp_path: Path,
+) -> None:
+    extra = "<!-- notes-range-end: 2222222222222222222222222222222222222222 -->"
+    staged = NEXT + f"\n```markdown`invalid\n{extra}\n```\n"
+    write(tmp_path / "docs/releases/2.4.md", canonical())
+    write(tmp_path / "docs/releases/next.md", staged)
+
+    with pytest.raises(PromotionError, match="watermark"):
+        plan_promotion(tmp_path, "2.4.1")
+
+
 def test_fenced_only_canonical_watermark_refuses(tmp_path: Path) -> None:
     watermark = "<!-- notes-range-end: 1111111111111111111111111111111111111111 -->"
     page = canonical().replace(watermark, "")
@@ -443,6 +455,37 @@ def test_patch_order_ignores_fenced_heading_examples(
     ]
 
     assert promoted.index("## v2.4.1") < promoted.index("## v2.4.2")
+    assert "## v9.9.9" in promoted
+
+
+def test_malformed_backtick_opener_cannot_hide_patch_heading(
+    tmp_path: Path,
+) -> None:
+    example = "```markdown`invalid\n## v9.9.9\n```\n\n"
+    page = with_patch("v2.4.1").replace(
+        "<!-- PATCH-RELEASES-END -->",
+        example + "<!-- PATCH-RELEASES-END -->",
+    )
+    write(tmp_path / "docs/releases/2.4.md", page)
+    write(tmp_path / "docs/releases/next.md", NEXT)
+
+    with pytest.raises(PromotionError, match="patch headings"):
+        plan_promotion(tmp_path, "2.4.2")
+
+
+def test_tilde_fence_info_string_may_contain_backticks(tmp_path: Path) -> None:
+    example = "~~~markdown`valid\n## v9.9.9\n~~~\n\n"
+    page = with_patch("v2.4.1").replace(
+        "<!-- PATCH-RELEASES-END -->",
+        example + "<!-- PATCH-RELEASES-END -->",
+    )
+    write(tmp_path / "docs/releases/2.4.md", page)
+    write(tmp_path / "docs/releases/next.md", NEXT)
+
+    promoted = plan_promotion(tmp_path, "2.4.2").writes[
+        tmp_path / "docs/releases/2.4.md"
+    ]
+
     assert "## v9.9.9" in promoted
 
 

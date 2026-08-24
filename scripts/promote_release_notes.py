@@ -68,10 +68,12 @@ def _masked_line(line: str) -> str:
 
 
 def _opening_fence(line: str) -> tuple[str, int] | None:
-    match = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+    match = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
     if match is None:
         return None
     marker = match.group(1)
+    if marker[0] == "`" and "`" in match.group(2):
+        return None
     return marker[0], len(marker)
 
 
