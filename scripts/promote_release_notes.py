@@ -20,7 +20,7 @@ VERSION_RE = re.compile(
     r"(?P<patch>0|[1-9][0-9]*)"
     r"(?:-rc\.(?P<rc>[1-9][0-9]*))?$"
 )
-WATERMARK_RE = re.compile(r"<!-- notes-range-end: ([0-9a-f]{40}) -->")
+WATERMARK_RE = re.compile(r"^<!-- notes-range-end: ([0-9a-f]{40}) -->$", re.MULTILINE)
 INDEX_START_RE = re.compile(r"<!-- RELEASE-PAGES-START:[\s\S]*?-->")
 PATCH_HEADING_RE = re.compile(r"^## v([0-9]+)\.([0-9]+)\.([0-9]+)$", re.MULTILINE)
 PATCH_HEADING_CANDIDATE_RE = re.compile(r"^## v[0-9]+\.[0-9]+\.[0-9]+.*$", re.MULTILINE)
@@ -63,6 +63,58 @@ def require_once(text: str, token: str, label: str) -> None:
         raise PromotionError(f"{label} must occur exactly once; found {count}")
 
 
+def _masked_line(line: str) -> str:
+    return "".join(character if character in "\r\n" else " " for character in line)
+
+
+def _opening_fence(line: str) -> tuple[str, int] | None:
+    match = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+    if match is None:
+        return None
+    marker = match.group(1)
+    return marker[0], len(marker)
+
+
+def _closes_fence(line: str, character: str, length: int) -> bool:
+    return (
+        re.fullmatch(rf" {{0,3}}{re.escape(character)}{{{length},}}[ \t]*", line)
+        is not None
+    )
+
+
+def _mask_fenced_code(text: str) -> str:
+    masked: list[str] = []
+    fence_character = ""
+    fence_length = 0
+    for line in text.splitlines(keepends=True):
+        stripped = line.rstrip("\r\n")
+        if fence_character:
+            masked.append(_masked_line(line))
+            if _closes_fence(stripped, fence_character, fence_length):
+                fence_character = ""
+                fence_length = 0
+            continue
+
+        fence = _opening_fence(stripped)
+        if fence is not None:
+            fence_character, fence_length = fence
+            masked.append(_masked_line(line))
+        else:
+            masked.append(line)
+    return "".join(masked)
+
+
+def _watermark_match(text: str, label: str) -> re.Match[str]:
+    visible = _mask_fenced_code(text)
+    matches = list(WATERMARK_RE.finditer(visible))
+    lookalikes = sum("notes-range-end" in line for line in visible.splitlines())
+    if len(matches) != 1 or lookalikes != 1:
+        raise PromotionError(
+            f"{label} must contain exactly one standalone 40-hex watermark"
+        )
+    return matches[0]
+
+
 def validate_next(text: str) -> str:
     lines = text.splitlines()
     if not lines or lines[0] != "# Next release":
@@ -72,8 +124,7 @@ def validate_next(text: str) -> str:
         raise PromotionError(
             f"next.md title must occur exactly once; found {title_count}"
         )
-    if len(WATERMARK_RE.findall(text)) != 1:
-        raise PromotionError("next.md must contain exactly one 40-hex watermark")
+    _watermark_match(text, "next.md")
     start = "<!-- RELEASE-SUMMARY NEXT START -->"
     end = "<!-- RELEASE-SUMMARY NEXT END -->"
     require_once(text, start, "NEXT summary start")
@@ -89,13 +140,23 @@ def validate_next(text: str) -> str:
 def _target_summary_count(text: str, tag: str) -> int:
     start = f"<!-- RELEASE-SUMMARY {tag} START -->"
     end = f"<!-- RELEASE-SUMMARY {tag} END -->"
-    starts = text.count(start)
-    ends = text.count(end)
-    if starts != ends or starts > 1:
+    visible = _mask_fenced_code(text)
+    starts = visible.count(start)
+    ends = visible.count(end)
+    if starts == 0 and ends == 0:
+        return 0
+    if starts != 1 or ends != 1:
         raise PromotionError(
-            "target summary must contain zero or one complete START/END pair"
+            "target summary must contain exactly one complete START/END pair"
         )
-    return starts
+    start_at = visible.index(start)
+    end_at = visible.index(end)
+    if start_at > end_at:
+        raise PromotionError("target summary START must precede END")
+    summary = visible[start_at + len(start) : end_at].strip()
+    if not summary:
+        raise PromotionError("target summary must not be empty")
+    return 1
 
 
 def new_page_text(next_text: str, target: Target) -> str:
@@ -164,18 +225,14 @@ def shift_headings(text: str, levels: int = 1) -> str:
         stripped = line.rstrip("\r\n")
         if fence_character:
             shifted.append(line)
-            if re.fullmatch(
-                rf"{re.escape(fence_character)}{{{fence_length},}}[ \t]*", stripped
-            ):
+            if _closes_fence(stripped, fence_character, fence_length):
                 fence_character = ""
                 fence_length = 0
             continue
 
-        fence = re.match(r"^(`{3,}|~{3,})", stripped)
-        if fence:
-            marker = fence.group(1)
-            fence_character = marker[0]
-            fence_length = len(marker)
+        fence = _opening_fence(stripped)
+        if fence is not None:
+            fence_character, fence_length = fence
             shifted.append(line)
             continue
 
@@ -196,8 +253,7 @@ def _validate_canonical_page(
         raise PromotionError(
             f"canonical page title must be {title!r} exactly once; found {title_count}"
         )
-    if len(WATERMARK_RE.findall(page_text)) != 1:
-        raise PromotionError("canonical page must contain exactly one 40-hex watermark")
+    _watermark_match(page_text, "canonical page")
 
     start = "<!-- PATCH-RELEASES-START -->"
     end = "<!-- PATCH-RELEASES-END -->"
@@ -208,7 +264,7 @@ def _validate_canonical_page(
     if start_at > end_at:
         raise PromotionError("patch START sentinel must precede END sentinel")
 
-    patch_text = page_text[start_at:end_at]
+    patch_text = _mask_fenced_code(page_text[start_at:end_at])
     patch_matches = list(PATCH_HEADING_RE.finditer(patch_text))
     if len(patch_matches) != len(PATCH_HEADING_CANDIDATE_RE.findall(patch_text)):
         raise PromotionError("patch headings must be ascending and undated")
@@ -239,13 +295,14 @@ def promote_patch_page(
     if patches and target_version <= patches[-1]:
         raise PromotionError("target patch would violate ascending version order")
 
-    staging_watermark = WATERMARK_RE.search(next_text)
-    canonical_watermark = WATERMARK_RE.search(page_text)
-    if staging_watermark is None or canonical_watermark is None:
-        raise PromotionError("validated release notes lost their watermark")
+    staging_watermark = _watermark_match(next_text, "next.md")
+    canonical_watermark = _watermark_match(page_text, "canonical page")
 
-    body = next_text.split("\n", 1)[1]
-    body = WATERMARK_RE.sub("", body, count=1)
+    body_start = next_text.index("\n") + 1
+    body = next_text[body_start:]
+    watermark_start = staging_watermark.start() - body_start
+    watermark_end = staging_watermark.end() - body_start
+    body = body[:watermark_start] + body[watermark_end:]
     body = body.replace("RELEASE-SUMMARY NEXT", f"RELEASE-SUMMARY {target.tag}")
     body = shift_headings(body).strip()
     section = f"## {target.tag}\n\n{body}"

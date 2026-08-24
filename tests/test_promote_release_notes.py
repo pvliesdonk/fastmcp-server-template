@@ -252,6 +252,51 @@ def test_duplicate_target_summary_refuses(tmp_path: Path) -> None:
     assert snapshot(tmp_path) == before
 
 
+def test_reversed_target_summary_refuses(tmp_path: Path) -> None:
+    block = """<!-- RELEASE-SUMMARY v2.4.0 START -->
+Existing reviewed summary.
+<!-- RELEASE-SUMMARY v2.4.0 END -->"""
+    reversed_block = """<!-- RELEASE-SUMMARY v2.4.0 END -->
+Existing reviewed summary.
+<!-- RELEASE-SUMMARY v2.4.0 START -->"""
+    write(tmp_path / "docs/releases/2.4.md", canonical().replace(block, reversed_block))
+
+    with pytest.raises(PromotionError, match="target summary"):
+        plan_promotion(tmp_path, "2.4.0")
+
+
+def test_empty_target_summary_refuses(tmp_path: Path) -> None:
+    write(
+        tmp_path / "docs/releases/2.4.md",
+        canonical().replace("Existing reviewed summary.", ""),
+    )
+
+    with pytest.raises(PromotionError, match="target summary"):
+        plan_promotion(tmp_path, "2.4.0")
+
+
+@pytest.mark.parametrize(
+    ("indent", "fence"), [("", "```"), ("   ", "```"), ("", "~~~"), ("   ", "~~~")]
+)
+def test_target_summary_ignores_marker_examples_in_fenced_code(
+    tmp_path: Path,
+    indent: str,
+    fence: str,
+) -> None:
+    fenced_example = f"""
+{indent}{fence}markdown
+<!-- RELEASE-SUMMARY v2.4.0 START -->
+Example text is not a second reviewed block.
+<!-- RELEASE-SUMMARY v2.4.0 END -->
+{indent}{fence}
+"""
+    write(tmp_path / "docs/releases/2.4.md", canonical() + fenced_example)
+
+    plan = plan_promotion(tmp_path, "2.4.0")
+
+    assert plan.stage_paths == ()
+
+
 def test_patch_section_is_inserted_before_patch_end(tmp_path: Path) -> None:
     write(tmp_path / "docs/releases/2.4.md", canonical("v2.4.0"))
     write(tmp_path / "docs/releases/next.md", NEXT)
@@ -267,6 +312,56 @@ def test_patch_section_is_inserted_before_patch_end(tmp_path: Path) -> None:
     assert "notes-range-end: 1111111111111111111111111111111111111111" not in page
 
 
+def test_next_watermark_must_be_standalone_metadata(tmp_path: Path) -> None:
+    watermark = "<!-- notes-range-end: 0123456789abcdef0123456789abcdef01234567 -->"
+    write(tmp_path / "docs/releases/2.4.md", canonical())
+    write(
+        tmp_path / "docs/releases/next.md",
+        NEXT.replace(watermark, f"Inline example: {watermark}"),
+    )
+
+    with pytest.raises(PromotionError, match="watermark"):
+        plan_promotion(tmp_path, "2.4.1")
+
+
+def test_extra_malformed_watermark_lookalike_refuses(tmp_path: Path) -> None:
+    write(tmp_path / "docs/releases/2.4.md", canonical())
+    write(
+        tmp_path / "docs/releases/next.md",
+        NEXT + "\n<!-- notes-range-end: not-a-commit -->\n",
+    )
+
+    with pytest.raises(PromotionError, match="watermark"):
+        plan_promotion(tmp_path, "2.4.1")
+
+
+def test_fenced_only_canonical_watermark_refuses(tmp_path: Path) -> None:
+    watermark = "<!-- notes-range-end: 1111111111111111111111111111111111111111 -->"
+    page = canonical().replace(watermark, "")
+    page += f"\n```markdown\n{watermark}\n```\n"
+    write(tmp_path / "docs/releases/2.4.md", page)
+    write(tmp_path / "docs/releases/next.md", NEXT)
+
+    with pytest.raises(PromotionError, match="watermark"):
+        plan_promotion(tmp_path, "2.4.1")
+
+
+def test_fenced_watermark_example_survives_metadata_promotion(tmp_path: Path) -> None:
+    example = "<!-- notes-range-end: 2222222222222222222222222222222222222222 -->"
+    staged = NEXT + f"\n```markdown\n{example}\n```\n"
+    write(tmp_path / "docs/releases/2.4.md", canonical())
+    write(tmp_path / "docs/releases/next.md", staged)
+
+    page = plan_promotion(tmp_path, "2.4.1").writes[tmp_path / "docs/releases/2.4.md"]
+
+    assert (
+        page.count("<!-- notes-range-end: 0123456789abcdef0123456789abcdef01234567 -->")
+        == 1
+    )
+    assert example in page
+    assert "notes-range-end: 1111111111111111111111111111111111111111" not in page
+
+
 @pytest.mark.parametrize("fence", ["```", "~~~"])
 def test_heading_conversion_ignores_fenced_code(tmp_path: Path, fence: str) -> None:
     staged = NEXT + f"\n{fence}markdown\n## literal example\n{fence}\n"
@@ -276,6 +371,21 @@ def test_heading_conversion_ignores_fenced_code(tmp_path: Path, fence: str) -> N
     page = plan_promotion(tmp_path, "2.4.1").writes[tmp_path / "docs/releases/2.4.md"]
 
     assert "### Credential rotation" in page
+    assert "## literal example" in page
+    assert "### literal example" not in page
+
+
+@pytest.mark.parametrize("fence", ["```", "~~~"])
+def test_heading_conversion_recognizes_three_space_indented_fences(
+    tmp_path: Path,
+    fence: str,
+) -> None:
+    staged = NEXT + f"\n   {fence}markdown\n## literal example\n   {fence}\n"
+    write(tmp_path / "docs/releases/2.4.md", canonical("v2.4.0"))
+    write(tmp_path / "docs/releases/next.md", staged)
+
+    page = plan_promotion(tmp_path, "2.4.1").writes[tmp_path / "docs/releases/2.4.md"]
+
     assert "## literal example" in page
     assert "### literal example" not in page
 
@@ -313,6 +423,27 @@ def test_dated_patch_heading_refuses(tmp_path: Path) -> None:
         plan_promotion(tmp_path, "2.4.2")
 
     assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize("fence", ["```", "~~~"])
+def test_patch_order_ignores_fenced_heading_examples(
+    tmp_path: Path,
+    fence: str,
+) -> None:
+    example = f"   {fence}markdown\n## v9.9.9\n   {fence}\n\n"
+    page = with_patch("v2.4.1").replace(
+        "<!-- PATCH-RELEASES-END -->",
+        example + "<!-- PATCH-RELEASES-END -->",
+    )
+    write(tmp_path / "docs/releases/2.4.md", page)
+    write(tmp_path / "docs/releases/next.md", NEXT)
+
+    promoted = plan_promotion(tmp_path, "2.4.2").writes[
+        tmp_path / "docs/releases/2.4.md"
+    ]
+
+    assert promoted.index("## v2.4.1") < promoted.index("## v2.4.2")
+    assert "## v9.9.9" in promoted
 
 
 @pytest.mark.parametrize(
