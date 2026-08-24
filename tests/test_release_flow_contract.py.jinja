@@ -42,6 +42,7 @@ release-PR model:
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -789,6 +790,104 @@ def test_rc_release_bodies_use_the_stable_summary_marker() -> None:
     assert 'awk -v tag="$marker_tag"' in release, (
         "the summary extraction must use the normalized stable marker"
     )
+
+
+def _release_body_script() -> str:
+    """Extract the real release-body step from the rendered workflow."""
+    workflow = yaml.safe_load(RELEASE_WORKFLOW.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["release"]["steps"]
+    return next(
+        step["run"]
+        for step in steps
+        if step.get("name") == "Compose the release body (summary, docs, compare, changelog)"
+    )
+
+
+def _run_release_body(tmp_path: Path, tag: str, page: str | None) -> subprocess.CompletedProcess[str]:
+    """Run the real release-body script with only GitHub and git faked."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    captured = tmp_path / "release-body-captured.md"
+    (bin_dir / "git").write_text(
+        "#!/usr/bin/env bash\n"
+        "if [ \"$1\" = tag ] && [ \"$2\" = --list ]; then exit 0; fi\n"
+        "exit 1\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "gh").write_text(
+        "#!/usr/bin/env bash\n"
+        "case \"$1 $2\" in\n"
+        "  'release view') printf '%s\\n' 'Machine changelog body' ;;\n"
+        "  'release edit') cp \"$5\" \"$CAPTURED_BODY\" ;;\n"
+        "  *) exit 1 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    for command in (bin_dir / "git", bin_dir / "gh"):
+        command.chmod(0o755)
+
+    if page is not None:
+        releases = tmp_path / "docs" / "releases"
+        releases.mkdir(parents=True)
+        (releases / "9.9.md").write_text(page, encoding="utf-8")
+
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "TAG": tag,
+        "IS_PRERELEASE": "true" if "-rc." in tag else "false",
+        "REPO": "example/repo",
+        "CAPTURED_BODY": str(captured),
+    }
+    result = subprocess.run(
+        ["bash", "-c", _release_body_script()],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    result.captured_body = captured  # type: ignore[attr-defined]
+    return result
+
+
+@pytest.mark.parametrize(
+    ("tag", "page", "error"),
+    [
+        ("v9.9.9", None, "release notes page is missing"),
+        (
+            "v9.9.9",
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n",
+            "release summary is missing or empty",
+        ),
+    ],
+    ids=("missing-page", "empty-summary"),
+)
+def test_release_body_refuses_unvalidated_notes(
+    tmp_path: Path, tag: str, page: str | None, error: str
+) -> None:
+    """A release must not publish without a page and non-empty stable summary."""
+    result = _run_release_body(tmp_path, tag, page)
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert error in result.stdout + result.stderr
+
+
+def test_rc_release_body_reads_the_stable_summary_marker(tmp_path: Path) -> None:
+    """An RC publishes the non-empty stable marker from its target page."""
+    result = _run_release_body(
+        tmp_path,
+        "v9.9.9-rc.1",
+        "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
+        "Validated summary.\n"
+        "<!-- RELEASE-SUMMARY v9.9.9 END -->\n",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    body = result.captured_body.read_text(encoding="utf-8")  # type: ignore[attr-defined]
+    assert "Validated summary." in body
+    assert "Release candidate 9.9.9-rc.1" in body
 
 
 def test_port_bookkeeping_carries_the_notes_page() -> None:
