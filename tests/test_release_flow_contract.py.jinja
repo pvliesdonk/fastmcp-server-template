@@ -648,17 +648,23 @@ def _release_notes_gate_validation_script() -> str:
 
 
 @pytest.mark.parametrize(
-    "page",
+    ("page", "error"),
     [
-        "<!-- RELEASE-SUMMARY v9.9.9 END -->\n"
-        "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
-        "A summary after an invalid marker order.\n",
-        "<!-- RELEASE-SUMMARY v9.9.9 START -->\nAn unclosed summary.\n",
+        (
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
+            "A summary after an invalid marker order.\n",
+            "summary block is malformed",
+        ),
+        (
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\nAn unclosed summary.\n",
+            "must contain exactly one RELEASE-SUMMARY end marker",
+        ),
     ],
     ids=("end-before-start", "unclosed-block"),
 )
 def test_release_notes_gate_rejects_malformed_summary_blocks(
-    tmp_path: Path, page: str
+    tmp_path: Path, page: str, error: str
 ) -> None:
     """Marker counts alone must not admit a reversed or unclosed block."""
     releases = tmp_path / "docs" / "releases"
@@ -677,6 +683,7 @@ def test_release_notes_gate_rejects_malformed_summary_blocks(
     )
 
     assert result.returncode != 0, result.stdout + result.stderr
+    assert error in result.stdout + result.stderr
 
 
 def test_publish_workflow_skips_release_pr_merges() -> None:
