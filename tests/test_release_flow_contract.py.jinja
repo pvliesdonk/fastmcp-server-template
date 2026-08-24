@@ -704,6 +704,26 @@ def _release_notes_gate_validation_script() -> str:
     return cast("str", validation.split("\nvale docs/releases/", maxsplit=1)[0])
 
 
+def _run_release_notes_gate(
+    tmp_path: Path, page: str | None
+) -> subprocess.CompletedProcess[str]:
+    """Run the gate's real validation script against a controlled release page."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nversion = "9.9.9"\n', encoding="utf-8"
+    )
+    if page is not None:
+        releases = tmp_path / "docs" / "releases"
+        releases.mkdir(parents=True)
+        (releases / "9.9.md").write_text(page, encoding="utf-8")
+    return subprocess.run(
+        ["bash", "-c", _release_notes_gate_validation_script()],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 @pytest.mark.parametrize(
     ("page", "error"),
     [
@@ -724,20 +744,7 @@ def test_release_notes_gate_rejects_malformed_summary_blocks(
     tmp_path: Path, page: str, error: str
 ) -> None:
     """Marker counts alone must not admit a reversed or unclosed block."""
-    releases = tmp_path / "docs" / "releases"
-    releases.mkdir(parents=True)
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nversion = "9.9.9"\n', encoding="utf-8"
-    )
-    (releases / "9.9.md").write_text(page, encoding="utf-8")
-
-    result = subprocess.run(
-        ["bash", "-c", _release_notes_gate_validation_script()],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = _run_release_notes_gate(tmp_path, page)
 
     assert result.returncode != 0, result.stdout + result.stderr
     assert error in result.stdout + result.stderr
@@ -882,6 +889,69 @@ def _run_release_body(
     )
     result.captured_body = captured  # type: ignore[attr-defined]
     return result
+
+
+@pytest.mark.parametrize(
+    ("page", "accepted"),
+    [
+        (
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
+            "Validated summary.\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n",
+            True,
+        ),
+        (
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
+            "Reversed markers.\n",
+            False,
+        ),
+        (
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\nFirst summary.\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\nSecond summary.\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n",
+            False,
+        ),
+        ("# Release notes without a target summary\n", False),
+        ("<!-- RELEASE-SUMMARY v9.9.9 START -->\nUnclosed summary.\n", False),
+        (
+            "<!-- RELEASE-SUMMARY v9.9.9 START --> trailing text\n"
+            "Summary behind a stray start delimiter.\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n",
+            False,
+        ),
+        (
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
+            "Summary before a stray end delimiter.\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 END --> trailing text\n",
+            False,
+        ),
+    ],
+    ids=(
+        "valid",
+        "malformed",
+        "duplicate",
+        "missing",
+        "unterminated",
+        "start-marker-suffix",
+        "end-marker-suffix",
+    ),
+)
+def test_release_notes_gate_matches_publisher_summary_marker_contract(
+    tmp_path: Path, page: str, accepted: bool
+) -> None:
+    """Gate and publisher agree on exact whole-line summary delimiters.
+
+    Substring parsing would accept a marker with trailing text in the gate but
+    reject it at release publication, leaving a mergeable release PR that
+    cannot publish.
+    """
+    gate = _run_release_notes_gate(tmp_path / "gate", page)
+    publisher = _run_release_body(tmp_path / "publisher", "v9.9.9", page)
+
+    assert (gate.returncode == 0) is accepted, gate.stdout + gate.stderr
+    assert (publisher.returncode == 0) is accepted, publisher.stdout + publisher.stderr
 
 
 @pytest.mark.parametrize(
