@@ -701,7 +701,7 @@ def _release_notes_gate_validation_script() -> str:
     validation = next(
         step["run"] for step in steps if step.get("name") == "Validate release notes"
     )
-    return cast(str, validation.split("\nvale docs/releases/", maxsplit=1)[0])
+    return cast("str", validation.split("\nvale docs/releases/", maxsplit=1)[0])
 
 
 @pytest.mark.parametrize(
@@ -824,7 +824,7 @@ def _release_body_script() -> str:
     )
     steps = workflow["jobs"]["release"]["steps"]
     return cast(
-        str,
+        "str",
         next(
             step["run"]
             for step in steps
