@@ -36,7 +36,9 @@ def _pin_line_index(lines: list[str]) -> int:
 def test_rationale_comment_leads_with_the_pinned_floor() -> None:
     lines = _PYPROJECT.read_text(encoding="utf-8").splitlines()
     pin_index = _pin_line_index(lines)
-    floor = _PIN_RE.match(lines[pin_index])["floor"]
+    match = _PIN_RE.match(lines[pin_index])
+    assert match is not None
+    floor = match["floor"]
 
     block_start = pin_index
     while block_start > 0 and lines[block_start - 1].lstrip().startswith("#"):

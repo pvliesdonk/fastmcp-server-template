@@ -65,6 +65,9 @@ DOCS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "docs.yml"
 UNSTABLE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "unstable.yml"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 COVERAGE_STATUS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "coverage-status.yml"
+RELEASE_NOTES_GATE_WORKFLOW = (
+    REPO_ROOT / ".github" / "workflows" / "release-notes-gate.yml"
+)
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 {%- if include_claude_plugin %}
 PLUGIN_JSON = Path(".claude-plugin/plugin/.claude-plugin/plugin.json")
@@ -604,6 +607,35 @@ def test_release_notes_skill_uses_the_checked_out_sha_for_api_research() -> None
     assert "HEAD_SHA=$(git rev-parse HEAD)" in text
     assert "compare/${PREV}...${HEAD_SHA}" in text
     assert "compare/PREV...HEAD\"" not in text
+
+
+def test_release_notes_gate_validates_the_prepared_release_summary() -> None:
+    """Release PRs need one non-empty stable summary before they can merge."""
+    text = RELEASE_NOTES_GATE_WORKFLOW.read_text(encoding="utf-8")
+
+    for required in (
+        "pull_request:",
+        "branches: [main, \"release/**\"]",
+        "opened",
+        "synchronize",
+        "ready_for_review",
+        "reopened",
+        "name: Release Notes Gate",
+        "if: startsWith(github.head_ref, 'knope/prepare/')",
+        'stable="${version%%-*}"',
+        'tag="v${stable}"',
+        'minor="${stable%.*}"',
+        'page="docs/releases/${minor}.md"',
+        'grep -cF "RELEASE-SUMMARY ${tag} START"',
+        'grep -cF "RELEASE-SUMMARY ${tag} END"',
+        '[ "$count" = "1" ]',
+        '[ "$end_count" = "1" ]',
+        'awk -v tag="$tag"',
+        "tr -d '[:space:]'",
+        "vale docs/releases/",
+        "uv run mkdocs build --strict",
+    ):
+        assert required in text, f"release-notes gate lost {required!r}"
 
 
 def test_publish_workflow_skips_release_pr_merges() -> None:
