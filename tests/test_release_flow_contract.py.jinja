@@ -671,6 +671,32 @@ def test_release_prepare_leaves_release_prs_draft_for_maintainers() -> None:
     )
 
 
+def test_operator_docs_and_template_smoke_match_the_agent_neutral_surface() -> None:
+    """Only optional ``@claude`` handling retains the Claude OAuth secret."""
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert (
+        "| `CLAUDE_CODE_OAUTH_TOKEN` | `claude.yml` | Run `claude setup-token` locally "
+        "and paste the result. This is optional unless you want `@claude` command "
+        "handling. |"
+    ) in readme
+    release_token_row = next(
+        line for line in readme.splitlines() if line.startswith("| `RELEASE_TOKEN` |")
+    )
+    assert "release-notes.yml" not in release_token_row
+
+    forking = (REPO_ROOT / "FORKING.md").read_text(encoding="utf-8")
+    assert "claude-code-review.yml" not in forking
+    assert "release-notes.yml" not in forking
+
+    template_ci = (REPO_ROOT / ".github/workflows/template-ci.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "release-notes-gate.yml" in template_ci
+    assert "name: Release Notes Gate" in template_ci
+    assert "startsWith(github.head_ref, 'knope/prepare/')" in template_ci
+    assert "claude-code-review draft gate and per-commit concurrency" not in template_ci
+
+
 def _release_notes_gate_validation_script() -> str:
     """Extract the real validation step, omitting only external docs checks."""
     workflow = yaml.safe_load(RELEASE_NOTES_GATE_WORKFLOW.read_text(encoding="utf-8"))
