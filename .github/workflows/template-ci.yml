@@ -621,21 +621,12 @@ jobs:
             [ "$count" = "1" ] || { echo "::error::expected 1 '$marker' sentinel, found $count"; exit 1; }
           done
 
-      - name: claude-code-review draft gate and per-commit concurrency
+      - name: release notes gate smoke
         working-directory: /tmp/smoke
         run: |
-          # Both halves must survive the render, and neither announces its
-          # absence: without the draft gate the reviewer decides eligibility
-          # itself, mid-run, and loses a race against "Ready for review"
-          # (template#437 — two full reviews of one diff); without the
-          # SHA-keyed group two triggers on the same commit each run to
-          # completion. A review that runs twice looks like a working review.
-          grep -qF 'github.event.pull_request.draft == false' .github/workflows/claude-code-review.yml \
-            || { echo "::error::claude-code-review.yml lost its workflow-level draft gate — the reviewer would race 'Ready for review' again"; exit 1; }
-          grep -qF 'cancel-in-progress: true' .github/workflows/claude-code-review.yml \
-            || { echo "::error::claude-code-review.yml lost its per-commit concurrency — the same commit can be reviewed twice"; exit 1; }
-          grep -qE '^  group: claude-review-.*pull_request\.number.*pull_request\.head\.sha' .github/workflows/claude-code-review.yml \
-            || { echo "::error::claude-code-review.yml's concurrency group no longer keys on the PR and head SHA, so it cannot dedupe per commit"; exit 1; }
+          test -f .github/workflows/release-notes-gate.yml
+          grep -qF 'name: Release Notes Gate' .github/workflows/release-notes-gate.yml
+          grep -qF 'startsWith(github.head_ref, '\''knope/prepare/'\'')' .github/workflows/release-notes-gate.yml
 
       - name: release.yml marketplace upsert
         working-directory: /tmp/smoke
@@ -1200,11 +1191,9 @@ jobs:
 
           # --- Step 1: stop tracking ---
           rm -f .copier-answers.yml
-          # --- Step 2: prune template-origin CI + fleet review wiring ---
+          # --- Step 2: prune template-origin CI + optional fleet command wiring ---
           rm -f .github/workflows/copier-update.yml \
-                .github/workflows/claude.yml \
-                .github/workflows/claude-code-review.yml \
-                .github/workflows/release-notes.yml
+                .github/workflows/claude.yml
           rm -f scripts/copier_update_notes.py
           # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
           #     count the scrub expects (issue #199).
@@ -1387,8 +1376,6 @@ jobs:
           for gone in \
               .github/workflows/copier-update.yml \
               .github/workflows/claude.yml \
-              .github/workflows/claude-code-review.yml \
-              .github/workflows/release-notes.yml \
               scripts/copier_update_notes.py; do
             [ ! -e "$gone" ] \
               || { echo "::error::$gone not removed by detach"; exit 1; }
@@ -1401,6 +1388,7 @@ jobs:
               .github/workflows/docs.yml \
               .github/workflows/release-prepare.yml \
               .github/workflows/release.yml \
+              .github/workflows/release-notes-gate.yml \
               .github/workflows/release-notes-publish.yml; do
             [ -f "$kept" ] \
               || { echo "::error::$kept was removed but should be kept"; exit 1; }

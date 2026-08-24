@@ -55,9 +55,6 @@ knope-counted subset (`feat`/`fix`/`!`), and this section's prose are checked
 against each other by `tests/test_commit_conventions.py`, so no one of the
 three can drift alone.
 
-The automated Claude review runs **only after CI passes** — if CI is red, no
-review is posted. Fix CI and push; the review runs on the next green run.
-
 ## Breaking Changes and the `!` Marker
 
 The release version is computed by knope from commit subjects and lands in a reviewed release PR, so the `!` marker (or `BREAKING CHANGE:` footer) *is* the major-version decision — apply it deliberately, not by habit; the release-PR review is where a mis-typed `!` gets caught, but the reviewer should never have to. A change is **breaking** only if it breaks one of two surfaces:
@@ -142,7 +139,7 @@ Constrain issues to **decay that will compound**, not anything imperfect. The di
 Trivial exceptions: pure typo fixes and automated dependency bumps (Renovate) may skip the issue.
 
 <!-- TEMPLATE-TRACKING-START -->
-**The bot reviewer (claude-review) is a merge gate, not a pair reviewer.** Local review must be complete before the PR opens. If it finds anything on first run, the local review was incomplete — that is a discipline failure to investigate, not "address-and-move-on." Run a local code-review pass on the cumulative diff before `gh pr create`; it is not a substitute.
+**Local review is a merge gate.** Run a local code-review pass on the cumulative diff before `gh pr create`. If it finds anything, investigate the missed issue rather than treating the review as an "address-and-move-on" substitute.
 <!-- TEMPLATE-TRACKING-END -->
 
 ## GitHub Review Types
