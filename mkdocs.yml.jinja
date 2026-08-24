@@ -12,6 +12,7 @@ edit_uri: edit/main/docs/
 exclude_docs: |
   design/**
   decisions/**
+  releases/next.md
   superpowers/**
 
 theme:
@@ -79,10 +80,10 @@ plugins:
           - prompts.md
         Deployment:
           - deployment/*.md
-        # Glob deliberately: each minor's release-notes page is auto-indexed
-        # without a sections-list update (same rationale as guides/*).
+        # Character-class prefix excludes the unversioned staging page while
+        # auto-indexing each canonical minor page.
         Release Notes:
-          - releases/*.md
+          - releases/[0-9]*.[0-9]*.md
         # PROJECT-LLMSTXT-SECTIONS-END
   - mkdocstrings:
       handlers:
