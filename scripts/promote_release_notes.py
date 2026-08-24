@@ -6,10 +6,13 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
-from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 VERSION_RE = re.compile(
     r"^v?(?P<major>0|[1-9][0-9]*)\."
