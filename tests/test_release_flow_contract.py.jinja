@@ -690,6 +690,7 @@ def test_operator_docs_and_template_smoke_match_the_agent_neutral_surface() -> N
     assert "claude-code-review.yml" not in forking
     assert "release-notes.yml" not in forking
 
+
 def _release_notes_gate_validation_script() -> str:
     """Extract the real validation step, omitting only external docs checks."""
     workflow = yaml.safe_load(RELEASE_NOTES_GATE_WORKFLOW.read_text(encoding="utf-8"))
