@@ -53,13 +53,15 @@ jobs:
           minor="${stable%.*}"
           page="docs/releases/${minor}.md"
           test -f "$page" || { echo "::error::$page is missing"; exit 1; }
-          count="$(grep -cF "RELEASE-SUMMARY ${tag} START" "$page" || true)"
+          start="<!-- RELEASE-SUMMARY ${tag} START -->"
+          end="<!-- RELEASE-SUMMARY ${tag} END -->"
+          count="$(grep -cFx "$start" "$page" || true)"
           [ "$count" = "1" ] || { echo "::error::$page must contain exactly one RELEASE-SUMMARY block for ${tag}"; exit 1; }
-          end_count="$(grep -cF "RELEASE-SUMMARY ${tag} END" "$page" || true)"
+          end_count="$(grep -cFx "$end" "$page" || true)"
           [ "$end_count" = "1" ] || { echo "::error::$page must contain exactly one RELEASE-SUMMARY end marker for ${tag}"; exit 1; }
-          if ! summary="$(awk -v tag="$tag" '
-            index($0, "RELEASE-SUMMARY " tag " START") { started=1; next }
-            index($0, "RELEASE-SUMMARY " tag " END") {
+          if ! summary="$(awk -v start="$start" -v end="$end" '
+            $0 == start { started=1; next }
+            $0 == end {
               if (!started) exit 1
               closed=1
               exit

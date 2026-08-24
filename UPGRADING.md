@@ -789,25 +789,25 @@ adoption with `knope prepare-release --dry-run`, then run the full gate.
 
 ## v5.1 - Release notes move into the release pull request
 
-Release Prepare now drafts and commits the `docs/releases/` page onto every
-release pull request, so every tag contains its own notes page (template#420).
-The post-publication body-upgrade path and
-`<!-- release-notes-pending -->` marker are gone.
+Release Prepare creates or refreshes a release pull request as a permanent
+draft. Every release must carry a reviewed `docs/releases/` page in the release
+pull request, so the tagged tree contains the release notes (template#420).
 
-1. Do not merge until the `draft-notes` job succeeds and the release pull
-   request tree contains the intended page. Drafting normally adds a second
-   commit, but a valid unchanged page needs no new commit. If the job fails or
-   the page is absent, retry or redispatch.
-2. Use `skip_notes: true` only as an explicit outage escape hatch or when a
-   hand-written page is already present.
-3. Redispatch Release Prepare for an open release pull request created under
+1. Check out the `knope/prepare/*` release branch. A maintainer or their local
+   coding agent authors the target release page by following
+   `.claude/skills/writing-release-notes/SKILL.md`, runs its Vale and strict
+   MkDocs checks, then commits and pushes the notes surface.
+2. Keep the pull request as a draft while reviewing that notes diff. When the
+   artifact is ready, a maintainer must explicitly mark the pull request ready
+   for review; Release Prepare never does this automatically.
+3. The required **Release Notes Gate** must pass before the release pull
+   request can merge. It requires exactly one non-empty target summary block
+   and the release-notes prose and documentation checks. There is no bypass.
+4. Redispatch Release Prepare for an open release pull request created under
    v5.0; do not update it manually.
-4. A stable v5.0 release that still carries the invisible pending marker is no
-   longer updated automatically. After merging a manually dispatched backfill
-   notes pull request, update its GitHub release body with `gh release edit`.
 
-No project-owned file changes shape in this line. Existing notes pages without
-the new range watermark are upgraded by their next accepted draft.
+No project-owned file changes shape in this line. Existing notes pages remain
+historical records; author each new release's page on its release branch.
 
 ## v5.2 - Rolling `rc` image tag and the marketplace manifest path
 
