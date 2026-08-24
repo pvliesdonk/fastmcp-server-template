@@ -27,6 +27,8 @@ Work from the existing `knope/prepare/*` release PR branch. Derive:
   `docs/releases/MINOR.md`.
 - `PREV` as the highest stable tag strictly below the target version,
   series-aware with `sort -V`; it is empty for a first release.
+- `HEAD_SHA` with `HEAD_SHA=$(git rev-parse HEAD)`. This is the exact checked-out
+  release PR head to use as the GitHub API range endpoint.
 - The page mode. Create the page for a new minor. Add a patch section inside
   the patch sentinels when the page does not cover a patch target. Revise the
   existing section when its `RELEASE-SUMMARY` marker already covers the target;
@@ -64,9 +66,10 @@ when adding a date that a pre-release draft could not yet state.
 
 ### 1. Enumerate the range through the API
 
-- Commit list: `gh api "repos/OWNER/REPO/compare/PREV...HEAD"`. Paginate past
-  250 commits. If `PREV` is empty, use the release compare view or full commit
-  list. The API is authoritative because a local clone may be shallow.
+- Commit list: `gh api "repos/OWNER/REPO/compare/${PREV}...${HEAD_SHA}"`.
+  Paginate past 250 commits. If `PREV` is empty, use the release compare view
+  or full commit list. The API is authoritative because a local clone may be
+  shallow.
 - Commit to PR: `gh api "repos/OWNER/REPO/commits/SHA/pulls"`. Never infer a
   PR number from a commit subject.
 - PR to issues: query each PR's GraphQL `closingIssuesReferences`. Do not grep

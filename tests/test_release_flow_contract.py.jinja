@@ -602,7 +602,7 @@ def test_release_notes_skill_uses_the_checked_out_sha_for_api_research() -> None
         encoding="utf-8"
     )
     assert "HEAD_SHA=$(git rev-parse HEAD)" in text
-    assert "compare/PREV...HEAD_SHA" in text
+    assert "compare/${PREV}...${HEAD_SHA}" in text
     assert "compare/PREV...HEAD\"" not in text
 
 
