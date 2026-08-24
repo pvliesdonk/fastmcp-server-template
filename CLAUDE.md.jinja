@@ -142,7 +142,16 @@ Constrain issues to **decay that will compound**, not anything imperfect. The di
 Trivial exceptions: pure typo fixes and automated dependency bumps (Renovate) may skip the issue.
 
 <!-- TEMPLATE-TRACKING-START -->
-**The bot reviewer (claude-review) is a merge gate, not a pair reviewer.** Local review must be complete before the PR opens. If it finds anything on first run, the local review was incomplete — that is a discipline failure to investigate, not "address-and-move-on." Run a local code-review pass on the cumulative diff before `gh pr create`; it is not a substitute.
+Request Claude selectively on a pull request or issue with an explicit `@claude`
+mention.
+
+{% if enable_automatic_claude_review %}
+Automatic Claude review runs after deterministic CI passes. It is advisory and
+is not a required ruleset check.
+{% else %}
+Automatic agent review is disabled. Request Claude selectively with an
+`@claude` mention; deterministic CI remains the merge gate.
+{% endif %}
 <!-- TEMPLATE-TRACKING-END -->
 
 ## GitHub Review Types

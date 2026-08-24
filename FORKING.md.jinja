@@ -36,7 +36,9 @@ rm -f scripts/copier_update_notes.py
 What this removes and why:
 
 - `copier-update.yml` — template-update automation; meaningless once detached.
-- `claude.yml`, `claude-code-review.yml` — fleet review-bot wiring.
+- `claude.yml` — the explicit `@claude` mention responder.
+- `claude-code-review.yml` — the optional automatic pull-request reviewer, if
+  your project enabled it.
 - `release-notes.yml` — the Claude-agent release-notes drafter (same
   `CLAUDE_CODE_OAUTH_TOKEN` dependency as the review wiring). Keep it
   instead if your fork keeps that secret and wants agent-drafted notes.

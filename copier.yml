@@ -249,6 +249,9 @@ _skip_if_exists:
 # introduced on its PSR-era predecessor for #325), with knope.toml's stamp
 # Command as the invocation it must stay in lockstep with;
 # tests/test_release_flow_contract.py asserts that coupling.
+# The enable_automatic_claude_review-gated workflow remains template-owned:
+# enabling the answer generates .github/workflows/claude-code-review.yml, and
+# disabling it removes that generated file on the next copier update.
 
 # Files in the template repo that should never land in generated projects.
 # Setting _exclude in copier.yml REPLACES copier's default exclude list

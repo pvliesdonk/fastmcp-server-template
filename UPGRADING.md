@@ -1153,4 +1153,18 @@ recipe under "Before every upgrade" is how to find the others.
 
 ## Unreleased
 
-_Nothing yet._
+### Automatic Claude review is now opt-in
+
+Automatic Claude pull-request review now defaults to off. Explicit `@claude`
+mentions remain available through the mention responder.
+
+To keep automatic review enabled, add this answer to `.copier-answers.yml`
+before running `copier update`:
+
+```yaml
+enable_automatic_claude_review: true
+```
+
+When automatic review is disabled, remove any independently configured required
+Claude-review check from the repository rulesets or branch protection. The
+deterministic CI checks remain the merge gate.
