@@ -58,6 +58,7 @@ STAMPER = REPO_ROOT / "scripts" / "stamp_manifests.py"
 GUARD = REPO_ROOT / "scripts" / "promotion_guard.sh"
 PREPARE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-prepare.yml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
+# Retained only until the hosted-drafting implementation is removed below.
 NOTES_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-notes.yml"
 NOTES_PUBLISH_WORKFLOW = (
     REPO_ROOT / ".github" / "workflows" / "release-notes-publish.yml"
@@ -159,6 +160,38 @@ def test_prepare_workflow_invokes_the_stamp_script() -> None:
         if "git commit" in str(step.get("command", ""))
     )
     assert prepare_idx < stamp_idx < commit_idx
+
+
+def test_prepare_promotes_notes_before_release_commit() -> None:
+    text = KNOPE_TOML.read_text(encoding="utf-8")
+    prepare = text[
+        text.index('name = "prepare-release"') : text.index('name = "tag-release"')
+    ]
+    assert prepare.index("scripts/stamp_manifests.py $version") < prepare.index(
+        "scripts/promote_release_notes.py $version"
+    ) < prepare.index('git commit -m \\"chore: prepare release $version\\"')
+
+
+def test_release_prepare_has_no_model_or_notes_bypass() -> None:
+    text = PREPARE_WORKFLOW.read_text(encoding="utf-8")
+    forbidden = (
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "anthropics/",
+        "skip_notes",
+        "full_redraft",
+        "draft-notes",
+        "gh pr ready --undo",
+        "release-notes-draft",
+    )
+    assert not {token for token in forbidden if token in text}
+
+
+def test_release_pr_body_assigns_freshness_to_reviewers() -> None:
+    text = KNOPE_TOML.read_text(encoding="utf-8")
+    assert "notes-range-end" in text
+    assert "meaningful" in text
+    assert "re-dispatch" in text
+    assert "held as a DRAFT" not in text
 
 
 def test_prepare_workflow_runs_the_guard_between_commit_and_push() -> None:
@@ -576,7 +609,7 @@ def test_marketplace_bump_feeds_the_catalog_readme() -> None:
     )
 
 
-def test_prepare_drafts_notes_into_the_release_pr() -> None:
+def _obsolete_prepare_drafts_notes_into_the_release_pr() -> None:
     """Release notes are a generated artifact of preparation (template#419).
 
     The notes page has exactly the changelog's lifecycle: drafted by the
@@ -610,7 +643,7 @@ def test_prepare_drafts_notes_into_the_release_pr() -> None:
     )
 
 
-def test_notes_lock_is_taken_by_the_caller_job_in_call_mode() -> None:
+def _obsolete_notes_lock_is_taken_by_the_caller_job_in_call_mode() -> None:
     """The end-to-end notes lock needs BOTH declaration sites (template#448).
 
     A workflow-level ``concurrency`` key belongs to the triggered run —
@@ -638,7 +671,7 @@ def test_notes_lock_is_taken_by_the_caller_job_in_call_mode() -> None:
     )
 
 
-def test_notes_dispatch_offers_a_full_redraft_override() -> None:
+def _obsolete_notes_dispatch_offers_a_full_redraft_override() -> None:
     """The watermark cache needs an operator override (template#452/#460).
 
     Incremental research deliberately preserves accepted prose, so a
@@ -702,7 +735,7 @@ def test_notes_dispatch_offers_a_full_redraft_override() -> None:
     )
 
 
-def test_ready_lift_retries_the_stale_pr_head_read() -> None:
+def _obsolete_ready_lift_retries_the_stale_pr_head_read() -> None:
     """The ready-lift must ride out its own push's API lag (template#462).
 
     The landing step reads the PR head right after its own lease-guarded
@@ -724,7 +757,7 @@ def test_ready_lift_retries_the_stale_pr_head_read() -> None:
     )
 
 
-def test_notes_workflow_is_callable_and_not_release_triggered() -> None:
+def _obsolete_notes_workflow_is_callable_and_not_release_triggered() -> None:
     """The notes workflow serves the release PR; the post-hoc path is gone.
 
     A ``release: published`` trigger would resurrect notes that arrive
@@ -882,7 +915,7 @@ def test_notes_workflow_is_callable_and_not_release_triggered() -> None:
     )
 
 
-def test_release_pr_is_held_draft_until_the_notes_land() -> None:
+def _obsolete_release_pr_is_held_draft_until_the_notes_land() -> None:
     """The notes are a merge gate, not a footnote (template#421).
 
     The release PR opens before the hour-scale draft-notes job runs, and
@@ -970,27 +1003,8 @@ def test_pending_marker_machinery_is_gone() -> None:
     )
 
 
-def test_rc_series_redrafts_and_rc_bodies_read_the_stable_marker() -> None:
-    """An rc series must refresh one section, and rc bodies must find it.
-
-    Every candidate of a target normalises to the same stable version, so
-    a later rc (or the promotion) of a patch release must re-draft the
-    section its first rc wrote — mode selection keys on the page's
-    RELEASE-SUMMARY marker, not on ``Z > 0`` alone, or each refresh
-    appends a duplicate section.  And because the skill writes the marker
-    for the STABLE tag, the release-body extraction must normalise an rc
-    tag the same way or every rc body ships an empty summary.
-    """
-    notes = NOTES_WORKFLOW.read_text(encoding="utf-8")
-    marker_check = 'grep -qF "RELEASE-SUMMARY ${TAG} START" "$page"'
-    assert marker_check in notes, (
-        "mode selection must detect an already-covered target via its "
-        "RELEASE-SUMMARY marker and re-draft in place"
-    )
-    assert notes.index(marker_check) < notes.index('"${ver##*.}" -gt 0'), (
-        "the marker check must take precedence over the Z > 0 patch-append "
-        "branch — an rc.2 of a patch target must re-draft rc.1's section"
-    )
+def test_rc_release_body_reads_the_stable_summary_marker() -> None:
+    """RC bodies find the stable marker written into the tagged page."""
     release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
     assert 'marker_tag="v${ver%%-*}"' in release, (
         "the body step must normalise the tag to the stable version before "
