@@ -1,5 +1,11 @@
 # Changelog
 
+## v5.6.3 (2026-08-24)
+
+- #489 chore(deps): update dependency renovatebot/github-action to v46.2.4
+- #488 feat(readme): add project header customization block
+
+
 ## v5.6.2 (2026-08-22)
 
 - #480 fix: unblock publish-pypi and bound the build backend that broke it
