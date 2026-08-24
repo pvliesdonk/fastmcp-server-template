@@ -69,6 +69,9 @@ def test_automatic_review_is_absent_by_default(review_off: Path) -> None:
     workflows = review_off / ".github/workflows"
     assert not (workflows / "claude-code-review.yml").exists()
     assert not (workflows / ".jinja").exists()
+    guidance = (review_off / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "Automatic agent review is disabled" in guidance
+    assert "The automated Claude review runs" not in guidance
 
 
 def test_automatic_review_renders_when_enabled(review_on: Path) -> None:
@@ -78,6 +81,8 @@ def test_automatic_review_renders_when_enabled(review_on: Path) -> None:
     text = workflow.read_text(encoding="utf-8")
     assert "github.event.pull_request.draft == false" in text
     assert "cancel-in-progress: true" in text
+    guidance = (review_on / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "The automated Claude review runs **only after CI passes**" in guidance
 
 
 def test_template_repo_has_no_active_automatic_reviewer() -> None:

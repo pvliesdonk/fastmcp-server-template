@@ -1327,8 +1327,8 @@ jobs:
             && { echo "::error::Shared Infrastructure section survived the scrub"; exit 1; } || true
           grep -qE '^## Contributing fixes upstream$' CLAUDE.md \
             && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
-          grep -qF 'bot reviewer (claude-review)' CLAUDE.md \
-            && { echo "::error::bot-reviewer paragraph survived the scrub"; exit 1; } || true
+          grep -qF 'Automatic agent review is disabled' CLAUDE.md \
+            && { echo "::error::automatic-review tracking guidance survived the scrub"; exit 1; } || true
           grep -qE '^## Release notes pages$' CLAUDE.md \
             && { echo "::error::Release notes pages section survived the scrub"; exit 1; } || true
           # Neutral guidance must remain. The scrub is a sed range-delete, so the

@@ -55,8 +55,10 @@ knope-counted subset (`feat`/`fix`/`!`), and this section's prose are checked
 against each other by `tests/test_commit_conventions.py`, so no one of the
 three can drift alone.
 
+{% if enable_automatic_claude_review %}
 The automated Claude review runs **only after CI passes** — if CI is red, no
 review is posted. Fix CI and push; the review runs on the next green run.
+{% endif %}
 
 ## Breaking Changes and the `!` Marker
 
