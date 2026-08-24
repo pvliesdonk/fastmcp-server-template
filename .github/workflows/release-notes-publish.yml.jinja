@@ -92,6 +92,7 @@ jobs:
           else
             range="HEAD^..HEAD"
           fi
+          # next\.md is staging, not a canonical release page.
           git diff --name-only --diff-filter=AM "$range" -- 'docs/releases/*.md' \
             | grep -vE '/(index|next)\.md$' > changed-pages.txt || true
           if [ -s changed-pages.txt ]; then
