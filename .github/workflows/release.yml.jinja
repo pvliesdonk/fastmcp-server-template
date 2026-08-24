@@ -273,14 +273,39 @@ jobs:
             echo "::error::release notes page is missing: ${page}"
             exit 1
           fi
-          summary=$(awk -v tag="$marker_tag" '
-            index($0, "RELEASE-SUMMARY " tag " START") { f=1; next }
-            index($0, "RELEASE-SUMMARY " tag " END")   { f=0 }
-            f' "$page" | awk 'NF {p=1} p' | tac | awk 'NF {p=1} p' | tac)
-          if [ -z "$summary" ]; then
-            echo "::error::release summary is missing or empty: ${marker_tag}"
+          if ! summary=$(awk -v tag="$marker_tag" '
+            BEGIN {
+              start = "<!-- RELEASE-SUMMARY " tag " START -->"
+              end = "<!-- RELEASE-SUMMARY " tag " END -->"
+            }
+            $0 == start {
+              starts++
+              if (starts == 1 && !open && !closed) {
+                open = 1
+                next
+              }
+            }
+            $0 == end {
+              ends++
+              if (open && !closed) {
+                open = 0
+                closed = 1
+                next
+              }
+            }
+            open { print }
+            END {
+              if (starts != 1 || ends != 1 || open || !closed) exit 1
+            }
+          ' "$page"); then
+            echo "::error::release summary must contain exactly one complete non-empty block: ${marker_tag}"
             exit 1
           fi
+          if ! printf '%s\n' "$summary" | grep -q '[^[:space:]]'; then
+            echo "::error::release summary must contain exactly one complete non-empty block: ${marker_tag}"
+            exit 1
+          fi
+          summary=$(printf '%s\n' "$summary" | awk 'NF {p=1} p' | tac | awk 'NF {p=1} p' | tac)
           {
             if [ "$IS_PRERELEASE" = "true" ]; then
               # PyPI knows the candidate by its PEP 440 canonical spelling,
