@@ -177,12 +177,12 @@ prepare the narrative before release automation starts:
 
 The first release candidate for a stable identity consumes `next.md` into the
 canonical minor page. Later candidates and stable promotion reuse the same
-`vX.Y.Z` entry. When meaningful behavior lands after the first candidate,
+`vX.Y.Z` entry. When user-visible behavior lands after the first candidate,
 invoke `refresh-known-target` and merge the normal notes pull request before
-re-dispatching Release Prepare. Backfills and redrafts use the same ordinary
+re-dispatching Release Prepare. Corrections and redrafts use the same ordinary
 pull-request path for shipped pages.
 
-There is no notes bypass. Missing or ambiguous staging makes deterministic
+No notes bypass exists. Missing or ambiguous staging makes deterministic
 promotion refuse the prepare. Every causal claim must cite a linked issue or
 pull request, and the skill runs Vale and strict MkDocs before opening its pull
 request. Later canonical-page edits redeploy that minor through the
