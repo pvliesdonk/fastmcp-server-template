@@ -354,6 +354,11 @@ include_claude_plugin:
   default: false
   help: "Scaffold the Claude Code plugin channel (.claude-plugin/plugin: plugin.json + exec-form .mcp.json seeded once, version-stamped by scripts/stamp_manifests.py in every stable release PR). The release workflow's marketplace publish job already keys on the directory existing at the tag, so turning this on is what makes marketplace publishing take effect. Leave off for servers not distributed as a Claude Code plugin."
 
+enable_automatic_claude_review:
+  type: bool
+  default: false
+  help: "Include automatic Claude pull-request review after CI passes. Leave off to keep agent review human-triggered through @claude only."
+
 enable_authorization:
   type: bool
   default: false

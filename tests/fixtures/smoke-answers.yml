@@ -10,5 +10,6 @@ github_org: pvliesdonk
 docker_registry: ghcr.io/pvliesdonk
 include_mcp_apps_scaffold: true
 include_claude_plugin: true
+enable_automatic_claude_review: false
 enable_authorization: true
 enable_structural_gate: true
