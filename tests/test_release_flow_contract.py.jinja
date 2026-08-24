@@ -596,6 +596,16 @@ def test_release_notes_skill_is_agent_neutral() -> None:
         assert required in text
 
 
+def test_release_notes_skill_uses_the_checked_out_sha_for_api_research() -> None:
+    """API research follows the exact release PR head, not GitHub's default ref."""
+    text = (REPO_ROOT / ".claude/skills/writing-release-notes/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "HEAD_SHA=$(git rev-parse HEAD)" in text
+    assert "compare/PREV...HEAD_SHA" in text
+    assert "compare/PREV...HEAD\"" not in text
+
+
 def test_publish_workflow_skips_release_pr_merges() -> None:
     """The release owns its own docs deploy (template#421).
 
@@ -656,6 +666,17 @@ def test_pending_marker_machinery_is_gone() -> None:
         "the publish workflow must not rewrite release bodies any more — "
         "its jobs are the release-merge gate and the docs redeploy for "
         "later page edits"
+    )
+
+
+def test_rc_release_bodies_use_the_stable_summary_marker() -> None:
+    """RC body extraction normalizes its tag to the stable page marker."""
+    release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    assert 'marker_tag="v${ver%%-*}"' in release, (
+        "the release body must normalize an RC tag before summary lookup"
+    )
+    assert 'awk -v tag="$marker_tag"' in release, (
+        "the summary extraction must use the normalized stable marker"
     )
 
 
