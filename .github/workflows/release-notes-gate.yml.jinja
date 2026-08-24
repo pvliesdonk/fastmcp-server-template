@@ -57,11 +57,19 @@ jobs:
           [ "$count" = "1" ] || { echo "::error::$page must contain exactly one RELEASE-SUMMARY block for ${tag}"; exit 1; }
           end_count="$(grep -cF "RELEASE-SUMMARY ${tag} END" "$page" || true)"
           [ "$end_count" = "1" ] || { echo "::error::$page must contain exactly one RELEASE-SUMMARY end marker for ${tag}"; exit 1; }
-          summary="$(awk -v tag="$tag" '
-            index($0, "RELEASE-SUMMARY " tag " START") { in_block=1; next }
-            index($0, "RELEASE-SUMMARY " tag " END") { in_block=0; exit }
-            in_block { print }
-          ' "$page")"
+          if ! summary="$(awk -v tag="$tag" '
+            index($0, "RELEASE-SUMMARY " tag " START") { started=1; next }
+            index($0, "RELEASE-SUMMARY " tag " END") {
+              if (!started) exit 1
+              closed=1
+              exit
+            }
+            started { print }
+            END { if (!started || !closed) exit 1 }
+          ' "$page")"; then
+            echo "::error::${tag} summary block is malformed"
+            exit 1
+          fi
           [ -n "$(printf '%s' "$summary" | tr -d '[:space:]')" ] || { echo "::error::${tag} summary block is empty"; exit 1; }
           vale docs/releases/
           uv run mkdocs build --strict
