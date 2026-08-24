@@ -857,12 +857,37 @@ def _run_release_body(tmp_path: Path, tag: str, page: str | None) -> subprocess.
         ("v9.9.9", None, "release notes page is missing"),
         (
             "v9.9.9",
+            "# 9.9 release notes\n",
+            "release summary must contain exactly one complete non-empty block",
+        ),
+        (
+            "v9.9.9",
             "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
             "<!-- RELEASE-SUMMARY v9.9.9 END -->\n",
-            "release summary is missing or empty",
+            "release summary must contain exactly one complete non-empty block",
+        ),
+        (
+            "v9.9.9",
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\nFirst summary.\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\nSecond summary.\n"
+            "<!-- RELEASE-SUMMARY v9.9.9 END -->\n",
+            "release summary must contain exactly one complete non-empty block",
+        ),
+        (
+            "v9.9.9",
+            "<!-- RELEASE-SUMMARY v9.9.9 START -->\n"
+            "Trailing page content is not a summary terminator.\n",
+            "release summary must contain exactly one complete non-empty block",
         ),
     ],
-    ids=("missing-page", "empty-summary"),
+    ids=(
+        "missing-page",
+        "missing-target-marker",
+        "empty-summary",
+        "duplicate-target-blocks",
+        "unterminated-target-block",
+    ),
 )
 def test_release_body_refuses_unvalidated_notes(
     tmp_path: Path, tag: str, page: str | None, error: str
