@@ -694,7 +694,7 @@ def test_operator_docs_and_template_smoke_match_the_agent_neutral_surface() -> N
 def _release_notes_gate_validation_script() -> str:
     """Extract the real validation step, omitting only external docs checks."""
     workflow = cast(
-        dict[str, Any],
+        "dict[str, Any]",
         yaml.safe_load(RELEASE_NOTES_GATE_WORKFLOW.read_text(encoding="utf-8")),
     )
     steps = workflow["jobs"]["release-notes"]["steps"]
@@ -820,7 +820,7 @@ def test_rc_release_bodies_use_the_stable_summary_marker() -> None:
 def _release_body_script() -> str:
     """Extract the real release-body step from the rendered workflow."""
     workflow = cast(
-        dict[str, Any], yaml.safe_load(RELEASE_WORKFLOW.read_text(encoding="utf-8"))
+        "dict[str, Any]", yaml.safe_load(RELEASE_WORKFLOW.read_text(encoding="utf-8"))
     )
     steps = workflow["jobs"]["release"]["steps"]
     return next(
