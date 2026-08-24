@@ -162,6 +162,10 @@ ignore = ["E501"]
 # safe here and would otherwise trip every adopter's structural diff-gate
 # the first time an update touches the template-owned parts of the script.
 "scripts/stamp_manifests.py" = ["S603", "S607"]
+# The release-notes promoter stages only its computed repository-relative paths
+# from an explicit repository root. Its `git add -A --` uses fixed argv with no
+# shell interpolation, so the same subprocess and partial-path exceptions apply.
+"scripts/promote_release_notes.py" = ["S603", "S607"]
 {% endif %}
 # PROJECT-RUFF-IGNORES-START — replace, extend, or override the entries below
 # for your project's real source/test paths (split _server_apps.py into

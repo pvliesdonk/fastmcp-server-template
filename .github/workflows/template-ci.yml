@@ -1579,16 +1579,16 @@ jobs:
             --select E,W,F,I,B,C4,UP,ARG,SIM,TC,PTH,RUF \
             --ignore E501 \
             --line-length 88 \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_upgrading.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Format check scripts (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_upgrading.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
         # The scripts that render into every project (gen_config_surface.py,
-        # copier_update_notes.py) must satisfy the SAME structural rules
+        # copier_update_notes.py, promote_release_notes.py) must satisfy the SAME structural rules
         # the downstream diff-gate enforces (CLAUDE.md gate #5 / the `structure`
         # job): C901 + the PLR complexity family + S. The `Lint scripts`
         # step above intentionally mirrors only the base whole-repo `select`,
@@ -1611,14 +1611,14 @@ jobs:
         run: |
           uv run --with ruff ruff check \
             --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
-            --per-file-ignores "scripts/gen_config_surface.py:S606" \
+            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607" \
             --config "lint.mccabe.max-complexity=10" \
             --config "lint.pylint.max-args=5" \
             --config "lint.pylint.max-branches=12" \
             --config "lint.pylint.max-returns=6" \
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py
 
   pr-title:
     name: PR Title

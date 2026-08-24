@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from scripts.promote_release_notes import (
     PromotionError,
+    PromotionPlan,
+    apply_plan,
+    main,
     normalize_target,
     plan_promotion,
 )
@@ -86,8 +93,35 @@ def snapshot(root: Path) -> dict[Path, bytes]:
     return {
         path.relative_to(root): path.read_bytes()
         for path in sorted(root.rglob("*"))
-        if path.is_file()
+        if path.is_file() and ".git" not in path.parts
     }
+
+
+def init_repository(root: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "tests@example.com"], cwd=root, check=True
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Release Notes Tests"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixtures"], cwd=root, check=True)
+
+
+def cached_status(root: Path, *, detect_renames: bool = True) -> list[str]:
+    arguments = ["git", "diff", "--cached", "--name-status"]
+    if not detect_renames:
+        arguments.append("--no-renames")
+    return subprocess.run(
+        arguments,
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
 
 
 @pytest.mark.parametrize(
@@ -264,6 +298,20 @@ def test_out_of_order_patch_refuses(tmp_path: Path) -> None:
     assert snapshot(tmp_path) == before
 
 
+def test_dated_patch_heading_refuses(tmp_path: Path) -> None:
+    write(
+        tmp_path / "docs/releases/2.4.md",
+        with_patch("v2.4.1").replace("## v2.4.1", "## v2.4.1 (2026-08-24)"),
+    )
+    write(tmp_path / "docs/releases/next.md", NEXT)
+    before = snapshot(tmp_path)
+
+    with pytest.raises(PromotionError, match="undated"):
+        plan_promotion(tmp_path, "2.4.2")
+
+    assert snapshot(tmp_path) == before
+
+
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
@@ -363,3 +411,150 @@ def test_malformed_canonical_page_refuses_without_changes(
         plan_promotion(tmp_path, "2.4.1")
 
     assert snapshot(tmp_path) == before
+
+
+def test_apply_plan_writes_and_deletes_without_staging(tmp_path: Path) -> None:
+    old = tmp_path / "old.md"
+    new = tmp_path / "nested/new.md"
+    write(old, "old\n")
+
+    apply_plan(PromotionPlan(tmp_path, {new: "new\n"}, (old,), ()))
+
+    assert new.read_bytes() == b"new\n"
+    assert not old.exists()
+    assert not (new.parent / ".new.md.tmp").exists()
+
+
+def test_patch_cli_applies_and_stages_only_release_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write(tmp_path / "docs/releases/2.4.md", canonical())
+    write(tmp_path / "docs/releases/next.md", NEXT)
+    write(tmp_path / "unrelated.txt", "committed\n")
+    init_repository(tmp_path)
+    write(tmp_path / "unrelated.txt", "unstaged\n")
+    write(tmp_path / "untracked.txt", "untracked\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["2.4.1-rc.1"]) == 0
+
+    assert cached_status(tmp_path) == [
+        "M\tdocs/releases/2.4.md",
+        "D\tdocs/releases/next.md",
+    ]
+    assert (tmp_path / "unrelated.txt").read_text(encoding="utf-8") == "unstaged\n"
+    assert (
+        subprocess.run(
+            ["git", "diff", "--quiet", "--", "unrelated.txt"],
+            cwd=tmp_path,
+            check=False,
+        ).returncode
+        == 1
+    )
+    assert (tmp_path / "untracked.txt").read_text(encoding="utf-8") == "untracked\n"
+
+
+def test_new_series_cli_applies_and_stages_exact_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write(tmp_path / "docs/releases/next.md", NEXT)
+    write(tmp_path / "docs/releases/index.md", INDEX)
+    init_repository(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["2.4.0"]) == 0
+
+    assert cached_status(tmp_path, detect_renames=False) == [
+        "A\tdocs/releases/2.4.md",
+        "M\tdocs/releases/index.md",
+        "D\tdocs/releases/next.md",
+    ]
+
+
+def test_existing_target_cli_is_a_noop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    write(tmp_path / "docs/releases/2.4.md", canonical())
+    init_repository(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["2.4.0-rc.2"]) == 0
+
+    assert cached_status(tmp_path) == []
+    assert "nothing to do" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "staged",
+    [
+        NEXT.replace("# Next release", "# Upcoming release", 1),
+        NEXT + "\n# Next release\n",
+        NEXT.replace(
+            "<!-- notes-range-end: 0123456789abcdef0123456789abcdef01234567 -->",
+            "",
+            1,
+        ),
+        NEXT + "\n<!-- notes-range-end: 2222222222222222222222222222222222222222 -->\n",
+        NEXT.replace("<!-- RELEASE-SUMMARY NEXT START -->", "", 1),
+        NEXT + "\n<!-- RELEASE-SUMMARY NEXT START -->\n",
+        NEXT.replace("<!-- RELEASE-SUMMARY NEXT END -->", "", 1),
+        NEXT + "\n<!-- RELEASE-SUMMARY NEXT END -->\n",
+        NEXT.replace(
+            "Operators can now rotate credentials without restarting the server.", ""
+        ),
+    ],
+)
+def test_cli_next_refusals_preserve_every_source_byte(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    staged: str,
+) -> None:
+    write(tmp_path / "docs/releases/2.4.md", canonical())
+    write(tmp_path / "docs/releases/next.md", staged)
+    init_repository(tmp_path)
+    before = snapshot(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["2.4.1"]) == 1
+
+    assert snapshot(tmp_path) == before
+    assert cached_status(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        canonical().replace("# 2.4", "# 2.4 release", 1),
+        canonical() + "\n# 2.4\n",
+        canonical().replace(
+            "<!-- notes-range-end: 1111111111111111111111111111111111111111 -->",
+            "",
+            1,
+        ),
+        canonical()
+        + "\n<!-- notes-range-end: 2222222222222222222222222222222222222222 -->\n",
+        canonical().replace("<!-- PATCH-RELEASES-START -->", "", 1),
+        canonical() + "\n<!-- PATCH-RELEASES-START -->\n",
+        canonical().replace("<!-- PATCH-RELEASES-END -->", "", 1),
+        canonical() + "\n<!-- PATCH-RELEASES-END -->\n",
+    ],
+)
+def test_cli_canonical_refusals_preserve_every_source_byte(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    page: str,
+) -> None:
+    write(tmp_path / "docs/releases/2.4.md", page)
+    write(tmp_path / "docs/releases/next.md", NEXT)
+    init_repository(tmp_path)
+    before = snapshot(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["2.4.1"]) == 1
+
+    assert snapshot(tmp_path) == before
+    assert cached_status(tmp_path) == []

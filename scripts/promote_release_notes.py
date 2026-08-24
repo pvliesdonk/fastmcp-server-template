@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -17,6 +20,7 @@ VERSION_RE = re.compile(
 WATERMARK_RE = re.compile(r"<!-- notes-range-end: ([0-9a-f]{40}) -->")
 INDEX_START_RE = re.compile(r"<!-- RELEASE-PAGES-START:[\s\S]*?-->")
 PATCH_HEADING_RE = re.compile(r"^## v([0-9]+)\.([0-9]+)\.([0-9]+)$", re.MULTILINE)
+PATCH_HEADING_CANDIDATE_RE = re.compile(r"^## v[0-9]+\.[0-9]+\.[0-9]+.*$", re.MULTILINE)
 
 
 class PromotionError(ValueError):
@@ -136,8 +140,8 @@ def promote_new_page(
     index_text: str,
 ) -> PromotionPlan:
     validate_next(next_text)
-    page_text = new_page_text(next_text, target)
     promoted_index = _new_index_text(index_text, target)
+    page_text = new_page_text(next_text, target)
     page_path = root / target.page
     index_relative = Path("docs/releases/index.md")
     next_relative = Path("docs/releases/next.md")
@@ -201,10 +205,11 @@ def _validate_canonical_page(
     if start_at > end_at:
         raise PromotionError("patch START sentinel must precede END sentinel")
 
-    patches = [
-        (int(match[1]), int(match[2]), int(match[3]))
-        for match in PATCH_HEADING_RE.finditer(page_text[start_at:end_at])
-    ]
+    patch_text = page_text[start_at:end_at]
+    patch_matches = list(PATCH_HEADING_RE.finditer(patch_text))
+    if len(patch_matches) != len(PATCH_HEADING_CANDIDATE_RE.findall(patch_text)):
+        raise PromotionError("patch headings must be ascending and undated")
+    patches = [(int(match[1]), int(match[2]), int(match[3])) for match in patch_matches]
     if any(left >= right for left, right in pairwise(patches)):
         raise PromotionError(
             "existing patch sections must be in ascending version order"
@@ -292,3 +297,53 @@ def plan_promotion(root: Path, version: str) -> PromotionPlan:
         )
     index_text = index_path.read_text(encoding="utf-8")
     return promote_new_page(root, target, next_text, index_text)
+
+
+def apply_plan(plan: PromotionPlan) -> None:
+    temporary: dict[Path, Path] = {}
+    try:
+        for path, text in plan.writes.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temp = path.with_name(f".{path.name}.tmp")
+            temp.write_text(text, encoding="utf-8", newline="\n")
+            temporary[path] = temp
+        for path, temp in temporary.items():
+            temp.replace(path)
+        for path in plan.deletes:
+            path.unlink()
+    finally:
+        for temp in temporary.values():
+            temp.unlink(missing_ok=True)
+
+    if plan.stage_paths:
+        subprocess.run(
+            ["git", "add", "-A", "--", *[str(path) for path in plan.stage_paths]],
+            cwd=plan.root,
+            check=True,
+        )
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if len(arguments) != 1:
+        print("usage: promote_release_notes.py VERSION", file=sys.stderr)
+        return 2
+
+    try:
+        plan = plan_promotion(Path.cwd(), arguments[0])
+        if not plan.stage_paths:
+            print(
+                f"promote_release_notes: {arguments[0]} already promoted; nothing to do"
+            )
+            return 0
+        apply_plan(plan)
+    except PromotionError as error:
+        print(f"promote_release_notes: REFUSING: {error}", file=sys.stderr)
+        return 1
+
+    print(f"promote_release_notes: promoted {arguments[0]}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
