@@ -608,7 +608,7 @@ def test_release_notes_skill_uses_the_checked_out_sha_for_api_research() -> None
     )
     assert "HEAD_SHA=$(git rev-parse HEAD)" in text
     assert "compare/${PREV}...${HEAD_SHA}" in text
-    assert "compare/PREV...HEAD\"" not in text
+    assert 'compare/PREV...HEAD"' not in text
 
 
 def test_release_notes_gate_validates_the_prepared_release_summary() -> None:
@@ -617,7 +617,7 @@ def test_release_notes_gate_validates_the_prepared_release_summary() -> None:
 
     for required in (
         "pull_request:",
-        "branches: [main, \"release/**\"]",
+        'branches: [main, "release/**"]',
         "opened",
         "synchronize",
         "ready_for_review",
@@ -664,7 +664,9 @@ def test_release_prepare_leaves_release_prs_draft_for_maintainers() -> None:
     step_name = "Set the release PR draft hold"
     assert step_name in prepare, "release PR draft hold step missing"
     hold_step = prepare[prepare.index(step_name) :]
-    hold_step = hold_step[: hold_step.index("- name:")] if "- name:" in hold_step else hold_step
+    hold_step = (
+        hold_step[: hold_step.index("- name:")] if "- name:" in hold_step else hold_step
+    )
     assert "gh pr ready --undo" in hold_step
     assert hold_step.count("gh pr ready") == 1, (
         "the draft hold must be Release Prepare's only PR-state action"
@@ -692,7 +694,9 @@ def _release_notes_gate_validation_script() -> str:
     """Extract the real validation step, omitting only external docs checks."""
     workflow = yaml.safe_load(RELEASE_NOTES_GATE_WORKFLOW.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["release-notes"]["steps"]
-    validation = next(step["run"] for step in steps if step.get("name") == "Validate release notes")
+    validation = next(
+        step["run"] for step in steps if step.get("name") == "Validate release notes"
+    )
     return validation.split("\nvale docs/releases/", maxsplit=1)[0]
 
 
@@ -816,26 +820,29 @@ def _release_body_script() -> str:
     return next(
         step["run"]
         for step in steps
-        if step.get("name") == "Compose the release body (summary, docs, compare, changelog)"
+        if step.get("name")
+        == "Compose the release body (summary, docs, compare, changelog)"
     )
 
 
-def _run_release_body(tmp_path: Path, tag: str, page: str | None) -> subprocess.CompletedProcess[str]:
+def _run_release_body(
+    tmp_path: Path, tag: str, page: str | None
+) -> subprocess.CompletedProcess[str]:
     """Run the real release-body script with only GitHub and git faked."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     captured = tmp_path / "release-body-captured.md"
     (bin_dir / "git").write_text(
         "#!/usr/bin/env bash\n"
-        "if [ \"$1\" = tag ] && [ \"$2\" = --list ]; then exit 0; fi\n"
+        'if [ "$1" = tag ] && [ "$2" = --list ]; then exit 0; fi\n'
         "exit 1\n",
         encoding="utf-8",
     )
     (bin_dir / "gh").write_text(
         "#!/usr/bin/env bash\n"
-        "case \"$1 $2\" in\n"
+        'case "$1 $2" in\n'
         "  'release view') printf '%s\\n' 'Machine changelog body' ;;\n"
-        "  'release edit') cp \"$5\" \"$CAPTURED_BODY\" ;;\n"
+        '  \'release edit\') cp "$5" "$CAPTURED_BODY" ;;\n'
         "  *) exit 1 ;;\n"
         "esac\n",
         encoding="utf-8",
