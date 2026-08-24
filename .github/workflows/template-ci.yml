@@ -1222,8 +1222,7 @@ jobs:
           # still removing it from an opted-in downstream.
           rm -f .github/workflows/copier-update.yml \
                 .github/workflows/claude.yml \
-                .github/workflows/claude-code-review.yml \
-                .github/workflows/release-notes.yml
+                .github/workflows/claude-code-review.yml
           rm -f scripts/copier_update_notes.py
           # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
           #     count the scrub expects (issue #199).
@@ -1407,7 +1406,6 @@ jobs:
               .github/workflows/copier-update.yml \
               .github/workflows/claude.yml \
               .github/workflows/claude-code-review.yml \
-              .github/workflows/release-notes.yml \
               scripts/copier_update_notes.py; do
             [ ! -e "$gone" ] \
               || { echo "::error::$gone not removed by detach"; exit 1; }
