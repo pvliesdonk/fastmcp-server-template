@@ -1,0 +1,67 @@
+name: Release Notes Gate
+
+on:
+  pull_request:
+    branches: [main, "release/**"]
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  release-notes:
+    name: Release Notes Gate
+    if: startsWith(github.head_ref, 'knope/prepare/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install docs dependencies
+        run: uv sync --no-default-groups --group docs --frozen
+
+      - name: Install Vale and sync style packs
+        run: |
+          set -euo pipefail
+          VER=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+version:/{print; exit}' \
+              .github/workflows/ci.yml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          [ -n "$VER" ] || { echo "::error::vale version pin not found in ci.yml"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/valebin"
+          TARBALL="vale_${VER}_Linux_64-bit.tar.gz"
+          BASE="https://github.com/vale-cli/vale/releases/download/v${VER}"
+          curl -sSfL -o "$RUNNER_TEMP/$TARBALL" "$BASE/$TARBALL" \
+            || { echo "::error::could not download $BASE/$TARBALL"; exit 1; }
+          curl -sSfL -o "$RUNNER_TEMP/checksums.txt" "$BASE/vale_${VER}_checksums.txt" \
+            || { echo "::error::could not download the vale $VER checksums file"; exit 1; }
+          ( cd "$RUNNER_TEMP" && grep " $TARBALL\$" checksums.txt | sha256sum -c - ) \
+            || { echo "::error::vale $VER tarball failed checksum verification"; exit 1; }
+          tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$RUNNER_TEMP/valebin" vale
+          echo "$RUNNER_TEMP/valebin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/valebin/vale" sync
+
+      - name: Validate release notes
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)"
+          stable="${version%%-*}"
+          tag="v${stable}"
+          minor="${stable%.*}"
+          page="docs/releases/${minor}.md"
+          test -f "$page" || { echo "::error::$page is missing"; exit 1; }
+          count="$(grep -cF "RELEASE-SUMMARY ${tag} START" "$page" || true)"
+          [ "$count" = "1" ] || { echo "::error::$page must contain exactly one RELEASE-SUMMARY block for ${tag}"; exit 1; }
+          end_count="$(grep -cF "RELEASE-SUMMARY ${tag} END" "$page" || true)"
+          [ "$end_count" = "1" ] || { echo "::error::$page must contain exactly one RELEASE-SUMMARY end marker for ${tag}"; exit 1; }
+          summary="$(awk -v tag="$tag" '
+            index($0, "RELEASE-SUMMARY " tag " START") { in_block=1; next }
+            index($0, "RELEASE-SUMMARY " tag " END") { in_block=0; exit }
+            in_block { print }
+          ' "$page")"
+          [ -n "$(printf '%s' "$summary" | tr -d '[:space:]')" ] || { echo "::error::${tag} summary block is empty"; exit 1; }
+          vale docs/releases/
+          uv run mkdocs build --strict
