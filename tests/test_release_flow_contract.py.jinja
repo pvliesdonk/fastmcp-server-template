@@ -187,9 +187,7 @@ def test_release_prepare_has_no_model_or_notes_bypass() -> None:
 
 
 def test_hosted_release_notes_workflow_is_absent() -> None:
-    assert not (
-        REPO_ROOT / ".github" / "workflows" / "release-notes.yml"
-    ).exists()
+    assert not (REPO_ROOT / ".github" / "workflows" / "release-notes.yml").exists()
 
 
 def test_release_pr_body_assigns_freshness_to_reviewers() -> None:
@@ -613,7 +611,6 @@ def test_marketplace_bump_feeds_the_catalog_readme() -> None:
         "the bump must run the catalog's README generator, or the catalog's "
         "default branch goes stale after every release"
     )
-
 
 
 def test_publish_workflow_skips_release_pr_merges() -> None:
