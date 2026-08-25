@@ -58,6 +58,10 @@ _tasks:
 # covers that path.
 _migrations:
   - "python scripts/gen_config_surface.py"
+  # CLAUDE.md → AGENTS.md move (#484/#485): splices the project's DOMAIN
+  # blocks from HEAD:CLAUDE.md into AGENTS.md, rewrites CLAUDE.md as the
+  # stub, and reconciles .claude/skills/ symlinks.  Idempotent.
+  - "python scripts/migrate_agent_instructions.py"
 
 # Starter files: written once on first `copier copy`, protected from
 # `copier update`.  Domain-owned — users customise these and keep their

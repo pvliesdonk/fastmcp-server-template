@@ -306,6 +306,15 @@ jobs:
           rel=$(grep -cE '^<!-- TEMPLATE-TRACKING-START -->$' .agents/skills/releasing/SKILL.md || true)
           [ "$rel" = "1" ] || { echo "::error::expected 1 TEMPLATE-TRACKING pair in releasing skill, found $rel"; exit 1; }
 
+      - name: AGENTS.md template-owned size budget
+        working-directory: /tmp/smoke
+        run: |
+          # Claude Code warns above 40k always-loaded chars.  The smoke render's
+          # DOMAIN blocks are near-empty, so this measures the template's share;
+          # 24k leaves every downstream >=16k for domain content (#484).
+          size=$(wc -c < AGENTS.md | tr -d '[:space:]')
+          [ "$size" -le 24000 ] || { echo "::error::AGENTS.md template-owned prose is ${size} chars (> 24000). Move guidance into a skill under .agents/skills/ rather than growing the always-loaded file."; exit 1; }
+
       - name: shared docs render with consumer env_prefix
         working-directory: /tmp/smoke
         run: |
@@ -1234,6 +1243,7 @@ jobs:
                 .github/workflows/claude.yml \
                 .github/workflows/claude-code-review.yml
           rm -f scripts/copier_update_notes.py
+          rm -f scripts/migrate_agent_instructions.py
           # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
           #     count the scrub expects (issue #199).
           #
@@ -1455,7 +1465,8 @@ jobs:
               .github/workflows/copier-update.yml \
               .github/workflows/claude.yml \
               .github/workflows/claude-code-review.yml \
-              scripts/copier_update_notes.py; do
+              scripts/copier_update_notes.py \
+              scripts/migrate_agent_instructions.py; do
             [ ! -e "$gone" ] \
               || { echo "::error::$gone not removed by detach"; exit 1; }
           done
