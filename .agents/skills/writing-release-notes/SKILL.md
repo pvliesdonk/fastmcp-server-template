@@ -307,7 +307,8 @@ the selected base, and create the notes branch explicitly from that fresh
 remote-tracking branch. Never branch from the caller's `HEAD`:
 
 ```bash
-BRANCH="notes/${IDENTITY}"
+BRANCH_STEM="notes/${IDENTITY}-$(date -u +%Y%m%d%H%M%S)"
+BRANCH="$BRANCH_STEM"
 BODY_FILE=".release-notes-pr-body.md"
 
 if [ -n "$(git status --porcelain)" ]; then
@@ -315,6 +316,12 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 git fetch origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+suffix=1
+while git show-ref --verify --quiet "refs/heads/$BRANCH" \
+    || git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; do
+  BRANCH="${BRANCH_STEM}-${suffix}"
+  suffix=$((suffix + 1))
+done
 git switch --create "$BRANCH" --no-track "origin/$BASE"
 ```
 
@@ -383,7 +390,7 @@ git push --set-upstream origin "$BRANCH"
 
 if gh pr create \
   --title "docs: prepare release notes for ${IDENTITY}" \
-  --head "notes/${IDENTITY}" \
+  --head "$BRANCH" \
   --base "$BASE" \
   --body-file "$BODY_FILE"; then
   rm -f "$BODY_FILE"

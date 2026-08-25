@@ -24,7 +24,7 @@ def test_release_skill_creates_pr_from_temporary_body_file() -> None:
     )
     assert 'BODY_FILE=".release-notes-pr-body.md"' in text
     assert '--title "docs: prepare release notes for ${IDENTITY}"' in text
-    assert '--head "notes/${IDENTITY}"' in text
+    assert '--head "$BRANCH"' in text
     assert '--base "$BASE"' in text
     assert '--body-file "$BODY_FILE"' in text
     assert text.index("gh pr create \\") < text.index('rm -f "$BODY_FILE"')
@@ -66,6 +66,30 @@ def test_release_skill_branches_from_fresh_remote_base_and_rechecks_it() -> None
 
     assert fetch_at < switch_at < final_fetch_at < ancestry_at < push_at
     assert 'git switch -c "$BRANCH"' not in output
+
+
+def test_release_skill_uses_a_fresh_branch_name_for_each_pr() -> None:
+    text = (REPO / ".agents/skills/writing-release-notes/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    output = text[text.index("## Output") :]
+
+    assert 'BRANCH_STEM="notes/${IDENTITY}-$(date -u +%Y%m%d%H%M%S)"' in output
+    assert 'git show-ref --verify --quiet "refs/heads/$BRANCH"' in output
+    assert 'git ls-remote --exit-code --heads origin "$BRANCH"' in output
+    assert 'BRANCH="${BRANCH_STEM}-${suffix}"' in output
+    assert '--head "$BRANCH"' in output
+    assert 'BRANCH="notes/${IDENTITY}"' not in output
+
+
+def test_next_notes_are_an_explicit_mkdocs_only_exclusion() -> None:
+    workflow = (REPO / ".github/workflows/template-ci.yml").read_text(encoding="utf-8")
+    mkdocs = (REPO / "mkdocs.yml.jinja").read_text(encoding="utf-8")
+
+    assert "releases/next.md" in mkdocs
+    assert 'MK_VALE_EXCEPTIONS="releases/next.md"' in workflow
+    assert 'grep -vFx "$MK_VALE_EXCEPTIONS"' in workflow
+    assert "next.md is intentionally Vale-linted" in workflow
 
 
 def test_release_skill_reviews_staged_and_cumulative_diffs_before_push() -> None:

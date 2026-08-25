@@ -811,12 +811,19 @@ jobs:
           # the one a reviewer already believed was covered was the one that
           # could drift silently. It is a block scalar of bare `subtree/**`
           # lines, so it needs no ! or docs/ prefix stripping; canon() handles
-          # the trailing /** and the sort.
-          MK_EXCL=$(awk '/^exclude_docs:/{f=1; next} f && /^[^[:space:]]/{exit} f' \
+          # the trailing /** and the sort. `releases/next.md` is the one
+          # deliberate exception: staging is excluded from published MkDocs,
+          # but next.md is intentionally Vale-linted before release promotion.
+          MK_VALE_EXCEPTIONS="releases/next.md"
+          MK_RAW=$(awk '/^exclude_docs:/{f=1; next} f && /^[^[:space:]]/{exit} f' \
               mkdocs.yml \
             | tr -d ' ' | grep -v '^$' | paste -sd, - || true)
-          [ -n "$MK_EXCL" ] \
+          [ -n "$MK_RAW" ] \
             || { echo "::error::exclude_docs block not found in the rendered mkdocs.yml — mkdocs.yml.jinja claims to be in lockstep with the Vale exclusion, so this must be extractable"; exit 1; }
+          echo "$MK_RAW" | tr ',' '\n' | grep -qxF "$MK_VALE_EXCEPTIONS" \
+            || { echo "::error::mkdocs exclude_docs lost the Vale-linted staging exception $MK_VALE_EXCEPTIONS"; exit 1; }
+          MK_EXCL=$(echo "$MK_RAW" | tr ',' '\n' \
+            | grep -vFx "$MK_VALE_EXCEPTIONS" | paste -sd, -)
           CI_NORM=$(canon "$CI_EXCL")
           PC_NORM=$(canon "$PC_EXCL")
           MK_NORM=$(canon "$MK_EXCL")
@@ -831,7 +838,7 @@ jobs:
               || { echo "::error::${pair%%:*} exclusion set canonicalized to empty — the raw value was non-empty, so the extraction matched something this canon() cannot read. Comparing it would pass vacuously."; exit 1; }
           done
           [ "$CI_NORM" = "$MK_NORM" ] \
-            || { echo "::error::vale/mkdocs exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) mkdocs exclude_docs=$MK_EXCL ($MK_NORM). A subtree excluded from the published site but linted by Vale (or the reverse) means the two disagree about what is user-facing prose."; exit 1; }
+            || { echo "::error::vale/mkdocs exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) mkdocs exclude_docs=$MK_EXCL ($MK_NORM), after removing explicit Vale-only staging exceptions from $MK_RAW. A subtree excluded from the published site but linted by Vale (or the reverse) means the two disagree about what is user-facing prose."; exit 1; }
           [ "$CI_NORM" = "$PC_NORM" ] \
             || { echo "::error::vale exclusion scope drift — ci.yml=$CI_EXCL ($CI_NORM) pre-commit=$PC_EXCL ($PC_NORM)"; exit 1; }
 
