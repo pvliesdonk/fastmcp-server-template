@@ -6,6 +6,8 @@ description: >-
 
 <!-- ===== TEMPLATE-OWNED — re-rendered on template updates. ===== -->
 
+# Repository Protection
+
 ## Repository protection (rulesets)
 
 `.github/rulesets/*.json` are the source of truth for this repository's branch and tag rulesets — required PRs + the `CI Success` check on `main` and `release/*`, deletion/force-push protection for `v*` tags — and `bootstrap.yml` applies them (upsert by name) on pushes touching those files and on manual dispatch. Never adjust protection in the GitHub UI: the next bootstrap run resets it to the checked-in state. Change the JSON files instead. The release pipeline's `RELEASE_TOKEN` (a repository admin's PAT) bypasses these rules **by design** via the admin-role bypass entry — its remaining jobs are creating the `vX.Y.Z` tag + GitHub release after a release PR merges (the `v*` tag ruleset applies) and opening the release/notes/port PRs whose CI must run; direct release-commit and merge-back pushes to protected branches are gone with PSR. Posture and bypass model: `docs/deployment/repository-protection.md`.
