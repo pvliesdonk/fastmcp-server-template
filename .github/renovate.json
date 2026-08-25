@@ -5,8 +5,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Bump GitHub Action pins inside Jinja-templated workflow files. Dependabot and Renovate's native github-actions manager cannot read *.jinja, so the template's Action pins — the single source of truth for the whole fleet — are invisible to them. This scans them; downstream inherits bumps via template release + copier update.",
-      "managerFilePatterns": ["/^\\.github/workflows/.*\\.jinja$/"],
+      "description": "Bump GitHub Action pins inside Jinja-templated workflow files and composite actions (any *.jinja under .github/actions/). Dependabot and Renovate's native github-actions manager cannot read *.jinja, so the template's Action pins — the single source of truth for the whole fleet — are invisible to them. This scans them; downstream inherits bumps via template release + copier update.",
+      "managerFilePatterns": ["/^\\.github/(workflows|actions)/.*\\.jinja$/"],
       "matchStrings": [
         "uses:\\s+(?<depName>[\\w.-]+/[\\w.-]+)(?:/[\\w./-]+)?@(?<currentValue>v\\d[^\\s\"']*)"
       ],

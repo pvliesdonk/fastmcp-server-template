@@ -1,7 +1,7 @@
 """Offline self-test for the upstream customManagers regex in .github/renovate.json.
 
-Reads the actual matchString from the committed config and applies it to every
-Jinja workflow, asserting the capture groups behave: depName is always
+Reads the actual matchString and managerFilePatterns from the committed config
+and applies them to every Jinja file they cover, asserting the capture groups behave: depName is always
 owner/repo (subpath stripped), codeql-action dedupes to one depName, and known
 pins are captured with the right currentValue. Keeps the regex and its
 contract in sync — edit the regex, this test re-verifies it.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CONFIG = REPO / ".github" / "renovate.json"
-WORKFLOW_DIR = REPO / ".github" / "workflows"
+GITHUB_DIR = REPO / ".github"
 
 
 def _manager(dep_name: str | None = None) -> dict:
@@ -29,19 +29,72 @@ def _manager(dep_name: str | None = None) -> dict:
     return manager
 
 
-def _matcher() -> re.Pattern[str]:
-    (match_string,) = _manager()["matchStrings"]
+def _matcher(manager: dict | None = None) -> re.Pattern[str]:
+    (match_string,) = (manager or _manager())["matchStrings"]
     # Renovate uses JS/RE2 named groups `(?<name>)`; Python `re` needs `(?P<name>)`.
     return re.compile(match_string.replace("(?<", "(?P<"))
+
+
+def _covered_files(manager: dict | None = None) -> list[Path]:
+    """Every Jinja file under .github/ that the manager's file patterns select.
+
+    Derived from the committed patterns rather than a hard-coded glob so the
+    test cannot silently cover a narrower set than Renovate does (#492).
+    Patterns are Renovate's `/regex/` form, matched against repo-relative paths.
+    """
+    pats = [
+        re.compile(p.strip("/")) for p in (manager or _manager())["managerFilePatterns"]
+    ]
+    return sorted(
+        f
+        for f in GITHUB_DIR.rglob("*.jinja")
+        if any(p.search(f.relative_to(REPO).as_posix()) for p in pats)
+    )
 
 
 def _captures() -> list[tuple[str, str]]:
     pat = _matcher()
     hits: list[tuple[str, str]] = []
-    for wf in WORKFLOW_DIR.glob("*.jinja"):
+    for wf in _covered_files():
         for m in pat.finditer(wf.read_text()):
             hits.append((m.group("depName"), m.group("currentValue")))
     return hits
+
+
+def test_file_pattern_covers_every_action_pin() -> None:
+    """No `@vX` pin under .github/**/*.jinja may sit outside the manager's reach.
+
+    Composite actions under .github/actions/ carried the same setup-uv pin as
+    the workflows but were invisible to Renovate, so a bump left the fleet on
+    two majors of one action (#492).  Only pins the matchString captures are
+    checked: SHA-pinned actions are outside this manager's remit by design.
+    """
+    pat = _matcher()
+    covered = set(_covered_files())
+    uncovered = sorted(
+        f.relative_to(REPO).as_posix()
+        for f in GITHUB_DIR.rglob("*.jinja")
+        if f not in covered and pat.search(f.read_text())
+    )
+    assert not uncovered, f"action pins outside managerFilePatterns: {uncovered}"
+    assert any(
+        f.relative_to(REPO).as_posix().startswith(".github/actions/") for f in covered
+    ), "composite actions under .github/actions/ are not covered"
+
+
+def test_each_action_pinned_to_one_version() -> None:
+    """A Renovate bump must move every captured occurrence of an action together.
+
+    Scoped to the Jinja files this manager owns.  The template's own real
+    workflows (`template-*.yml`) are bumped by Renovate's native manager in a
+    separate PR, so a transient split between them and the fleet pins is
+    tolerated here rather than turning one of the two PRs red.
+    """
+    versions: dict[str, set[str]] = {}
+    for dep_name, current_value in _captures():
+        versions.setdefault(dep_name, set()).add(current_value)
+    drifted = {d: sorted(v) for d, v in versions.items() if len(v) > 1}
+    assert not drifted, f"action pinned at differing versions: {drifted}"
 
 
 def test_every_depname_is_owner_slash_repo() -> None:
@@ -89,13 +142,9 @@ def test_knope_cli_manager_captures_the_version_input() -> None:
     halves could run different knope versions.
     """
     manager = _manager("knope-dev/knope")
-    (match_string,) = manager["matchStrings"]
-    pat = re.compile(match_string.replace("(?<", "(?P<"))
-    file_pattern = manager["managerFilePatterns"][0].strip("/")
+    pat = _matcher(manager)
     pins: dict[str, list[str]] = {}
-    for wf in WORKFLOW_DIR.glob("*.jinja"):
-        if not re.search(file_pattern, f".github/workflows/{wf.name}"):
-            continue
+    for wf in _covered_files(manager):
         found = [m.group("currentValue") for m in pat.finditer(wf.read_text())]
         if found:
             pins[wf.name] = found
