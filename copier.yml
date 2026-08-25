@@ -74,13 +74,24 @@ _migrations:
   # command, not a script: on a from-real-directory upgrade the destination
   # still only has the OLD template's files, so
   # scripts/migrate_agent_instructions.py does not exist yet at this stage.
+  # `Template.migration_tasks()` returns no tasks for EITHER stage when the
+  # destination's recorded template commit or the new template commit does
+  # not resolve to a version (e.g. a bare-hash `_commit`, or an untagged
+  # template) — on that path this guard does not run and the render crash
+  # documented above returns. No `version:` window is set on this entry: the
+  # release this ships in is chosen at dispatch time (see "Release" in
+  # CLAUDE.md), not known while this file is edited, and the steady state is
+  # a no-op anyway once every downstream has migrated once, because the
+  # rendered `tests/test_agent_instructions.py` forbids a real directory
+  # under `.claude/skills/` from ever being committed again.
   # Keep this name list identical to TEMPLATE_SKILLS in
   # scripts/migrate_agent_instructions.py and scripts/tests/test_shared_skill_paths.py.
   - command: >-
       for d in authoring-issues-prs config-contract logging-standard releasing
       repository-protection tool-registration writing-release-notes; do
-      p=".claude/skills/$d"; if [ -d "$p" ] && [ ! -L "$p" ]; then rm -rf
-      "$p"; fi; done
+      p=".claude/skills/$d"; if [ -d "$p" ] && [ ! -L "$p" ]; then echo
+      "copier migration: removing real directory $p (the template now ships
+      it as a symlink into .agents/skills/)"; rm -rf "$p"; fi; done
     when: "{{ _stage == 'before' }}"
   # CLAUDE.md → AGENTS.md move (#484/#485): splices the project's DOMAIN
   # blocks from HEAD:CLAUDE.md into AGENTS.md, rewrites CLAUDE.md as the

@@ -4,9 +4,14 @@ are reachable by Claude Code through .claude/skills/<name> symlinks (#486)."""
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+import migrate_agent_instructions as mig
 
 REPO = Path(__file__).resolve().parents[2]
 AGENTS_SKILLS = REPO / ".agents" / "skills"
@@ -200,3 +205,36 @@ def test_release_skill_treats_github_prose_as_untrusted_before_publication() -> 
         "credentialed publication",
     ):
         assert required in prose
+
+
+def test_template_skills_list_matches_migration_script() -> None:
+    assert mig.TEMPLATE_SKILLS == TEMPLATE_SKILLS, (
+        "TEMPLATE_SKILLS drifted between scripts/migrate_agent_instructions.py "
+        f"{mig.TEMPLATE_SKILLS} and scripts/tests/test_shared_skill_paths.py "
+        f"{TEMPLATE_SKILLS} -- keep the two tuples identical"
+    )
+
+
+def test_template_skills_list_matches_copier_before_stage_migration() -> None:
+    config = yaml.safe_load((REPO / "copier.yml").read_text(encoding="utf-8"))
+    before_stage = [
+        m
+        for m in config["_migrations"]
+        if isinstance(m, dict) and "before" in m.get("when", "")
+    ]
+    assert len(before_stage) == 1, (
+        "expected exactly one before-stage _migrations entry in copier.yml, "
+        f"found {len(before_stage)}"
+    )
+    command = before_stage[0]["command"]
+    match = re.search(r"for \w+ in (.+?);\s*do", command)
+    assert match, (
+        "could not find a 'for X in ...; do' clause in copier.yml's before-stage "
+        f"migration command: {command!r}"
+    )
+    names = frozenset(match.group(1).split())
+    assert names == frozenset(TEMPLATE_SKILLS), (
+        "TEMPLATE_SKILLS drifted between scripts/tests/test_shared_skill_paths.py "
+        f"{sorted(TEMPLATE_SKILLS)} and copier.yml's before-stage migration command "
+        f"{sorted(names)} -- keep the skill-name list identical in both places"
+    )

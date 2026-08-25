@@ -1211,3 +1211,13 @@ Edit the value in `.copier-answers.yml` to 100 characters or fewer, then run
 `copier update` again; the renders of `server.json`, `README.md` and the
 other consumers pick the new value up. A blurb that was edited by hand in
 `server.json` alone is caught by the new contract test instead.
+
+### CLAUDE.md is now a stub; AGENTS.md carries the instructions
+
+- If you had customised a template-owned skill under `.claude/skills/`
+  (before this release: `authoring-issues-prs`), the update replaces that
+  directory with a symlink into `.agents/skills/` and logs `copier
+  migration: removing real directory …`. Recover your edits with `git show
+  HEAD:.claude/skills/<name>/SKILL.md` and re-apply them as a project-owned
+  skill under `.agents/skills/<other-name>/` — template-owned skills are
+  re-rendered on every update.
