@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression check for the copier-update generation ordering.
 
 The bug class this guards (issue #291 item 4): on ``copier update``,
@@ -15,8 +14,9 @@ end-to-end with a real ``copier update``:
    project.
 2. Inject one domain field + literal ``env()`` read into the config
    sentinels, regenerate, and assert the var landed in ``.env.example``.
-3. Commit, then ``copier update --trust`` to the working tree's ``HEAD``.
-4. Assert the var survived in the generated artifacts and that
+3. Commit default and opted-in variants, then ``copier update --trust`` each
+   project to the working tree's ``HEAD``.
+4. Assert both Claude workflow variants and the var survived, and that
    ``gen_config_surface.py --check`` exits clean — the exact state the
    pre-fix ordering could not produce without a manual re-run.
 
@@ -51,7 +51,7 @@ _VAR = "SMOKE_MCP_VAULT_PATH"
 
 
 def _run(args: list[str], cwd: Path) -> None:
-    result = subprocess.run(args, cwd=cwd)
+    result = subprocess.run(args, cwd=cwd, check=False)
     if result.returncode != 0:
         raise SystemExit(f"ERROR: {' '.join(args)} exited {result.returncode}")
 
@@ -94,55 +94,77 @@ def _assert_var(project: Path, rel_path: str, *, expected: bool) -> None:
         raise SystemExit(f"ERROR: {_VAR} {state} {rel_path} — update regression")
 
 
+def _assert_review_workflows(project: Path, *, enabled: bool) -> None:
+    workflows = project / ".github" / "workflows"
+    automatic_review = workflows / "claude-code-review.yml"
+    if automatic_review.exists() is not enabled:
+        state = "removed" if enabled else "retained"
+        raise SystemExit(
+            f"ERROR: copier update {state} automatic Claude review with "
+            f"enable_automatic_claude_review={enabled}"
+        )
+    if not (workflows / "claude.yml").is_file():
+        raise SystemExit("ERROR: copier update removed the explicit @claude responder")
+
+
 def main() -> int:
     template_root = Path(__file__).resolve().parent.parent
     with tempfile.TemporaryDirectory(prefix="update-regression-") as tmp:
-        project = Path(tmp) / "proj"
+        for enabled in (False, True):
+            project = Path(tmp) / f"proj-review-{'on' if enabled else 'off'}"
 
-        _copier(
-            [
-                "copy",
-                "--trust",
-                "--defaults",
-                f"--vcs-ref={BASE_REF}",
-                "--data-file",
-                str(template_root / "tests" / "fixtures" / "smoke-answers.yml"),
-                str(template_root),
-                str(project),
-            ],
-            template_root,
-        )
+            _copier(
+                [
+                    "copy",
+                    "--trust",
+                    "--defaults",
+                    f"--vcs-ref={BASE_REF}",
+                    "--data-file",
+                    str(template_root / "tests" / "fixtures" / "smoke-answers.yml"),
+                    str(template_root),
+                    str(project),
+                ],
+                template_root,
+            )
 
-        # `copier copy .` records `_src_path: .`, which `copier update`
-        # would resolve relative to the project. Point it back at the
-        # template checkout.
-        answers = project / ".copier-answers.yml"
-        answers.write_text(
-            answers.read_text(encoding="utf-8").replace(
+            # `copier copy .` records `_src_path: .`, which `copier update`
+            # would resolve relative to the project. Point it back at the
+            # template checkout and opt one old render into automatic review
+            # before the conditional destination path is introduced.
+            answers = project / ".copier-answers.yml"
+            answer_text = answers.read_text(encoding="utf-8").replace(
                 "_src_path: .", f"_src_path: {template_root}"
-            ),
-            encoding="utf-8",
-        )
+            )
+            if enabled:
+                answer_text += "enable_automatic_claude_review: true\n"
+            answers.write_text(answer_text, encoding="utf-8")
 
-        _inject_domain_var(project)
-        _run([sys.executable, "scripts/gen_config_surface.py"], project)
-        _assert_var(project, ".env.example", expected=True)
+            _inject_domain_var(project)
+            _run([sys.executable, "scripts/gen_config_surface.py"], project)
+            _assert_var(project, ".env.example", expected=True)
 
-        _git(["init", "-q"], project)
-        _git(["add", "-A"], project)
-        _git(["commit", "-q", "-m", f"scaffold at {BASE_REF} + domain var"], project)
+            _git(["init", "-q"], project)
+            _git(["add", "-A"], project)
+            _git(
+                ["commit", "-q", "-m", f"scaffold at {BASE_REF} + domain var"],
+                project,
+            )
 
-        _copier(["update", "--trust", "--defaults", "--vcs-ref=HEAD"], project)
+            _copier(["update", "--trust", "--defaults", "--vcs-ref=HEAD"], project)
+            _assert_review_workflows(project, enabled=enabled)
 
-        _assert_var(project, ".env.example", expected=True)
-        _assert_var(
-            project,
-            "docs/javascripts/config-wizard/wizard-spec.json",
-            expected=True,
-        )
-        _run([sys.executable, "scripts/gen_config_surface.py", "--check"], project)
+            _assert_var(project, ".env.example", expected=True)
+            _assert_var(
+                project,
+                "docs/javascripts/config-wizard/wizard-spec.json",
+                expected=True,
+            )
+            _run([sys.executable, "scripts/gen_config_surface.py", "--check"], project)
 
-    print(f"update regression OK: {_VAR} survived {BASE_REF} -> HEAD")
+    print(
+        f"update regression OK: {_VAR} and both review variants survived "
+        f"{BASE_REF} -> HEAD"
+    )
     return 0
 
 

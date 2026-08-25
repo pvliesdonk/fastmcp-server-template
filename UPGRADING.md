@@ -1153,4 +1153,38 @@ recipe under "Before every upgrade" is how to find the others.
 
 ## Unreleased
 
-_Nothing yet._
+### Automatic Claude review is now opt-in
+
+Automatic Claude pull-request review now defaults to off. Explicit `@claude`
+mentions remain available through the mention responder.
+
+To keep automatic review enabled, add this answer to `.copier-answers.yml`
+before running `copier update`:
+
+```yaml
+enable_automatic_claude_review: true
+```
+
+When automatic review is disabled, remove any independently configured required
+Claude-review check from the repository rulesets or branch protection. The
+deterministic CI checks remain the merge gate.
+
+### Release notes are now human-owned staging
+
+Add these rules to the project-owned `.gitignore` when they are absent, so the
+provider-neutral release skill remains tracked:
+
+```gitignore
+.agents/*
+!.agents/skills/
+```
+
+Stop dispatching the removed **Release Notes** workflow. Before preparing a new
+release identity, invoke `.agents/skills/writing-release-notes/SKILL.md` and
+merge its `docs/releases/next.md` pull request. Remove local runbooks and
+repository settings that assume a draft hold, `skip_notes`, or `full_redraft`;
+deterministic promotion now refuses when reviewed notes are missing.
+
+Keep `CLAUDE_CODE_OAUTH_TOKEN` only for the explicit `@claude` responder or an
+opted-in automatic Claude review. Existing canonical `docs/releases/X.Y.md`
+pages need no conversion.

@@ -72,16 +72,11 @@ _migrations:
 # one-time creation on first weekly cron; `_skip_if_exists` preserves
 # thereafter.
 _skip_if_exists:
-  # .claude/skills/ (the contributor-facing authoring skill) is deliberately
-  # NOT listed here: it follows the CLAUDE.md ownership pattern — template-
-  # owned, re-rendered on every update, with a DOMAIN-AUTHORING sentinel
-  # block for project-specific additions — so contribution-hygiene fixes
-  # reach existing consumers instead of freezing at first render.  Contrast
-  # with `.claude-plugin/**` below, whose skills are USER-facing content.
-  # NOTE: .gitignore (seeded once, below) gained the `.claude/*` +
-  # `!.claude/skills/` pattern together with this skill; a consumer whose
-  # .gitignore predates it must apply that change by hand, or the rendered
-  # skill stays untracked (git add skips ignored paths).
+  # Contributor skills are deliberately NOT listed here: the provider-neutral
+  # release-notes skill under .agents/ and the Claude-specific issue-authoring
+  # skill under .claude/ are template-owned and re-rendered on every update.
+  # NOTE: .gitignore is seeded once. Consumers whose copy predates either
+  # tracked skills-root exception must add it by hand or git ignores the skill.
   # Claude Code plugin channel starters: seeded once, then project-owned.
   # plugin.json / .mcp.json carry the live release version (stamped by
   # scripts/stamp_manifests.py inside each stable release PR), so
@@ -249,6 +244,9 @@ _skip_if_exists:
 # introduced on its PSR-era predecessor for #325), with knope.toml's stamp
 # Command as the invocation it must stay in lockstep with;
 # tests/test_release_flow_contract.py asserts that coupling.
+# The enable_automatic_claude_review-gated workflow remains template-owned:
+# enabling the answer generates .github/workflows/claude-code-review.yml, and
+# disabling it removes that generated file on the next copier update.
 
 # Files in the template repo that should never land in generated projects.
 # Setting _exclude in copier.yml REPLACES copier's default exclude list
@@ -353,6 +351,11 @@ include_claude_plugin:
   type: bool
   default: false
   help: "Scaffold the Claude Code plugin channel (.claude-plugin/plugin: plugin.json + exec-form .mcp.json seeded once, version-stamped by scripts/stamp_manifests.py in every stable release PR). The release workflow's marketplace publish job already keys on the directory existing at the tag, so turning this on is what makes marketplace publishing take effect. Leave off for servers not distributed as a Claude Code plugin."
+
+enable_automatic_claude_review:
+  type: bool
+  default: false
+  help: "Include automatic Claude pull-request review after CI passes. Leave off to keep agent review human-triggered through @claude only."
 
 enable_authorization:
   type: bool

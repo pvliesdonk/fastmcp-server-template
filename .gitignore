@@ -20,9 +20,12 @@ htmlcov/
 *.npz
 site/
 
-# Claude Code local settings — everything under .claude/ EXCEPT skills/,
-# which is tracked: it ships the contributor-facing authoring skill(s) into
-# generated projects (re-rendered on copier update, like CLAUDE.md).
+# Shared agent skills are tracked while other .agents content stays local.
+.agents/*
+!.agents/skills/
+
+# Claude Code local settings — everything under .claude/ EXCEPT skills/.
+# The retained subtree carries Claude-specific contributor skills.
 .claude/*
 !.claude/skills/
 
