@@ -122,7 +122,8 @@ site, `docs/design/`, and inline docstrings.
 ## Releases
 
 Merging is not releasing. When a release is cut, and from where, is
-governed by the release model in `AGENTS.md`: releases normally come
+governed by the release model in the `releasing` skill
+(`.agents/skills/releasing/SKILL.md`): releases normally come
 straight from a quiescent trunk, and a short-lived `release/X.Y` branch
 is the exception tool for excluding unfinished work or patching a
 shipped release. The ships-atomically signal recorded on epics

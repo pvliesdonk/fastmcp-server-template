@@ -215,6 +215,23 @@ def test_template_skills_list_matches_migration_script() -> None:
     )
 
 
+def test_template_skills_list_matches_rendered_test_file() -> None:
+    text = (REPO / "tests" / "test_agent_instructions.py").read_text(encoding="utf-8")
+    match = re.search(
+        r"TEMPLATE_SKILLS: tuple\[str, \.\.\.\] = \((.*?)\)", text, re.DOTALL
+    )
+    assert match, (
+        "could not find a 'TEMPLATE_SKILLS: tuple[str, ...] = (...)' literal in "
+        "tests/test_agent_instructions.py"
+    )
+    names = tuple(re.findall(r'"([^"]+)"', match.group(1)))
+    assert names == TEMPLATE_SKILLS, (
+        "TEMPLATE_SKILLS drifted between scripts/tests/test_shared_skill_paths.py "
+        f"{TEMPLATE_SKILLS} and tests/test_agent_instructions.py {names} -- keep the "
+        "skill-name list identical in both places"
+    )
+
+
 def test_template_skills_list_matches_copier_before_stage_migration() -> None:
     config = yaml.safe_load((REPO / "copier.yml").read_text(encoding="utf-8"))
     before_stage = [

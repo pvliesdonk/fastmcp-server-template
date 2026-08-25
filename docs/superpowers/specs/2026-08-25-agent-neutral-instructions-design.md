@@ -136,6 +136,20 @@ hand-edit exception, and that `.gitignore` already needs the `!.agents/skills/`
 and `!.claude/skills/` exceptions (seeded-once file; both notes already exist
 from earlier releases).
 
+**Addendum (post-implementation).** Step 3's after-stage migration alone was
+not enough: copier 9.17 crashes with an `IsADirectoryError` out of
+`Worker._render_allowed` when a rendered symlink lands on a real directory,
+non-atomically and *before* `_migrations` ever runs. The fix is a
+**before-stage** `_migrations` shell guard in `copier.yml` that removes the
+seven template-owned real directories first, so the render can lay the
+symlink down; the after-stage symlink reconciliation above stays as
+belt-and-braces. Copier also skips *all* migrations, both stages, when
+either the destination's or the template's recorded commit fails to resolve
+to a version (a bare-hash `_commit`) — `UPGRADING.md` covers that case with
+a manual step. The before-stage guard carries no `version:` window
+deliberately: the release is chosen at dispatch time, and once every
+downstream has migrated once it is a steady-state no-op anyway.
+
 ### 5. Guards
 
 Template side (`template-ci`, `scripts/tests/`):

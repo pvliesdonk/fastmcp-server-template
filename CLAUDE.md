@@ -221,11 +221,12 @@ scripts/promote_upgrading.py --check` locally to see what it sees.
 
 The release *model* that generated projects follow — trunk releases from
 a quiescent commit by default, short-lived `release/X.Y` branches as the
-exception, the three channels — ships in `AGENTS.md.jinja`'s "Release
-model" section.  `CONTRIBUTING.md` points at "the release model in
-`AGENTS.md`": in a generated project that resolves to the rendered
-section; in this repo, releases are the manual dispatch above and the
-same trunk-first spirit applies, without the branch machinery.
+exception, the three channels — ships in
+`.agents/skills/releasing/SKILL.md.jinja`'s "Release model" section.
+`CONTRIBUTING.md` points at "the release model in the `releasing` skill":
+in a generated project that resolves to that rendered skill; in this
+repo, releases are the manual dispatch above and the same trunk-first
+spirit applies, without the branch machinery.
 
 ## Spec
 

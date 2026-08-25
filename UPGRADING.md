@@ -1235,9 +1235,13 @@ Do by hand only if it applies:
   (before this release: `authoring-issues-prs`), the update replaces that
   directory with a symlink into `.agents/skills/` and logs `copier
   migration: removing real directory …`. Recover your edits with `git show
-  HEAD:.claude/skills/<name>/SKILL.md` and re-apply them as a project-owned
-  skill under `.agents/skills/<other-name>/` — template-owned skills are
-  re-rendered on every update.
+  HEAD:.claude/skills/<name>/SKILL.md`. If the customisation lived inside a
+  `DOMAIN-*` sentinel block (e.g. `DOMAIN-AUTHORING-START`/`-END` in
+  `authoring-issues-prs`), paste it back into the same sentinel in
+  `.agents/skills/<name>/SKILL.md` — that block is preserved by every later
+  update. Only edits **outside** a sentinel need a separate project-owned
+  skill under `.agents/skills/<other-name>/`, since template-owned skills
+  are otherwise re-rendered on every update.
 - If your `.gitignore` predates the `!.agents/skills/` or `!.claude/skills/`
   exceptions, add both (the file is seeded once), or git ignores the skills
   and their symlinks.

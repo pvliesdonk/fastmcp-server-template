@@ -50,9 +50,13 @@ What this removes and why:
 `release-notes-publish.yml`. (The release pair still needs the `RELEASE_TOKEN`
 secret; only its `copier-update` justification is gone.
 `release-notes-publish.yml` is deterministic — no Claude dependency — and
-still redeploys canonical `docs/releases/` pages on merge.) The neutral
-`.agents/skills/writing-release-notes/` skill is independent of Claude review
-wiring; retain or remove it according to the detached fork's release process.
+still redeploys canonical `docs/releases/` pages on merge.) The seven
+template-owned skills under `.agents/skills/` (`authoring-issues-prs`,
+`config-contract`, `logging-standard`, `releasing`, `repository-protection`,
+`tool-registration`, `writing-release-notes`) and their `.claude/skills/<name>`
+symlinks are independent of Claude review wiring; retain or remove each
+according to the detached fork's process — a fork that keeps using Claude
+Code, for instance, has no reason to drop the symlinks even after detaching.
 
 ## Step 3 — Scrub template-tracking guidance from `AGENTS.md` and its skills
 
@@ -92,7 +96,10 @@ generator still runs in a fork, just not on a copier lifecycle event).
 The fork-neutral contributor guidance
 (Conventions, the PR acceptance gates, the Logging Standard skill, the config
 contract skill, GitHub Review Types) is kept. If your fork added its own
-`.claude/CLAUDE.md`, apply the same scrub there.
+`.claude/CLAUDE.md`, apply the same scrub there; the same goes for a
+project-owned addition to `AGENTS.md` outside the DOMAIN blocks, or an
+extra project-owned skill under `.agents/skills/`, if either picked up
+copier-update or template-tracking wording of its own.
 
 ## Step 4 — README cleanup (optional)
 

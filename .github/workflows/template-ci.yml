@@ -1291,6 +1291,10 @@ jobs:
           # sentinel). Every check below counts OCCURRENCES across this
           # whole set, not just AGENTS.md, so a string that moved with its
           # section keeps being checked.
+          # `.agents/skills/authoring-issues-prs/SKILL.md` is deliberately NOT
+          # in this set: its copier-update wording matches none of the sed
+          # rules below, so scrubbing it here would be a no-op that still
+          # needs a real fix — tracked as a follow-up issue instead.
           SCRUB_FILES="AGENTS.md .agents/skills/releasing/SKILL.md .agents/skills/config-contract/SKILL.md .agents/skills/tool-registration/SKILL.md"
           count_occurrences() {
             cat $SCRUB_FILES | grep -oF "$1" | wc -l | tr -d '[:space:]' || true
@@ -1414,6 +1418,7 @@ jobs:
               '^## PR Discipline$' \
               '^## GitHub Review Types$' \
               '^## Documentation Discipline$' \
+              '^## Documentation Conventions' \
               '^## Key Design Decisions$'; do
             grep -qE "$kept_section" AGENTS.md \
               || { echo "::error::neutral section '$kept_section' lost — scrub deleted too much"; exit 1; }
@@ -1423,7 +1428,7 @@ jobs:
           # The range-delete's bottom-boundary over-run guard is now
           # '## Key Design Decisions' (asserted in the kept-section loop above):
           # it sits below where the END fence was, so a range delete that ran to
-          # EOF past pair 2 would drop it too.
+          # EOF past pair 3 would drop it too.
           #
           # Asserted as TWO independent fixed-string checks, each using the same
           # literal its own `sed` -e deletes (issue #199). The previous single
