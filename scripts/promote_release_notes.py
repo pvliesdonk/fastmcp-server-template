@@ -22,8 +22,17 @@ VERSION_RE = re.compile(
 )
 WATERMARK_RE = re.compile(r"^<!-- notes-range-end: ([0-9a-f]{40}) -->$", re.MULTILINE)
 INDEX_START_RE = re.compile(r"<!-- RELEASE-PAGES-START:[\s\S]*?-->")
-PATCH_HEADING_RE = re.compile(r"^## v([0-9]+)\.([0-9]+)\.([0-9]+)$", re.MULTILINE)
-PATCH_HEADING_CANDIDATE_RE = re.compile(r"^## v[0-9]+\.[0-9]+\.[0-9]+.*$", re.MULTILINE)
+PATCH_HEADING_RE = re.compile(
+    r"^ {0,3}##[ \t]+v([0-9]+)\.([0-9]+)\.([0-9]+)"
+    r"(?:[ \t]+#+)?[ \t]*$",
+    re.MULTILINE,
+)
+PATCH_HEADING_CANDIDATE_RE = re.compile(
+    r"^ {0,3}##[ \t]+v[0-9]+\.[0-9]+\.[0-9]+.*$", re.MULTILINE
+)
+ATX_HEADING_RE = re.compile(
+    r"^(?P<indent> {0,3})(?P<marks>#{1,6})(?P<suffix>(?:[ \t].*)?)$"
+)
 
 
 class PromotionError(ValueError):
@@ -238,10 +247,18 @@ def shift_headings(text: str, levels: int = 1) -> str:
             shifted.append(line)
             continue
 
-        if re.match(r"^#{1,6}[ \t]", line):
-            shifted.append("#" * levels + line)
-        else:
+        heading = ATX_HEADING_RE.fullmatch(stripped)
+        if heading is None or len(heading["marks"]) + levels > 6:
             shifted.append(line)
+            continue
+        newline = line[len(stripped) :]
+        shifted.append(
+            heading["indent"]
+            + "#" * levels
+            + heading["marks"]
+            + heading["suffix"]
+            + newline
+        )
     return "".join(shifted)
 
 

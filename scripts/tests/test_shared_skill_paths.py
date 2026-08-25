@@ -47,3 +47,57 @@ def test_release_skill_never_stages_temporary_body_file() -> None:
     assert "git add -A" not in output
     assert "git add .\n" not in output
     assert "Do not stage `$BODY_FILE`" in output
+
+
+def test_release_skill_branches_from_fresh_remote_base_and_rechecks_it() -> None:
+    text = (REPO / ".agents/skills/writing-release-notes/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    output = text[text.index("## Output") :]
+
+    fetch = 'git fetch origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"'
+    fetch_at = output.index(fetch)
+    switch_at = output.index('git switch --create "$BRANCH" --no-track "origin/$BASE"')
+    final_fetch_at = output.index(fetch, fetch_at + 1)
+    ancestry_at = output.index(
+        'git merge-base --is-ancestor "origin/$BASE" HEAD', final_fetch_at
+    )
+    push_at = output.index('git push --set-upstream origin "$BRANCH"')
+
+    assert fetch_at < switch_at < final_fetch_at < ancestry_at < push_at
+    assert 'git switch -c "$BRANCH"' not in output
+
+
+def test_release_skill_reviews_staged_and_cumulative_diffs_before_push() -> None:
+    text = (REPO / ".agents/skills/writing-release-notes/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    output = text[text.index("## Output") :]
+    commit_at = output.index(
+        'git commit -m "docs: prepare release notes for ${IDENTITY}"'
+    )
+    push_at = output.index('git push --set-upstream origin "$BRANCH"')
+
+    assert output.index("git diff --cached --check") < commit_at
+    assert (
+        output.index("git diff --cached", output.index("git diff --cached --check") + 1)
+        < commit_at
+    )
+    assert output.index('git diff "origin/$BASE...HEAD" --check') < push_at
+    assert output.index('git diff "origin/$BASE...HEAD"', commit_at) < push_at
+
+
+def test_release_skill_treats_github_prose_as_untrusted_before_publication() -> None:
+    text = (REPO / ".agents/skills/writing-release-notes/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    prose = " ".join(text.split()).lower()
+
+    for required in (
+        "untrusted data",
+        "issue and pull-request bodies and comments",
+        "embedded instructions",
+        "human confirmation",
+        "credentialed publication",
+    ):
+        assert required in prose

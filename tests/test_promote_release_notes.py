@@ -402,6 +402,29 @@ def test_heading_conversion_recognizes_three_space_indented_fences(
     assert "### literal example" not in page
 
 
+@pytest.mark.parametrize(
+    ("staged_heading", "promoted_heading"),
+    [
+        ("## Credential rotation", "### Credential rotation"),
+        ("   ## Credential rotation", "   ### Credential rotation"),
+        ("  ##\tCredential rotation", "  ###\tCredential rotation"),
+        (" ## Credential rotation ##", " ### Credential rotation ##"),
+    ],
+)
+def test_heading_conversion_preserves_commonmark_atx_indentation(
+    tmp_path: Path,
+    staged_heading: str,
+    promoted_heading: str,
+) -> None:
+    staged = NEXT.replace("## Credential rotation", staged_heading)
+    write(tmp_path / "docs/releases/2.4.md", canonical("v2.4.0"))
+    write(tmp_path / "docs/releases/next.md", staged)
+
+    page = plan_promotion(tmp_path, "2.4.1").writes[tmp_path / "docs/releases/2.4.md"]
+
+    assert promoted_heading in page.splitlines()
+
+
 def test_patch_sections_remain_ascending_and_undated(tmp_path: Path) -> None:
     write(tmp_path / "docs/releases/2.4.md", with_patch("v2.4.1"))
     write(tmp_path / "docs/releases/next.md", NEXT)
@@ -410,6 +433,28 @@ def test_patch_sections_remain_ascending_and_undated(tmp_path: Path) -> None:
 
     assert page.index("## v2.4.1") < page.index("## v2.4.2")
     assert "## v2.4.2 (" not in page
+
+
+def test_indented_patch_sections_participate_in_order_validation(
+    tmp_path: Path,
+) -> None:
+    page = with_patch("v2.4.2").replace("## v2.4.2", "   ## v2.4.2 ###")
+    write(tmp_path / "docs/releases/2.4.md", page)
+    write(tmp_path / "docs/releases/next.md", NEXT)
+
+    with pytest.raises(PromotionError, match="ascending"):
+        plan_promotion(tmp_path, "2.4.1")
+
+
+def test_indented_patch_sections_participate_in_series_validation(
+    tmp_path: Path,
+) -> None:
+    page = with_patch("v9.9.1").replace("## v9.9.1", "  ## v9.9.1")
+    write(tmp_path / "docs/releases/2.4.md", page)
+    write(tmp_path / "docs/releases/next.md", NEXT)
+
+    with pytest.raises(PromotionError, match="canonical minor series"):
+        plan_promotion(tmp_path, "2.4.2")
 
 
 def test_out_of_order_patch_refuses(tmp_path: Path) -> None:
