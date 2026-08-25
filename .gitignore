@@ -25,7 +25,8 @@ site/
 !.agents/skills/
 
 # Claude Code local settings — everything under .claude/ EXCEPT skills/.
-# The retained subtree carries Claude-specific contributor skills.
+# The retained subtree holds symlinks into .agents/skills/, template-owned
+# on copier update.
 .claude/*
 !.claude/skills/
 

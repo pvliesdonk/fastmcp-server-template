@@ -24,10 +24,9 @@ create new projects.
 - `src/{{python_module}}/*.jinja` — generated project's Python module.
 - `pyproject.toml.jinja`, `AGENTS.md.jinja`, `Dockerfile.jinja`, etc.
   — generated project's other files.
-- `.github/ISSUE_TEMPLATE/*.yml`, `CONTRIBUTING.md`, the neutral
-  `.agents/skills/writing-release-notes/` skill, and Claude-specific
-  `.claude/skills/authoring-issues-prs/` skill are copied verbatim into
-  generated projects and re-rendered on `copier update`.
+- `.github/ISSUE_TEMPLATE/*.yml`, `CONTRIBUTING.md`, and every skill under
+  `.agents/skills/` (with its `.claude/skills/` symlink) are copied verbatim
+  into generated projects and re-rendered on `copier update`.
 
 ## Making changes
 

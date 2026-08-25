@@ -11,6 +11,11 @@ _min_copier_version: "9.4"
 _answers_file: .copier-answers.yml
 _templates_suffix: .jinja
 
+# Contributor skills are canonical under .agents/skills/ (portable, read by
+# Cursor/Codex/…); Claude Code only scans .claude/skills/, so each ships a
+# relative symlink there.  Copier must copy the link, not its target (#486).
+_preserve_symlinks: true
+
 # Post-generation tasks.
 #
 # 1. Vendor the MCP Apps SDK into static/app.html.  The task value is
@@ -72,9 +77,9 @@ _migrations:
 # one-time creation on first weekly cron; `_skip_if_exists` preserves
 # thereafter.
 _skip_if_exists:
-  # Contributor skills are deliberately NOT listed here: the provider-neutral
-  # release-notes skill under .agents/ and the Claude-specific issue-authoring
-  # skill under .claude/ are template-owned and re-rendered on every update.
+  # Contributor skills are deliberately NOT listed here: every template-owned
+  # skill under .agents/skills/ and its .claude/skills/ symlink is re-rendered
+  # on every update.
   # NOTE: .gitignore is seeded once. Consumers whose copy predates either
   # tracked skills-root exception must add it by hand or git ignores the skill.
   # Claude Code plugin channel starters: seeded once, then project-owned.

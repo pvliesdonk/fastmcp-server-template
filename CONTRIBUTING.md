@@ -19,7 +19,7 @@ Before filing, search the target repo's existing issues — open **and**
 closed — for the same observation. If it is already on file, comment there
 rather than opening a duplicate.
 
-The `authoring-issues-prs` skill (`.claude/skills/authoring-issues-prs/`)
+The `authoring-issues-prs` skill (`.agents/skills/authoring-issues-prs/`)
 walks this guide's routing and filing procedure and performs the follow-up
 steps issue forms cannot (sub-issue links, milestones). It points back at
 this file; this file stays the single source of the rules.

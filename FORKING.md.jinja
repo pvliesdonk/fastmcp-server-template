@@ -50,37 +50,44 @@ still redeploys canonical `docs/releases/` pages on merge.) The neutral
 `.agents/skills/writing-release-notes/` skill is independent of Claude review
 wiring; retain or remove it according to the detached fork's release process.
 
-## Step 3 — Scrub template-tracking guidance from `AGENTS.md`
+## Step 3 — Scrub template-tracking guidance from `AGENTS.md` and its skills
 
 ```bash
 # -i.bak + rm keeps this portable across GNU sed (Linux) and BSD sed (macOS),
-# which disagree on the in-place flag's syntax.
-sed -i.bak \
-  -e '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' \
-  -e '/<!-- ===== TEMPLATE-OWNED SECTIONS BELOW/d' \
-  -e '/<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->/d' \
-  -e 's/ Kept across copier update\.//' \
-  -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
-  -e 's/ are preserved across `copier update`\./ are domain-owned./' \
-  -e 's/The block is preserved across `copier update`\./The block is domain-owned./' \
-  -e 's| on every `copier copy`/`copier update` and re-verified by| whenever config fields change, and re-verified by|' \
-  AGENTS.md && rm -f AGENTS.md.bak
+# which disagree on the in-place flag's syntax. Runs over AGENTS.md and the
+# three skills that still carry copier-update wording after the task-shaped
+# sections moved into portable skills under .agents/skills/ (#486): a
+# detached fork owns those files too, so the same scrub applies to each.
+for f in AGENTS.md .agents/skills/releasing/SKILL.md .agents/skills/config-contract/SKILL.md .agents/skills/tool-registration/SKILL.md; do
+  sed -i.bak \
+    -e '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' \
+    -e '/<!-- ===== TEMPLATE-OWNED SECTIONS BELOW/d' \
+    -e '/<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->/d' \
+    -e 's/ Kept across copier update\.//' \
+    -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
+    -e 's/ are preserved across `copier update`\./ are domain-owned./' \
+    -e 's/The block is preserved across `copier update`\./The block is domain-owned./' \
+    -e 's| on every `copier copy`/`copier update` and re-verified by| whenever config fields change, and re-verified by|' \
+    "$f" && rm -f "$f.bak"
+done
 ```
 
 This deletes the template-coupled sections — the bot-reviewer merge-gate
-paragraph, **Shared Infrastructure**, and **Contributing fixes upstream** — and
-strips the copier-update wording that no longer describes a detached fork: the
-`TEMPLATE-OWNED SECTIONS` banner fences (a fork owns every section, so the
-template/domain split is moot), the "Kept across copier update" notes on the
-DOMAIN blocks, the remaining "preserved/survive across copier update" notes
-(the pre-commit defaults, the `Dockerfile` sentinels, the
+paragraph, **Shared Infrastructure**, **Contributing fixes upstream**, and the
+releasing skill's **Release notes pages** section — and strips the
+copier-update wording that the `releasing`, `config-contract`, and
+`tool-registration` skills carry and that no longer describes a detached
+fork: the `TEMPLATE-OWNED SECTIONS` banner fences (a fork owns every section,
+so the template/domain split is moot), the "Kept across copier update" notes
+on the DOMAIN blocks, the remaining "preserved/survive across copier update"
+notes (the pre-commit defaults, the `Dockerfile` sentinels, the
 `scripts/stamp_manifests.py` release-manifest sentinels, and the upstream
 sentinel),
 and the copier-specific trigger on the config-wizard spec generation note (the
 generator still runs in a fork, just not on a copier lifecycle event).
 The fork-neutral contributor guidance
-(Conventions, the PR acceptance gates, the Logging Standard, the config
-contract, GitHub Review Types) is kept. If your fork added its own
+(Conventions, the PR acceptance gates, the Logging Standard skill, the config
+contract skill, GitHub Review Types) is kept. If your fork added its own
 `.claude/CLAUDE.md`, apply the same scrub there.
 
 ## Step 4 — README cleanup (optional)
