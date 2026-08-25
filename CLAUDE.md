@@ -22,11 +22,29 @@ create new projects.
   bump for the template's own git tags; no PSR.
 - `.github/workflows/*.yml.jinja` — generated project's workflows.
 - `src/{{python_module}}/*.jinja` — generated project's Python module.
-- `pyproject.toml.jinja`, `AGENTS.md.jinja`, `Dockerfile.jinja`, etc.
-  — generated project's other files.
-- `.github/ISSUE_TEMPLATE/*.yml`, `CONTRIBUTING.md`, and every skill under
-  `.agents/skills/` (with its `.claude/skills/` symlink) are copied verbatim
-  into generated projects and re-rendered on `copier update`.
+- `pyproject.toml.jinja`, `Dockerfile.jinja`, etc. — generated project's
+  other files.
+- `AGENTS.md.jinja` — the generated project's single always-loaded
+  instruction file; `CLAUDE.md.jinja` is a three-line `@AGENTS.md` stub
+  next to it. `tests/test_agent_instructions.py` (copied verbatim, see
+  below) guards that shape in the *rendered* project — this repo's own
+  `CLAUDE.md` is deliberately the maintainer guide you are reading, not
+  the stub.
+- `.github/ISSUE_TEMPLATE/*.yml`, `CONTRIBUTING.md`, and every template-owned
+  skill's `.agents/skills/*/SKILL.md(.jinja)` (with its relative
+  `.claude/skills/<name>` symlink — carried into a render as a symlink,
+  rather than a copy of its target, by copier's `_preserve_symlinks: true`)
+  are copied verbatim into generated projects and re-rendered on
+  `copier update`.
+- `scripts/migrate_agent_instructions.py` — the `copier update` migration
+  that splices a downstream's `CLAUDE.md` DOMAIN blocks into `AGENTS.md` and
+  rewrites `CLAUDE.md` as the stub; it is copier's after-stage `_migrations`
+  entry. `copier.yml`'s before-stage shell guard runs earlier in the same
+  update and removes any real `.claude/skills/<name>` directory it finds
+  (for all seven template skill names) so the render can lay the symlink
+  down in its place — so by the time the after-stage migration's own
+  symlink reconciliation runs there is normally nothing left for it to
+  remove (the branch stays as belt-and-braces).
 
 ## Making changes
 
@@ -100,6 +118,26 @@ only covered if it is rendered *above* the hygiene step and named in its
 argument list, so a new render step belongs in both places.  The
 idempotence render (`/tmp/smoke2`) is deliberately excluded: it is already
 asserted byte-identical to the default render.
+
+### Always-loaded budget
+
+`AGENTS.md` is the one file every AAIF-aware agent loads on every turn, so
+its template-owned prose is budgeted separately from a downstream's own
+content. `template-ci` fails when the smoke render's `AGENTS.md` exceeds
+24 000 characters of template-owned prose (the DOMAIN blocks hold only
+their placeholder text in that render). `tests/test_agent_instructions.py`
+— copied verbatim into every generated project, not a `.jinja` file —
+separately asserts a *rendered* project's whole `AGENTS.md` stays
+≤ 40 000 characters, the budget that also covers a downstream's own
+DOMAIN content. When new guidance is task-shaped rather than
+always-needed, put it in a skill under `.agents/skills/` instead of
+growing `AGENTS.md.jinja` — that is the lever both budgets expect you to
+pull. The seven template-skill names must stay
+identical across three places — `TEMPLATE_SKILLS` in
+`scripts/migrate_agent_instructions.py`, the same tuple in
+`scripts/tests/test_shared_skill_paths.py`, and the before-stage shell
+guard's directory list in `copier.yml` — and that test file is the guard
+against drift.
 
 ## Breaking changes
 
