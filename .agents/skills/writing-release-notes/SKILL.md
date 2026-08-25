@@ -237,7 +237,7 @@ git (`gh api "repos/OWNER/REPO/contents/PATH?ref=REF" -H "Accept:
 application/vnd.github.raw"` returns the file body directly, no decoding
 pipeline needed; the ref accepts a tag or a commit SHA, so the same call
 covers prepare-time drafting where the tag does not exist yet) —
-classified against the breaking-change policy in `CLAUDE.md` (operator
+classified against the breaking-change policy in `AGENTS.md` (operator
 surface and public library interface, assessed against the last stable):
 
 - import surface: diff `tests/public_import_surface.txt` at the two refs;

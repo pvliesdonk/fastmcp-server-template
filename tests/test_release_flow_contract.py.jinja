@@ -1346,7 +1346,7 @@ def _pins_or_skip() -> dict[str, str]:
 def test_committed_pins_agree_with_each_other() -> None:
     """Every committed manifest pins the same version.
 
-    `CLAUDE.md`'s "Manifest version lockstep" rule is that `server.json`{% if include_claude_plugin %},
+    `AGENTS.md`'s "Manifest version lockstep" rule is that `server.json`{% if include_claude_plugin %},
     the Claude plugin `plugin.json` and its `.mcp.json`{% endif %} all carry
     one version, and `scripts/stamp_manifests.py` moves them together.  The
     neighbouring test checks each pin against the *release history*, which

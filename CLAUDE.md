@@ -2,8 +2,8 @@
 
 Copier template repository.  This file is for claude-code agents
 working on the **template itself** — NOT the generated projects.
-Generated projects get their own `CLAUDE.md` rendered from
-`CLAUDE.md.jinja`.
+Generated projects get their own `AGENTS.md` rendered from
+`AGENTS.md.jinja` (plus a stub `CLAUDE.md` that imports it).
 
 ## Purpose
 
@@ -22,7 +22,7 @@ create new projects.
   bump for the template's own git tags; no PSR.
 - `.github/workflows/*.yml.jinja` — generated project's workflows.
 - `src/{{python_module}}/*.jinja` — generated project's Python module.
-- `pyproject.toml.jinja`, `CLAUDE.md.jinja`, `Dockerfile.jinja`, etc.
+- `pyproject.toml.jinja`, `AGENTS.md.jinja`, `Dockerfile.jinja`, etc.
   — generated project's other files.
 - `.github/ISSUE_TEMPLATE/*.yml`, `CONTRIBUTING.md`, the neutral
   `.agents/skills/writing-release-notes/` skill, and Claude-specific
@@ -105,8 +105,8 @@ asserted byte-identical to the default render.
 ## Breaking changes
 
 The canonical breaking-change policy ships in the generated project's
-`CLAUDE.md` — see "Breaking Changes and the `!` Marker" in
-`CLAUDE.md.jinja`.  In short: a change is breaking only if it breaks
+`AGENTS.md` — see "Breaking Changes and the `!` Marker" in
+`AGENTS.md.jinja`.  In short: a change is breaking only if it breaks
 the operator surface (env var, config file, CLI flag, deployment
 layout, on-disk state) or the public library interface, assessed
 against the last stable release; MCP tool-surface changes are not
@@ -120,8 +120,8 @@ extend.  This repo's releases are cut manually via
 `template-release.yml`'s `bump` input; apply the same test when
 deciding whether that input must be `major`.  `CONTRIBUTING.md` and
 `.github/PULL_REQUEST_TEMPLATE.md` point at "the breaking-change
-policy in `CLAUDE.md`" — in this repo that is this section; in a
-generated project it is the rendered section from `CLAUDE.md.jinja`.
+policy in `AGENTS.md`" — in this repo that is this section; in a
+generated project it is the rendered section from `AGENTS.md.jinja`.
 
 ## Repository protection
 
@@ -184,9 +184,9 @@ scripts/promote_upgrading.py --check` locally to see what it sees.
 
 The release *model* that generated projects follow — trunk releases from
 a quiescent commit by default, short-lived `release/X.Y` branches as the
-exception, the three channels — ships in `CLAUDE.md.jinja`'s "Release
+exception, the three channels — ships in `AGENTS.md.jinja`'s "Release
 model" section.  `CONTRIBUTING.md` points at "the release model in
-`CLAUDE.md`": in a generated project that resolves to the rendered
+`AGENTS.md`": in a generated project that resolves to the rendered
 section; in this repo, releases are the manual dispatch above and the
 same trunk-first spirit applies, without the branch machinery.
 

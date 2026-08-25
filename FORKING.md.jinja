@@ -4,7 +4,7 @@ This project was generated from the
 [`fastmcp-server-template`](https://github.com/pvliesdonk/fastmcp-server-template)
 copier template and, by default, **tracks** it: the weekly
 `copier-update` workflow opens PRs that pull in template and `fastmcp-pvl-core`
-improvements, and `CLAUDE.md` routes fixes back upstream.
+improvements, and `AGENTS.md` routes fixes back upstream.
 
 A **fork** is different. If you are taking sole ownership of this server, or
 want an opinionated variant that no longer follows the fleet, you should
@@ -50,7 +50,7 @@ still redeploys canonical `docs/releases/` pages on merge.) The neutral
 `.agents/skills/writing-release-notes/` skill is independent of Claude review
 wiring; retain or remove it according to the detached fork's release process.
 
-## Step 3 — Scrub template-tracking guidance from `CLAUDE.md`
+## Step 3 — Scrub template-tracking guidance from `AGENTS.md`
 
 ```bash
 # -i.bak + rm keeps this portable across GNU sed (Linux) and BSD sed (macOS),
@@ -64,7 +64,7 @@ sed -i.bak \
   -e 's/ are preserved across `copier update`\./ are domain-owned./' \
   -e 's/The block is preserved across `copier update`\./The block is domain-owned./' \
   -e 's| on every `copier copy`/`copier update` and re-verified by| whenever config fields change, and re-verified by|' \
-  CLAUDE.md && rm -f CLAUDE.md.bak
+  AGENTS.md && rm -f AGENTS.md.bak
 ```
 
 This deletes the template-coupled sections — the bot-reviewer merge-gate
