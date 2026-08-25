@@ -58,6 +58,30 @@ _tasks:
 # covers that path.
 _migrations:
   - "python scripts/gen_config_surface.py"
+  # Real-directory -> symlink guard for .claude/skills/ (#484/#485/#486).
+  # Any downstream still on a pre-move release has REAL directories at
+  # .claude/skills/<name>; this template now ships those as symlinks into
+  # .agents/skills/<name>.  Copier's own renderer cannot make that swap: it
+  # crashes (IsADirectoryError -> a bare `assert is_dir` in
+  # Worker._render_allowed) partway through rendering, AFTER some files are
+  # already rewritten in place but BEFORE `_migrations` (an after-stage
+  # step) ever runs — so the after-stage migration below never gets a
+  # chance to fix it, and the destination is left half-updated.  A
+  # before-stage migration runs early enough (copier runs "before" migrations
+  # ahead of the template render — see Worker._apply_update), so remove any
+  # REAL directory here first; a downstream's own extra skill under
+  # .claude/skills/ is untouched.  This must be a self-contained shell
+  # command, not a script: on a from-real-directory upgrade the destination
+  # still only has the OLD template's files, so
+  # scripts/migrate_agent_instructions.py does not exist yet at this stage.
+  # Keep this name list identical to TEMPLATE_SKILLS in
+  # scripts/migrate_agent_instructions.py and scripts/tests/test_shared_skill_paths.py.
+  - command: >-
+      for d in authoring-issues-prs config-contract logging-standard releasing
+      repository-protection tool-registration writing-release-notes; do
+      p=".claude/skills/$d"; if [ -d "$p" ] && [ ! -L "$p" ]; then rm -rf
+      "$p"; fi; done
+    when: "{{ _stage == 'before' }}"
   # CLAUDE.md → AGENTS.md move (#484/#485): splices the project's DOMAIN
   # blocks from HEAD:CLAUDE.md into AGENTS.md, rewrites CLAUDE.md as the
   # stub, and reconciles .claude/skills/ symlinks.  Idempotent.
