@@ -295,12 +295,11 @@ Never claim an untagged target has shipped. Do not edit `mkdocs.yml` or
 
 ## Output
 
-Before writing, inspect `git status` and refuse unrelated changes. Create a
-branch named `notes/<identity>`. Commit only `docs/releases/`, any necessary
-`.vale/styles/config/vocabularies/Base/accept.txt` additions, and the pull
-request body. Push the branch and run `gh pr create --base "$BASE"`.
-
-The pull request body must carry:
+Before writing, inspect `git status` and refuse unrelated changes. Set
+`IDENTITY` to the stable target (`vX.Y.Z`) or `next` when no target is known.
+Write the proposed pull request body to the temporary repository-root file
+`.release-notes-pr-body.md`, outside the committed notes surface. The body must
+carry:
 
 - the release tag and compare link;
 - a claim-by-claim evidence summary (or a statement that every inline link
@@ -308,6 +307,37 @@ The pull request body must carry:
 - your breaking-change classification and any disagreement with `!` markers;
 - docs-staleness candidates found in the research;
 - anything you could not source and therefore left out.
+
+Create the pull request with this explicit sequence. Do not stage `$BODY_FILE`;
+it is command input, not repository content. The staged set contains only
+`docs/releases/` and a changed Vale vocabulary file:
+
+```bash
+BRANCH="notes/${IDENTITY}"
+BODY_FILE=".release-notes-pr-body.md"
+
+git switch -c "$BRANCH"
+git add docs/releases/
+if ! git diff --quiet -- .vale/styles/config/vocabularies/Base/accept.txt; then
+  git add .vale/styles/config/vocabularies/Base/accept.txt
+fi
+git commit -m "docs: prepare release notes for ${IDENTITY}"
+git push --set-upstream origin "$BRANCH"
+
+if gh pr create \
+  --title "docs: prepare release notes for ${IDENTITY}" \
+  --head "notes/${IDENTITY}" \
+  --base "$BASE" \
+  --body-file "$BODY_FILE"; then
+  rm -f "$BODY_FILE"
+else
+  echo "Pull request creation failed; ${BODY_FILE} remains for retry." >&2
+  exit 1
+fi
+```
+
+Remove the temporary body file only after `gh pr create` succeeds. A failure
+keeps the evidence summary available for a deterministic retry.
 
 **Honest failure beats confident junk.** If the range has too few linked
 issues to support a narrative, write the modest factual page the evidence
