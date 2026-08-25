@@ -1533,3 +1533,27 @@ def test_release_tags_are_visible_when_the_changelog_records_releases() -> None:
         "checkout was made without tags (add fetch-tags: true, template#387), "
         "or the repository lost its release tags"
     )
+
+
+# --- server.json registry constraints ------------------------------------
+#
+# `publish-registry` is the LAST job of a release and the only place the MCP
+# Registry's limits are enforced.  A description over 100 characters passes
+# every earlier gate, publishes PyPI / Docker / the plugin, and then fails the
+# registry entry alone (scholar-mcp v1.9.1).  The template's `copier copy`
+# validator guards the initial answer; this guards later hand edits to
+# `server.json`, which copier never re-checks.
+
+MCP_REGISTRY_DESCRIPTION_MAX = 100
+
+
+def test_server_json_description_fits_the_registry_cap() -> None:
+    server = json.loads((REPO_ROOT / "server.json").read_text(encoding="utf-8"))
+    description = server["description"]
+    assert description.strip(), "server.json description is empty"
+    assert len(description) <= MCP_REGISTRY_DESCRIPTION_MAX, (
+        f"server.json description is {len(description)} chars; the MCP registry "
+        f"caps it at {MCP_REGISTRY_DESCRIPTION_MAX} and publish-registry — the "
+        f"last job of a release — would fail with 422 (#481). Shorten it here "
+        f"and in .copier-answers.yml (domain_description)."
+    )

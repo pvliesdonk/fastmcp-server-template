@@ -1188,3 +1188,26 @@ deterministic promotion now refuses when reviewed notes are missing.
 Keep `CLAUDE_CODE_OAUTH_TOKEN` only for the explicit `@claude` responder or an
 opted-in automatic Claude review. Existing canonical `docs/releases/X.Y.md`
 pages need no conversion.
+
+### `domain_description` is capped at 100 characters
+
+The MCP registry rejects a `server.json` `description` longer than 100
+characters, and `publish-registry` is the last job of a release, so a long
+blurb used to fail only after PyPI, Docker and the plugin had already
+published. The answer now has a copier validator, and the rendered
+`tests/test_release_flow_contract.py` fails when the committed
+`server.json` description exceeds the cap.
+
+**Shorten the blurb before running `copier update`.** If the stored
+`domain_description` in `.copier-answers.yml` is over 100 characters (or
+blank), `copier update` refuses before rendering anything, and the error it
+prints is copier's generic one, not the validator's message:
+
+```
+ValueError: Question "domain_description" is required
+```
+
+Edit the value in `.copier-answers.yml` to 100 characters or fewer, then run
+`copier update` again; the renders of `server.json`, `README.md` and the
+other consumers pick the new value up. A blurb that was edited by hand in
+`server.json` alone is caught by the new contract test instead.
