@@ -74,7 +74,7 @@ inventory for the successor.
 
 | Element | Why it earned its place |
 |---|---|
-| **Cumulative range contract**: `BASE = merge-base(HEAD, origin/<derived default branch>)`, never last-push..HEAD; default branch derived, not hardcoded `main` | Matches requirement 2 exactly; the derivation note (a stale `origin/main` resolving an ancient merge-base) is a real failure mode worth carrying verbatim |
+| **Cumulative range contract**: `BASE = merge-base(HEAD, origin/<derived default branch>)`, never last-push..HEAD; default branch derived, not hardcoded `main` | Matches requirement 2; the derivation note (a stale `origin/main` resolving an ancient merge-base) is a real failure mode worth carrying verbatim. One generalization needed: the default branch is only the fallback — the PR's actual base (a `release/X.Y` PR, a stacked PR) is the authority (§7.2) |
 | **Lenses = distinct bodies of prior commitment**: rules files, the diff on its own terms, git-history intent, past PR reviews, adjacent comments/docstrings, normative specs | The best taxonomy surveyed anywhere in this research; each lens has crisp flag / don't-flag lists. The *decomposition* survives even if the *parallel dispatch* doesn't |
 | **Per-finding evidence field**: verbatim quote with its own file:line (the rule, the commit subject, the comment, the prior review URL) | Requirement 3; also universal across every high-precision tool surveyed (§5.1) |
 | **Anchored false-positive rubric + exclusion list**: pre-existing issues, linter/CI-catchable, intentional changes, uncodified opinions, `# noqa`-silenced rules → score 0–25 | The exclusion list is the empirically effective part (§5.1); mirrors the canonical upstream `/code-review` rubric |
@@ -281,9 +281,17 @@ normal outcome.
 
 ### 7.2 Scope contract (mostly inherited from the circus)
 
-- Range: `BASE..HEAD`, `BASE = merge-base(HEAD, origin/<default>)` with the
-  default branch derived, never hardcoded; the same cumulative diff every
-  post-push reviewer sees.
+- Range: `BASE..HEAD` where `BASE = merge-base(HEAD, <base ref>)` — the
+  same cumulative diff every post-push reviewer sees. The base ref is the
+  **PR's actual base branch** (from PR metadata when a PR exists, or named
+  by the invoker), not assumed to be the default branch: a PR targeting
+  `release/X.Y` — a supported flow here — or a stacked PR, reviewed
+  against the default branch, would sweep in the base branch's whole
+  divergence or miss the backport's scope. Only without a resolvable base
+  does it fall back to derivation — the nearest of `origin/<default>` and
+  `origin/release/*` by ancestry, the same derivation
+  `scripts/structural_gate.sh` already uses — and never a hardcoded
+  `main`.
 - **Read-only.** The review changes nothing: no checkouts, no stashes, no
   fixes-while-reviewing. Unrelated working-tree changes are untouched by
   construction (requirement 6). Fixing happens after, as ordinary work.
