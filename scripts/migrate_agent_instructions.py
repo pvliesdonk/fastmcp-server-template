@@ -38,6 +38,7 @@ STUB = (
 TEMPLATE_SKILLS: tuple[str, ...] = (
     "applying-template-updates",
     "authoring-issues-prs",
+    "code-review",
     "config-contract",
     "logging-standard",
     "releasing",
