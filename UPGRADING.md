@@ -1393,4 +1393,10 @@ Two things NOT to do:
 
 ## Unreleased
 
-_Nothing yet._
+The rendered `identity(...)` and `documentation(...)` calls in `server.py`
+are now wrapped with a magic trailing comma, so `ruff format` leaves them
+stable for every `domain_description` length up to the 100-char cap
+(template#523). A project that worked around the previous one-line render
+overflowing the 88-char limit — e.g. a `[tool.ruff.format]` exclude for
+`server.py` plus `force-exclude` — can drop that carve-out after this
+update; the conformance gate and the formatter agree again.

@@ -119,11 +119,13 @@ def make_server(
     # WORKFLOWS < INSTANCE < OPERATOR`` anchors pvl-core exports — never
     # ``priority=0``, which is ``IDENTITY`` and must stay unique), and
     # ``finalize_instructions`` renders them once, after tool visibility.
-    instructions_for(mcp).identity("{{ domain_description }}")
+    instructions_for(mcp).identity(
+        "{{ domain_description }}",
+    )
     # The docs site publishes llms.txt per version (mkdocs-llmstxt, mike);
     # `/latest/` resolves once the first release has published the site.
     instructions_for(mcp).documentation(
-        "https://{{ github_org }}.github.io/{{ project_name }}/latest/llms.txt"
+        "https://{{ github_org }}.github.io/{{ project_name }}/latest/llms.txt",
     )
 {% if enable_authorization %}
     # Optional: opt-in authorization on tools / resources / prompts via
