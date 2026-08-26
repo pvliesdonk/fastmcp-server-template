@@ -31,6 +31,10 @@ rm -f .github/workflows/copier-update.yml \
       .github/workflows/claude-code-review.yml
 rm -f scripts/copier_update_notes.py
 rm -f scripts/migrate_agent_instructions.py
+rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
+rm -f docs/deployment/template-updates.md
+# The page above is in the MkDocs nav; a dangling entry fails `mkdocs build --strict`.
+sed -i.bak '/Template Updates: deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
 ```
 
 What this removes and why:
@@ -44,13 +48,18 @@ What this removes and why:
 - `scripts/migrate_agent_instructions.py` — the CLAUDE.md → AGENTS.md
   migration that only `copier update`'s `_migrations` stage invoked; dead
   weight once you no longer run `copier update`.
+- the `applying-template-updates` skill and `docs/deployment/template-updates.md`
+  — the procedure for the weekly template update pull request, which a
+  detached fork never receives. The `sed` line removes the page's nav
+  entry (`docs.yml` runs `mkdocs build --strict`, which fails on a
+  dangling entry); Step 3 drops the release-process page's link to it.
 
 **Keep** your own CI and release workflows: `ci.yml`, `codeql.yml`,
 `coverage-status.yml`, `docs.yml`, `release-prepare.yml`, `release.yml`, and
 `release-notes-publish.yml`. (The release pair still needs the `RELEASE_TOKEN`
 secret; only its `copier-update` justification is gone.
 `release-notes-publish.yml` is deterministic — no Claude dependency — and
-still redeploys canonical `docs/releases/` pages on merge.) The seven
+still redeploys canonical `docs/releases/` pages on merge.) The remaining
 template-owned skills under `.agents/skills/` (`authoring-issues-prs`,
 `config-contract`, `logging-standard`, `releasing`, `repository-protection`,
 `tool-registration`, `writing-release-notes`) and their `.claude/skills/<name>`
@@ -62,15 +71,19 @@ Code, for instance, has no reason to drop the symlinks even after detaching.
 
 ```bash
 # -i.bak + rm keeps this portable across GNU sed (Linux) and BSD sed (macOS),
-# which disagree on the in-place flag's syntax. Runs over AGENTS.md and the
+# which disagree on the in-place flag's syntax. Runs over AGENTS.md, the
 # three skills that still carry copier-update wording after the task-shaped
-# sections moved into portable skills under .agents/skills/ (#486): a
-# detached fork owns those files too, so the same scrub applies to each.
-for f in AGENTS.md .agents/skills/releasing/SKILL.md .agents/skills/config-contract/SKILL.md .agents/skills/tool-registration/SKILL.md; do
+# sections moved into portable skills under .agents/skills/ (#486), and the
+# release-process page (its link to the template-update page): a detached
+# fork owns those files too, so the same scrub applies to each. The rule on
+# `applying-template-updates` drops the AGENTS.md Skills bullet for the
+# skill Step 2 removed.
+for f in AGENTS.md .agents/skills/releasing/SKILL.md .agents/skills/config-contract/SKILL.md .agents/skills/tool-registration/SKILL.md docs/deployment/release-process.md; do
   sed -i.bak \
     -e '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' \
     -e '/<!-- ===== TEMPLATE-OWNED SECTIONS BELOW/d' \
     -e '/<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->/d' \
+    -e '/^- `applying-template-updates` — /d' \
     -e 's/ Kept across copier update\.//' \
     -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
     -e 's/ are preserved across `copier update`\./ are domain-owned./' \
@@ -112,6 +125,9 @@ These leftover references are harmless but now misleading:
   consumer. Drop that workflow from the row.
 - The `### \`uv.lock\` refresh after \`copier update\`` subsection no longer
   applies. Remove it.
+- The **Contributing** section names the `applying-template-updates` skill
+  and links `docs/deployment/template-updates.md`, both removed in Step 2.
+  Drop those two references.
 
 ## You are now standalone
 

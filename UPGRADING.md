@@ -1326,3 +1326,24 @@ Do this for each existing pin, before or right after `copier update`:
    exactly one of the two bounds (a bare name without a bound is fine).
 4. Run `uv run python scripts/check_pins.py --offline` locally; CI runs the
    online check and will tell you the moment the referenced issue closes.
+
+### Operator docs: release checklist, template-update guide, new skill
+
+`docs/deployment/release-process.md` now opens with the step-by-step
+release checklist, and a new page `docs/deployment/template-updates.md`
+documents working through the weekly template update pull request,
+including the seeded-once files `copier update` never touches. Both are
+template-owned and arrive with this update. A new skill,
+`applying-template-updates`, lands under `.agents/skills/` with its
+`.claude/skills/` symlink.
+
+The MkDocs navigation is yours (`PROJECT-NAV-START` block; fresh renders get
+the entry), so add the new page yourself, under Deployment:
+
+```yaml
+      - Template Updates: deployment/template-updates.md
+```
+
+Without it the page is still built and linked from the release-process
+page and the README; `mkdocs build --strict` does not fail on a page that
+is not in the nav.
