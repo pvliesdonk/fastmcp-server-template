@@ -43,8 +43,10 @@ def render(tmp_path: Path, enabled: bool) -> Path:
 
 
 @pytest.fixture(scope="module")
-def review_off(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return render(tmp_path_factory.mktemp("review-off"), enabled=False)
+def review_off(smoke_render: Path) -> Path:
+    # The smoke answers already set enable_automatic_claude_review: false, so
+    # this is the shared session render (conftest.py) rather than a fresh one.
+    return smoke_render
 
 
 @pytest.fixture(scope="module")

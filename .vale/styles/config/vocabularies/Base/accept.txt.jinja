@@ -1,66 +1,9 @@
-# Project vocabulary — accepted tech terms that Vale's default spell-check
-# would otherwise flag as unknown words. One term per line. Vale matches
-# case-insensitively by default. See https://vale.sh/docs/topics/vocab.
+# Project vocabulary — accepted terms that Vale's default spell-check would
+# otherwise flag as unknown words in this project's own prose. One term per
+# line. Vale matches case-insensitively. See https://docs.vale.sh/keys/vocabularies.
 #
-# Add new accepted terms below as your docs corpus grows. Keep entries
-# alphabetical within their category for easy review.
-
-# --- Identity providers and auth-stack tooling ---
-Authelia
-Keycloak
-OAuth
-OIDC
-Traefik
-
-# --- HTTP / URL terminology ---
-hostname
-subpath
-URIs
-
-# --- OAuth / OIDC token fields ---
-access_token
-id_token
-
-# --- Python / runtime ecosystem ---
-dataclass
-debugpy
-lockfile
-mypy
-namespace
-namespaced
-pytest
-ruff
-scaffolded
-stdio
-uv
-venv
-venv's
-virtualenv
-
-# --- Operational / config jargon ---
-ADRs
-allowlist
-backports
-codecov
-config
-cron
-denylist
-deployer
-dev
-env
-hotfix
-knope
-repo
-ruleset
-rulesets
-systemd
-truthy
-uncommented
-uncommenting
-unprefixed
-upsert
-upserts
-validators
-
-# --- Diagnostics / observability ---
-traceback
+# This file is yours: copier seeds it once and never rewrites it. Terms the
+# template's own prose needs live in ../Template/accept.txt, which the
+# template maintains; `.vale.ini` activates both (`Vocab = Base, Template`).
+# Add project-specific terms below as your docs corpus grows, alphabetical
+# for easy review.
