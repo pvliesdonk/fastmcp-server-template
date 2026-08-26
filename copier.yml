@@ -97,6 +97,10 @@ _migrations:
   # blocks from HEAD:CLAUDE.md into AGENTS.md, rewrites CLAUDE.md as the
   # stub, and reconciles .claude/skills/ symlinks.  Idempotent.
   - "python scripts/migrate_agent_instructions.py"
+  # Seeded-file change report (#519): renders the previous and target refs
+  # and diffs every `_skip_if_exists` path into .copier-seeded-changes.md,
+  # so an update is never applied blind to what it cannot re-render.
+  - "python scripts/report_seeded_changes.py"
 
 # Starter files: written once on first `copier copy`, protected from
 # `copier update`.  Domain-owned — users customise these and keep their

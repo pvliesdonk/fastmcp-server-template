@@ -55,17 +55,16 @@ none remain.
 
 ## 4. Check the seeded-once files
 
-Read `_skip_if_exists` from the template's `copier.yml` at the target ref.
-Skip the generated artefacts in that list (`.env.example`,
-`packaging/env.example`, `examples/*.env`,
-`docs/javascripts/config-wizard/wizard-spec.json`): the update regenerates
-them and hand edits are reverted. For every other path, check the compare
-link between the two refs (the template's `UPGRADING.md` "Before every
-upgrade" section has the render-and-diff recipe when the compare view is
-not enough). A changed seeded file is a change to apply by hand to this
-project's copy, preserving local content; when you are not certain the
-change applies here, stop and ask instead of applying or dismissing it.
-Describe each one in the report either way.
+Read `.copier-seeded-changes.md` at the repository root: the update wrote
+it, and it holds a diff of every `_skip_if_exists` path between the previous
+and target template refs (generated artefacts such as `.env.example` are
+already excluded), or states that nothing changed. If it says the report
+could not be computed, fall back to the compare link between the two refs
+and the template's `UPGRADING.md` "Before every upgrade" recipe. A changed
+seeded file is a change to apply by hand to this project's copy, preserving
+local content; when you are not certain the change applies here, stop and
+ask instead of applying or dismissing it. Describe each one in your report
+either way.
 
 ## 5. Refresh and gate
 

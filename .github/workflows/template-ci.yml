@@ -1245,6 +1245,7 @@ jobs:
                 .github/workflows/claude-code-review.yml
           rm -f scripts/copier_update_notes.py
           rm -f scripts/migrate_agent_instructions.py
+          rm -f scripts/report_seeded_changes.py .copier-seeded-changes.md
           rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
           rm -f docs/deployment/template-updates.md
           sed -i.bak '/Template Updates: deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
@@ -1500,7 +1501,8 @@ jobs:
               .github/workflows/claude.yml \
               .github/workflows/claude-code-review.yml \
               scripts/copier_update_notes.py \
-              scripts/migrate_agent_instructions.py; do
+              scripts/migrate_agent_instructions.py \
+              scripts/report_seeded_changes.py; do
             [ ! -e "$gone" ] \
               || { echo "::error::$gone not removed by detach"; exit 1; }
           done
@@ -1654,7 +1656,7 @@ jobs:
           CORE=$(grep -oE '"fastmcp-pvl-core>=[^"]*"' pyproject.toml.jinja | head -1 | tr -d '"')
           [ -n "$CORE" ] || { echo "::error::no fastmcp-pvl-core constraint in pyproject.toml.jinja"; exit 1; }
           echo "core constraint: $CORE"
-          uv run --with pytest --with pyyaml --with jsonschema --with jinja2 --with "$CORE" pytest scripts/tests/ -v
+          uv run --with pytest --with pyyaml --with jsonschema --with jinja2 --with copier --with "$CORE" pytest scripts/tests/ -v
 
       - name: UPGRADING.md Unreleased section
         run: |
@@ -1682,12 +1684,12 @@ jobs:
             --ignore E501 \
             --line-length 88 \
             --target-version py311 \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Format check scripts (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 --target-version py311 \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
         # The scripts that render into every project (gen_config_surface.py,
@@ -1714,7 +1716,7 @@ jobs:
         run: |
           uv run --with ruff ruff check \
             --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
-            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310" \
+            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310,scripts/report_seeded_changes.py:S603,scripts/report_seeded_changes.py:S606,scripts/report_seeded_changes.py:S607" \
             --config "lint.mccabe.max-complexity=10" \
             --config "lint.pylint.max-args=5" \
             --config "lint.pylint.max-branches=12" \
@@ -1722,7 +1724,7 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             --target-version py311 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/report_seeded_changes.py
 
   pr-title:
     name: PR Title

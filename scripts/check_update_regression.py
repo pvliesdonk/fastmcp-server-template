@@ -107,8 +107,43 @@ def _assert_review_workflows(project: Path, *, enabled: bool) -> None:
         raise SystemExit("ERROR: copier update removed the explicit @claude responder")
 
 
+def _assert_seeded_report(project: Path) -> None:
+    """The after-stage migration must leave a computed seeded-file report
+    (#519); tests/test_smoke.py is seeded and has changed since BASE_REF."""
+    report = project / ".copier-seeded-changes.md"
+    if not report.is_file():
+        raise SystemExit("ERROR: copier update did not write .copier-seeded-changes.md")
+    text = report.read_text(encoding="utf-8")
+    if "could not be computed" in text:
+        raise SystemExit(f"ERROR: seeded-file report was not computed:\n{text}")
+    if "## `tests/test_smoke.py`" not in text:
+        raise SystemExit(
+            "ERROR: seeded-file report does not list tests/test_smoke.py, which "
+            f"changed between {BASE_REF} and HEAD:\n{text[:2000]}"
+        )
+    if "## `docs/releases/index.md`" not in text:
+        raise SystemExit(
+            "ERROR: seeded-file report does not list docs/releases/index.md — a file "
+            "under a trailing-`**` pattern (docs/releases/**) that changed since "
+            f"{BASE_REF}; the glob handling regressed:\n{text[:2000]}"
+        )
+
+
 def main() -> int:
     template_root = Path(__file__).resolve().parent.parent
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=template_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    if dirty:
+        raise SystemExit(
+            "ERROR: the template checkout has uncommitted or untracked changes; copier "
+            "mints a temporary commit for them, and the seeded-file report cannot re-render "
+            "that ref. Commit or stash first:\n" + dirty
+        )
     with tempfile.TemporaryDirectory(prefix="update-regression-") as tmp:
         for enabled in (False, True):
             project = Path(tmp) / f"proj-review-{'on' if enabled else 'off'}"
@@ -152,6 +187,7 @@ def main() -> int:
 
             _copier(["update", "--trust", "--defaults", "--vcs-ref=HEAD"], project)
             _assert_review_workflows(project, enabled=enabled)
+            _assert_seeded_report(project)
 
             _assert_var(project, ".env.example", expected=True)
             _assert_var(
