@@ -151,8 +151,12 @@ design problem. What demonstrably works:
    opinions. Every high-precision tool ships one.
 3. **Narrow passes over one broad reviewer.** cubic cut false positives 51%
    without losing recall by replacing a monolithic reviewer with focused
-   micro-passes. This vindicates the circus's lens decomposition — as
-   *charters*, independent of parallel dispatch.
+   micro-passes. This vindicates the circus's lens decomposition as
+   *charters* — with a caveat that §7.3 inherits: the measured passes were
+   independent contexts, so the evidence confounds narrowness of *scope*
+   with independence of *judgment*, and no surveyed source separates the
+   two. A single context walking narrow charters keeps the first property
+   but not the second.
 4. **A refutation pass.** Before reporting, re-read the cited file:line and
    try to *disprove* the finding, requiring evidence-typed disagreement
    (cite the code that refutes, or concede). Adversarial-review research
@@ -315,9 +319,13 @@ An optional sixth charter, **past PR reviews**, runs only when GitHub API
 access is available and the diff touches files with recent review history —
 the circus's most expensive, lowest-yield lens becomes conditional.
 
-Capability-conditional parallelism per §6.3. This preserves what §5.1(3)
-shows matters (narrow charters) while cutting the mandatory cost from
-11 dispatches to ~1.
+Capability-conditional parallelism per §6.3. This cuts the mandatory cost
+from 11 dispatches to ~1 while keeping each charter narrow — but per
+§5.1(3)'s caveat, a shared context retains only the narrow *scope* of the
+measured micro-pass designs, not their independent *judgment*: an earlier
+charter's rubric can color a later charter's reading. Whether the
+sequential form keeps enough of the benefit is precisely what the trial
+prerequisite (§7.9) must measure, on this degraded path specifically.
 
 ### 7.4 Two phases: find, then refute
 
@@ -329,7 +337,13 @@ run at most one targeted command where execution can settle it. Only findings
 that survive refutation are reported, each carrying what was checked. In a
 harness with subagents, phase 2 is where a fresh context earns its cost
 (§5.3's self-justification bias); single-context agents get an explicit
-"switch sides: your job is now to disprove each item" instruction.
+"switch sides: your job is now to disprove each item" instruction. That
+fallback must be named for what it is: the weakest form of the mitigation,
+in exactly the setup §5.3's literature identifies as most biased — the
+same context that wrote the diff judging its own findings — and it is the
+*common* case across target agents (§6.3: most harnesses offer no
+subagent fork the skill can rely on). The design cannot assume this path
+away; it must measure it (§7.9).
 
 ### 7.5 Vocabulary: severity × confidence, words not numbers
 
@@ -396,6 +410,22 @@ charter are the only multipliers, both opt-in. This is the property that
 makes "run it before every PR-bound push" a sustainable ask rather than the
 circus's exam-you-must-book.
 
+### 7.9 Prerequisite: measure the degraded path before the design freezes
+
+The release-notes skill was hardened by recorded trial runs (#347); this
+skill needs the same, and not as after-the-fact verification but as a
+**prerequisite to freezing the charter prompts**: run the drafted procedure
+over a handful of historical PRs with known post-push findings and measure
+what it catches, misses, and invents. The measurement that matters is the
+**single-context, no-subagent path** — the common case across target
+agents, and the one whose effectiveness the surveyed evidence does not
+establish (§5.1(3)'s scope-vs-independence caveat; §7.4's weakest-form
+refutation fallback). "Provider-neutral" must mean *effective on most
+providers*, not merely *runnable on most providers*; the trial is the only
+way to know which one the sequential-charter form delivers, and its outcome
+may legitimately change the recommended shape (for example, requiring a
+second invocation for the refutation phase where no subagent exists).
+
 ## 8. Open questions for the design
 
 1. **Severity taxonomy final form** — the three-level vocabulary above vs
@@ -408,11 +438,10 @@ circus's exam-you-must-book.
    above) vs merging `REVIEW.md` into the skill and pointing the hosted
    workflow at the skill instead. The latter is cleaner long-term but
    touches the hosted-review workflow this design was scoped away from.
-4. **Verification of the skill itself** — the release-notes skill was
-   hardened by recorded trial runs (#347); plan the equivalent: run the
-   skill over a handful of historical PRs with known post-push findings and
-   measure what it catches, misses, and invents, before freezing the
-   charter prompts.
+4. **Trial-run mechanics** — the trial itself is a prerequisite, not an
+   open question (§7.9); open are only its mechanics: which historical PRs
+   form the benchmark set, and how catches, misses, and inventions are
+   recorded and compared across harnesses.
 5. **Windows contributors** — the symlink caveat already noted in the
    instructions design applies unchanged.
 6. **A `security-review` sibling** — the hard-exclusion-list pattern from
