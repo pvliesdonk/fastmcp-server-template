@@ -2940,12 +2940,15 @@ class TestCleanHelpForMarkdownTable:
 
 
 class TestMarkdownVocabularyNormalisation:
-    """Vale's spell-check is driven by `.vale/styles/config/vocabularies/
-    Base/accept.txt`, which is `_skip_if_exists` — an existing downstream
-    keeps its own copy forever, so a term added there reaches only fresh
-    renders. The generated table text, by contrast, arrives on every
-    `copier update`. Vocabulary therefore has to be normalised on the
-    generator side, the only lever that propagates."""
+    """Vale's spell-check is driven by the vocabulary layers under
+    `.vale/styles/config/vocabularies/`; before #366 the only one, Base, was
+    `_skip_if_exists` — an existing downstream
+    keeps its own copy forever, so a term added there reached only fresh
+    renders, and the generator-side map was the only lever that propagated.
+    Since #366 the re-rendered Template layer propagates too; the map now
+    carries wording the template prefers spelled out in reader-facing
+    tables (`JWTs` -> `JSON Web Tokens`), and this class proves that
+    rewrite still reaches the spliced docs tables."""
 
     def test_jwts_does_not_reach_a_spliced_docs_table(self, fake_project):
         """End to end through `write_artifacts`, because the vocabulary is

@@ -91,10 +91,10 @@ diff of all of it is noise: `tools.py`, `resources.py`, `prompts.py`,
 The entries worth reading a diff of are the ones the template still authors
 content for, where a change is a correction rather than your own work:
 
-- `.vale/styles/config/vocabularies/Base/accept.txt` — template prose that
-  arrives in a later release can need vocabulary the seeded file lacks, and
-  the missing terms fail your docs gate rather than the template's
-  (template#366);
+- `.vale/styles/config/vocabularies/Base/accept.txt` — for targets before
+  the template's own vocabulary moved to the re-rendered
+  `vocabularies/Template/accept.txt` (template#366), template prose arriving
+  in a release could need terms the seeded file lacks;
 - `.claude-plugin/**` — the plugin scaffold and its README;
 - `packaging/mcpb/` — `manifest.json.in`, `pyproject.toml.in`, `build.sh` and
   the entry shim, which track the mcpb CLI and manifest version;
@@ -1358,3 +1358,35 @@ with the update; the weekly update pull request embeds it. Work through it
 as `docs/deployment/template-updates.md` step 3 describes. Nothing to do
 by hand for this release beyond reading it; the first update that produces
 it lists every seeded change since your previous template version.
+
+### Vale: the template's vocabulary is now a second, re-rendered layer
+
+Template prose could fail a project's Vale gate because the terms it
+needed lived in the seeded `Base/accept.txt`, which never re-renders
+(#366). The template's terms now live in
+`.vale/styles/config/vocabularies/Template/accept.txt`, which is
+template-owned and arrives with every update; `Base/accept.txt` stays
+yours. `.vale.ini` stays seeded too (its core options cannot be split into a
+project block, and re-rendering a seeded file conflicts for every existing
+project), so one line is yours to change by hand:
+
+```ini
+Vocab = Base, Template
+```
+
+Until that line is in place the new layer is inert and template terms keep
+failing your gate. No `vale sync` is needed: vocabularies are read from
+disk on every run.
+
+Two things NOT to do:
+
+- Do not apply the `Base/accept.txt` deletions that `.copier-seeded-changes.md`
+  shows for this update. The template's own seed is now empty, but your
+  `Base` is yours; the template terms you copied into it earlier are harmless
+  duplicates.
+- Fifteen former template terms (`cron`, `dataclass`, `denylist`,
+  `deployer`, `mypy`, `namespaced`, `pytest`, `ruff`, `traceback`,
+  `uncommented`, `uncommenting`, `unprefixed`, `upsert`, `URIs`,
+  `validators`) are in no template vocabulary any more because no template
+  prose uses them outside code, which Vale does not spell-check. If your
+  own prose does, they belong in your `Base/accept.txt`.

@@ -197,12 +197,20 @@ _skip_if_exists:
   # eventually drifted and turned those tests red.
   # Vale config — users tune rule overrides, add Vocab, pin Packages
   # versions per their docs corpus.  Initial render seeds the file; later
-  # template updates leave their tuning intact.
+  # template updates leave their tuning intact.  Stays seeded on purpose
+  # (#366 considered making it template-owned): Vale's core options must
+  # sit above `[*.md]`, so no single sentinel block can hold a project's
+  # overrides, and a previously seeded file conflicts for every existing
+  # consumer the moment it is re-rendered.  Template-side changes to it
+  # (a vocabulary layer, a package URL) reach consumers by hand, surfaced
+  # by the `.copier-seeded-changes.md` report.
   - ".vale.ini"
-  # Vale Vocab accept list — the activation vehicle for `Vocab = Base` in
-  # .vale.ini above.  Users add project-specific accepted terms as their
-  # docs corpus grows; without _skip_if_exists, copier update would wipe
-  # those additions on every weekly cron and reseed the template version.
+  # Vale Vocab accept list — the project's own accepted terms, activated by
+  # `Vocab = Base, Template` in .vale.ini.  Users add project-specific terms
+  # as their docs corpus grows; without _skip_if_exists, copier update would
+  # wipe those additions on every weekly cron and reseed the template
+  # version.  The template's own terms live in the template-owned
+  # vocabularies/Template/accept.txt, which IS re-rendered (#366).
   - ".vale/styles/config/vocabularies/Base/accept.txt"
   # docs/javascripts/config-wizard/wizard-spec.json is listed further down,
   # with the other generated config artifacts — see the "Generated AND

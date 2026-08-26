@@ -296,7 +296,9 @@ Never claim an untagged target has shipped. Do not edit `mkdocs.yml` or
   Distinguish the two hit classes: real prose findings get rewritten;
   domain vocabulary the spell-checker does not know goes into
   `.vale/styles/config/vocabularies/Base/accept.txt` (add it in the same
-  change) — never contort prose around a vocabulary hit.
+  change) — never contort prose around a vocabulary hit. (In the template
+  repository itself, a term that template-rendered prose needs belongs in
+  `vocabularies/Template/accept.txt.jinja`, the re-rendered layer.)
 - **Strict docs build**: `uv run mkdocs build --strict` must pass.
 
 ## Output
@@ -345,11 +347,11 @@ exact staged diff before committing:
 
 ```bash
 git add docs/releases/
-if ! git diff --quiet -- .vale/styles/config/vocabularies/Base/accept.txt; then
-  git add .vale/styles/config/vocabularies/Base/accept.txt
+if ! git diff --quiet -- .vale/styles/config/vocabularies/; then
+  git add .vale/styles/config/vocabularies/
 fi
 if git diff --cached --name-only | grep -Ev \
-  '^(docs/releases/|\.vale/styles/config/vocabularies/Base/accept\.txt$)'; then
+  '^(docs/releases/|\.vale/styles/config/vocabularies/(Base|Template)/accept\.txt(\.jinja)?$)'; then
   echo "Refusing to commit files outside the release-notes surface." >&2
   exit 1
 fi
@@ -370,7 +372,7 @@ if ! git merge-base --is-ancestor "origin/$BASE" HEAD; then
   exit 1
 fi
 if git diff --name-only "origin/$BASE...HEAD" | grep -Ev \
-  '^(docs/releases/|\.vale/styles/config/vocabularies/Base/accept\.txt$)'; then
+  '^(docs/releases/|\.vale/styles/config/vocabularies/(Base|Template)/accept\.txt(\.jinja)?$)'; then
   echo "Refusing to publish files outside the release-notes surface." >&2
   exit 1
 fi

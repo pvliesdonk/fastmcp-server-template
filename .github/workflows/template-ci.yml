@@ -1210,22 +1210,25 @@ jobs:
           # would abort the step with a bare `cp: cannot stat …` and no
           # ::error::, AFTER the real gate has already passed — turning the
           # advisory into a red build with no diagnostic, the exact
-          # diagnostic-loss shape #256 removed from this file. The accept.txt
-          # path is `_skip_if_exists` in copier.yml, so it is a rename-sensitive
-          # literal: check it, and trap so an abort between the emptying and the
-          # restore cannot leave the vocabulary gutted for later steps.
+          # diagnostic-loss shape #256 removed from this file. Both vocabulary
+          # layers are emptied (the seeded Base list and the template-owned
+          # Template list, #366); the paths are rename-sensitive literals:
+          # check them, and trap so an abort between the emptying and the
+          # restore cannot leave a vocabulary gutted for later steps.
           ( cd /tmp/smoke
-            ACC=.vale/styles/config/vocabularies/Base/accept.txt
-            if [ ! -f "$ACC" ]; then
-              echo "::warning::$ACC not found — skipping the suppressed-findings advisory"
-              exit 0
-            fi
-            cp "$ACC" "$RUNNER_TEMP/accept.bak"
-            trap 'cp "$RUNNER_TEMP/accept.bak" "$ACC" 2>/dev/null || true' EXIT
-            grep -E '^\s*(#|$)' "$RUNNER_TEMP/accept.bak" > "$ACC" || true
+            ACCS="$(printf '%s\n' .vale/styles/config/vocabularies/Base/accept.txt .vale/styles/config/vocabularies/Template/accept.txt)"
+            mkdir -p "$RUNNER_TEMP/accept-bak"
+            for f in $ACCS; do
+              [ -f "$f" ] || { echo "::warning::$f not found — skipping the suppressed-findings advisory"; exit 0; }
+              cp "$f" "$RUNNER_TEMP/accept-bak/$(echo "$f" | tr / _)"
+            done
+            trap 'for f in $ACCS; do cp "$RUNNER_TEMP/accept-bak/$(echo "$f" | tr / _)" "$f" 2>/dev/null || true; done' EXIT
+            for f in $ACCS; do
+              grep -E '^\s*(#|$)' "$RUNNER_TEMP/accept-bak/$(echo "$f" | tr / _)" > "$f" || true
+            done
             STRICT=$(vale "${VALE_FLAGS[@]}" "${FILES[@]}" 2>&1 | grep -E '^ *[0-9]+:' | grep -vc 'Vale.Spelling' || true)
             if [ "$STRICT" != "0" ]; then
-              echo "::warning::$STRICT non-spelling Vale finding(s) are suppressed by an accepted vocabulary term; re-run with an emptied accept.txt to see them"
+              echo "::warning::$STRICT non-spelling Vale finding(s) are suppressed by an accepted vocabulary term; re-run with both accept.txt files emptied to see them"
             fi ) || echo "::warning::the suppressed-findings advisory could not run; the gate above is unaffected"
 
       - name: detach smoke (FORKING.md commands produce a clean standalone state)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -51,8 +52,10 @@ def rendered_off(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="module")
-def rendered_on(tmp_path_factory) -> Path:
-    return _render(tmp_path_factory.mktemp("plugin-on"), plugin_on=True)
+def rendered_on(smoke_render: Path) -> Path:
+    # The smoke answers already set include_claude_plugin: true, so this is
+    # the shared session render (conftest.py) rather than a fresh one.
+    return smoke_render
 
 
 class TestPluginOff:
@@ -112,8 +115,13 @@ class TestPluginOn:
         assert '".claude-plugin/plugin/.claude-plugin/plugin.json"' in contract
         assert '".claude-plugin/plugin/.mcp.json"' in contract
 
-    def test_stamper_rewrites_both_manifests(self, rendered_on: Path):
+    def test_stamper_rewrites_both_manifests(self, rendered_on: Path, tmp_path: Path):
         """Run the rendered stamp script for real against the scaffold."""
+        # This test stamps manifests and creates a git repo, and `rendered_on`
+        # is the session-shared render: work on a private copy so every later
+        # consumer of that render still sees a pristine tree.
+        shutil.copytree(rendered_on, tmp_path / "stamp", symlinks=True)
+        rendered_on = tmp_path / "stamp"
         # The script stages what it stamps for knope's release commit, so it
         # needs a real git index; the render is not a repo yet.
         if not (rendered_on / ".git").exists():

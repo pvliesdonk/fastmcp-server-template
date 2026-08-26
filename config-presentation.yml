@@ -256,10 +256,11 @@ packaging:
   PGID: [oci]
 
 # Term-replacement map applied to help text on the Vale-linted markdown
-# table splice path only (`_clean_help_for_markdown_table`). Can't live in
-# `.vale.ini`/`accept.txt` instead: that file is `_skip_if_exists`, so a term
-# added there never reaches an existing downstream, while a generated table
-# arrives on every `copier update` — this file is the only lever that does.
+# table splice path only (`_clean_help_for_markdown_table`). Since #366 the
+# template's accepted vocabulary (`vocabularies/Template/accept.txt`) is
+# re-rendered on every update, so a spelling hit can also be accepted there;
+# this map is for wording the template prefers spelled out in reader-facing
+# tables (`JWTs` → `JSON Web Tokens`) rather than merely accepted.
 markdown_vocabulary:
   JWTs: "JSON Web Tokens"
 
