@@ -16,11 +16,19 @@ vars:
     tags: [server]
     wizard: {group: Server, when: server}
 
+  - name: "{PREFIX}_INSTRUCTIONS_EXTRA"
+    provenance: template
+    type_name: "str"
+    default: null
+    help: "Operator context appended to the generated MCP instructions."
+    tags: [server]
+    wizard: {group: Server, when: server}
+
   - name: "{PREFIX}_INSTRUCTIONS"
     provenance: template
     type_name: "str"
     default: null
-    help: "Replaces the default MCP instructions text sent to clients."
+    help: "Legacy: replaces the entire generated MCP instructions text (deprecated; prefer the _EXTRA variant)."
     tags: [server]
     wizard: {group: Server, when: server}
 
@@ -216,6 +224,7 @@ packaging:
   FASTMCP_LOG_LEVEL: [pypi, oci]
   FASTMCP_ENABLE_RICH_LOGGING: [pypi, oci]
   "{PREFIX}_SERVER_NAME": [pypi, oci]
+  "{PREFIX}_INSTRUCTIONS_EXTRA": [pypi, oci]
   "{PREFIX}_INSTRUCTIONS": [pypi, oci]
   "{PREFIX}_HTTP_PATH": [oci]
   # Not HTTP-specific: apply_tool_visibility runs in make_server regardless

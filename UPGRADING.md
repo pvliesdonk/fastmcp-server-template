@@ -1151,7 +1151,7 @@ example of the general class: a template change that lands in a file copier
 will not touch, with nothing in the update to tell you. The render-and-diff
 recipe under "Before every upgrade" is how to find the others.
 
-## Unreleased
+## Unreleased - fastmcp-pvl-core 5 and composed instructions
 
 ### Automatic Claude review is now opt-in
 
@@ -1263,3 +1263,34 @@ Do by hand only if it applies:
   `CLAUDE.md` (`git show HEAD:CLAUDE.md`) into `AGENTS.md` yourself and
   replace `CLAUDE.md` with the rendered stub, since none of that happens
   automatically in this case.
+
+### fastmcp-pvl-core 5: composed instructions
+
+The floor moves to `fastmcp-pvl-core>=5.0.0,<6`. pvl-core 5 removes
+`build_instructions` and composes server instructions with an
+`InstructionsBuilder`; the rendered `server.py` now calls
+`instructions_for(mcp).identity(...)` after constructing the server and
+`finalize_instructions(mcp, config.server, env_prefix=...)` as the last call
+after `apply_tool_visibility`. `copier update` re-renders that wiring; then:
+
+- Run `uv lock` (the floor changed) and fix anything of yours that imported
+  `build_instructions`: contribute the text through
+  `instructions_for(mcp).add(text, priority=WORKFLOWS, tools=(...))` from your
+  DOMAIN-WIRING block instead, using the anchors pvl-core exports
+  (`IDENTITY < DOCS < CAPABILITIES < WORKFLOWS < INSTANCE < OPERATOR`); never
+  `priority=0`, which is `IDENTITY` and must stay unique. Snippets that name
+  tools are dropped when a tool is hidden, so workflow prose never references
+  a tool that is absent.
+- `tests/test_smoke.py` is seeded once and not re-rendered. Rewrite its
+  instructions tests to the new shape (copy them from a fresh render, or from
+  the template's `tests/test_smoke.py.jinja`): the composed text starts with
+  your `domain_description`, `<PREFIX>_INSTRUCTIONS_EXTRA` is appended, and
+  the old assertion that the text mentions `<PREFIX>_INSTRUCTIONS` is false
+  now.
+- If you wired a path-2 transfer tool (`build_transfer_links`), add
+  `add_transfer_workflow(mcp, download_tool=..., upload_tool=...)` so it gets
+  the core's capability-link prose.
+- Operators who set `<PREFIX>_INSTRUCTIONS` keep the full-replace behaviour
+  but now see a startup deprecation warning; move deployment context to
+  `<PREFIX>_INSTRUCTIONS_EXTRA`, which is appended to the generated text.
+  When both are set, `_EXTRA` is ignored.

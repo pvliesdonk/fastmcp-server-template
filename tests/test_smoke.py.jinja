@@ -137,23 +137,36 @@ async def test_server_name_env_override_reaches_server_info(
     assert json.loads(first.text)["server_name"] == "renamed-instance"
 
 
-def test_instructions_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``{{ env_prefix }}_INSTRUCTIONS`` replaces the built-in instructions.
-
-    ``build_instructions`` advertises this override in its hint line; honoring
-    it here makes that advertisement true instead of a dead hint.
-    """
+def test_instructions_env_override(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Legacy ``{{ env_prefix }}_INSTRUCTIONS`` still replaces everything, and
+    says so: pvl-core logs one deprecation warning pointing at ``_EXTRA``."""
     monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS", "Custom operator text.")
-    assert make_server().instructions == "Custom operator text."
+    # Scope to core's logger: make_server() re-applies FASTMCP_LOG_LEVEL to the
+    # root logger, which would otherwise drop the record under a stricter env.
+    monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
+    with caplog.at_level("WARNING", logger="fastmcp_pvl_core"):
+        server = make_server()
+    assert server.instructions == "Custom operator text."
+    assert any(
+        "{{ env_prefix }}_INSTRUCTIONS_EXTRA" in rec.getMessage() for rec in caplog.records
+    ), "expected the deprecation warning naming the _EXTRA replacement"
 
 
-def test_instructions_default_falls_back_to_build_instructions(
+def test_instructions_compose_identity_and_operator_extra(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unset, instructions fall back to ``build_instructions`` (whose hint
-    advertises the override var). Guards the fallback arm of the override."""
+    """Unset ``INSTRUCTIONS``, the text is composed: the identity line the
+    scaffold contributes comes first, and ``_EXTRA`` is appended verbatim."""
     monkeypatch.delenv("{{ env_prefix }}_INSTRUCTIONS", raising=False)
-    assert "{{ env_prefix }}_INSTRUCTIONS" in (make_server().instructions or "")
+    monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS_EXTRA", "House rule: be brief.")
+    text = make_server().instructions or ""
+    assert text.startswith(
+        "{{ domain_description | trim }}",
+    )
+    assert "https://{{ github_org }}.github.io/{{ project_name }}/latest/llms.txt" in text
+    assert text.rstrip().endswith("House rule: be brief.")
 
 
 def test_blank_overrides_fall_back_to_defaults(
@@ -163,7 +176,7 @@ def test_blank_overrides_fall_back_to_defaults(
 
     ``env`` strips and treats a blank value as unset, so a blank SERVER_NAME
     must revert to ``{{ project_name }}`` rather than rename the instance to
-    whitespace, and a blank INSTRUCTIONS must revert to ``build_instructions``.
+    whitespace, and a blank INSTRUCTIONS must leave the composed text in place.
     Guards against a future refactor (e.g. raw ``os.environ.get``) that would
     pass the blank value through.
     """
@@ -171,7 +184,9 @@ def test_blank_overrides_fall_back_to_defaults(
     monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS", "   ")
     server = make_server()
     assert server.name == "{{ project_name }}"
-    assert "{{ env_prefix }}_INSTRUCTIONS" in (server.instructions or "")
+    assert (server.instructions or "").startswith(
+        "{{ domain_description | trim }}",
+    )
 
 
 async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
