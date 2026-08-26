@@ -19,6 +19,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 ANSWERS = REPO / "tests" / "fixtures" / "smoke-answers.yml"
 ALLOWED = "Peter's caf\u00e9 <index> & more \u2014 fast"
+YAML_TRICKY = "Docs over MCP: search, tag # and read [notes] {fast} *now*"
 MANIFESTS = (
     "server.json",
     "packaging/mcpb/manifest.json.in",
@@ -70,3 +71,12 @@ def test_allowed_characters_render_valid_manifests_verbatim(tmp_path: Path) -> N
     assert manifest["long_description"] == ALLOWED
     pyproject = tomllib.loads((out / "pyproject.toml").read_text(encoding="utf-8"))
     assert pyproject["project"]["description"] == ALLOWED
+
+
+def test_yaml_significant_characters_render_a_valid_mkdocs_yml(tmp_path: Path) -> None:
+    # `site_description` is a double-quoted YAML scalar (#513): with `"` and
+    # `\\` rejected by the validator, every accepted blurb is a valid scalar,
+    # including colon-space and a bare `#`, which broke the bare form.
+    out = _render(tmp_path, YAML_TRICKY)
+    config = yaml.safe_load((out / "mkdocs.yml").read_text(encoding="utf-8"))
+    assert config["site_description"] == YAML_TRICKY
