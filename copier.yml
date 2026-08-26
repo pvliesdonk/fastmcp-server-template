@@ -378,6 +378,8 @@ domain_description:
   validator: >-
     {% if not domain_description.strip() %}
     Required: a one-line blurb for README and the default MCP instructions.
+    {% elif '"' in domain_description or '\\' in domain_description %}
+    Must not contain a double quote or a backslash: the blurb is interpolated verbatim into JSON, TOML, Python and YAML string literals (server.json, pyproject.toml, cli.py, mkdocs.yml, the mcpb and plugin manifests).
     {% elif domain_description | length > 100 %}
     Too long ({{ domain_description | length }} chars, counting any surrounding whitespace, which is rendered verbatim): the MCP registry caps server.json's description at 100 characters and would reject the first release's publish-registry job.
     {% endif %}
