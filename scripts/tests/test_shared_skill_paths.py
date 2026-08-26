@@ -19,6 +19,7 @@ CLAUDE_SKILLS = REPO / ".claude" / "skills"
 TEMPLATE_SKILLS = (
     "applying-template-updates",
     "authoring-issues-prs",
+    "code-review",
     "config-contract",
     "logging-standard",
     "releasing",
