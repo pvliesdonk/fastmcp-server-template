@@ -42,9 +42,11 @@ Review the **cumulative diff** — the same one every post-push reviewer
 sees — never "since my last push".
 
 1. Resolve the base ref, in this order of authority:
-   - the PR's actual base branch, when a PR exists
+   - the base the invoker explicitly named — an explicit instruction beats
+     recorded metadata (a stacked PR may need a comparison GitHub's
+     recorded base does not give);
+   - otherwise the PR's actual base branch, when a PR exists
      (`gh pr view --json baseRefName`);
-   - the base the invoker named;
    - only as fallback, derive it: the nearest of `origin/<default>` and
      `origin/release/*` by ancestry (the same derivation
      `scripts/structural_gate.sh` uses). Never assume `main`: a PR
