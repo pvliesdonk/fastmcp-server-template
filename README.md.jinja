@@ -211,6 +211,20 @@ When `copier update` introduces new dependencies (such as a new extra added to `
 
 CI installs with `--locked` (and the review workflow with `--frozen`) so no job ever rewrites `uv.lock` in its own workspace: a job that re-locks hides the drift it just repaired, and a dirty workspace breaks any later `git checkout` in the same job. Lockfile drift then shows up as a red install step with a clear message, not as a silent mutation.
 
+## Contributing
+
+`CONTRIBUTING.md` holds the rules for issues and pull requests, and where a
+fix belongs: `fastmcp-pvl-core` for library code, the template for
+template-owned files, this repository for anything inside its `DOMAIN-*` /
+`CONFIG-*` / `PROJECT-*` blocks. `AGENTS.md` carries the conventions and
+gates; the skills under `.agents/skills/` carry the task procedures, among
+them `writing-release-notes` (release notes),
+`applying-template-updates` (the weekly template update pull request) and
+`authoring-issues-prs` (filing). The release procedure is in
+[docs/deployment/release-process.md](docs/deployment/release-process.md);
+the template update procedure in
+[docs/deployment/template-updates.md](docs/deployment/template-updates.md).
+
 ## Links
 
 - [Documentation](https://{{ github_org }}.github.io/{{ project_name }}/)

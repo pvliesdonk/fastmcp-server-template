@@ -17,6 +17,7 @@ REPO = Path(__file__).resolve().parents[2]
 AGENTS_SKILLS = REPO / ".agents" / "skills"
 CLAUDE_SKILLS = REPO / ".claude" / "skills"
 TEMPLATE_SKILLS = (
+    "applying-template-updates",
     "authoring-issues-prs",
     "config-contract",
     "logging-standard",

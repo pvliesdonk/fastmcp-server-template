@@ -41,7 +41,7 @@ create new projects.
   rewrites `CLAUDE.md` as the stub; it is copier's after-stage `_migrations`
   entry. `copier.yml`'s before-stage shell guard runs earlier in the same
   update and removes any real `.claude/skills/<name>` directory it finds
-  (for all seven template skill names) so the render can lay the symlink
+  (for every template skill name) so the render can lay the symlink
   down in its place — so by the time the after-stage migration's own
   symlink reconciliation runs there is normally nothing left for it to
   remove (the branch stays as belt-and-braces).
@@ -132,7 +132,7 @@ separately asserts a *rendered* project's whole `AGENTS.md` stays
 DOMAIN content. When new guidance is task-shaped rather than
 always-needed, put it in a skill under `.agents/skills/` instead of
 growing `AGENTS.md.jinja` — that is the lever both budgets expect you to
-pull. The seven template-skill names must stay
+pull. The template-skill names must stay
 identical across three places — `TEMPLATE_SKILLS` in
 `scripts/migrate_agent_instructions.py`, the same tuple in
 `scripts/tests/test_shared_skill_paths.py`, and the before-stage shell

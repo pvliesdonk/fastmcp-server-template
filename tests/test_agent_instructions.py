@@ -6,7 +6,7 @@ with .claude/skills/ symlinks for Claude Code.  Claude Code warns above
 40 000 characters of always-loaded instructions, and the template owns
 ~20k of AGENTS.md, so the DOMAIN blocks are the lever when this fails.
 
-The seven template-owned skills each get a `.claude/skills/<name>` symlink
+Every template-owned skill gets a `.claude/skills/<name>` symlink
 into `.agents/skills/<name>`; every other entry under `.claude/skills/` is
 project-owned and left alone, except that a symlink there must still resolve
 inside `.agents/skills/` (a stray symlink pointing outside the skills tree
@@ -30,6 +30,7 @@ STUB = (
     "`DOMAIN-START` / `DOMAIN-END` markers). This file is template-owned; do not add content here.\n"
 )
 TEMPLATE_SKILLS: tuple[str, ...] = (
+    "applying-template-updates",
     "authoring-issues-prs",
     "config-contract",
     "logging-standard",

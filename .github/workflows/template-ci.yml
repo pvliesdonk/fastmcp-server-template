@@ -303,6 +303,8 @@ jobs:
           ttend=$(grep -cE '^<!-- TEMPLATE-TRACKING-END -->$' AGENTS.md || true)
           [ "$ttstart" = "2" ] || { echo "::error::expected 2 TEMPLATE-TRACKING-START markers, found $ttstart"; exit 1; }
           [ "$ttend" = "2" ] || { echo "::error::expected 2 TEMPLATE-TRACKING-END markers, found $ttend"; exit 1; }
+          rp=$(grep -cE '^<!-- TEMPLATE-TRACKING-START -->$' docs/deployment/release-process.md || true)
+          [ "$rp" = "1" ] || { echo "::error::expected 1 TEMPLATE-TRACKING pair in release-process.md, found $rp"; exit 1; }
           rel=$(grep -cE '^<!-- TEMPLATE-TRACKING-START -->$' .agents/skills/releasing/SKILL.md || true)
           [ "$rel" = "1" ] || { echo "::error::expected 1 TEMPLATE-TRACKING pair in releasing skill, found $rel"; exit 1; }
 
@@ -1243,6 +1245,9 @@ jobs:
                 .github/workflows/claude-code-review.yml
           rm -f scripts/copier_update_notes.py
           rm -f scripts/migrate_agent_instructions.py
+          rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
+          rm -f docs/deployment/template-updates.md
+          sed -i.bak '/Template Updates: deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
           # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
           #     count the scrub expects (issue #199).
           #
@@ -1294,7 +1299,7 @@ jobs:
           # in this set: its copier-update wording matches none of the sed
           # rules below, so scrubbing it here would be a no-op that still
           # needs a real fix — tracked as a follow-up issue instead.
-          SCRUB_FILES="AGENTS.md .agents/skills/releasing/SKILL.md .agents/skills/config-contract/SKILL.md .agents/skills/tool-registration/SKILL.md"
+          SCRUB_FILES="AGENTS.md .agents/skills/releasing/SKILL.md .agents/skills/config-contract/SKILL.md .agents/skills/tool-registration/SKILL.md docs/deployment/release-process.md"
           count_occurrences() {
             cat $SCRUB_FILES | grep -oF "$1" | wc -l | tr -d '[:space:]' || true
           }
@@ -1305,8 +1310,15 @@ jobs:
               preflight_fail=1
             fi
           }
-          check_anchor 3 '<!-- TEMPLATE-TRACKING-START -->'
-          check_anchor 3 '<!-- TEMPLATE-TRACKING-END -->'
+          # 4: two pairs in AGENTS.md, one in the releasing skill, one around
+          # the release-process page's link to the template-updates page.
+          check_anchor 4 '<!-- TEMPLATE-TRACKING-START -->'
+          check_anchor 4 '<!-- TEMPLATE-TRACKING-END -->'
+          # The Skills bullet for the copier-only skill; the skill itself is
+          # removed in Step 2, so the bullet goes with it.  The anchor starts
+          # at the backtick: count_occurrences passes it to `grep -F` bare,
+          # and a leading `- ` would be read as an option.
+          check_anchor 1 '`applying-template-updates` — when working through'
           check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS BELOW'
           check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->'
           check_anchor 3 ' Kept across copier update.'
@@ -1331,6 +1343,7 @@ jobs:
               -e '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' \
               -e '/<!-- ===== TEMPLATE-OWNED SECTIONS BELOW/d' \
               -e '/<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->/d' \
+              -e '/^- `applying-template-updates` — /d' \
               -e 's/ Kept across copier update\.//' \
               -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
               -e 's/ are preserved across `copier update`\./ are domain-owned./' \
@@ -1375,6 +1388,23 @@ jobs:
             && { echo "::error::automatic-review tracking guidance survived the scrub"; exit 1; } || true
           grep -qE '^## Release notes pages$' .agents/skills/releasing/SKILL.md \
             && { echo "::error::Release notes pages section survived the scrub"; exit 1; } || true
+          grep -qE '^## Template updates$' docs/deployment/release-process.md \
+            && { echo "::error::Template updates section survived the scrub"; exit 1; } || true
+          grep -qE '^## Where to read about a release$' docs/deployment/release-process.md \
+            || { echo "::error::release-process page lost '## Where to read about a release' — scrub deleted too much"; exit 1; }
+          [ ! -e docs/deployment/template-updates.md ] \
+            || { echo "::error::template-updates page not removed by detach"; exit 1; }
+          [ ! -e .claude/skills/applying-template-updates ] \
+            || { echo "::error::applying-template-updates symlink not removed by detach"; exit 1; }
+          ! grep -q 'applying-template-updates' AGENTS.md \
+            || { echo "::error::AGENTS.md still advertises the applying-template-updates skill after detach"; exit 1; }
+          ! grep -q 'template-updates.md' mkdocs.yml \
+            || { echo "::error::mkdocs.yml nav still lists the removed template-updates page after detach"; exit 1; }
+          # The detached docs must still build strictly: a dangling nav entry
+          # or a link to a removed page is exactly what a fork's docs.yml
+          # would fail on next.  The venv from the gate above is reused.
+          uv run mkdocs build --strict -q \
+            || { echo "::error::mkdocs build --strict fails on the detached tree"; exit 1; }
           # The releasing skill's own TEMPLATE-TRACKING pair (pair 2) has no
           # over-run guard from the AGENTS.md kept-section loop below, since
           # that loop only ever checks AGENTS.md. Guard it here instead: the
