@@ -9,7 +9,12 @@ name: Renovate (template)
 
 on:
   schedule:
-    - cron: "0 6 * * 1" # Monday 06:00 UTC
+    # Every 4 hours, 7 minutes past to sidestep GitHub's top-of-hour delay.
+    # Nothing in .github/renovate.json is schedule-gated and nothing
+    # automerges, so cadence here only bounds how long an Action bump waits
+    # for its PR (runs take ~2 min on RELEASE_TOKEN).  The downstream runner
+    # (renovate.yml.jinja) has its own, window-driven reason for the same cron.
+    - cron: "7 */4 * * *"
   workflow_dispatch:
 
 permissions:
