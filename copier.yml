@@ -11,6 +11,11 @@ _min_copier_version: "9.4"
 _answers_file: .copier-answers.yml
 _templates_suffix: .jinja
 
+# Contributor skills are canonical under .agents/skills/ (portable, read by
+# Cursor/Codex/…); Claude Code only scans .claude/skills/, so each ships a
+# relative symlink there.  Copier must copy the link, not its target (#486).
+_preserve_symlinks: true
+
 # Post-generation tasks.
 #
 # 1. Vendor the MCP Apps SDK into static/app.html.  The task value is
@@ -53,6 +58,45 @@ _tasks:
 # covers that path.
 _migrations:
   - "python scripts/gen_config_surface.py"
+  # Real-directory -> symlink guard for .claude/skills/ (#484/#485/#486).
+  # Any downstream still on a pre-move release has REAL directories at
+  # .claude/skills/<name>; this template now ships those as symlinks into
+  # .agents/skills/<name>.  Copier's own renderer cannot make that swap: it
+  # crashes (IsADirectoryError -> a bare `assert is_dir` in
+  # Worker._render_allowed) partway through rendering, AFTER some files are
+  # already rewritten in place but BEFORE `_migrations` (an after-stage
+  # step) ever runs — so the after-stage migration below never gets a
+  # chance to fix it, and the destination is left half-updated.  A
+  # before-stage migration runs early enough (copier runs "before" migrations
+  # ahead of the template render — see Worker._apply_update), so remove any
+  # REAL directory here first; a downstream's own extra skill under
+  # .claude/skills/ is untouched.  This must be a self-contained shell
+  # command, not a script: on a from-real-directory upgrade the destination
+  # still only has the OLD template's files, so
+  # scripts/migrate_agent_instructions.py does not exist yet at this stage.
+  # `Template.migration_tasks()` returns no tasks for EITHER stage when the
+  # destination's recorded template commit or the new template commit does
+  # not resolve to a version (e.g. a bare-hash `_commit`, or an untagged
+  # template) — on that path this guard does not run and the render crash
+  # documented above returns. No `version:` window is set on this entry: the
+  # release this ships in is chosen at dispatch time (see "Release" in
+  # CLAUDE.md), not known while this file is edited, and the steady state is
+  # a no-op anyway once every downstream has migrated once, because the
+  # rendered `tests/test_agent_instructions.py` forbids a real directory
+  # under `.claude/skills/` from ever being committed again.
+  # Keep this name list identical to TEMPLATE_SKILLS in
+  # scripts/migrate_agent_instructions.py and scripts/tests/test_shared_skill_paths.py.
+  - command: >-
+      for d in authoring-issues-prs config-contract logging-standard releasing
+      repository-protection tool-registration writing-release-notes; do
+      p=".claude/skills/$d"; if [ -d "$p" ] && [ ! -L "$p" ]; then echo
+      "copier migration: removing real directory $p (the template now ships
+      it as a symlink into .agents/skills/)"; rm -rf "$p"; fi; done
+    when: "{{ _stage == 'before' }}"
+  # CLAUDE.md → AGENTS.md move (#484/#485): splices the project's DOMAIN
+  # blocks from HEAD:CLAUDE.md into AGENTS.md, rewrites CLAUDE.md as the
+  # stub, and reconciles .claude/skills/ symlinks.  Idempotent.
+  - "python scripts/migrate_agent_instructions.py"
 
 # Starter files: written once on first `copier copy`, protected from
 # `copier update`.  Domain-owned — users customise these and keep their
@@ -72,9 +116,9 @@ _migrations:
 # one-time creation on first weekly cron; `_skip_if_exists` preserves
 # thereafter.
 _skip_if_exists:
-  # Contributor skills are deliberately NOT listed here: the provider-neutral
-  # release-notes skill under .agents/ and the Claude-specific issue-authoring
-  # skill under .claude/ are template-owned and re-rendered on every update.
+  # Contributor skills are deliberately NOT listed here: every template-owned
+  # skill under .agents/skills/ and its .claude/skills/ symlink is re-rendered
+  # on every update.
   # NOTE: .gitignore is seeded once. Consumers whose copy predates either
   # tracked skills-root exception must add it by hand or git ignores the skill.
   # Claude Code plugin channel starters: seeded once, then project-owned.
@@ -143,7 +187,7 @@ _skip_if_exists:
   # .pre-commit-config.yaml is deliberately NOT here (moved out for #254):
   # it is template-owned with a DOMAIN-HOOKS seam for domain-specific hooks
   # (shellcheck, yamllint, project linters, etc.), the same hybrid pattern
-  # as CLAUDE.md/README.md below.  While it was seeded, the re-rendered
+  # as AGENTS.md/README.md below.  While it was seeded, the re-rendered
   # tests/test_structural_gate.py asserted on a file `copier update` could
   # never reach, so every pre-existing consumer's structural select string
   # eventually drifted and turned those tests red.
@@ -217,7 +261,7 @@ _skip_if_exists:
 # `ProjectConfig.from_env`) or in `config-presentation.domain.yml` (for a var
 # the AST scan cannot see: a deprecated alias no longer read inside
 # `from_env`, or a var read outside `from_env` entirely).
-# Note: CLAUDE.md and README.md are deliberately NOT in _skip_if_exists.
+# Note: AGENTS.md and README.md are deliberately NOT in _skip_if_exists.
 # Both are hybrid files: domain-owned sections are bracketed by
 # <!-- DOMAIN-START --> / <!-- DOMAIN-END --> markers, and the rest is
 # template-owned.  Copier's plain 3-way merge (old-rendered vs new-rendered
@@ -234,7 +278,7 @@ _skip_if_exists:
 # added in #178; the remaining top-level docs/*.md files
 # (index, installation, configuration, tools/index, prompts) moved out in #106.
 # Those docs files use topic-specific DOMAIN-{TOPIC}-{KIND} sentinels
-# rather than the bare DOMAIN-START used in CLAUDE.md / README.md.
+# rather than the bare DOMAIN-START used in AGENTS.md / README.md.
 # .pre-commit-config.yaml joined the hybrid set for #254 (its seam is
 # DOMAIN-HOOKS, YAML-comment markers): downstream hooks live between the
 # markers and survive the merge; the template-owned hook pins and gate
@@ -253,9 +297,9 @@ _skip_if_exists:
 # entirely — so we re-list the stock defaults (.git, __pycache__, ~*, etc.)
 # here as well.
 #
-# Named README.md/CHANGELOG.md/LICENSE/CLAUDE.md files also exist in this
+# Named README.md/CHANGELOG.md/LICENSE/AGENTS.md files also exist in this
 # repo as maintainer-facing documentation; copier's `.jinja` precedence
-# means README.md.jinja / CLAUDE.md.jinja / CHANGELOG.md.jinja / LICENSE.jinja
+# means README.md.jinja / AGENTS.md.jinja / CHANGELOG.md.jinja / LICENSE.jinja
 # render into the destination, and the plain files stay only in the template
 # repo.  They don't need to be listed here for that to work.
 _exclude:
@@ -371,7 +415,7 @@ enable_authorization:
 enable_structural_gate:
   type: bool
   default: true
-  help: "Scaffold the diff-scoped structural-health gate: strict ruff structural rules (complexity, god-class, too-many-*, security) enforced on changed lines only via diff-quality, as a pre-push hook and a CI 'structure' job, plus the CLAUDE.md structural-health guidance (local-shape rules, advisory radon/vulture audit, decay-issue template). New code is held to the bar; pre-existing code is never blocked. Leave on unless a project deliberately opts out of structural enforcement."
+  help: "Scaffold the diff-scoped structural-health gate: strict ruff structural rules (complexity, god-class, too-many-*, security) enforced on changed lines only via diff-quality, as a pre-push hook and a CI 'structure' job, plus the AGENTS.md structural-health guidance (local-shape rules, advisory radon/vulture audit, decay-issue template). New code is held to the bar; pre-existing code is never blocked. Leave on unless a project deliberately opts out of structural enforcement."
 
 structural_gate_assert_clean_tree:
   type: bool

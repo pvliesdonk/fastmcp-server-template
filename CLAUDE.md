@@ -2,8 +2,8 @@
 
 Copier template repository.  This file is for claude-code agents
 working on the **template itself** — NOT the generated projects.
-Generated projects get their own `CLAUDE.md` rendered from
-`CLAUDE.md.jinja`.
+Generated projects get their own `AGENTS.md` rendered from
+`AGENTS.md.jinja` (plus a stub `CLAUDE.md` that imports it).
 
 ## Purpose
 
@@ -22,12 +22,29 @@ create new projects.
   bump for the template's own git tags; no PSR.
 - `.github/workflows/*.yml.jinja` — generated project's workflows.
 - `src/{{python_module}}/*.jinja` — generated project's Python module.
-- `pyproject.toml.jinja`, `CLAUDE.md.jinja`, `Dockerfile.jinja`, etc.
-  — generated project's other files.
-- `.github/ISSUE_TEMPLATE/*.yml`, `CONTRIBUTING.md`, the neutral
-  `.agents/skills/writing-release-notes/` skill, and Claude-specific
-  `.claude/skills/authoring-issues-prs/` skill are copied verbatim into
-  generated projects and re-rendered on `copier update`.
+- `pyproject.toml.jinja`, `Dockerfile.jinja`, etc. — generated project's
+  other files.
+- `AGENTS.md.jinja` — the generated project's single always-loaded
+  instruction file; `CLAUDE.md.jinja` is a three-line `@AGENTS.md` stub
+  next to it. `tests/test_agent_instructions.py` (copied verbatim, see
+  below) guards that shape in the *rendered* project — this repo's own
+  `CLAUDE.md` is deliberately the maintainer guide you are reading, not
+  the stub.
+- `.github/ISSUE_TEMPLATE/*.yml`, `CONTRIBUTING.md`, and every template-owned
+  skill's `.agents/skills/*/SKILL.md(.jinja)` (with its relative
+  `.claude/skills/<name>` symlink — carried into a render as a symlink,
+  rather than a copy of its target, by copier's `_preserve_symlinks: true`)
+  are copied verbatim into generated projects and re-rendered on
+  `copier update`.
+- `scripts/migrate_agent_instructions.py` — the `copier update` migration
+  that splices a downstream's `CLAUDE.md` DOMAIN blocks into `AGENTS.md` and
+  rewrites `CLAUDE.md` as the stub; it is copier's after-stage `_migrations`
+  entry. `copier.yml`'s before-stage shell guard runs earlier in the same
+  update and removes any real `.claude/skills/<name>` directory it finds
+  (for all seven template skill names) so the render can lay the symlink
+  down in its place — so by the time the after-stage migration's own
+  symlink reconciliation runs there is normally nothing left for it to
+  remove (the branch stays as belt-and-braces).
 
 ## Making changes
 
@@ -102,11 +119,31 @@ argument list, so a new render step belongs in both places.  The
 idempotence render (`/tmp/smoke2`) is deliberately excluded: it is already
 asserted byte-identical to the default render.
 
+### Always-loaded budget
+
+`AGENTS.md` is the one file every AAIF-aware agent loads on every turn, so
+its template-owned prose is budgeted separately from a downstream's own
+content. `template-ci` fails when the smoke render's `AGENTS.md` exceeds
+24 000 characters of template-owned prose (the DOMAIN blocks hold only
+their placeholder text in that render). `tests/test_agent_instructions.py`
+— copied verbatim into every generated project, not a `.jinja` file —
+separately asserts a *rendered* project's whole `AGENTS.md` stays
+≤ 40 000 characters, the budget that also covers a downstream's own
+DOMAIN content. When new guidance is task-shaped rather than
+always-needed, put it in a skill under `.agents/skills/` instead of
+growing `AGENTS.md.jinja` — that is the lever both budgets expect you to
+pull. The seven template-skill names must stay
+identical across three places — `TEMPLATE_SKILLS` in
+`scripts/migrate_agent_instructions.py`, the same tuple in
+`scripts/tests/test_shared_skill_paths.py`, and the before-stage shell
+guard's directory list in `copier.yml` — and that test file is the guard
+against drift.
+
 ## Breaking changes
 
 The canonical breaking-change policy ships in the generated project's
-`CLAUDE.md` — see "Breaking Changes and the `!` Marker" in
-`CLAUDE.md.jinja`.  In short: a change is breaking only if it breaks
+`AGENTS.md` — see "Breaking Changes and the `!` Marker" in
+`AGENTS.md.jinja`.  In short: a change is breaking only if it breaks
 the operator surface (env var, config file, CLI flag, deployment
 layout, on-disk state) or the public library interface, assessed
 against the last stable release; MCP tool-surface changes are not
@@ -120,8 +157,8 @@ extend.  This repo's releases are cut manually via
 `template-release.yml`'s `bump` input; apply the same test when
 deciding whether that input must be `major`.  `CONTRIBUTING.md` and
 `.github/PULL_REQUEST_TEMPLATE.md` point at "the breaking-change
-policy in `CLAUDE.md`" — in this repo that is this section; in a
-generated project it is the rendered section from `CLAUDE.md.jinja`.
+policy in `AGENTS.md`" — in this repo that is this section; in a
+generated project it is the rendered section from `AGENTS.md.jinja`.
 
 ## Repository protection
 
@@ -184,11 +221,12 @@ scripts/promote_upgrading.py --check` locally to see what it sees.
 
 The release *model* that generated projects follow — trunk releases from
 a quiescent commit by default, short-lived `release/X.Y` branches as the
-exception, the three channels — ships in `CLAUDE.md.jinja`'s "Release
-model" section.  `CONTRIBUTING.md` points at "the release model in
-`CLAUDE.md`": in a generated project that resolves to the rendered
-section; in this repo, releases are the manual dispatch above and the
-same trunk-first spirit applies, without the branch machinery.
+exception, the three channels — ships in
+`.agents/skills/releasing/SKILL.md.jinja`'s "Release model" section.
+`CONTRIBUTING.md` points at "the release model in the `releasing` skill":
+in a generated project that resolves to that rendered skill; in this
+repo, releases are the manual dispatch above and the same trunk-first
+spirit applies, without the branch machinery.
 
 ## Spec
 

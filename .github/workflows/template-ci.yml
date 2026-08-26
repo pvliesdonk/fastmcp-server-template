@@ -86,9 +86,9 @@ jobs:
             || { echo "::error::structural thresholds rendered with gate off"; exit 1; }
           ! grep -qF '"tests/**"' pyproject.toml \
             || { echo "::error::structural tests/** S-ignore rendered with gate off"; exit 1; }
-          ! grep -q '## Structural health' CLAUDE.md \
+          ! grep -q '## Structural health' AGENTS.md \
             || { echo "::error::structural-health section rendered with gate off"; exit 1; }
-          ! grep -qF 'Structural quality (diff) passes' CLAUDE.md \
+          ! grep -qF 'Structural quality (diff) passes' AGENTS.md \
             || { echo "::error::structural acceptance-gate item rendered with gate off"; exit 1; }
 
       - name: authorization toggle-off render
@@ -276,7 +276,7 @@ jobs:
         working-directory: /tmp/smoke
         run: uv run pytest -x -q
 
-      - name: CLAUDE.md sentinel structure
+      - name: AGENTS.md sentinel structure
         working-directory: /tmp/smoke
         run: |
           # Line-anchored regexes so prose mentions don't satisfy the check.
@@ -285,23 +285,35 @@ jobs:
           # `|| true` keeps bash -e from aborting at the command substitution when
           # grep finds zero matches (exit 1), so the ::error:: lines below fire
           # instead of an opaque "exit 1" without context.
-          start=$(grep -cE '^<!-- DOMAIN-START -->$' CLAUDE.md || true)
-          end=$(grep -cE '^<!-- DOMAIN-END -->$' CLAUDE.md || true)
+          start=$(grep -cE '^<!-- DOMAIN-START -->$' AGENTS.md || true)
+          end=$(grep -cE '^<!-- DOMAIN-END -->$' AGENTS.md || true)
           [ "$start" = "3" ] || { echo "::error::expected 3 DOMAIN-START fences, found $start"; exit 1; }
           [ "$end" = "3" ] || { echo "::error::expected 3 DOMAIN-END fences, found $end"; exit 1; }
-          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED opening fence"; exit 1; }
-          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' CLAUDE.md || { echo "::error::missing TEMPLATE-OWNED closing fence"; exit 1; }
-          # TEMPLATE-TRACKING marker pairs (3): one around the bot-reviewer
-          # paragraph, one around the Release notes pages section, one around
-          # Shared Infrastructure + Contributing fixes upstream. FORKING.md's
-          # detach scrub deletes them as a sed range — a dropped marker would
-          # make the scrub delete the wrong span, so the count must stay
-          # exact, and it must match the detach smoke's check_anchor counts
-          # further down.
-          ttstart=$(grep -cE '^<!-- TEMPLATE-TRACKING-START -->$' CLAUDE.md || true)
-          ttend=$(grep -cE '^<!-- TEMPLATE-TRACKING-END -->$' CLAUDE.md || true)
-          [ "$ttstart" = "3" ] || { echo "::error::expected 3 TEMPLATE-TRACKING-START markers, found $ttstart"; exit 1; }
-          [ "$ttend" = "3" ] || { echo "::error::expected 3 TEMPLATE-TRACKING-END markers, found $ttend"; exit 1; }
+          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' AGENTS.md || { echo "::error::missing TEMPLATE-OWNED opening fence"; exit 1; }
+          grep -qE '^<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->$' AGENTS.md || { echo "::error::missing TEMPLATE-OWNED closing fence"; exit 1; }
+          # TEMPLATE-TRACKING marker pairs (2 in AGENTS.md): one around the
+          # bot-reviewer paragraph, one around Shared Infrastructure +
+          # Contributing fixes upstream. The Release notes pages pair moved to
+          # the releasing skill with the rest of the release sections (#486)
+          # and is checked separately below. FORKING.md's detach scrub deletes
+          # these as a sed range — a dropped marker would make the scrub
+          # delete the wrong span, so the count must stay exact, and it must
+          # match the detach smoke's check_anchor counts further down.
+          ttstart=$(grep -cE '^<!-- TEMPLATE-TRACKING-START -->$' AGENTS.md || true)
+          ttend=$(grep -cE '^<!-- TEMPLATE-TRACKING-END -->$' AGENTS.md || true)
+          [ "$ttstart" = "2" ] || { echo "::error::expected 2 TEMPLATE-TRACKING-START markers, found $ttstart"; exit 1; }
+          [ "$ttend" = "2" ] || { echo "::error::expected 2 TEMPLATE-TRACKING-END markers, found $ttend"; exit 1; }
+          rel=$(grep -cE '^<!-- TEMPLATE-TRACKING-START -->$' .agents/skills/releasing/SKILL.md || true)
+          [ "$rel" = "1" ] || { echo "::error::expected 1 TEMPLATE-TRACKING pair in releasing skill, found $rel"; exit 1; }
+
+      - name: AGENTS.md template-owned size budget
+        working-directory: /tmp/smoke
+        run: |
+          # Claude Code warns above 40k always-loaded chars.  The smoke render's
+          # DOMAIN blocks are near-empty, so this measures the template's share;
+          # 24k leaves every downstream >=16k for domain content (#484).
+          size=$(wc -c < AGENTS.md | tr -d '[:space:]')
+          [ "$size" -le 24000 ] || { echo "::error::AGENTS.md template-owned prose is ${size} chars (> 24000). Move guidance into a skill under .agents/skills/ rather than growing the always-loaded file."; exit 1; }
 
       - name: shared docs render with consumer env_prefix
         working-directory: /tmp/smoke
@@ -1231,11 +1243,12 @@ jobs:
                 .github/workflows/claude.yml \
                 .github/workflows/claude-code-review.yml
           rm -f scripts/copier_update_notes.py
+          rm -f scripts/migrate_agent_instructions.py
           # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
           #     count the scrub expects (issue #199).
           #
           #     Without this the whole step passes VACUOUSLY whenever
-          #     CLAUDE.md.jinja is reworded and the scrub is not: the `sed`
+          #     AGENTS.md.jinja is reworded and the scrub is not: the `sed`
           #     matches nothing, and the post-scrub "wording is gone"
           #     assertions still pass — because the wording is gone from the
           #     SOURCE, not because the scrub removed it. Source and scrub
@@ -1246,7 +1259,7 @@ jobs:
           #     drift: a new section that adds a fourth ` Kept across copier
           #     update.` the scrub was never told about.
           #
-          #     Counts must be bumped deliberately when CLAUDE.md.jinja gains or
+          #     Counts must be bumped deliberately when AGENTS.md.jinja gains or
           #     loses one of these strings — that edit is exactly the moment to
           #     check FORKING.md's scrub still covers it.
           preflight_fail=0
@@ -1268,13 +1281,28 @@ jobs:
           # accumulate-don't-stop behaviour both helpers rely on — precisely in
           # the drift case this step exists to report. `|| true` costs nothing
           # and makes the behaviour independent of that setting.
+          # The scrub-anchor strings now live across AGENTS.md and the three
+          # skills that carry template-tracked / copier-update prose after
+          # the task-shaped sections moved out of AGENTS.md into portable
+          # skills (#486): releasing (Release notes pages TEMPLATE-TRACKING
+          # pair, the Dockerfile/stamp-manifests "preserved across" prose is
+          # actually in config-contract — see below), config-contract, and
+          # tool-registration (the Server Info Tool "block is preserved"
+          # sentinel). Every check below counts OCCURRENCES across this
+          # whole set, not just AGENTS.md, so a string that moved with its
+          # section keeps being checked.
+          # `.agents/skills/authoring-issues-prs/SKILL.md` is deliberately NOT
+          # in this set: its copier-update wording matches none of the sed
+          # rules below, so scrubbing it here would be a no-op that still
+          # needs a real fix — tracked as a follow-up issue instead.
+          SCRUB_FILES="AGENTS.md .agents/skills/releasing/SKILL.md .agents/skills/config-contract/SKILL.md .agents/skills/tool-registration/SKILL.md"
           count_occurrences() {
-            grep -oF "$1" CLAUDE.md | wc -l | tr -d '[:space:]' || true
+            cat $SCRUB_FILES | grep -oF "$1" | wc -l | tr -d '[:space:]' || true
           }
           check_anchor() {
             actual=$(count_occurrences "$2")
             if [ "$actual" != "$1" ]; then
-              echo "::error::scrub-anchor drift: expected $1 occurrence(s) of '$2' in the rendered CLAUDE.md, found $actual. CLAUDE.md.jinja was reworded without updating the detach scrub (FORKING.md + this workflow) — fix the scrub, or bump the expected count here if the change is intentional."
+              echo "::error::scrub-anchor drift: expected $1 occurrence(s) of '$2' across the rendered scrub file set ($SCRUB_FILES), found $actual. AGENTS.md.jinja or a skill it fed was reworded without updating the detach scrub (FORKING.md + this workflow) — fix the scrub, or bump the expected count here if the change is intentional."
               preflight_fail=1
             fi
           }
@@ -1290,20 +1318,27 @@ jobs:
           check_anchor 2 'The block is preserved across `copier update`.'
           check_anchor 1 ' on every `copier copy`/`copier update` and re-verified by'
           [ "$preflight_fail" = "0" ] \
-            || { echo "::error::detach scrub is no longer coupled to CLAUDE.md.jinja — see the scrub-anchor drift errors above"; exit 1; }
+            || { echo "::error::detach scrub is no longer coupled to AGENTS.md.jinja — see the scrub-anchor drift errors above"; exit 1; }
 
-          # --- Step 3: scrub CLAUDE.md template-tracking + copier-update wording ---
+          # --- Step 3: scrub template-tracking + copier-update wording ---
           # -i.bak + rm mirrors FORKING.md's portable form (GNU + BSD sed).
-          sed -i.bak \
-            -e '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' \
-            -e '/<!-- ===== TEMPLATE-OWNED SECTIONS BELOW/d' \
-            -e '/<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->/d' \
-            -e 's/ Kept across copier update\.//' \
-            -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
-            -e 's/ are preserved across `copier update`\./ are domain-owned./' \
-            -e 's/The block is preserved across `copier update`\./The block is domain-owned./' \
-            -e 's| on every `copier copy`/`copier update` and re-verified by| whenever config fields change, and re-verified by|' \
-            CLAUDE.md && rm -f CLAUDE.md.bak
+          # Runs over every file in $SCRUB_FILES: AGENTS.md still carries the
+          # PR-Discipline and Shared-Infrastructure TEMPLATE-TRACKING pairs,
+          # while the release, config-contract, and tool-registration skills
+          # carry the rest of the copier-update wording since #486 moved
+          # those sections out of AGENTS.md.
+          for f in $SCRUB_FILES; do
+            sed -i.bak \
+              -e '/<!-- TEMPLATE-TRACKING-START -->/,/<!-- TEMPLATE-TRACKING-END -->/d' \
+              -e '/<!-- ===== TEMPLATE-OWNED SECTIONS BELOW/d' \
+              -e '/<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->/d' \
+              -e 's/ Kept across copier update\.//' \
+              -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
+              -e 's/ are preserved across `copier update`\./ are domain-owned./' \
+              -e 's/The block is preserved across `copier update`\./The block is domain-owned./' \
+              -e 's| on every `copier copy`/`copier update` and re-verified by| whenever config fields change, and re-verified by|' \
+              "$f" && rm -f "$f.bak"
+          done
           # --- Closing ("You are now standalone"): remove the detach guide.
           #     FORKING.md's numbered Step 4 (README cleanup) is intentionally
           #     NOT mirrored here — it mutates README prose this smoke does not
@@ -1321,49 +1356,71 @@ jobs:
           # the last two ("lives upstream", "propagate here via copier update")
           # are actual prose inside the scrubbed TEMPLATE-TRACKING range, so this
           # grep bites on a regressed scrub rather than passing vacuously.
-          ! grep -rniE "fleet|downstream conforms|shape lives in pvl-core|lives upstream|propagate here via .?copier update" CLAUDE.md \
-            || { echo "::error::template-tracking language remains in CLAUDE.md after scrub"; exit 1; }
-          # A detached fork's CLAUDE.md must not claim its sections are
-          # overwritten or preserved by copier update (issue #184). The scrub
-          # strips every such mention (banner fences, DOMAIN "Kept across" notes,
-          # "preserved/survive across copier update" prose), so none may remain.
-          ! grep -niF 'copier update' CLAUDE.md \
-            || { echo "::error::copier-update wording remains in CLAUDE.md after detach scrub"; exit 1; }
-          grep -qE '^## Shared Infrastructure$' CLAUDE.md \
+          # Checked across the whole $SCRUB_FILES set, not just AGENTS.md,
+          # since the release/config-contract/tool-registration skills now
+          # carry some of that scrubbed prose (#486).
+          ! grep -rniE "fleet|downstream conforms|shape lives in pvl-core|lives upstream|propagate here via .?copier update" $SCRUB_FILES \
+            || { echo "::error::template-tracking language remains in the scrub file set after scrub"; exit 1; }
+          # A detached fork must not claim its sections are overwritten or
+          # preserved by copier update (issue #184). The scrub strips every
+          # such mention (banner fences, DOMAIN "Kept across" notes,
+          # "preserved/survive across copier update" prose), so none may
+          # remain anywhere in $SCRUB_FILES.
+          ! grep -niF 'copier update' $SCRUB_FILES \
+            || { echo "::error::copier-update wording remains in the scrub file set after detach scrub"; exit 1; }
+          grep -qE '^## Shared Infrastructure$' AGENTS.md \
             && { echo "::error::Shared Infrastructure section survived the scrub"; exit 1; } || true
-          grep -qE '^## Contributing fixes upstream$' CLAUDE.md \
+          grep -qE '^## Contributing fixes upstream$' AGENTS.md \
             && { echo "::error::Contributing fixes upstream section survived the scrub"; exit 1; } || true
-          grep -qF 'Automatic agent review is disabled' CLAUDE.md \
+          grep -qF 'Automatic agent review is disabled' AGENTS.md \
             && { echo "::error::automatic-review tracking guidance survived the scrub"; exit 1; } || true
-          grep -qE '^## Release notes pages$' CLAUDE.md \
+          grep -qE '^## Release notes pages$' .agents/skills/releasing/SKILL.md \
             && { echo "::error::Release notes pages section survived the scrub"; exit 1; } || true
+          # The releasing skill's own TEMPLATE-TRACKING pair (pair 2) has no
+          # over-run guard from the AGENTS.md kept-section loop below, since
+          # that loop only ever checks AGENTS.md. Guard it here instead: the
+          # pair is the LAST section in releasing/SKILL.md, so only the
+          # heading immediately ABOVE its START marker needs a must-survive
+          # assertion — there is no heading below the END marker to lose.
+          grep -qE '^## Release machinery' .agents/skills/releasing/SKILL.md \
+            || { echo "::error::releasing skill lost '## Release machinery' — scrub deleted too much above the TEMPLATE-TRACKING pair"; exit 1; }
           # Neutral guidance must remain. The scrub is a sed range-delete, so the
           # only "deleted too much" failure mode (given the pristine-render
-          # marker-count guard already holds 2 balanced pairs) is a misplaced
-          # marker that swallows a section adjacent to one of the FOUR marker
-          # boundaries. Every boundary is bracketed by a must-survive assertion:
-          #   pair 1 START → ## PR Discipline (above)
-          #   pair 1 END   → ## GitHub Review Types (below)
-          #   pair 2 START → ## Logging Standard family / release machinery
-          #                  sections (above; the release-notes-pages pair)
-          #   pair 2 END   → ## Tool Registration Checklist (below)
-          #   pair 3 START → ## Server Info Tool (above)
-          #   pair 3 END   → ## Key Design Decisions (below; the TEMPLATE-OWNED
-          #                  END fence that used to sit here is removed by the
-          #                  scrub, so ## Key Design Decisions is now the sole
-          #                  below-the-boundary over-run guard)
+          # marker-count guard already holds 2 balanced pairs in AGENTS.md plus
+          # 1 in the releasing skill) is a misplaced marker that swallows a
+          # section adjacent to one of the three pairs' boundaries (#486 moved
+          # the Release notes pages TEMPLATE-TRACKING pair, and the Logging
+          # Standard, Config & Customization Contract, Server Info Tool, and
+          # Tool Registration Checklist sections it used to sit between, into
+          # the releasing / config-contract / tool-registration skills —
+          # checked separately via $SCRUB_FILES above). Pair 1 (PR Discipline)
+          # and pair 3 (Shared Infrastructure) live in AGENTS.md; pair 2
+          # (Release notes pages) lives in the releasing skill, guarded just
+          # above. Every boundary is bracketed by a must-survive assertion:
+          #   pair 1 START → ## PR Discipline (above, in AGENTS.md)
+          #   pair 1 END   → ## GitHub Review Types (below, in AGENTS.md)
+          #   pair 2 START → ## Release machinery (above, in the releasing
+          #                  skill — asserted just above; the pair is the
+          #                  last section in that file, so there is no
+          #                  below-boundary heading to guard)
+          #   pair 3 START → ## Documentation Discipline / Documentation
+          #                  Conventions sections (above, in AGENTS.md)
+          #   pair 3 END   → ## Key Design Decisions (below, in AGENTS.md;
+          #                  the TEMPLATE-OWNED END fence that used to sit
+          #                  here is removed by the scrub, so ## Key Design
+          #                  Decisions is now the sole below-the-boundary
+          #                  over-run guard)
           # The remaining entries are the other sections FORKING.md promises survive.
           for kept_section in \
               '^## Conventions$' \
+              '^## Breaking Changes and the' \
               '^## Hard PR Acceptance Gates$' \
               '^## PR Discipline$' \
-              '^## Logging Standard$' \
-              '^## Config & Customization Contract$' \
-              '^## Server Info Tool' \
               '^## GitHub Review Types$' \
-              '^## Tool Registration Checklist$' \
+              '^## Documentation Discipline$' \
+              '^## Documentation Conventions' \
               '^## Key Design Decisions$'; do
-            grep -qE "$kept_section" CLAUDE.md \
+            grep -qE "$kept_section" AGENTS.md \
               || { echo "::error::neutral section '$kept_section' lost — scrub deleted too much"; exit 1; }
           done
           # The TEMPLATE-OWNED banner fences are intentionally removed by the
@@ -1371,7 +1428,7 @@ jobs:
           # The range-delete's bottom-boundary over-run guard is now
           # '## Key Design Decisions' (asserted in the kept-section loop above):
           # it sits below where the END fence was, so a range delete that ran to
-          # EOF past pair 2 would drop it too.
+          # EOF past pair 3 would drop it too.
           #
           # Asserted as TWO independent fixed-string checks, each using the same
           # literal its own `sed` -e deletes (issue #199). The previous single
@@ -1380,9 +1437,9 @@ jobs:
           # was deleted" from "the END fence was renamed and now neither the sed
           # nor this regex matches it" — the delete and its check failed
           # together instead of independently.
-          ! grep -qF '<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' CLAUDE.md \
+          ! grep -qF '<!-- ===== TEMPLATE-OWNED SECTIONS BELOW' AGENTS.md \
             || { echo "::error::TEMPLATE-OWNED BELOW banner fence survived the detach scrub"; exit 1; }
-          ! grep -qF '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->' CLAUDE.md \
+          ! grep -qF '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->' AGENTS.md \
             || { echo "::error::TEMPLATE-OWNED END banner fence survived the detach scrub"; exit 1; }
 
           # --- the substitutions PRODUCED their replacement text ---
@@ -1413,7 +1470,8 @@ jobs:
               .github/workflows/copier-update.yml \
               .github/workflows/claude.yml \
               .github/workflows/claude-code-review.yml \
-              scripts/copier_update_notes.py; do
+              scripts/copier_update_notes.py \
+              scripts/migrate_agent_instructions.py; do
             [ ! -e "$gone" ] \
               || { echo "::error::$gone not removed by detach"; exit 1; }
           done
@@ -1594,7 +1652,7 @@ jobs:
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
         # The scripts that render into every project (gen_config_surface.py,
         # copier_update_notes.py, promote_release_notes.py) must satisfy the SAME structural rules
-        # the downstream diff-gate enforces (CLAUDE.md gate #5 / the `structure`
+        # the downstream diff-gate enforces (AGENTS.md gate #5 / the `structure`
         # job): C901 + the PLR complexity family + S. The `Lint scripts`
         # step above intentionally mirrors only the base whole-repo `select`,
         # which omits these — so a complexity regression in a shipped script

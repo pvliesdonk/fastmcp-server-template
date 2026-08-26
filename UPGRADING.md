@@ -1211,3 +1211,47 @@ Edit the value in `.copier-answers.yml` to 100 characters or fewer, then run
 `copier update` again; the renders of `server.json`, `README.md` and the
 other consumers pick the new value up. A blurb that was edited by hand in
 `server.json` alone is caught by the new contract test instead.
+
+### CLAUDE.md is now a stub; AGENTS.md carries the instructions
+
+Project instructions moved to `AGENTS.md`, which every AAIF-aware agent reads;
+`CLAUDE.md` is a three-line stub importing it. Task-shaped guidance (release
+model and machinery, config contract, logging standard, tool registration,
+repository protection) moved into skills under `.agents/skills/`, each with a
+`.claude/skills/<name>` symlink so Claude Code still finds it.
+
+`copier update` migrates automatically: the DOMAIN blocks from your committed
+`CLAUDE.md` are spliced into `AGENTS.md`, `CLAUDE.md` is rewritten as the stub,
+and the old `.claude/skills/authoring-issues-prs/` directory becomes a symlink.
+Review the update PR's `AGENTS.md` diff to confirm your three DOMAIN blocks
+arrived.
+
+Do by hand only if it applies:
+
+- If you had edited template-owned prose in `CLAUDE.md` outside the DOMAIN
+  blocks, re-apply it in `AGENTS.md` — the migration prints a pointer to
+  `git show HEAD:CLAUDE.md`.
+- If you had customised a template-owned skill under `.claude/skills/`
+  (before this release: `authoring-issues-prs`), the update replaces that
+  directory with a symlink into `.agents/skills/` and logs `copier
+  migration: removing real directory …`. Recover your edits with `git show
+  HEAD:.claude/skills/<name>/SKILL.md`. If the customisation lived inside a
+  `DOMAIN-*` sentinel block (e.g. `DOMAIN-AUTHORING-START`/`-END` in
+  `authoring-issues-prs`), paste it back into the same sentinel in
+  `.agents/skills/<name>/SKILL.md` — that block is preserved by every later
+  update. Only edits **outside** a sentinel need a separate project-owned
+  skill under `.agents/skills/<other-name>/`, since template-owned skills
+  are otherwise re-rendered on every update.
+- If your `.gitignore` predates the `!.agents/skills/` or `!.claude/skills/`
+  exceptions, add both (the file is seeded once), or git ignores the skills
+  and their symlinks.
+- If `AGENTS.md` exceeds 40 000 characters, `tests/test_agent_instructions.py`
+  fails: shorten the DOMAIN blocks or move detail into a project skill.
+- If `_commit` in `.copier-answers.yml` is a bare commit hash rather than a
+  tag-derived version, copier skips **all** migrations — the before-stage
+  guard and `scripts/migrate_agent_instructions.py` alike. Before running
+  `copier update`, remove `.claude/skills/authoring-issues-prs/` by hand
+  (`git rm -r`); after it, move your three DOMAIN blocks from the committed
+  `CLAUDE.md` (`git show HEAD:CLAUDE.md`) into `AGENTS.md` yourself and
+  replace `CLAUDE.md` with the rendered stub, since none of that happens
+  automatically in this case.

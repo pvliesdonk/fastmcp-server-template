@@ -1,11 +1,91 @@
+"""Template-owned contributor skills live under .agents/skills/ (portable) and
+are reachable by Claude Code through .claude/skills/<name> symlinks (#486)."""
+
+from __future__ import annotations
+
+import re
+import sys
 from pathlib import Path
 
+import pytest
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+import migrate_agent_instructions as mig
+
 REPO = Path(__file__).resolve().parents[2]
+AGENTS_SKILLS = REPO / ".agents" / "skills"
+CLAUDE_SKILLS = REPO / ".claude" / "skills"
+TEMPLATE_SKILLS = (
+    "authoring-issues-prs",
+    "config-contract",
+    "logging-standard",
+    "releasing",
+    "repository-protection",
+    "tool-registration",
+    "writing-release-notes",
+)
+_FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+
+
+def _skill_file(name: str) -> Path:
+    d = AGENTS_SKILLS / name
+    for candidate in (d / "SKILL.md.jinja", d / "SKILL.md"):
+        if candidate.is_file():
+            return candidate
+    raise AssertionError(f"{name}: no SKILL.md(.jinja) under .agents/skills/")
+
+
+@pytest.mark.parametrize("name", TEMPLATE_SKILLS)
+def test_skill_is_portable_and_symlinked(name: str) -> None:
+    _skill_file(name)
+    link = CLAUDE_SKILLS / name
+    assert link.is_symlink(), f".claude/skills/{name} must be a symlink"
+    assert link.readlink() == Path(f"../../.agents/skills/{name}"), link.readlink()
+    assert link.resolve() == (AGENTS_SKILLS / name).resolve()
+
+
+@pytest.mark.parametrize("name", TEMPLATE_SKILLS)
+def test_skill_frontmatter(name: str) -> None:
+    text = _skill_file(name).read_text(encoding="utf-8")
+    m = _FRONTMATTER.match(text)
+    assert m, f"{name}: SKILL.md lacks YAML frontmatter"
+    fm = m.group(1)
+    assert re.search(rf"^name: {re.escape(name)}$", fm, re.MULTILINE), (
+        f"{name}: name must equal dir"
+    )
+    assert re.search(r"^description: \S", fm, re.MULTILINE), (
+        f"{name}: description missing"
+    )
+
+
+def test_no_real_directories_under_claude_skills() -> None:
+    real = [
+        p.name for p in CLAUDE_SKILLS.iterdir() if p.is_dir() and not p.is_symlink()
+    ]
+    assert not real, (
+        f"real directories under .claude/skills/ (must be symlinks): {real}"
+    )
+
+
+def test_every_agents_skill_has_a_symlink() -> None:
+    missing = [
+        p.name
+        for p in AGENTS_SKILLS.iterdir()
+        if p.is_dir() and not (CLAUDE_SKILLS / p.name).is_symlink()
+    ]
+    assert not missing, f"skills without a .claude/skills symlink: {missing}"
+
+
+def test_gitignore_keeps_both_skill_roots() -> None:
+    for path in (REPO / ".gitignore", REPO / ".gitignore.jinja"):
+        text = path.read_text(encoding="utf-8")
+        assert "!.agents/skills/" in text, path
+        assert "!.claude/skills/" in text, path
 
 
 def test_release_skill_uses_neutral_path() -> None:
     assert (REPO / ".agents/skills/writing-release-notes/SKILL.md").is_file()
-    assert not (REPO / ".claude/skills/writing-release-notes/SKILL.md").exists()
     assert (REPO / ".claude/skills/authoring-issues-prs/SKILL.md").is_file()
 
 
@@ -125,3 +205,53 @@ def test_release_skill_treats_github_prose_as_untrusted_before_publication() -> 
         "credentialed publication",
     ):
         assert required in prose
+
+
+def test_template_skills_list_matches_migration_script() -> None:
+    assert mig.TEMPLATE_SKILLS == TEMPLATE_SKILLS, (
+        "TEMPLATE_SKILLS drifted between scripts/migrate_agent_instructions.py "
+        f"{mig.TEMPLATE_SKILLS} and scripts/tests/test_shared_skill_paths.py "
+        f"{TEMPLATE_SKILLS} -- keep the two tuples identical"
+    )
+
+
+def test_template_skills_list_matches_rendered_test_file() -> None:
+    text = (REPO / "tests" / "test_agent_instructions.py").read_text(encoding="utf-8")
+    match = re.search(
+        r"TEMPLATE_SKILLS: tuple\[str, \.\.\.\] = \((.*?)\)", text, re.DOTALL
+    )
+    assert match, (
+        "could not find a 'TEMPLATE_SKILLS: tuple[str, ...] = (...)' literal in "
+        "tests/test_agent_instructions.py"
+    )
+    names = tuple(re.findall(r'"([^"]+)"', match.group(1)))
+    assert names == TEMPLATE_SKILLS, (
+        "TEMPLATE_SKILLS drifted between scripts/tests/test_shared_skill_paths.py "
+        f"{TEMPLATE_SKILLS} and tests/test_agent_instructions.py {names} -- keep the "
+        "skill-name list identical in both places"
+    )
+
+
+def test_template_skills_list_matches_copier_before_stage_migration() -> None:
+    config = yaml.safe_load((REPO / "copier.yml").read_text(encoding="utf-8"))
+    before_stage = [
+        m
+        for m in config["_migrations"]
+        if isinstance(m, dict) and "before" in m.get("when", "")
+    ]
+    assert len(before_stage) == 1, (
+        "expected exactly one before-stage _migrations entry in copier.yml, "
+        f"found {len(before_stage)}"
+    )
+    command = before_stage[0]["command"]
+    match = re.search(r"for \w+ in (.+?);\s*do", command)
+    assert match, (
+        "could not find a 'for X in ...; do' clause in copier.yml's before-stage "
+        f"migration command: {command!r}"
+    )
+    names = frozenset(match.group(1).split())
+    assert names == frozenset(TEMPLATE_SKILLS), (
+        "TEMPLATE_SKILLS drifted between scripts/tests/test_shared_skill_paths.py "
+        f"{sorted(TEMPLATE_SKILLS)} and copier.yml's before-stage migration command "
+        f"{sorted(names)} -- keep the skill-name list identical in both places"
+    )

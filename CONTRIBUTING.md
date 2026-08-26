@@ -19,7 +19,7 @@ Before filing, search the target repo's existing issues — open **and**
 closed — for the same observation. If it is already on file, comment there
 rather than opening a duplicate.
 
-The `authoring-issues-prs` skill (`.claude/skills/authoring-issues-prs/`)
+The `authoring-issues-prs` skill (`.agents/skills/authoring-issues-prs/`)
 walks this guide's routing and filing procedure and performs the follow-up
 steps issue forms cannot (sub-issue links, milestones). It points back at
 this file; this file stays the single source of the rules.
@@ -105,7 +105,7 @@ PRs", not "one PR per issue". Trivial exceptions: pure typo fixes and
 automated dependency bumps (Renovate) may skip the issue.
 
 Mark a commit breaking (`feat!:` / `BREAKING CHANGE:`) only under the
-breaking-change policy in `CLAUDE.md`: the change must break the operator
+breaking-change policy in `AGENTS.md`: the change must break the operator
 surface (env var, config file, CLI flag, deployment layout, on-disk state)
 or the public library interface, assessed against the **last stable
 release**, not the previous commit. MCP tool-surface changes are not
@@ -122,7 +122,8 @@ site, `docs/design/`, and inline docstrings.
 ## Releases
 
 Merging is not releasing. When a release is cut, and from where, is
-governed by the release model in `CLAUDE.md`: releases normally come
+governed by the release model in the `releasing` skill
+(`.agents/skills/releasing/SKILL.md`): releases normally come
 straight from a quiescent trunk, and a short-lived `release/X.Y` branch
 is the exception tool for excluding unfinished work or patching a
 shipped release. The ships-atomically signal recorded on epics
@@ -138,7 +139,7 @@ means the release comes from before it started, or waits.
   won't pick it up unless the template's version constraint in
   `pyproject.toml.jinja` is also bumped.
 - **Template-level fix** (anything template-owned: `Dockerfile`, workflows,
-  `server.py` skeleton, `CLAUDE.md` sections): open a PR on
+  `server.py` skeleton, `AGENTS.md` sections): open a PR on
   `pvliesdonk/fastmcp-server-template`. After merge + release, this project
   gets the fix on the next weekly `copier update` cron, or dispatch the
   workflow manually.

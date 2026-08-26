@@ -29,7 +29,7 @@ uv run my-new-service serve
 Downstreams updated via `copier update --trust` when a new template
 tag lands.  `.copier-answers.yml` in your repo records the template
 version; conflicts are surfaced as `<<<<<<< HEAD` markers in the
-hybrid files (`pyproject.toml`, `CLAUDE.md`) on the rare occasion a
+hybrid files (`pyproject.toml`, `AGENTS.md`) on the rare occasion a
 template-owned section and a domain edit collide.
 
 ## Spec
