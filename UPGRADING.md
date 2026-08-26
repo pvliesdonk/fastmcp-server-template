@@ -1294,3 +1294,35 @@ after `apply_tool_visibility`. `copier update` re-renders that wiring; then:
   but now see a startup deprecation warning; move deployment context to
   `<PREFIX>_INSTRUCTIONS_EXTRA`, which is appended to the generated text.
   When both are set, `_EXTRA` is ignored.
+
+### `[tool.uv]` pins must name their exit condition
+
+**This will turn CI red for any existing project that carries a `[tool.uv]`
+pin without an `# until:` comment, or that gives one package a version bound
+both under `[project]` and in a `[tool.uv]` table.** That is intended: the
+pin is a workaround whose reason must be written down. Expect the first CI
+run after `copier update` to fail on the new lint step until the pins are
+annotated.
+
+`scripts/check_pins.py` (new, run by `ci.yml`'s lint job) and
+`tests/test_dependency_pins.py` require every `[tool.uv]
+override-dependencies` / `constraint-dependencies` entry to carry
+`# until: <GitHub issue or PR URL>` on its line, on a comment line directly
+above it, or on the array's opening line (covering every entry), and fail the build once that issue is resolved — closed as
+completed, or a merged PR — which is the signal to lift the pin; an issue
+closed without a fix fails too, asking for a live one. A lookup that cannot
+complete (private repo, rate limit) only warns. They also reject a package
+with a version bound both under `[project]` (or `[dependency-groups]`) and in
+a `[tool.uv]` table, the shape that made Renovate PRs raise a bound without
+moving the lock (Renovate cannot see the `[tool.uv]` tables).
+
+Do this for each existing pin, before or right after `copier update`:
+
+1. Find the upstream issue or PR the pin waits on; if none exists, open a
+   tracking issue in your own repository that says what must change.
+2. Add `# until: <that URL>` on the pin's line, for example
+   `"numpy<2.5.0",  # until: https://github.com/pvliesdonk/markdown-vault-mcp/issues/727`.
+3. If the same package also carries a version bound under `[project]`, keep
+   exactly one of the two bounds (a bare name without a bound is fine).
+4. Run `uv run python scripts/check_pins.py --offline` locally; CI runs the
+   online check and will tell you the moment the referenced issue closes.
