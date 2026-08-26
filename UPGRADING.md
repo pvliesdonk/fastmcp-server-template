@@ -1151,7 +1151,7 @@ example of the general class: a template change that lands in a file copier
 will not touch, with nothing in the update to tell you. The render-and-diff
 recipe under "Before every upgrade" is how to find the others.
 
-## Unreleased - fastmcp-pvl-core 5 and composed instructions
+## v6.0 - fastmcp-pvl-core 5 and composed instructions
 
 ### Automatic Claude review is now opt-in
 
@@ -1390,3 +1390,7 @@ Two things NOT to do:
   `validators`) are in no template vocabulary any more because no template
   prose uses them outside code, which Vale does not spell-check. If your
   own prose does, they belong in your `Base/accept.txt`.
+
+## Unreleased
+
+_Nothing yet._

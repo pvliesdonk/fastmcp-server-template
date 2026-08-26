@@ -1,5 +1,24 @@
 # Changelog
 
+## v6.0.0 (2026-08-26)
+
+- #522 fix(vale): layer the template vocabulary as a re-rendered second accept list
+- #521 feat: add provider-neutral code-review skill
+- #520 feat(scaffold): copier update writes a diff of every seeded-once file the template changed
+- #518 docs: operator runbooks — release checklist, template-update guide, applying-template-updates skill, extended README
+- #517 feat(scaffold): require an exit condition on every [tool.uv] pin and fail CI once it is met
+- #516 fix(scaffold): quote site_description in mkdocs.yml
+- #515 feat!: adopt fastmcp-pvl-core 5 and compose server instructions
+- #514 fix(renovate): run every 4 hours and group non-major updates to stop rebase storms
+- #512 fix(copier): refuse a domain_description with a quote or backslash
+- #509 fix(ci): cap the scripts-tests core install at the template's own major
+- #504 feat(agents): agent-neutral AGENTS.md, portable skills, and automatic downstream migration
+- #500 fix(renovate): cover composite actions under .github/actions/ with the action-pin manager
+- #499 fix(copier): cap domain_description at the MCP registry's 100 characters
+- #498 feat: make agent automation human-controlled
+- #490 chore(deps): update dependency astral-sh/setup-uv to v10
+
+
 ## v5.6.3 (2026-08-24)
 
 - #489 chore(deps): update dependency renovatebot/github-action to v46.2.4
