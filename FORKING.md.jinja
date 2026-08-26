@@ -31,6 +31,7 @@ rm -f .github/workflows/copier-update.yml \
       .github/workflows/claude-code-review.yml
 rm -f scripts/copier_update_notes.py
 rm -f scripts/migrate_agent_instructions.py
+rm -f scripts/report_seeded_changes.py .copier-seeded-changes.md
 rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
 rm -f docs/deployment/template-updates.md
 # The page above is in the MkDocs nav; a dangling entry fails `mkdocs build --strict`.
@@ -48,6 +49,9 @@ What this removes and why:
 - `scripts/migrate_agent_instructions.py` — the CLAUDE.md → AGENTS.md
   migration that only `copier update`'s `_migrations` stage invoked; dead
   weight once you no longer run `copier update`.
+- `scripts/report_seeded_changes.py` and its output `.copier-seeded-changes.md`
+  — the seeded-file report a `copier update` writes; nothing writes it after
+  detaching.
 - the `applying-template-updates` skill and `docs/deployment/template-updates.md`
   — the procedure for the weekly template update pull request, which a
   detached fork never receives. The `sed` line removes the page's nav

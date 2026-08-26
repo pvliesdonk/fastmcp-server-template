@@ -46,12 +46,14 @@ procedure in agent-invocable form).
 3. **Check the seeded-once files.** Copier's `_skip_if_exists` list names
    files that are written on the first `copier copy` and never touched
    again by `copier update`. They are absent from the diff even when the
-   template changed them; the pull request body says so under its
-   resolution policy and points at the "Before every upgrade" section of
-   the template's `UPGRADING.md`, which has the precise recipe (render the
-   old and new template versions and diff the seeded paths). The quick
-   version: open the compare link and look for changes under these paths,
-   then apply any that matter by hand, keeping your local content:
+   template changed them. The update writes `.copier-seeded-changes.md` at
+   the repository root (the pull request body embeds it): a diff of every
+   seeded path between the previous and target template versions, or an
+   explicit statement that no seeded file changed. Work through that file
+   and apply what applies by hand, keeping your local content. When the
+   report says it could not be computed, fall back to the compare link and
+   the "Before every upgrade" recipe in the template's `UPGRADING.md`. The
+   seeded paths, for reference:
 
    `.claude-plugin/**`, `src/{{ python_module }}/tools.py`,
    `src/{{ python_module }}/resources.py`, `src/{{ python_module }}/prompts.py`,

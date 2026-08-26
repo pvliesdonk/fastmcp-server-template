@@ -1347,3 +1347,14 @@ the entry), so add the new page yourself, under Deployment:
 Without it the page is still built and linked from the release-process
 page and the README; `mkdocs build --strict` does not fail on a page that
 is not in the nav.
+
+### `copier update` now reports seeded-file changes
+
+Every `copier update` ends by writing `.copier-seeded-changes.md` at the
+repository root: a diff of what the template changed, between the previous
+and target versions, in each `_skip_if_exists` file (the ones the update
+never re-renders), or an explicit statement that none changed. Commit the file
+with the update; the weekly update pull request embeds it. Work through it
+as `docs/deployment/template-updates.md` step 3 describes. Nothing to do
+by hand for this release beyond reading it; the first update that produces
+it lists every seeded change since your previous template version.
