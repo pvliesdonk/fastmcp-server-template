@@ -57,6 +57,8 @@ def test_blurb_at_the_cap_renders(tmp_path: Path) -> None:
     ("blurb", "expected"),
     [
         ("x" * 101, "Too long (101 chars"),
+        ('Search "papers" fast', "Must not contain a double quote or a backslash"),
+        ("C:\\vault indexer", "Must not contain a double quote or a backslash"),
         # Padding renders verbatim into server.json, so it counts (#499 review).
         (" " + "x" * 100 + " ", "Too long (102 chars"),
         ("   ", "Required"),

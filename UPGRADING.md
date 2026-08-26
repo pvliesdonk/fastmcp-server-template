@@ -1212,6 +1212,14 @@ Edit the value in `.copier-answers.yml` to 100 characters or fewer, then run
 other consumers pick the new value up. A blurb that was edited by hand in
 `server.json` alone is caught by the new contract test instead.
 
+The same validator now also refuses a `domain_description` containing a
+double quote or a backslash: the blurb is interpolated verbatim into JSON,
+TOML, Python and YAML string literals, so either character produced a
+project that failed at `uv sync`, import time or publish time. As with the
+length cap, `copier update` reports this as copier's generic
+`Question "domain_description" is required` — reword the value in
+`.copier-answers.yml` first.
+
 ### CLAUDE.md is now a stub; AGENTS.md carries the instructions
 
 Project instructions moved to `AGENTS.md`, which every AAIF-aware agent reads;
