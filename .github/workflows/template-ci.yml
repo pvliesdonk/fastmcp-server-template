@@ -1615,7 +1615,12 @@ jobs:
         run: uv python install 3.12
 
       - name: Run script unit tests
-        run: uv run --with pytest --with pyyaml --with jsonschema --with jinja2 --with 'fastmcp-pvl-core>=4.6.1' pytest scripts/tests/ -v
+        # Cap the core at the template's own major (pyproject.toml.jinja's
+        # `<5`): the generator's fixtures assert core help text, and an
+        # unbounded install picks up the next major the day it ships
+        # (5.0.0 reworded that text and turned main red).  Move the cap
+        # together with the floor when the template adopts a new major (#502).
+        run: uv run --with pytest --with pyyaml --with jsonschema --with jinja2 --with 'fastmcp-pvl-core>=4.6.1,<5' pytest scripts/tests/ -v
 
       - name: UPGRADING.md Unreleased section
         run: |
