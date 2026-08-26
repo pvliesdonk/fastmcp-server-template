@@ -17,9 +17,12 @@ instructions, with no configuration beyond the variable itself:
 
 - `{{ env_prefix }}_SERVER_NAME`: the server name reported to clients and
   by `get_server_info`. Defaults to `{{ project_name }}`.
-- `{{ env_prefix }}_INSTRUCTIONS`: replaces the default MCP instructions
-  text. Unset, the scaffold builds the default (which advertises this
-  override).
+- `{{ env_prefix }}_INSTRUCTIONS_EXTRA`: operator context appended to the
+  generated MCP instructions (deployment notes, house rules). The generated
+  text (identity, tool workflows, documentation pointer) stays intact.
+- `{{ env_prefix }}_INSTRUCTIONS`: legacy. Replaces the entire generated
+  instructions text and logs a deprecation warning at startup; when both are
+  set, `_EXTRA` is ignored. Move operator context to `_EXTRA`.
 
 ## Tool visibility
 

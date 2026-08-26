@@ -406,15 +406,14 @@ jobs:
             done
           done
 
-          # --- signing-key row: Default `derived`, description spells out
-          # "JSON Web Tokens" (never the "JWTs" abbreviation).
+          # --- signing-key row: Default `derived`, and the description never
+          # abbreviates to "JWTs" (pvl-core <5 said "JWTs" and the generator's
+          # vocabulary expanded it; 5.0 dropped the term from its own text).
           for f in "$OIDC" "$AUTH"; do
             signing_row=$(region "$f" OPTIONAL | grep -F '`SMOKE_MCP_OIDC_JWT_SIGNING_KEY`') \
               || { echo "::error::$f OPTIONAL region missing the signing-key row"; exit 1; }
             echo "$signing_row" | grep -qF '| `derived` |' \
               || { echo "::error::$f signing-key row does not show Default \`derived\`: $signing_row"; exit 1; }
-            echo "$signing_row" | grep -qF 'JSON Web Tokens' \
-              || { echo "::error::$f signing-key row missing 'JSON Web Tokens'"; exit 1; }
             ! echo "$signing_row" | grep -qF 'JWTs' \
               || { echo "::error::$f signing-key row still abbreviates to 'JWTs'"; exit 1; }
           done
@@ -1615,12 +1614,17 @@ jobs:
         run: uv python install 3.12
 
       - name: Run script unit tests
-        # Cap the core at the template's own major (pyproject.toml.jinja's
-        # `<5`): the generator's fixtures assert core help text, and an
-        # unbounded install picks up the next major the day it ships
-        # (5.0.0 reworded that text and turned main red).  Move the cap
-        # together with the floor when the template adopts a new major (#502).
-        run: uv run --with pytest --with pyyaml --with jsonschema --with jinja2 --with 'fastmcp-pvl-core>=4.6.1,<5' pytest scripts/tests/ -v
+        # Install the core at exactly the constraint the template renders
+        # (pyproject.toml.jinja): the generator's fixtures assert core help
+        # text, and an unbounded install picked up 5.0.0 the day it shipped
+        # and turned main red (#509).  Reading the constraint out of the
+        # template keeps floor and cap in lockstep without a second copy.
+        run: |
+          # Quoted form only, so a rationale comment naming the package can never win.
+          CORE=$(grep -oE '"fastmcp-pvl-core>=[^"]*"' pyproject.toml.jinja | head -1 | tr -d '"')
+          [ -n "$CORE" ] || { echo "::error::no fastmcp-pvl-core constraint in pyproject.toml.jinja"; exit 1; }
+          echo "core constraint: $CORE"
+          uv run --with pytest --with pyyaml --with jsonschema --with jinja2 --with "$CORE" pytest scripts/tests/ -v
 
       - name: UPGRADING.md Unreleased section
         run: |

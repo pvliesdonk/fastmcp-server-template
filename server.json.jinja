@@ -29,8 +29,12 @@
           "description": "Rename this server instance; defaults to the project name."
         },
         {
+          "name": "{{ env_prefix }}_INSTRUCTIONS_EXTRA",
+          "description": "Operator context appended to the generated MCP instructions."
+        },
+        {
           "name": "{{ env_prefix }}_INSTRUCTIONS",
-          "description": "Replaces the default MCP instructions text sent to clients."
+          "description": "Legacy: replaces the entire generated MCP instructions text (deprecated; prefer the _EXTRA variant)."
         },
         {
           "name": "FASTMCP_LOG_LEVEL",
@@ -151,8 +155,12 @@
           "description": "Rename this server instance; defaults to the project name."
         },
         {
+          "name": "{{ env_prefix }}_INSTRUCTIONS_EXTRA",
+          "description": "Operator context appended to the generated MCP instructions."
+        },
+        {
           "name": "{{ env_prefix }}_INSTRUCTIONS",
-          "description": "Replaces the default MCP instructions text sent to clients."
+          "description": "Legacy: replaces the entire generated MCP instructions text (deprecated; prefer the _EXTRA variant)."
         },
         {
           "name": "{{ env_prefix }}_HTTP_PATH",

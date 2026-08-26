@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import subprocess
@@ -2902,6 +2903,32 @@ class TestCleanHelpForMarkdownTable:
         assert "e.g." not in text
         assert "(`https://auth.example.com/.well-known/openid-configuration`)." in text
 
+    def test_for_example_is_folded_onto_the_eg_rules(self):
+        """pvl-core 5.0's own wording (#285): the two shapes it ships, plus the
+        sentence-initial one; a non-transitional 'for example' is left alone."""
+        text = g._clean_help_for_markdown_table(
+            "Public base URL of the deployed server, for example "
+            "`https://mcp.example.com`. Required for OIDC."
+        )
+        assert "for example" not in text
+        assert "(`https://mcp.example.com`). Required for OIDC." in text
+        text = g._clean_help_for_markdown_table(
+            "OIDC discovery document URL, for example "
+            "`https://auth.example.com/.well-known/openid-configuration`."
+        )
+        assert "for example" not in text
+        assert "(`https://auth.example.com/.well-known/openid-configuration`)." in text
+        assert (
+            g._clean_help_for_markdown_table("For example, set it to `x`.")
+            == "Set it to `x`."
+        )
+        assert (
+            g._clean_help_for_markdown_table("Values, for example: a, b.")
+            == "Values (a, b)."
+        )
+        unchanged = "Used for example deployments only."
+        assert g._clean_help_for_markdown_table(unchanged) == unchanged
+
     def test_ie_becomes_that_is(self):
         text = g._clean_help_for_markdown_table("Uses an alias, i.e. a friendly name.")
         assert "i.e." not in text
@@ -2924,13 +2951,24 @@ class TestMarkdownVocabularyNormalisation:
         """End to end through `write_artifacts`, because the vocabulary is
         presentation context the caller supplies — a bare `render_md_table`
         call has none in scope, so testing that way would prove nothing about
-        what actually ships."""
-        answers = g.load_answers(fake_project)
-        vars_ = g.collect_vars(fake_project, answers)
-        var = next(v for v in vars_ if v.suffix == "OIDC_JWT_SIGNING_KEY")
-        assert "JWTs" in var.help  # sanity: core's text has it
+        what actually ships.
 
-        g.write_artifacts(fake_project, check=False)
+        pvl-core 5.0 made its own help text Vale-safe (#285), so "JWTs" no
+        longer arrives from core; re-introduce it on the collected var so the
+        normaliser — the only lever that propagates to consumers — is still
+        exercised on the spliced output."""
+        answers = g.load_answers(fake_project)
+        real_vars = g.collect_vars(fake_project, answers)
+        var = next(v for v in real_vars if v.suffix == "OIDC_JWT_SIGNING_KEY")
+        assert "JWTs" not in var.help  # core's own wording is clean since 5.0
+        patched = [
+            dataclasses.replace(v, help="Signing key for issued JWTs. " + v.help)
+            if v is var
+            else v
+            for v in real_vars
+        ]
+
+        g.write_artifacts(fake_project, check=False, vars_=patched)
         for rel in ("docs/guides/authentication.md", "docs/deployment/oidc.md"):
             text = (fake_project / rel).read_text(encoding="utf-8")
             assert var.name in text  # sanity: the var reached this page
