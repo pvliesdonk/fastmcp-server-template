@@ -24,11 +24,17 @@ site/
 .agents/*
 !.agents/skills/
 
-# Claude Code local settings — everything under .claude/ EXCEPT skills/.
-# The retained subtree holds symlinks into .agents/skills/, template-owned
-# on copier update.
+# Claude Code local state — everything under .claude/ except the three
+# entries re-included below. skills/ holds symlinks into .agents/skills/,
+# template-owned on copier update.
 .claude/*
 !.claude/skills/
+# The SessionStart hook that installs Vale into a Claude Code on the web
+# container, and the settings file that registers it. Tracked so a web session
+# picks them up from the default branch; the binaries it installs land in
+# .claude/tools/, which the rule above keeps ignored.
+!.claude/settings.json
+!.claude/hooks/
 
 # Git worktrees (superpowers skill convention)
 .worktrees/

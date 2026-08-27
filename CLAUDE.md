@@ -80,7 +80,11 @@ create new projects.
    vale --glob='!docs/{superpowers,design,decisions}/**' docs README.md
    ```
    Match the Vale version pinned in the rendered `.github/workflows/ci.yml`;
-   a different local binary can report differently.  The file set and glob
+   a different local binary can report differently.  A Claude Code on the web
+   container ships no `vale` at all, which silently turns this step into a
+   no-op in the one place it is the only pre-push path; the SessionStart hook
+   at `.claude/hooks/session-start.sh` installs the pinned version into
+   `.claude/tools/bin` and puts it on `PATH`.  The file set and glob
    above are a convenience copy — `template-ci` extracts the version, file
    set and glob from that rendered `ci.yml` rather than restating them, so
    those three cannot drift from what a downstream runs.  One divergence is

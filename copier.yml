@@ -339,6 +339,13 @@ _exclude:
   - "scripts/check_update_regression.py"       # template-ci update guard — template-only
   - "scripts/promote_upgrading.py"             # UPGRADING.md release promotion — template-only
   - "schemas"                                  # vendored server.json schema — template-ci gate only
+  # Maintainer container setup for THIS repo's own agent sessions. The hook
+  # reads the Vale pin out of .github/workflows/ci.yml.jinja, a path that
+  # exists only here — in a generated project the same pin lives in the
+  # rendered ci.yml, so the script would find nothing and no-op. A downstream
+  # wanting the same convenience needs its own copy, not this one.
+  - ".claude/hooks"
+  - ".claude/settings.json"
   # Scaffold files that projects routinely have their own version of
   # (different docs layout, different test organisation).  Excluding
   # them here means they never render on copy OR update — fresh
