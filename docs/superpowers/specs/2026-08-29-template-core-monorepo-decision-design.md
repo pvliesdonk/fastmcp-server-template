@@ -49,11 +49,14 @@ prime directive is what produced the current split in the first place: the
 shared logic became a package (pvl-core) and the shared scaffolding became
 the template.
 
-The question is therefore twofold: does one repository holding both halves
-remove the coupling and reporting costs without losing a working
+The question is therefore threefold: does one repository holding both
+halves remove the coupling and reporting costs without losing a working
 `copier copy gh:pvliesdonk/fastmcp-server-template` and independent release
-cadences — and, deeper, does the shared logic even need to *be* a package,
-or could it be integral to the template?
+cadences; does the shared logic even need to *be* a package, or could it be
+integral to the template; and — since the template's actual job is
+**continuous fleet synchronization with the template as authority**, not
+one-time scaffolding — is copier, a scaffolding tool with a merge-based
+update, even the right mechanism for that job?
 
 ## Verified facts the design rests on
 
@@ -71,6 +74,11 @@ or could it be integral to the template?
 | `copier.yml`'s `_exclude` already replaces copier's defaults wholesale and excludes template-repo-only trees (`docs/superpowers`, `scripts/tests`, …) — a nested library tree is one more entry | `copier.yml:317-350` |
 | The floor in `pyproject.toml.jinja` (`"fastmcp-pvl-core>=5.0.0,<6"`) must keep existing while core is an installed package: downstreams install core from an index, so a merged repo replaces the floor-bump *PR* with a floor-vs-source consistency guard, not with nothing | `pyproject.toml.jinja:55` and its 37-line floor-history comment; `copier.yml:48-60` `_tasks`/`_migrations` install core from PyPI at scaffold time |
 | The template already needs a whole apparatus to defend the files that ARE integral to it: sentinel markers (`DOMAIN-*`, "TEMPLATE-OWNED — DO NOT EDIT"), the `_skip_if_exists` seeded-once list, `scripts/report_seeded_changes.py` diffing downstream edits to seeded files, the structural gate, and the `copier update` 3-way merge arbitrating every divergence. None of this machinery is needed for code that lives in site-packages | `copier.yml:122-220`; `scripts/report_seeded_changes.py`; `REVIEW.md`/`AGENTS.md.jinja` sentinel conventions; render-hygiene notes in `CLAUDE.md` |
+| copier's update is by design a merge, not an enforcement: it regenerates a fresh project, diffs it against the current one, re-applies the diff with git-style conflict markers or `.rej` files, and its own recovery path (`copier recopy`) "discards all the smart update algorithm" | copier docs, "Updating a project" |
+| The projen model is the opposite contract: every managed file is generated from a versioned package dependency, "most files are marked read-only, and an 'anti tamper' check is configured in the CI build workflow to ensure that files are not updated during build"; updates flow by bumping the dependency and re-running synthesis | projen README |
+| `scripts/gen_config_surface.py --check` already implements exactly that contract for the config artifacts: deterministic generation from the installed core version, with CI failing on any hand edit — it is a working synthesis-plus-anti-tamper check inside this very template | `template-ci.yml:428-429`; the generator's `ensure_core_available` bootstrap |
+| Reusable workflows can be called cross-repo from a public repository as `owner/repo/.github/workflows/<file>@<ref>`, referenced by tag/SHA/branch — so downstream workflow files can shrink to stubs whose pinned ref Renovate bumps like any Action pin | GitHub Actions docs, "Reusing workflows" |
+| Push-based central settings (organization rulesets, required-workflow rules, safe-settings) require an organization on a Team/Enterprise plan; the fleet lives under a personal account, so that family is closed unless the fleet moves to an org | GitHub docs, "Creating rulesets for repositories in your organization" |
 
 ## Design
 
@@ -167,6 +175,67 @@ installed package with a version; it does not need a public index. Public
 PyPI stays because it is free, already wired, and what Renovate
 understands — but a move to a private index would change nothing above.
 
+### The sync mechanism: from merge to synthesis
+
+The template's actual job is continuous fleet synchronization with the
+template as authority. copier's design center is one-time scaffolding with
+occasional improvements *merged in later* — regenerate, diff, re-apply with
+conflict markers, and when that fails, `recopy` and lose the algorithm.
+Every guard this repo has grown — sentinels, seeded-once lists,
+seeded-change reports, render hygiene, migration scripts, the update
+regression check — is hand-built machinery forcing a merge tool to act
+like an authority. The friction is structural, not a usage problem.
+
+Worse, **copier's merge semantics leak through to downstream agents**.
+Template-owned files arrive as ordinary, editable working-tree files whose
+upstream changes come as merges; an agent reading the repo infers "file I
+may edit", and the sentinel prose itself narrates the merge mechanics
+("kept across copier update"), which frames divergence as a supported
+workflow. The ownership model is communicated only as prose convention —
+the one channel agents reliably discount. A synthesis model communicates it
+in-band, in the channels agents actually respect: a generated-file header,
+a read-only bit, and a CI check that fails on any hand edit.
+
+Three tool families exist for the job. Template-and-merge (copier, cruft,
+the template-sync GitHub Actions) — copier is already the best of this
+family; the others are strictly weaker, so there is no better *copier*.
+Push-based central settings — closed to a personal account (see verified
+facts). And **config synthesis from a versioned package** — the projen
+model: managed files are generated from a versioned dependency, read-only,
+anti-tampered by CI, and updated by bumping the dependency and re-running
+synthesis. No 3-way merge exists in this model; a local edit to a managed
+file does not get merged around, it fails CI.
+
+This fleet has already independently built one-third of that model and it
+is the third that works best: `gen_config_surface.py --check` *is*
+synthesis with an anti-tamper check, versioned by the installed core. The
+conclusion is to finish the move rather than shop for a better merge tool:
+
+- Core's wheel grows a **`pvl sync`** command; the template-owned files
+  become synthesized outputs of templates shipped as package data (the
+  existing `.jinja` files, largely as-is).
+- Downstream CI asserts **`pvl sync --check`**; a fleet update is a
+  Renovate pin bump plus one deterministic regeneration commit —
+  conflict-free by construction.
+- Domain-owned and seeded-once files are simply *not synthesized* — the
+  existing `_skip_if_exists`/sentinel inventory is exactly the ownership
+  metadata the synthesizer needs, and the DOMAIN blocks become real escape
+  hatches instead of merge conventions.
+- CI logic gets a complementary shrink lever: downstream workflow files
+  become few-line stubs calling reusable workflows in this (public) repo
+  at a pinned tag, which Renovate bumps like any Action pin — workflow
+  *logic* leaves the file-sync problem entirely.
+- copier's remaining role is day-0 scaffolding — its actual design
+  center — until `pvl new` (synthesis from an empty answers file) replaces
+  even that; `copier update` retires with the last migrated file class,
+  and with it the merge-conflict bug class (#251 and kin) and most future
+  `UPGRADING.md` entries.
+
+This composes with the other two conclusions rather than competing: one
+repository, whose wheel carries the library *and* the way of working —
+the package boundary, already established as the drift fence, becomes the
+distribution channel for the entire template authority.
+
 **B. Monorepo.** One repository holding both halves. Removes criterion 1's
 cost (one tree: an API change, its operator docs, and the example
 implementation are one PR) and criterion 2's (one tracker, trivially). The
@@ -194,7 +263,7 @@ unreleased core code; the floor-vs-source guard exists to keep that visible.
 
 ### Decision
 
-Two conclusions, one per boundary:
+Three conclusions:
 
 **Merge the repositories (Option B)** — the repo boundary is accidental —
 with C′ (tracker consolidation) executed first as the reversible opening
@@ -213,11 +282,26 @@ divergence defense away in anti-divergence's name. The half of the split
 that hurt was the one built first (the repo split); the half that looks
 removable is the one doing the work.
 
+**Replace merge with synthesis as the sync mechanism** — the target
+architecture is the projen pattern implemented on this stack: template
+authority shipped inside the core wheel (`pvl sync` + `pvl sync --check`),
+copier demoted to day-0 scaffolding and ultimately replaced by `pvl new`.
+This is stated as the destination, not an aspiration: it is the largest
+work item in this document, and that is a sequencing fact, not a reason to
+stay — the migration runs file class by file class, each class moved
+permanently deleting its drift surface, its merge conflicts, and its
+`UPGRADING.md` tail, with the config artifacts already migrated today as
+proof the contract works.
+
 | Decision | Choice |
 |----------|--------|
 | Repository layout | One repository holding both halves |
 | Core packaging | Stays an installed wheel with its own version line — the drift fence and the conflict-free propagation channel; never rendered into downstream trees |
 | Distribution index | Public PyPI retained as plumbing (free, wired, Renovate-native); swappable for a private index without touching the design |
+| Sync mechanism (target) | Synthesis from the core wheel: `pvl sync` generates template-owned files from package-data templates; `pvl sync --check` in downstream CI; fleet update = Renovate pin bump + one regeneration commit |
+| copier's role | Day-0 scaffolding only, until `pvl new` replaces it; `copier update` retires with the last migrated file class |
+| CI logic distribution | Downstream workflows become stubs calling this repo's reusable workflows at a pinned tag (Renovate-bumped); workflow logic leaves file sync entirely |
+| Ownership signalling to agents | In-band, machine-enforced (generated-file header, read-only bit, failing `--check`) instead of prose sentinels narrating merge mechanics |
 | Merged-repo identity | Keep `fastmcp-server-template` (name and root layout): the only shape where the fleet's `_src_path` and the documented `copier copy` command survive with zero migration; merging into `pvl-core` or a new name puts every downstream on rename redirects for no benefit |
 | Library placement | Nested tree (e.g. `core/`), template stays at the root; one `_exclude` entry keeps it out of renders — smaller change than `_subdirectory`, which would move every template file |
 | Tag namespaces | Template keeps `v*` (copier-visible, PEP 440-valid); core moves to `pvl-core-v*` (PEP 440-invalid, copier-invisible), via PSR `tag_format` plus a one-time dual tag |
@@ -243,6 +327,17 @@ removable is the one doing the work.
   merged repo before the first post-merge core release; until then core can
   still release from the old repo, which stays intact (archived, not
   deleted) until the migration completes.
+- **The synthesis migration is the largest work item here** — a small
+  synthesizer plus porting every file class. Contained by the increment
+  rule (a class at a time, each independently shippable and valuable) and
+  by reuse: the `.jinja` templates move into the wheel largely as-is, the
+  ownership inventory already exists (`_skip_if_exists`, `_exclude`,
+  sentinels), and the bootstrap chicken-and-egg (a fresh project needs
+  core to synthesize) is already solved by `gen_config_surface.py`'s
+  `uv run --with` re-exec trick.
+- **projen itself was considered and set aside**: adopting it would bring
+  jsii/npm tooling into a pure-Python fleet; the pattern matters, not the
+  tool, and the pattern is already half-implemented natively here.
 - **This document itself renders nowhere**: it lives under
   `docs/superpowers/`, which `copier.yml` `_exclude`s, so no downstream sees
   it and no Vale/mkdocs surface changes.
@@ -270,6 +365,17 @@ halves releasable:
 6. **Paper cutover** — `CONTRIBUTING.md` routing rewrite, labels/rulesets/
    issue-forms merge, pvl-core's `docs/` (ADRs, specs, superpowers) moved
    in, `UPGRADING.md` policy extended to say which core changes get entries.
+7. **Synthesis migration** — runs after (or overlapping) the merge, file
+   class by file class, each class its own issue: `pvl sync` skeleton in
+   core reusing the existing `.jinja` templates as package data, with the
+   config artifacts (already synthesized today) as the first class carried
+   over; then workflows — either as synthesized stubs calling this repo's
+   reusable workflows at a pinned tag, or synthesized whole — then docs
+   scaffolding, packaging files, and agent-instruction files. A class is
+   "migrated" when its files carry the generated header, `pvl sync
+   --check` gates them in downstream CI, and they are dropped from
+   copier's render surface. `copier update` retires with the last class;
+   day-0 scaffolding stays on copier until `pvl new` exists.
 
 ## Open questions
 
