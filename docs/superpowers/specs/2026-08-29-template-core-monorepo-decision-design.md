@@ -3,10 +3,8 @@
 **Date:** 2026-08-29 (revised same day with the owner's weighting of the criteria)
 **Closes:** #507 (investigate merging fastmcp-server-template and fastmcp-pvl-core into one repository)
 **Does not cover:** performing the migration (each step in Sequencing becomes
-its own follow-up issue after this document is ratified); contacting the
-downstream projects (their preference is recorded as an open question);
-changes to either half's release *model* beyond what the merge itself
-requires.
+its own follow-up issue after this document is ratified); changes to either
+half's release *model* beyond what the merge itself requires.
 
 ## Problem
 
@@ -40,10 +38,22 @@ separate tag namespaces (mechanics verified below). Adoption lag: it is
 already near zero (same-day in every recent case) because one owner drives
 both repos; nothing needed fixing there.
 
-The question is therefore: does one repository holding both halves remove
-the coupling and reporting costs without losing independent PyPI versioning
-of the library, a working `copier copy gh:pvliesdonk/fastmcp-server-template`,
-and independent release cadences?
+Two pieces of owner context bound the whole analysis. First, **every
+downstream consumer is the owner's own**: the fleet is a family of MCP
+servers with different domain purposes that share the fastmcp wrapper code,
+the CI and release infrastructure, and the documentation scaffolding — and
+the prime directive for the family is **anti-divergence**: a fix to one must
+reach all, and they must stay similar in appearance and behavior. There is
+no external consumer whose expectations constrain the design. Second, that
+prime directive is what produced the current split in the first place: the
+shared logic became a package (pvl-core) and the shared scaffolding became
+the template.
+
+The question is therefore twofold: does one repository holding both halves
+remove the coupling and reporting costs without losing a working
+`copier copy gh:pvliesdonk/fastmcp-server-template` and independent release
+cadences — and, deeper, does the shared logic even need to *be* a package,
+or could it be integral to the template?
 
 ## Verified facts the design rests on
 
@@ -59,7 +69,8 @@ and independent release cadences?
 | pvl-core releases via python-semantic-release, `tag_format = "v{version}"`, PyPI publish in its release workflow; the template's `template-release.yml` derives versions with `git describe --tags --match 'v*'` — a glob a `pvl-core-v*` tag does not match, so the template's release machinery survives the merge unchanged | pvl-core `pyproject.toml` `[tool.semantic_release]`; `template-release.yml` version-compute step |
 | Every downstream's `_src_path` is the repo-level URL `gh:pvliesdonk/fastmcp-server-template` (consumed by `copier-update.yml.jinja:81-88`); `_subdirectory` is read from the template's config at the ref being rendered, so an internal layout change needs no downstream edits — but a repo *rename* would put every downstream on GitHub redirects | copier `_template.py:504-513`, `_main.py:1015`; `copier.yml` (no `_subdirectory` today) |
 | `copier.yml`'s `_exclude` already replaces copier's defaults wholesale and excludes template-repo-only trees (`docs/superpowers`, `scripts/tests`, …) — a nested library tree is one more entry | `copier.yml:317-350` |
-| The floor in `pyproject.toml.jinja` (`"fastmcp-pvl-core>=5.0.0,<6"`) must keep existing under any option: downstreams install core from PyPI, so a merged repo replaces the floor-bump *PR* with a floor-vs-source consistency guard, not with nothing | `pyproject.toml.jinja:55` and its 37-line floor-history comment; `copier.yml:48-60` `_tasks`/`_migrations` install core from PyPI at scaffold time |
+| The floor in `pyproject.toml.jinja` (`"fastmcp-pvl-core>=5.0.0,<6"`) must keep existing while core is an installed package: downstreams install core from an index, so a merged repo replaces the floor-bump *PR* with a floor-vs-source consistency guard, not with nothing | `pyproject.toml.jinja:55` and its 37-line floor-history comment; `copier.yml:48-60` `_tasks`/`_migrations` install core from PyPI at scaffold time |
+| The template already needs a whole apparatus to defend the files that ARE integral to it: sentinel markers (`DOMAIN-*`, "TEMPLATE-OWNED — DO NOT EDIT"), the `_skip_if_exists` seeded-once list, `scripts/report_seeded_changes.py` diffing downstream edits to seeded files, the structural gate, and the `copier update` 3-way merge arbitrating every divergence. None of this machinery is needed for code that lives in site-packages | `copier.yml:122-220`; `scripts/report_seeded_changes.py`; `REVIEW.md`/`AGENTS.md.jinja` sentinel conventions; render-hygiene notes in `CLAUDE.md` |
 
 ## Design
 
@@ -67,13 +78,19 @@ and independent release cadences?
 
 The criteria, in the owner's order of weight:
 
-1. **One product, one home** — docs and example implementation next to the
+1. **Anti-divergence across the family** — a fix to one downstream must
+   reach all, identically; the fleet stays uniform in behavior and
+   appearance. This is the prime directive the whole architecture serves.
+2. **One product, one home** — docs and example implementation next to the
    API they document; changes spanning API + docs + example land atomically.
-2. **One place to report** — a downstream files one issue; cross-half impact
+3. **One place to report** — a downstream files one issue; cross-half impact
    is a label, not a routing decision.
-3. Must-preserves: independent PyPI versioning; `copier copy gh:…` keeps
-   working; independent release cadences.
-4. Non-factors: release-train interleaving, cadence mismatch, adoption lag.
+4. Must-preserves: `copier copy gh:…` keeps working; independent release
+   cadences.
+5. Non-factors: release-train interleaving, cadence mismatch, adoption lag —
+   and, since every consumer is the owner's, *where* the wheel is served
+   from (public PyPI is plumbing, not a constraint; a private index or
+   git-tag installs would serve equally).
 
 ### The options against that weighing
 
@@ -97,16 +114,65 @@ change in two repos. Insufficient alone, but it is **independently
 shippable and reversible**, which makes it the natural first step of B's
 migration rather than an alternative to it.
 
-**D. Monorepo with core vendored or as a path dependency.** Rejected:
-vendoring forfeits independent PyPI versioning, and a path dependency
-cannot be expressed in the `pyproject.toml` downstreams install from PyPI.
+**D. Core integral to the template — no package at all.** The deepest
+variant of the question: since every consumer is the owner's, nothing
+*forces* core to be a distributable package; its code could ship as
+template-owned files rendered into every downstream and propagated by
+`copier update`. Rejected, and the reason is the strongest conclusion of
+this investigation — see "Why core stays a package" below. In short:
+the package boundary, not the repo boundary, is what actually enforces
+the anti-divergence prime directive.
+
+### Why core stays a package: the drift fence
+
+There are two separate boundaries in today's architecture: the **repo**
+boundary (two GitHub repositories) and the **package** boundary (core is an
+installed wheel, not files in the downstream tree). This investigation
+concludes the repo boundary is accidental and should go — but the package
+boundary is load-bearing, for three reasons:
+
+1. **The fence hierarchy.** The verified-facts table lists the apparatus the
+   template needs to defend the files that *are* integral: sentinels,
+   seeded-once lists, seeded-change reports, the structural gate, and
+   `copier update`'s 3-way merge arbitrating every divergence. All of it
+   exists because template-owned files sit in the downstream working tree,
+   where agents (and humans) can and do edit them — agents in particular
+   love deviating from template-owned code as "project divergence". Code in
+   site-packages needs none of that machinery: an agent working in a
+   downstream *cannot* "slightly adapt" `fastmcp_pvl_core`, because it is
+   not in the repository. The import boundary is the one fence agents do
+   not cross. Making core integral would move its entire codebase from
+   behind that fence into the sentinel-and-merge world, multiplying the
+   drift surface by the size of core — in the name of anti-divergence.
+
+2. **Propagation.** A core fix today reaches the fleet as: release core →
+   Renovate opens a green, conflict-free version-bump PR on every
+   downstream — conflict-free *because* no downstream can hold local edits
+   to core code. Integral propagation would be: template release → N
+   `copier update` runs, each a 3-way merge against files an agent may have
+   touched, with conflicts landing on a human. For "fix one, fix all,
+   identically", the pin bump is strictly better. A package pin also
+   guarantees the same *bytes execute* everywhere; a rendered file only
+   guarantees the same starting text.
+
+3. **What integrality would quietly lose.** Core's test suite and typing
+   run once, in core's own CI, against the exact artifact downstreams
+   install; integral core code would have its tests either duplicated into
+   every downstream or dropped. And the version floor — today a meaningful
+   compatibility contract with a documented history — would dissolve into
+   "whichever template version last rendered you".
+
+The corollary: PyPI itself is demoted to plumbing. The design needs *an*
+installed package with a version; it does not need a public index. Public
+PyPI stays because it is free, already wired, and what Renovate
+understands — but a move to a private index would change nothing above.
 
 **B. Monorepo.** One repository holding both halves. Removes criterion 1's
 cost (one tree: an API change, its operator docs, and the example
 implementation are one PR) and criterion 2's (one tracker, trivially). The
 must-preserves survive, on verified mechanics:
 
-- *Independent PyPI versioning:* core keeps PSR and its own version line;
+- *Independent core versioning:* core keeps PSR and its own version line;
   only its `tag_format` changes (`pvl-core-v{version}`), with a one-time
   dual tag so PSR can find its last release `[unverified: from PSR docs and
   config reading, not tested]`.
@@ -128,17 +194,30 @@ unreleased core code; the floor-vs-source guard exists to keep that visible.
 
 ### Decision
 
-**Recommendation: Option B — merge the repositories**, with C′ (tracker
-consolidation) executed first as the reversible opening step. Under the
-stated weighing this is not close: the two dominant costs are removed only
-by B, every cost B introduces is a one-time mechanical migration or a small
-permanent guard, and all three must-preserves survive on mechanics verified
-above rather than assumed. The previous revision's recommendation (C) stands
-corrected: it optimized a cost that carries no weight.
+Two conclusions, one per boundary:
+
+**Merge the repositories (Option B)** — the repo boundary is accidental —
+with C′ (tracker consolidation) executed first as the reversible opening
+step. Under the stated weighing this is not close: the coupling and
+reporting costs are removed only by B, every cost B introduces is a
+one-time mechanical migration or a small permanent guard, and the
+must-preserves survive on mechanics verified above rather than assumed. The
+previous revision's recommendation (C) stands corrected: it optimized a
+cost that carries no weight.
+
+**Keep core a package (reject D)** — the package boundary is load-bearing.
+It is the drift fence and the conflict-free propagation channel, which
+makes it the mechanism that actually delivers the anti-divergence prime
+directive; dissolving it into the template would trade the family's best
+divergence defense away in anti-divergence's name. The half of the split
+that hurt was the one built first (the repo split); the half that looks
+removable is the one doing the work.
 
 | Decision | Choice |
 |----------|--------|
 | Repository layout | One repository holding both halves |
+| Core packaging | Stays an installed wheel with its own version line — the drift fence and the conflict-free propagation channel; never rendered into downstream trees |
+| Distribution index | Public PyPI retained as plumbing (free, wired, Renovate-native); swappable for a private index without touching the design |
 | Merged-repo identity | Keep `fastmcp-server-template` (name and root layout): the only shape where the fleet's `_src_path` and the documented `copier copy` command survive with zero migration; merging into `pvl-core` or a new name puts every downstream on rename redirects for no benefit |
 | Library placement | Nested tree (e.g. `core/`), template stays at the root; one `_exclude` entry keeps it out of renders — smaller change than `_subdirectory`, which would move every template file |
 | Tag namespaces | Template keeps `v*` (copier-visible, PEP 440-valid); core moves to `pvl-core-v*` (PEP 440-invalid, copier-invisible), via PSR `tag_format` plus a one-time dual tag |
@@ -194,9 +273,11 @@ halves releasable:
 
 ## Open questions
 
-- Whether the four consuming projects would prefer the library and template
-  pinned at one version `[unverified: owner/downstream input; nothing in
-  either repo records a preference]`. The merge does not force it —
-  independent versioning is preserved — but makes it offerable later.
 - The PSR `tag_format` migration mechanics `[unverified]` — resolved by
   Sequencing step 2 before anything irreversible happens.
+
+(An earlier revision asked whether the consuming projects would prefer the
+library and template pinned at one version; the question dissolved once the
+owner confirmed every downstream is their own. Single-versioning remains
+possible but undesirable: it would make every template micro-release churn
+a meaningless core bump through the fleet.)
