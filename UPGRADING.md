@@ -1391,6 +1391,29 @@ Two things NOT to do:
   prose uses them outside code, which Vale does not spell-check. If your
   own prose does, they belong in your `Base/accept.txt`.
 
-## Unreleased
+## Unreleased - @claude responder can review and fix
 
-_Nothing yet._
+### Drop any local #535 workaround before updating
+
+`claude.yml` now carries the working reviewer configuration itself (the
+pinned 2.1.197 CLI, the `Task` grant, the project-environment setup), can
+commit and open pull requests when asked ("@claude please fix this"), and
+checks out full history so reviews compute the correct three-dot range
+(template#536).
+
+Do by hand only if it applies:
+
+- If you patched `.github/workflows/claude.yml` locally to work around
+  template#535 (as `markdown-vault-mcp#1194` did), revert the local edits
+  before running `copier update` — the template re-renders the file and a
+  local variant conflicts. Keep the template's version:
+  `git checkout <template-base> -- .github/workflows/claude.yml` or simply
+  accept the incoming side in the merge.
+- The responder's workflow permissions now include `contents: write`. If
+  your repository must keep @claude read-only, that is a deliberate local
+  divergence to carry (and re-apply after every update) — or ask for a
+  template answer/flag upstream instead.
+- Because the responder now carries write capability, it answers only
+  `@claude` mentions from the repository's own people (author association
+  OWNER, MEMBER, or COLLABORATOR). An outside contributor's `@claude`
+  mention is ignored by design — no run starts, nothing is posted.
