@@ -331,6 +331,7 @@ _exclude:
   - ".github/renovate.json"                    # upstream detector config — template-repo only
   - ".github/workflows/template-renovate.yml"  # upstream Renovate runner — template-repo only
   - ".github/workflows/template-labels.yml"  # this repo's label-ensure — template-repo only
+  - ".github/workflows/reusable-*.yml"  # workflow_call implementations the rendered stubs call — served from this repo, never rendered (#538)
   - "docs/superpowers"
   - "UPGRADING.md"                             # template-consumer upgrade notes — template-repo only
   - "uv.lock"                                 # generated projects create their own
