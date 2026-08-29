@@ -103,7 +103,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          fetch-depth: 1
+          # Full history: the code-review skill computes a three-dot range via
+          # `git merge-base`, which does not exist in a depth-1 clone — the
+          # reviewer then silently falls back to a two-dot diff that includes
+          # base-branch drift (template#536).
+          fetch-depth: 0
 
       - name: Set up project environment
         # Gives the reviewer a working venv so its targeted `uv run` checks
