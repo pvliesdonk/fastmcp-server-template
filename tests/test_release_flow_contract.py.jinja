@@ -63,7 +63,6 @@ NOTES_PUBLISH_WORKFLOW = (
 )
 DOCS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "docs.yml"
 UNSTABLE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "unstable.yml"
-CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 COVERAGE_STATUS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "coverage-status.yml"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 {%- if include_claude_plugin %}
@@ -1473,14 +1472,13 @@ def test_committed_pins_name_the_last_stable_or_the_prepared_version() -> None:
 @pytest.mark.parametrize(
     ("workflow", "label"),
     [
-        (CI_WORKFLOW, "ci.yml (own-branch path)"),
         (COVERAGE_STATUS_WORKFLOW, "coverage-status.yml (fork-PR fallback)"),
     ],
 )
 def test_every_codecov_patch_poster_posts_under_all_outcomes(
     workflow: Path, label: str
 ) -> None:
-    """Both posters of ``codecov/patch`` report something, always.
+    """Every poster of ``codecov/patch`` this repo carries reports, always.
 
     `extra_required_checks` lets a project make ``codecov/patch`` a required
     context.  A required check that never reports does not turn a pull request
@@ -1489,13 +1487,15 @@ def test_every_codecov_patch_poster_posts_under_all_outcomes(
     and "post nothing" are not equivalent failure modes, and the difference is
     invisible in a green run.
 
-    Two workflows can post this context: `ci.yml` for own-branch pull requests
-    and `coverage-status.yml` for fork ones, where the read-only fork token
-    forces the `workflow_run` detour.  They drifted once (#476): `ci.yml`
-    treated always-report as an invariant while the fallback skipped its
-    posting step whenever the artifact download failed.  Asserted rather than
-    documented, because the two halves live in different files and nothing
-    else couples them.
+    Two posters exist: the own-branch one in the CI gate's ``test`` job —
+    which lives in the template repository's ``reusable-ci.yml`` since the
+    rendered ``ci.yml`` became a stub (template#538), and is asserted by the
+    template's own test suite there — and `coverage-status.yml` for fork
+    pull requests, where the read-only fork token forces the `workflow_run`
+    detour.  They drifted once (#476): the gate treated always-report as an
+    invariant while the fallback skipped its posting step whenever the
+    artifact download failed.  This repo can only introspect the half it
+    carries, so only the fallback is asserted here.
     """
     text = workflow.read_text(encoding="utf-8")
     poster = text.index("name: Post codecov/patch status")
@@ -1520,8 +1520,8 @@ def test_release_tags_are_visible_when_the_changelog_records_releases() -> None:
     tag-coupled assert silently skips, and the suite green-lights states it
     never examined.  ``CHANGELOG.md`` version sections are the
     tag-independent witness that releases exist; when they do, at least one
-    ``v*`` tag must be visible — ``ci.yml``'s checkouts fetch tags for
-    exactly this.  A fresh render (no version sections) keeps its skip, so
+    ``v*`` tag must be visible — the CI gate's ``test``-job checkout
+    (``reusable-ci.yml``, template#538) fetches tags for exactly this.  A fresh render (no version sections) keeps its skip, so
     template-ci's smoke gate stays green.
     """
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")

@@ -2,8 +2,8 @@ name: Reusable CI
 
 # The fleet's CI gate, called by the thin `ci.yml` stub the template renders
 # into every project (template#538). This file is template-repo only — the
-# `reusable-*.yml` entry in copier.yml's `_exclude` keeps it out of renders —
-# and downstreams reach it as
+# `reusable-*.yml` entry in the template's `_exclude` list keeps it out of
+# renders — and downstreams reach it as
 #   uses: pvliesdonk/fastmcp-server-template/.github/workflows/reusable-ci.yml@<sha>
 # with the <sha> rendered from the template version the project is on.
 # The stub keeps two jobs on its own side: `pr-title` (it runs the calling

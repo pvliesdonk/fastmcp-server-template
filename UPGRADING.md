@@ -1391,6 +1391,31 @@ Two things NOT to do:
   prose uses them outside code, which Vale does not spell-check. If your
   own prose does, they belong in your `Base/accept.txt`.
 
-## Unreleased
+## Unreleased - ci.yml becomes a stub calling the template's reusable gate
 
-_Nothing yet._
+### Port local ci.yml edits before updating
+
+The rendered `ci.yml` is now a ~95-line stub: it keeps the triggers, the
+`pr-title` job, and the required `CI Success` aggregate, and calls the CI
+gate hosted in the template repository
+(`reusable-ci.yml`, pinned to the template commit your project renders
+from). `copier update` rewrites the whole file.
+
+No action is needed for a stock `ci.yml`: the `CODECOV_TOKEN` secret name
+and the required `CI Success` ruleset context are unchanged, and CI
+behavior is the same jobs running from the called workflow.
+
+Do by hand only if it applies:
+
+- If you added your own jobs or steps to `ci.yml`, move them to a separate
+  workflow (or into the stub's own job list) before updating, or rescue
+  them afterwards with `git show HEAD:.github/workflows/ci.yml`. Upstream
+  changes to the shared jobs belong in the template's `reusable-ci.yml`.
+- If your `extra_required_checks` answer names individual CI jobs (for
+  example `Lint` or `Test (Python 3.12)`), those check runs are now named
+  through the caller job (`CI / ci / Lint` style). Re-check the exact names
+  on the first post-update pull request and update the answer; the default
+  `CI Success` context is unaffected.
+- A detached fork (FORKING.md) should vendor the called workflow — the
+  detach guide gained a step that downloads `reusable-ci.yml` into the fork
+  and repoints the stub's `uses:` to the local copy.

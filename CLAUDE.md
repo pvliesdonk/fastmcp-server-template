@@ -79,14 +79,16 @@ create new projects.
    vale sync    # writes style packs into the tree — after step 4, never before
    vale --glob='!docs/{superpowers,design,decisions}/**' docs README.md
    ```
-   Match the Vale version pinned in the rendered `.github/workflows/ci.yml`;
-   a different local binary can report differently.  The file set and glob
-   above are a convenience copy — `template-ci` extracts the version, file
-   set and glob from that rendered `ci.yml` rather than restating them, so
-   those three cannot drift from what a downstream runs.  One divergence is
-   deliberate: a downstream's `ci.yml` sets `filter_mode: added`, failing
-   only on findings on lines its PR touched, while this gate lints the whole
-   set — the template owns this prose, so all of it must stay clean.
+   Match the Vale version pinned in `.github/workflows/reusable-ci.yml`
+   (the CI gate every downstream runs — the rendered `ci.yml` is a stub
+   that calls it, #538); a different local binary can report differently.
+   The file set and glob above are a convenience copy — `template-ci`
+   extracts the version, file set and glob from `reusable-ci.yml` rather
+   than restating them, so those three cannot drift from what a downstream
+   runs.  One divergence is deliberate: the gate's vale job sets
+   `filter_mode: added`, failing only on findings on lines a PR touched,
+   while this gate lints the whole set — the template owns this prose, so
+   all of it must stay clean.
 6. Verify the generated project's own gate passes:
    ```bash
    cd /tmp/smoke

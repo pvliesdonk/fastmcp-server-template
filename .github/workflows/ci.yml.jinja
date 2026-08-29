@@ -14,11 +14,13 @@ jobs:
   ci:
     # The gate itself lives in the template repository as a reusable workflow
     # (template#538); this stub carries only the per-project wiring. The pin
-    # is the template commit this project was rendered from — `copier update`
-    # re-renders it, so CI logic updates arrive as a one-line diff here
-    # instead of a whole-file merge. The called jobs run in THIS repository's
-    # context: they check out this repo and use its rendered
-    # ./.github/actions/setup-project-env composite.
+    # is the template commit this project was rendered from — a template
+    # update re-renders it, so CI logic updates arrive as a one-line diff
+    # here instead of a whole-file merge. The called jobs run in THIS
+    # repository's context: they check out this repo and use its rendered
+    # ./.github/actions/setup-project-env composite. Detaching from the
+    # template? FORKING.md's detach steps vendor the called workflow into
+    # this repository.
     #
     # `permissions:` here is the union of what the called jobs need; each
     # job inside the reusable workflow narrows it further per-job.

@@ -62,6 +62,21 @@ What this removes and why:
 `coverage-status.yml`, `docs.yml`, `release-prepare.yml`, `release.yml`, and
 `release-notes-publish.yml`. (The release pair still needs the `RELEASE_TOKEN`
 secret; only its `copier-update` justification is gone.
+
+`ci.yml` is a thin stub whose jobs run from the template repository's
+`reusable-ci.yml` at a pinned commit. That pin works forever, but a
+standalone fork should carry its own gate — vendor it:
+
+```bash
+ref=$(sed -nE 's#.*reusable-ci\.yml@([0-9a-f]{40}).*#\1#p' .github/workflows/ci.yml)
+curl -fsSL -o .github/workflows/reusable-ci.yml \
+  "https://raw.githubusercontent.com/pvliesdonk/fastmcp-server-template/${ref}/.github/workflows/reusable-ci.yml"
+sed -i.bak "s#pvliesdonk/fastmcp-server-template/.github/workflows/reusable-ci.yml@${ref}#./.github/workflows/reusable-ci.yml#" \
+  .github/workflows/ci.yml && rm -f .github/workflows/ci.yml.bak
+```
+
+A same-repository reusable-workflow call takes the `./.github/workflows/…`
+path form with no `@ref`; the vendored file needs no edits.
 `release-notes-publish.yml` is deterministic — no Claude dependency — and
 still redeploys canonical `docs/releases/` pages on merge.) The remaining
 template-owned skills under `.agents/skills/` (`authoring-issues-prs`,

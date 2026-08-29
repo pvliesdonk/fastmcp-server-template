@@ -7,9 +7,10 @@ prose free of new vocabulary, or extend the fixture set when it happens.
 
 `Template/accept.txt` is template-owned and re-rendered, so a term the
 template's prose needs arrives with that prose.  Every term in it must occur
-as a whole word in prose Vale actually spell-checks — the rendered file set
-and glob the rendered `ci.yml` hands to Vale, with code spans and fenced
-blocks removed (Vale skips those) — or it is dead vocabulary that hides a
+as a whole word in prose Vale actually spell-checks — the file set and glob
+`reusable-ci.yml` (the gate every downstream runs, #538) hands to Vale, with
+code spans and fenced blocks removed (Vale skips those) — or it is dead
+vocabulary that hides a
 real spelling hit downstream.  `Base/accept.txt` ships as an empty seed for
 project terms; `.vale.ini` stays seeded and activates both layers.
 """
@@ -44,11 +45,13 @@ def _terms(path: Path) -> list[str]:
 
 
 def _vale_inputs(rendered: Path) -> tuple[list[str], set[str]]:
-    """(files, excluded top-level docs dirs) from the rendered ci.yml Vale step —
-    the same source template-ci extracts them from, so this test cannot lint a
-    narrower or wider set than a downstream does."""
+    """(files, excluded top-level docs dirs) from reusable-ci.yml's Vale step —
+    the gate every downstream runs (#538; the rendered ci.yml is a stub that
+    calls it) and the same source template-ci extracts from, so this test
+    cannot lint a narrower or wider set than a downstream does."""
+    del rendered  # the Vale inputs live in this repo, not the render
     ci = yaml.safe_load(
-        (rendered / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        (REPO / ".github/workflows/reusable-ci.yml").read_text(encoding="utf-8")
     )
     for job in ci["jobs"].values():
         for step in job.get("steps", []):
@@ -58,7 +61,7 @@ def _vale_inputs(rendered: Path) -> tuple[list[str], set[str]]:
                 m = _EXCLUDE_GLOB_RE.search(str(with_.get("vale_flags", "")))
                 excluded = set(m.group(1).split(",")) if m else set()
                 return files, excluded
-    raise AssertionError("no vale-action step in the rendered ci.yml")
+    raise AssertionError("no vale-action step in reusable-ci.yml")
 
 
 def _linted_prose(rendered: Path) -> str:
