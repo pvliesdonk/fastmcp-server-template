@@ -6,6 +6,9 @@ name: Reusable CI
 # renders — and downstreams reach it as
 #   uses: pvliesdonk/fastmcp-server-template/.github/workflows/reusable-ci.yml@<sha>
 # with the <sha> rendered from the template version the project is on.
+# That pin makes SHA reachability on this repo's main LOAD-BEARING: a
+# history rewrite (force-push, filter-repo) would silently break every
+# downstream's CI until its next template update. Never rewrite main.
 # The stub keeps two jobs on its own side: `pr-title` (it runs the calling
 # repo's scripts/check_pr_title.py) and the `ci-success` aggregate whose
 # "CI Success" name is the context the shipped rulesets require. Everything

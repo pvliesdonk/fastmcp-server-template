@@ -1521,7 +1521,8 @@ def test_release_tags_are_visible_when_the_changelog_records_releases() -> None:
     never examined.  ``CHANGELOG.md`` version sections are the
     tag-independent witness that releases exist; when they do, at least one
     ``v*`` tag must be visible — the CI gate's ``test``-job checkout
-    (``reusable-ci.yml``, template#538) fetches tags for exactly this.  A fresh render (no version sections) keeps its skip, so
+    (``reusable-ci.yml``, template#538) fetches tags for exactly this.  A
+    fresh render (no version sections) keeps its skip, so
     template-ci's smoke gate stays green.
     """
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")

@@ -10,9 +10,9 @@ template's prose needs arrives with that prose.  Every term in it must occur
 as a whole word in prose Vale actually spell-checks — the file set and glob
 `reusable-ci.yml` (the gate every downstream runs, #538) hands to Vale, with
 code spans and fenced blocks removed (Vale skips those) — or it is dead
-vocabulary that hides a
-real spelling hit downstream.  `Base/accept.txt` ships as an empty seed for
-project terms; `.vale.ini` stays seeded and activates both layers.
+vocabulary that hides a real spelling hit downstream.  `Base/accept.txt`
+ships as an empty seed for project terms; `.vale.ini` stays seeded and
+activates both layers.
 """
 
 from __future__ import annotations
