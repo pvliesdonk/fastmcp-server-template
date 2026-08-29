@@ -1,172 +1,202 @@
 # One repository for the template and pvl-core: investigation and decision
 
-**Date:** 2026-08-29
+**Date:** 2026-08-29 (revised same day with the owner's weighting of the criteria)
 **Closes:** #507 (investigate merging fastmcp-server-template and fastmcp-pvl-core into one repository)
-**Does not cover:** implementing any option (a plan under `docs/superpowers/plans/`
-follows only if the recommendation is ratified); contacting the downstream
-projects (their preference is recorded as an open question); changes to either
-repo's release model beyond what the decision itself requires.
+**Does not cover:** performing the migration (each step in Sequencing becomes
+its own follow-up issue after this document is ratified); contacting the
+downstream projects (their preference is recorded as an open question);
+changes to either half's release *model* beyond what the merge itself
+requires.
 
 ## Problem
 
-The template and `fastmcp-pvl-core` change in lockstep but live in two
-repositories with two release trains. Issue #507 lists five recurring costs —
-floor-bump PR churn, the adoption-lag window in which downstream Renovate
-proposes a library version the template cannot import, render-time import
-coupling (`gen_config_surface.py`), cross-repo design specs, and three-tier
-issue routing — and asks for a decision on whether one repository holding both
-halves removes them without losing three things the split provides:
-independent PyPI versioning of the library, a template that
-`copier copy gh:pvliesdonk/fastmcp-server-template` can point at, and separate
-release cadences.
+The template and `fastmcp-pvl-core` are one product split across two
+repositories. The split is not between two products but through the middle of
+one:
 
-This document records the investigation, weighs four options, and recommends
-one. "Keep two repos" is an acceptable outcome per the issue, and is in fact
-the recommendation — with automation that removes most of the observed cost.
+- **The template is core's documentation.** pvl-core's own `docs/` holds no
+  operator documentation at all — only internal ADRs, specs, and maintainer
+  notes. Everything an operator reads about core's surface (the config env
+  vars, whose help text core itself owns via `server_config_surface`; the
+  auth modes; deployment) exists only as the template's rendered docs site.
+- **The template is core's example implementation.** `server.py.jinja` wires
+  13 core symbols in the blessed order; the rendered project is the reference
+  consumer that shows what core is *for*. Core is not usable without it, and
+  the template is meaningless without core.
+- **A downstream has two places to report problems.** The three-tier routing
+  (`CONTRIBUTING.md` "Where to send fixes", the `authoring-issues-prs`
+  skill) exists largely to explain which of two trackers an observation
+  belongs in — and issues routinely impact both halves (#502 here was the
+  adoption half of pvl-core#283; #446 here carried pvl-core#280's scope
+  fix into the fleet), so the routing decision is often wrong-by-half no
+  matter which tracker is picked.
+
+Two costs named in #507 turn out **not** to matter, and this document weighs
+them accordingly. Release cadence: the template ships often (89 releases in
+19 weeks vs core's 29) because small workflow steps need a release to be
+tried, while core can accumulate — that difference is by design and can
+continue unchanged inside one repository, since the two release trains keep
+separate tag namespaces (mechanics verified below). Adoption lag: it is
+already near zero (same-day in every recent case) because one owner drives
+both repos; nothing needed fixing there.
+
+The question is therefore: does one repository holding both halves remove
+the coupling and reporting costs without losing independent PyPI versioning
+of the library, a working `copier copy gh:pvliesdonk/fastmcp-server-template`,
+and independent release cadences?
 
 ## Verified facts the design rests on
 
 | Fact | How verified |
 |------|--------------|
-| pvl-core shipped 29 stable releases from v0.1.0 (2026-04-20) to v5.1.0 (2026-08-27); the template shipped 89 releases (v1.0.0, same day, to v6.0.0) in the same 19 weeks — a ~3:1 cadence mismatch | `git tag --sort=creatordate` with `git log -1 --format=%cs` per tag in a pvl-core clone; `grep -c '^## v' CHANGELOG.md` here |
-| The template's floor moved 9 times (1.0, 2.0, 3.2, 4.0, 4.10.1, 4.11.0, 4.11.2, 4.11.3, 5.0.0); roughly two-thirds of pvl-core's stable releases required no template change at all | `pyproject.toml.jinja:18-55` floor-history comment; CHANGELOG entries #10, #113, #153, #181, #329, #443, #446, #515 |
-| Adoption lag is already near zero: pvl-core 4.11.0, 4.11.2, 4.11.3, and 5.0.0 were each adopted by a template release **the same day** (v3.3.0 2026-08-13, v5.3.0 2026-08-19, v5.3.1 2026-08-20, v6.0.0 2026-08-26); the largest observed window was the 3.x line: 19 days from 3.0.0 (2026-05-29) to the adopting v2.0.0 (2026-06-17), 14 days counting from the 3.2.0 the new floor named | pvl-core tag dates cross-joined with `CHANGELOG.md` release headings mapping the adoption PRs |
-| The split's real damage has been breakage incidents, not calendar lag: 4.11.1's help-text rewording broke the render idempotency gate the day it shipped (#335/#336), and 5.0.0 turned template main red the day it shipped because `scripts-and-invariants` installed core unbounded (#509) | `template-ci.yml:1651-1662` comment ("an unbounded install picked up 5.0.0 the day it shipped and turned main red"); #336 PR body |
-| Both breakage classes already have merged guards: #336 makes the generator bootstrap resolve the project's full constraint, and #509 caps the scripts-tests install at the template's declared major | `gen_config_surface.py` `ensure_core_available` (constraint parsed at ~L2891); `template-ci.yml:1659-1662` |
-| copier picks the version to copy/update by listing git tags, **silently discarding any tag that does not parse as PEP 440**, and taking the max | copier 9.10.2 `copier/_vcs.py:129-147` (`checkout_latest_tag` filters through `valid_version`, which returns `False` on `InvalidVersion`) |
-| A prefixed tag such as `pvl-core-v5.1.0` is PEP 440-invalid and therefore invisible to copier, while `v5.1.0` is valid — so a monorepo works only if the **library** renames its tag namespace and the template keeps `v*` | `packaging.version.parse("pvl-core-v5.1.0")` raises `InvalidVersion`; `parse("v5.1.0")` == 5.1.0 |
-| pvl-core releases via python-semantic-release with `tag_format = "v{version}"`, publishing to PyPI from its release workflow — the same `v*` namespace the template's `template-release.yml` derives versions from (`git describe --tags --match 'v*'`) | pvl-core `pyproject.toml` `[tool.semantic_release]`; `.github/workflows/template-release.yml` version-compute step |
-| `_subdirectory` is read from the template's config **at the ref being rendered**, and `_src_path` stays the plain repo URL — so a layout move inside the repo does not require downstream `.copier-answers.yml` edits; separately, with a non-root `_subdirectory` copier stops applying its default excludes (this repo already re-lists them explicitly in `_exclude`) | copier `_template.py:504-513`, `_main.py:1015`, `_template.py:331`; `copier.yml:317-326` |
-| The template already runs a self-hosted Renovate ("upstream detector", `.github/renovate.json` + `template-renovate.yml`) with regex custom managers for pins Renovate cannot natively see inside `.jinja` files — but **no manager covers the `fastmcp-pvl-core` floor in `pyproject.toml.jinja`**, so today the floor-bump PR is always hand-made | `.github/renovate.json` (two custom managers: Action pins, knope CLI pin) |
-| Cross-repo spec references are real but small: 12 files in pvl-core name this repo (mostly `docs/superpowers/` specs and plans); this repo's `CLAUDE.md` points at a scaffold spec in a third repo (`markdown-vault-mcp`) | `grep -rl fastmcp-server-template` in the pvl-core clone; `CLAUDE.md` "Spec" section |
-| The two repos' release machinery is structurally different: manual `bump` dispatch + shell-computed version + `promote_upgrading.py` here, PSR there, and knope release-PRs in generated projects | `template-release.yml`; pvl-core `release.yml`; `CLAUDE.md:222-230` |
+| pvl-core's `docs/` contains `adr/`, `specs/`, `superpowers/`, `jobs.md`, `forking.md` — no operator documentation; the template's `docs/configuration.md` content is generated from core's own `server_config_surface` help text | `ls docs` in a pvl-core clone; `scripts/gen_config_surface.py` imports `server_config_surface` (~L585, "owns the help text and tags for every `ServerConfig` field") |
+| `server.py.jinja:16-30` imports 13 symbols from `fastmcp_pvl_core`; `config.py.jinja` and `cli.py.jinja` import more — the rendered project is core's reference consumer | read at HEAD |
+| Cross-repo issue pairs are routine: #502 (template) adopts pvl-core#283; #446 (template) carries pvl-core#280; 12 files in pvl-core reference this repo by name (specs, plans, README, CLAUDE.md) | issue bodies; `grep -rl fastmcp-server-template` in the pvl-core clone |
+| Cadence context (not an argument either way): 29 stable core releases vs 89 template releases in the same 19 weeks; core adoptions were same-day in every recent case (4.11.0→v3.3.0, 4.11.2→v5.3.0, 4.11.3→v5.3.1, 5.0.0→v6.0.0), the largest window being the 3.x line (19 days from 3.0.0) | `git tag --sort=creatordate` in the clone; `CHANGELOG.md` release headings mapping the adoption PRs |
+| The split's incident classes: 4.11.1's help-text rewording broke the render idempotency gate the day it shipped (#335/#336); 5.0.0 turned template main red the day it shipped (#509). Both have merged guards, but both exist *because* template CI installs core from PyPI rather than from source | `template-ci.yml:1651-1662` comment; #336 PR body |
+| copier picks the version to copy/update by listing git tags, **silently discarding any tag that does not parse as PEP 440**, and taking the max | copier 9.10.2 `copier/_vcs.py:129-147` (`checkout_latest_tag` filters through `valid_version`) |
+| A prefixed tag such as `pvl-core-v5.1.0` is PEP 440-invalid and therefore invisible to copier, while `v5.1.0` is valid — so both release trains coexist in one repo if the **library** renames its tag namespace and the template keeps `v*` | `packaging.version.parse("pvl-core-v5.1.0")` raises `InvalidVersion`; `parse("v5.1.0")` == 5.1.0 |
+| pvl-core releases via python-semantic-release, `tag_format = "v{version}"`, PyPI publish in its release workflow; the template's `template-release.yml` derives versions with `git describe --tags --match 'v*'` — a glob a `pvl-core-v*` tag does not match, so the template's release machinery survives the merge unchanged | pvl-core `pyproject.toml` `[tool.semantic_release]`; `template-release.yml` version-compute step |
+| Every downstream's `_src_path` is the repo-level URL `gh:pvliesdonk/fastmcp-server-template` (consumed by `copier-update.yml.jinja:81-88`); `_subdirectory` is read from the template's config at the ref being rendered, so an internal layout change needs no downstream edits — but a repo *rename* would put every downstream on GitHub redirects | copier `_template.py:504-513`, `_main.py:1015`; `copier.yml` (no `_subdirectory` today) |
+| `copier.yml`'s `_exclude` already replaces copier's defaults wholesale and excludes template-repo-only trees (`docs/superpowers`, `scripts/tests`, …) — a nested library tree is one more entry | `copier.yml:317-350` |
+| The floor in `pyproject.toml.jinja` (`"fastmcp-pvl-core>=5.0.0,<6"`) must keep existing under any option: downstreams install core from PyPI, so a merged repo replaces the floor-bump *PR* with a floor-vs-source consistency guard, not with nothing | `pyproject.toml.jinja:55` and its 37-line floor-history comment; `copier.yml:48-60` `_tasks`/`_migrations` install core from PyPI at scaffold time |
 
 ## Design
 
-### The options
+### Weighing
 
-**A. Status quo.** Two repos, hand-made floor-bump PRs. Baseline; every cost
-in the issue persists, though the two worst incident classes (#336, #509) are
-already guarded.
+The criteria, in the owner's order of weight:
 
-**B. Monorepo.** One repository holding both halves. The workable shape, per
-the verified copier mechanics:
+1. **One product, one home** — docs and example implementation next to the
+   API they document; changes spanning API + docs + example land atomically.
+2. **One place to report** — a downstream files one issue; cross-half impact
+   is a label, not a routing decision.
+3. Must-preserves: independent PyPI versioning; `copier copy gh:…` keeps
+   working; independent release cadences.
+4. Non-factors: release-train interleaving, cadence mismatch, adoption lag.
 
-- The merged repo keeps the name `fastmcp-server-template` (or the template
-  half stays at the root of whatever the repo is called), so every
-  downstream's `_src_path: gh:pvliesdonk/fastmcp-server-template` survives
-  unchanged. Either the template stays at the root with the library nested
-  under `lib/` (one `_exclude` entry), or the template moves under
-  `template/` with `_subdirectory` — both verified workable, the first is
-  smaller.
-- The **library** moves its tag namespace: PSR `tag_format =
-  "pvl-core-v{version}"`. Such tags are PEP 440-invalid, so copier keeps
-  seeing only the template's `v*` tags, and `template-release.yml`'s
-  `--match 'v*'` glob (which matches leading-`v` names only) also keeps
-  working unchanged. PSR derives the last version from tags matching its
-  `tag_format`, so the switch needs a one-time dual tag (`pvl-core-v5.1.0`
-  on the same commit as `v5.1.0`) `[unverified: from PSR docs and config
-  reading, not tested]`.
-- Template CI installs the library from the sibling tree instead of PyPI,
-  which genuinely kills the #336/#509 incident class *for the template* and
-  lets a breaking library change and its adoption land as one PR — the
-  strongest concrete benefit on offer.
-- Costs: PyPI trusted publishing re-scoped to the new repo/workflow; CI
-  path-filtering (`paths:` on `lib/**` vs the rest) so 89-releases-a-quarter
-  template traffic does not run the library's matrix; two release trains
-  interleaved on one releases page and one issue tracker; branch rulesets,
-  labels, and issue forms merged; the floor in `pyproject.toml.jinja` still
-  must be maintained for *downstreams* (they install from PyPI), so a new
-  guard has to keep floor == "latest released or current source" — replacing,
-  not removing, the coupling bookkeeping; and a new failure mode where the
-  template silently depends on unreleased library code. Downstream Renovate
-  still waits on a PyPI release, so B removes the template's share of the
-  adoption window, not the downstreams'.
+### The options against that weighing
 
-**C. Two repos + automation.** Extend the existing upstream detector with a
-third regex custom manager: match
-`"fastmcp-pvl-core(\[extra\])?>=X,<Y"` in `pyproject.toml.jinja`
-(datasource `pypi`, package `fastmcp-pvl-core`). Renovate then opens the
-floor-bump PR the day a library release ships, exactly as it already does for
-Action pins inside `.jinja` files. A bump that needs real adoption work (a
-major like 5.0.0) arrives as a **red** PR — template-ci renders and imports —
-which turns the adoption from something to remember into a failing check with
-a diff attached. Costs removed: floor-bump churn (the PR is machine-made) and
-most of the adoption window (bot latency instead of human memory). Costs
-untouched: render-time import coupling stays (but is guarded), specs stay
-cross-repo, routing stays three-tier.
+**A. Status quo.** Leaves both dominant costs fully in place. Rejected.
 
-**D. Monorepo with the library as a path dependency or vendored.** Rejected
-without detailed scoring: vendoring forfeits independent PyPI versioning (a
-stated must-preserve), and a path dependency cannot be expressed in the
-rendered project's `pyproject.toml`, which downstreams install from PyPI.
+**C. Two repos + an automated floor bump** (a Renovate custom manager for
+the core constraint in `pyproject.toml.jinja`, alongside the two the
+upstream detector already has). This was the previous revision's
+recommendation, and under the new weighing it is revealed as treating the
+cheapest symptom: it removes hand-made floor PRs — a cost the owner does not
+rank — and does nothing for docs colocation, atomic changes, or the split
+tracker. Not a competing end state; at most an interim convenience if the
+migration is deferred.
+
+**C′. Two repos, one tracker.** Disable issues on pvl-core, point its issue
+templates' `config.yml` contact link at this repo's tracker, transfer open
+issues (GitHub redirects transferred-issue URLs; plain-text `#N` references
+in old commit messages become stale — an accepted, bounded cost). Fixes
+criterion 2 completely, criterion 1 not at all: docs, example, and API still
+change in two repos. Insufficient alone, but it is **independently
+shippable and reversible**, which makes it the natural first step of B's
+migration rather than an alternative to it.
+
+**D. Monorepo with core vendored or as a path dependency.** Rejected:
+vendoring forfeits independent PyPI versioning, and a path dependency
+cannot be expressed in the `pyproject.toml` downstreams install from PyPI.
+
+**B. Monorepo.** One repository holding both halves. Removes criterion 1's
+cost (one tree: an API change, its operator docs, and the example
+implementation are one PR) and criterion 2's (one tracker, trivially). The
+must-preserves survive, on verified mechanics:
+
+- *Independent PyPI versioning:* core keeps PSR and its own version line;
+  only its `tag_format` changes (`pvl-core-v{version}`), with a one-time
+  dual tag so PSR can find its last release `[unverified: from PSR docs and
+  config reading, not tested]`.
+- *`copier copy gh:…` keeps working:* copier only sees PEP 440-parseable
+  tags, which after the rename are exactly the template's `v*` line; the
+  repo keeps its name (below), so `_src_path` across the fleet is untouched.
+- *Independent cadences:* both release trains continue as they are —
+  `template-release.yml` unchanged (its `--match 'v*'` glob does not match
+  `pvl-core-v*`), PSR unchanged but for the tag format.
+
+What B costs, all bounded and mechanical: the tree import with history, one
+`_exclude` entry, CI path filtering, PyPI trusted-publisher re-scoping,
+rulesets/labels/issue-forms merge, and a floor-vs-source guard replacing the
+floor grep. What B does *not* buy: downstreams still install core from PyPI,
+so their Renovate still waits on a core release — B removes the template's
+share of the coupling, not the fleet's PyPI dependency. And one genuine new
+failure mode arrives: template CI testing against sibling source can pass on
+unreleased core code; the floor-vs-source guard exists to keep that visible.
 
 ### Decision
 
-**Recommendation: Option C — keep two repositories, automate the floor bump.**
-
-The evidence does not support the monorepo's premise. Two-thirds of library
-releases were template-invisible, so a shared train would mostly couple
-unrelated work. Adoption lag is already same-day in every recent case — the
-split's observable damage was two incident classes, both of which have merged
-guards, and the remaining manual step (the floor-bump PR) is exactly the kind
-of pin the repo's upstream detector already automates for GitHub Actions.
-Meanwhile Option B's ledger is long: a PSR tag-namespace migration, PyPI
-trusted-publisher re-scoping, path-filtered CI, merged rulesets/labels/forms,
-interleaved release history at a 3:1 cadence mismatch — and it does not even
-delete the floor bookkeeping, it converts it into a floor-vs-source guard,
-while adding the unreleased-dependency failure mode.
-
-The cross-repo spec and routing costs are real but are the price of the
-split's chief benefit: the library is independently versioned and consumable
-without the template, and the template's very hot release cadence (89 in 19
-weeks) stays out of the library's history. Option B is recorded above with
-verified mechanics so it can be revisited cheaply if the coupling profile
-changes (say, if most library releases start forcing template changes).
+**Recommendation: Option B — merge the repositories**, with C′ (tracker
+consolidation) executed first as the reversible opening step. Under the
+stated weighing this is not close: the two dominant costs are removed only
+by B, every cost B introduces is a one-time mechanical migration or a small
+permanent guard, and all three must-preserves survive on mechanics verified
+above rather than assumed. The previous revision's recommendation (C) stands
+corrected: it optimized a cost that carries no weight.
 
 | Decision | Choice |
 |----------|--------|
-| Repository layout | Keep two repositories |
-| Floor-bump PRs | Automated: third custom manager in `.github/renovate.json` (regex on `pyproject.toml.jinja`, datasource `pypi`) |
-| Adoption of breaking majors | Unchanged: hand-written template PR, now triggered by the bot's red floor-bump PR instead of memory |
-| Cross-repo specs | Accepted cost; keep the existing practice of linking the other repo's spec from the issue/PR body |
-| Issue routing | Unchanged three-tier (`CONTRIBUTING.md` "Where to send fixes") |
-| Tag namespaces | Unchanged (`v*` in both repos — only a monorepo would force a rename) |
+| Repository layout | One repository holding both halves |
+| Merged-repo identity | Keep `fastmcp-server-template` (name and root layout): the only shape where the fleet's `_src_path` and the documented `copier copy` command survive with zero migration; merging into `pvl-core` or a new name puts every downstream on rename redirects for no benefit |
+| Library placement | Nested tree (e.g. `core/`), template stays at the root; one `_exclude` entry keeps it out of renders — smaller change than `_subdirectory`, which would move every template file |
+| Tag namespaces | Template keeps `v*` (copier-visible, PEP 440-valid); core moves to `pvl-core-v*` (PEP 440-invalid, copier-invisible), via PSR `tag_format` plus a one-time dual tag |
+| Issue tracker | One (this repo's); pvl-core's issues transferred, its tracker disabled — shippable before the code merge as step 1 |
+| Issue routing | `CONTRIBUTING.md` three-tier collapses to two: this repo (library *or* template — one tracker, a label distinguishes) / domain (downstream) |
+| Floor bookkeeping | `pyproject.toml.jinja`'s core constraint stays (downstreams install from PyPI); the hand-made floor-bump PR is replaced by a CI guard asserting floor == latest released core or current source version |
 
 ## Risks and mitigations
 
-- **Renovate cannot parse the constraint from `pyproject.toml.jinja`** (it is
-  not valid TOML to a native manager). Mitigated by using a regex custom
-  manager, the same technique the file's two existing managers use; the match
-  string targets the quoted dependency string, not the TOML structure.
-- **The bot PR lands red on a breaking major and sits unmerged.** That is the
-  designed behavior — it is the adoption work item, with CI attached. The
-  dependency dashboard (already enabled) keeps it visible.
-- **A library release that breaks the template without a floor bump**
-  (the 4.11.1 prose case) is not fixed by Option C. It is already mitigated
-  by #336 (bootstrap resolves the full constraint, so copy-time and
-  check-time agree) and #509 (major-capped installs); the residual case — a
-  same-major release changing generated prose — surfaces in the bot PR's CI
-  run rather than in downstream renders `[unverified: depends on the bot PR
-  re-rendering before a human next renders, which the render-and-gate job
-  does on every PR]`.
+- **The PSR tag-format migration is the least-tested step** `[unverified]`.
+  Mitigate by doing it while the repos are still separate (it is orthogonal
+  to the merge): rename core's tag namespace in place, watch one release
+  ship correctly, then import the tree.
+- **Template code silently depending on unreleased core.** The
+  floor-vs-source guard fails template CI whenever `pyproject.toml.jinja`'s
+  floor names a version older than the source tree's — the release that
+  unblocks it is core's own, cut on its normal cadence.
+- **Transferred issues renumber.** GitHub redirects the old URLs; bare
+  `#N` references inside pvl-core's commit history and specs go stale.
+  Accepted: the specs move into this repo in the same migration and can be
+  touched up as they land.
+- **PyPI trusted publishing** must be re-scoped to the workflow path in the
+  merged repo before the first post-merge core release; until then core can
+  still release from the old repo, which stays intact (archived, not
+  deleted) until the migration completes.
 - **This document itself renders nowhere**: it lives under
   `docs/superpowers/`, which `copier.yml` `_exclude`s, so no downstream sees
   it and no Vale/mkdocs surface changes.
 
 ## Sequencing
 
-1. This document merges (ratifying or amending the recommendation in PR
-   review) and closes #507.
-2. If ratified, a follow-up issue covers the Renovate custom manager for the
-   pvl-core floor — a change to `.github/renovate.json` only, template-repo
-   scoped, invisible to downstreams.
+Each step is a follow-up issue once this document is ratified; 1 and 2 are
+independently shippable before any code moves, and each step leaves both
+halves releasable:
+
+1. **C′ / tracker consolidation** — transfer pvl-core's open issues here,
+   disable its tracker, point its issue-template `config.yml` at this repo.
+   Reversible; delivers the reporting fix immediately.
+2. **Tag namespace** — PSR `tag_format = "pvl-core-v{version}"` in
+   pvl-core, one-time dual tag of the latest release, one release shipped
+   to prove it.
+3. **Tree import** — pvl-core's history imported under `core/`
+   (`git filter-repo`/subtree merge), one `_exclude` entry, render asserted
+   byte-identical to pre-merge.
+4. **CI split** — `paths:` filtering (core matrix on `core/**`; template-ci
+   on the rest); template CI installs core from the sibling tree; the
+   floor-vs-source guard replaces `template-ci.yml`'s floor grep.
+5. **Publishing** — PyPI trusted publisher re-scoped; first core release
+   from the merged repo; old repo archived with a pointer README.
+6. **Paper cutover** — `CONTRIBUTING.md` routing rewrite, labels/rulesets/
+   issue-forms merge, pvl-core's `docs/` (ADRs, specs, superpowers) moved
+   in, `UPGRADING.md` policy extended to say which core changes get entries.
 
 ## Open questions
 
 - Whether the four consuming projects would prefer the library and template
   pinned at one version `[unverified: owner/downstream input; nothing in
-  either repo records a preference]`. Option C does not foreclose it — a
-  downstream can already pin both.
-- The PSR tag-format migration mechanics recorded under Option B
-  `[unverified]` — only relevant if B is ever revisited.
+  either repo records a preference]`. The merge does not force it —
+  independent versioning is preserved — but makes it offerable later.
+- The PSR `tag_format` migration mechanics `[unverified]` — resolved by
+  Sequencing step 2 before anything irreversible happens.
