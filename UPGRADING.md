@@ -1391,8 +1391,6 @@ Two things NOT to do:
   prose uses them outside code, which Vale does not spell-check. If your
   own prose does, they belong in your `Base/accept.txt`.
 
-## Unreleased - @claude responder can review and fix
-
 ### Drop any local #535 workaround before updating
 
 `claude.yml` now carries the working reviewer configuration itself (the
@@ -1417,3 +1415,7 @@ Do by hand only if it applies:
   `@claude` mentions from the repository's own people (author association
   OWNER, MEMBER, or COLLABORATOR). An outside contributor's `@claude`
   mention is ignored by design — no run starts, nothing is posted.
+
+## Unreleased
+
+_Nothing yet._

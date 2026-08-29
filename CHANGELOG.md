@@ -1,5 +1,10 @@
 # Changelog
 
+## v6.0.1 (2026-08-29)
+
+- #539 fix(claude): give @claude the review workflow's working configuration, plus a write path
+
+
 ## v6.0.0 (2026-08-26)
 
 - #522 fix(vale): layer the template vocabulary as a re-rendered second accept list
