@@ -1413,3 +1413,7 @@ Do by hand only if it applies:
   your repository must keep @claude read-only, that is a deliberate local
   divergence to carry (and re-apply after every update) — or ask for a
   template answer/flag upstream instead.
+- Because the responder now carries write capability, it answers only
+  `@claude` mentions from the repository's own people (author association
+  OWNER, MEMBER, or COLLABORATOR). An outside contributor's `@claude`
+  mention is ignored by design — no run starts, nothing is posted.

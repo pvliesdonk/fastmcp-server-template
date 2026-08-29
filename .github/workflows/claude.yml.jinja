@@ -12,17 +12,26 @@ on:
 
 jobs:
   claude:
-    # Trigger only on @claude mentions, AND on the two PR-context events
-    # (`pull_request_review*`) only when the PR head is in this repo. Those
-    # events run in PR context for fork PRs, where GitHub withholds repository
-    # secrets (incl. CLAUDE_CODE_OAUTH_TOKEN) and the action would auth-fail.
-    # `issues` and `issue_comment` always run in base-repo context, so secrets
-    # are available — no fork check needed there.
+    # Trigger only on @claude mentions FROM the repository's own people:
+    # every branch requires the acting user's author_association to be
+    # OWNER, MEMBER, or COLLABORATOR. This job carries write capability
+    # (contents: write, Task, gh pr create below), so the mention itself is
+    # an instruction channel — on a public repo, without this gate ANY
+    # GitHub user's issue or comment could drive a write-capable agent
+    # holding repository secrets. Note the same-repo head guard on the two
+    # PR-context events bounds only the PR branch's ORIGIN, not who
+    # commented — a non-collaborator can comment on a collaborator's PR —
+    # so the association gate is needed on all four branches.
+    # The head guard stays for its original reason: `pull_request_review*`
+    # events run in PR context for fork PRs, where GitHub withholds
+    # repository secrets (incl. CLAUDE_CODE_OAUTH_TOKEN) and the action
+    # would auth-fail. `issues` and `issue_comment` always run in base-repo
+    # context, so secrets are available — no fork check needed there.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && github.event.pull_request.head.repo.full_name == github.repository) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && github.event.pull_request.head.repo.full_name == github.repository)
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) && github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association) && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: write        # @claude may commit and push a fix branch when asked ("@claude please fix this")
