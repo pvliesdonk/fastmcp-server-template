@@ -224,7 +224,20 @@ conclusion is to finish the move rather than shop for a better merge tool:
 - CI logic gets a complementary shrink lever: downstream workflow files
   become few-line stubs calling reusable workflows in this (public) repo
   at a pinned tag, which Renovate bumps like any Action pin — workflow
-  *logic* leaves the file-sync problem entirely.
+  *logic* leaves the file-sync problem entirely. **This lever is the
+  cheap, template-only quick win of the whole document**: it needs
+  neither the repo merge nor the synthesizer, ships through one normal
+  template release, and downstream Renovate's *native* github-actions
+  manager already bumps `uses:` refs in the (real, rendered) stub files.
+  Per-workflow, reversible, starting with the highest-churn workflow.
+  The bounded work items: Jinja variance becomes `with:` inputs; secrets
+  are passed explicitly in the stub (`secrets: inherit` is documented for
+  same-org callers, not a personal account); the aggregate `CI Success`
+  check keeps its exact context by living in the stub, so rulesets are
+  untouched; PyPI trusted publishing validates the *caller's* workflow
+  file, so stubs keeping their filenames need no publisher changes. As a
+  bonus, `template-ci` can then *call* the same reusable workflow it
+  ships instead of re-implementing the rendered gate.
 - copier's remaining role is day-0 scaffolding — its actual design
   center — until `pvl new` (synthesis from an empty answers file) replaces
   even that; `copier update` retires with the last migrated file class,
@@ -346,7 +359,10 @@ proof the contract works.
 
 Each step is a follow-up issue once this document is ratified; 1 and 2 are
 independently shippable before any code moves, and each step leaves both
-halves releasable:
+halves releasable. One item does not need ratification at all: the
+**reusable-workflow conversion** (step 7's workflow class) is template-only,
+per-workflow, and reversible — it can start immediately, regardless of when
+or whether the merge and synthesis land:
 
 1. **C′ / tracker consolidation** — transfer pvl-core's open issues here,
    disable its tracker, point its issue-template `config.yml` at this repo.
