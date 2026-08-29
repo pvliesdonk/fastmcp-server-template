@@ -1,5 +1,10 @@
 # Changelog
 
+## v6.0.2 (2026-08-29)
+
+- #542 fix(release): accept rc.0 when promoting release notes
+
+
 ## v6.0.1 (2026-08-29)
 
 - #539 fix(claude): give @claude the review workflow's working configuration, plus a write path
