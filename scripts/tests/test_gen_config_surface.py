@@ -32,6 +32,29 @@ def _marker_pair(region_id: str) -> str:
     )
 
 
+# Every region docs/configuration.md declares for a render with
+# enable_authorization off — REF-AUTHZ is deliberately absent, exactly as it
+# is in that render (the marker pair lives inside the same Jinja conditional
+# as the section heading), which also exercises the region-level
+# `when_answer` skip end to end through `write_artifacts`.
+_REFERENCE_REGION_IDS = (
+    "REF-SERVER",
+    "REF-AUTH",
+    "REF-PERSISTENCE",
+    "REF-TASKS",
+    "REF-APPS",
+    "REF-LOGGING",
+    "REF-CONTAINER",
+    "REF-DEBUG",
+    "REF-DOMAIN",
+)
+
+
+def _reference_markers() -> str:
+    """Stand-in docs/configuration.md: every gate-on region's marker pair."""
+    return "".join(_marker_pair(region_id) for region_id in _REFERENCE_REGION_IDS)
+
+
 @pytest.fixture
 def fake_project(tmp_path):
     """A minimal rendered-project layout the generator can read."""
@@ -73,6 +96,9 @@ def fake_project(tmp_path):
     (tmp_path / "README.md").write_text(
         _marker_pair("CORE") + _marker_pair("DOMAIN"),
         encoding="utf-8",
+    )
+    (tmp_path / "docs" / "configuration.md").write_text(
+        _reference_markers(), encoding="utf-8"
     )
     _seed_server_json(tmp_path)
     _seed_mcpb_manifest(tmp_path)
@@ -2608,12 +2634,15 @@ def _core_table(project_root: Path) -> str:
 
 
 def _domain_table(project_root: Path) -> str:
-    """Write every artifact for *project_root*, return README.md's spliced
-    DOMAIN region body (between its GENERATED-ENV-TABLE-DOMAIN markers)."""
+    """Write every artifact for *project_root*, return the configuration
+    reference's spliced REF-DOMAIN region body (between its
+    GENERATED-ENV-TABLE-REF-DOMAIN markers in docs/configuration.md) — the
+    region that renders every domain var. README.md's DOMAIN region is a
+    curated `readme`-tagged subset and would be empty for these fixtures."""
     g.write_artifacts(project_root, check=False)
-    text = (project_root / "README.md").read_text(encoding="utf-8")
-    return text.split("GENERATED-ENV-TABLE-DOMAIN-START")[1].split(
-        "GENERATED-ENV-TABLE-DOMAIN-END"
+    text = (project_root / "docs" / "configuration.md").read_text(encoding="utf-8")
+    return text.split("GENERATED-ENV-TABLE-REF-DOMAIN-START")[1].split(
+        "GENERATED-ENV-TABLE-REF-DOMAIN-END"
     )[0]
 
 
@@ -2637,9 +2666,11 @@ def _table_rows_by_variable(table: str, default_column: int) -> dict[str, str]:
 
 class TestReadmeRegions:
     """README.md's own `kind: splice` regions: CORE (a curated landing-page
-    subset, tag `readme`) and DOMAIN (the project's own fields, tag
-    `domain`). Unlike the OIDC docs, CORE is a hand-picked few vars, not a
-    section-wide selector — these tests pin that shape down."""
+    subset — tag `readme`, non-domain provenances) and DOMAIN (the
+    project's own curated subset — tag `readme`, provenance `domain`).
+    Unlike the OIDC docs, both are hand-picked few-var selections, not
+    section-wide selectors — these tests pin that shape down; the full
+    domain surface renders in docs/configuration.md's REF-DOMAIN region."""
 
     def test_core_table_is_the_readme_tagged_subset(self, fake_project):
         answers = g.load_answers(fake_project)
@@ -2806,7 +2837,10 @@ class TestReadmeRegions:
         domain_table = text.split("GENERATED-ENV-TABLE-DOMAIN-START")[1].split(
             "GENERATED-ENV-TABLE-DOMAIN-END"
         )[0]
-        assert "| Variable | Default | Required | Description |" in domain_table
+        # The fixture has no `readme`-tagged domain fields, so the curated
+        # DOMAIN region renders its declared empty_note, not a bare table.
+        assert "configuration reference" in domain_table
+        assert "| Variable |" not in domain_table
 
 
 class TestReadmeDomainHostileHelp:
@@ -2856,6 +2890,368 @@ class TestReadmeDomainHostileHelp:
         row = next(ln for ln in table.splitlines() if "DEMO_MCP_OPTIONAL_FIELD" in ln)
         cells = [c.strip() for c in row.split("|")]
         assert cells[3] == "No"
+
+
+def _splice_var(
+    name: str,
+    *,
+    provenance: str = "template",
+    tags: tuple[str, ...] = ("t",),
+    wizard: dict | None = None,
+    default: object = "v",
+) -> g.Var:
+    """A fabricated `Var` for the splice-region unit tests below."""
+    return g.Var(
+        name=name,
+        suffix=name,
+        provenance=provenance,
+        type_name="str",
+        default=default,
+        help=f"Help for {name}.",
+        tags=tags,
+        inferred=False,
+        wizard=wizard or {},
+    )
+
+
+def _one_region_file(tmp_path, region_id: str = "A") -> Path:
+    target = tmp_path / "doc.md"
+    target.write_text(_marker_pair(region_id), encoding="utf-8")
+    return target
+
+
+class TestConfigurationReference:
+    """The complete-reference splice levers: region `provenance` filters,
+    region `when_answer` gates, file-level `claim_once`/`complete`, grouped
+    rendering via `group_by: group`, and the `empty_note` fallback. These
+    are what turn one giant flat table into a sectioned reference that
+    cannot silently drop a var."""
+
+    def test_claim_once_places_a_multi_tag_var_in_the_first_declared_region(
+        self, tmp_path
+    ):
+        target = tmp_path / "doc.md"
+        target.write_text(_marker_pair("A") + _marker_pair("B"), encoding="utf-8")
+        both = _splice_var("X_BOTH", tags=("persistence", "tasks"))
+        only_b = _splice_var("X_TASKS", tags=("tasks",))
+        file_spec = {
+            "claim_once": True,
+            "regions": [
+                {"id": "A", "tags": ["persistence"], "columns": ["variable"]},
+                {"id": "B", "tags": ["tasks"], "columns": ["variable"]},
+            ],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        text = g.render_splice_file(tmp_path, "doc.md", file_spec, [both, only_b], ctx)
+        region_a = text.split("-A-START")[1].split("-A-END")[0]
+        region_b = text.split("-B-START")[1].split("-B-END")[0]
+        assert "X_BOTH" in region_a and "X_BOTH" not in region_b
+        assert "X_TASKS" in region_b
+
+    def test_without_claim_once_a_multi_tag_var_renders_in_both_regions(
+        self, tmp_path
+    ):
+        """The pre-existing behaviour, pinned: the OIDC docs' regions rely
+        on independent selection and must not inherit the claim rule."""
+        target = tmp_path / "doc.md"
+        target.write_text(_marker_pair("A") + _marker_pair("B"), encoding="utf-8")
+        both = _splice_var("X_BOTH", tags=("persistence", "tasks"))
+        file_spec = {
+            "regions": [
+                {"id": "A", "tags": ["persistence"], "columns": ["variable"]},
+                {"id": "B", "tags": ["tasks"], "columns": ["variable"]},
+            ],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        text = g.render_splice_file(tmp_path, "doc.md", file_spec, [both], ctx)
+        assert "X_BOTH" in text.split("-A-START")[1].split("-A-END")[0]
+        assert "X_BOTH" in text.split("-B-START")[1].split("-B-END")[0]
+
+    def test_complete_true_raises_naming_the_unclaimed_var(self, tmp_path):
+        _one_region_file(tmp_path)
+        covered = _splice_var("X_COVERED", tags=("t",))
+        dropped = _splice_var("X_DROPPED", tags=("elsewhere",))
+        file_spec = {
+            "claim_once": True,
+            "complete": True,
+            "regions": [{"id": "A", "tags": ["t"], "columns": ["variable"]}],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        with pytest.raises(SystemExit, match="X_DROPPED") as excinfo:
+            g.render_splice_file(tmp_path, "doc.md", file_spec, [covered, dropped], ctx)
+        assert "doc.md" in str(excinfo.value)
+        assert "elsewhere" in str(excinfo.value)
+
+    def test_complete_true_passes_when_every_var_is_claimed(self, tmp_path):
+        _one_region_file(tmp_path)
+        covered = _splice_var("X_COVERED", tags=("t",))
+        file_spec = {
+            "claim_once": True,
+            "complete": True,
+            "regions": [{"id": "A", "tags": ["t"], "columns": ["variable"]}],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        text = g.render_splice_file(tmp_path, "doc.md", file_spec, [covered], ctx)
+        assert "X_COVERED" in text
+
+    def test_when_answer_false_skips_the_region_even_with_no_marker(self, tmp_path):
+        """The gated-off render has no marker pair for the gated region (it
+        lives inside the same Jinja conditional), so the skip must happen
+        before the missing-marker guard would fire."""
+        _one_region_file(tmp_path)  # only region A's markers exist
+        var = _splice_var("X_GATED", tags=("authz",))
+        file_spec = {
+            "regions": [
+                {"id": "A", "tags": ["t"], "columns": ["variable"]},
+                {
+                    "id": "GATED",
+                    "tags": ["authz"],
+                    "when_answer": "enable_authorization",
+                    "columns": ["variable"],
+                },
+            ],
+        }
+        ctx = g.PresentationContext(
+            presentation={}, answers={"enable_authorization": False}
+        )
+        text = g.render_splice_file(tmp_path, "doc.md", file_spec, [var], ctx)
+        assert "X_GATED" not in text
+
+    def test_when_answer_true_splices_the_region(self, tmp_path):
+        target = tmp_path / "doc.md"
+        target.write_text(_marker_pair("GATED"), encoding="utf-8")
+        var = _splice_var("X_GATED", tags=("authz",))
+        file_spec = {
+            "regions": [
+                {
+                    "id": "GATED",
+                    "tags": ["authz"],
+                    "when_answer": "enable_authorization",
+                    "columns": ["variable"],
+                },
+            ],
+        }
+        ctx = g.PresentationContext(
+            presentation={}, answers={"enable_authorization": True}
+        )
+        text = g.render_splice_file(tmp_path, "doc.md", file_spec, [var], ctx)
+        assert "X_GATED" in text
+
+    def test_provenance_filter_narrows_and_orders_regions_disjointly(self, tmp_path):
+        target = tmp_path / "doc.md"
+        target.write_text(_marker_pair("CORE") + _marker_pair("DOMAIN"), encoding="utf-8")
+        core_var = _splice_var("X_CORE", provenance="core", tags=("readme",))
+        domain_var = _splice_var("X_DOMAIN", provenance="domain", tags=("readme", "domain"))
+        file_spec = {
+            "regions": [
+                {
+                    "id": "CORE",
+                    "tags": ["readme"],
+                    "provenance": ["core", "template", "external"],
+                    "columns": ["variable"],
+                },
+                {
+                    "id": "DOMAIN",
+                    "tags": ["readme"],
+                    "provenance": ["domain"],
+                    "columns": ["variable"],
+                },
+            ],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        text = g.render_splice_file(
+            tmp_path, "doc.md", file_spec, [core_var, domain_var], ctx
+        )
+        core_region = text.split("-CORE-START")[1].split("-CORE-END")[0]
+        domain_region = text.split("-DOMAIN-START")[1].split("-DOMAIN-END")[0]
+        assert "X_CORE" in core_region and "X_DOMAIN" not in core_region
+        assert "X_DOMAIN" in domain_region and "X_CORE" not in domain_region
+
+    def test_non_list_provenance_raises(self):
+        with pytest.raises(SystemExit, match="non-list"):
+            g._select_region_vars(
+                [], {"tags": ["t"], "provenance": "domain"}, source="doc.md region 'A'"
+            )
+
+    def test_unknown_provenance_token_raises(self):
+        with pytest.raises(SystemExit, match="domian"):
+            g._select_region_vars(
+                [], {"tags": ["t"], "provenance": ["domian"]}, source="doc.md region 'A'"
+            )
+
+    def test_group_by_group_renders_ungrouped_first_then_group_headings(
+        self, tmp_path
+    ):
+        _one_region_file(tmp_path)
+        ungrouped = _splice_var("X_PLAIN")
+        alpha_one = _splice_var("X_A1", wizard={"group": "Alpha"})
+        beta = _splice_var("X_B1", wizard={"group": "Beta"})
+        alpha_two = _splice_var("X_A2", wizard={"group": "Alpha"})
+        file_spec = {
+            "regions": [
+                {
+                    "id": "A",
+                    "tags": ["t"],
+                    "group_by": "group",
+                    "columns": ["variable"],
+                },
+            ],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        text = g.render_splice_file(
+            tmp_path, "doc.md", file_spec, [alpha_one, ungrouped, beta, alpha_two], ctx
+        )
+        body = text.split("-A-START")[1].split("-A-END")[0]
+        # Ungrouped renders first, above any heading; groups follow in
+        # first-appearance order, each holding all its vars.
+        assert body.index("X_PLAIN") < body.index("### Alpha")
+        assert body.index("### Alpha") < body.index("### Beta")
+        alpha_section = body.split("### Alpha")[1].split("### Beta")[0]
+        assert "X_A1" in alpha_section and "X_A2" in alpha_section
+        assert "X_B1" not in alpha_section
+
+    def test_unknown_group_by_value_raises(self, tmp_path):
+        _one_region_file(tmp_path)
+        file_spec = {
+            "regions": [
+                {"id": "A", "tags": ["t"], "group_by": "tag", "columns": ["variable"]},
+            ],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        with pytest.raises(SystemExit, match="group_by"):
+            g.render_splice_file(
+                tmp_path, "doc.md", file_spec, [_splice_var("X")], ctx
+            )
+
+    def test_empty_region_with_note_renders_the_note_not_a_table(self, tmp_path):
+        _one_region_file(tmp_path)
+        file_spec = {
+            "regions": [
+                {
+                    "id": "A",
+                    "tags": ["t"],
+                    "columns": ["variable"],
+                    "empty_note": "_Nothing here yet._",
+                },
+            ],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        text = g.render_splice_file(tmp_path, "doc.md", file_spec, [], ctx)
+        body = text.split("-A-START")[1].split("-A-END")[0]
+        assert "_Nothing here yet._" in body
+        assert "| Variable |" not in body
+
+    def test_empty_region_without_note_keeps_the_header_only_table(self, tmp_path):
+        _one_region_file(tmp_path)
+        file_spec = {
+            "regions": [{"id": "A", "tags": ["t"], "columns": ["variable"]}],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        text = g.render_splice_file(tmp_path, "doc.md", file_spec, [], ctx)
+        assert "| Variable |" in text.split("-A-START")[1].split("-A-END")[0]
+
+    def test_reference_places_tasks_url_under_persistence_not_tasks(
+        self, fake_project
+    ):
+        """End to end through `write_artifacts` against the real
+        config-presentation.yml: TASKS_URL carries both `persistence` and
+        `tasks` tags, and the claim-once rule must keep it under the
+        Persistence section (declared first), appearing exactly once in the
+        whole reference."""
+        g.write_artifacts(fake_project, check=False)
+        text = (fake_project / "docs" / "configuration.md").read_text(encoding="utf-8")
+        persistence = text.split("REF-PERSISTENCE-START")[1].split(
+            "REF-PERSISTENCE-END"
+        )[0]
+        tasks = text.split("REF-TASKS-START")[1].split("REF-TASKS-END")[0]
+        assert "DEMO_MCP_TASKS_URL" in persistence
+        assert "DEMO_MCP_TASKS_URL" not in tasks
+        assert text.count("`DEMO_MCP_TASKS_URL`") == 1
+
+    def test_reference_covers_every_collected_var(self, fake_project):
+        """The `complete: true` promise, verified positively: every
+        collected var's backticked name appears in the rendered reference."""
+        answers = g.load_answers(fake_project)
+        vars_ = g.collect_vars(fake_project, answers)
+        g.write_artifacts(fake_project, check=False, vars_=vars_)
+        text = (fake_project / "docs" / "configuration.md").read_text(encoding="utf-8")
+        missing = [v.name for v in vars_ if f"`{v.name}`" not in text]
+        assert missing == []
+
+    def test_domain_field_groups_render_as_subsections(self, fake_project):
+        """A downstream's wizard `group` hints segment the domain reference:
+        grouped fields render under `###` headings, ungrouped ones above."""
+        cfg = fake_project / "src" / "demo_mcp" / "config.py"
+        cfg.write_text(
+            "from __future__ import annotations\n\n"
+            "from dataclasses import dataclass, field\n\n"
+            "from fastmcp_pvl_core import ServerConfig, env\n\n\n"
+            "@dataclass(frozen=True)\n"
+            "class ProjectConfig:\n"
+            "    server: ServerConfig = field(default_factory=ServerConfig)\n"
+            "    vault_path: str = field(\n"
+            '        default="/data/vault",\n'
+            '        metadata={"help": "Vault root.", "tags": ("persistence",)},\n'
+            "    )\n"
+            "    embed_model: str = field(\n"
+            '        default="nomic",\n'
+            "        metadata={\n"
+            '            "help": "Embedding model.",\n'
+            '            "tags": ("persistence",),\n'
+            '            "wizard": {"group": "Embeddings"},\n'
+            "        },\n"
+            "    )\n\n"
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            "        return cls(\n"
+            '            vault_path=env("DEMO_MCP", "VAULT_PATH") or "/data/vault",\n'
+            '            embed_model=env("DEMO_MCP", "EMBED_MODEL") or "nomic",\n'
+            "        )\n",
+            encoding="utf-8",
+        )
+        body = _domain_table(fake_project)
+        assert "### Embeddings" in body
+        assert "DEMO_MCP_EMBED_MODEL" in body.split("### Embeddings")[1]
+        # The ungrouped field renders above the first heading.
+        assert body.index("DEMO_MCP_VAULT_PATH") < body.index("### Embeddings")
+
+    def test_readme_domain_region_features_only_readme_tagged_fields(
+        self, fake_project
+    ):
+        """The curated landing-page contract: a domain field reaches the
+        README's DOMAIN region only when its own `tags` include `readme`,
+        and a featured field never double-lists in the CORE region."""
+        cfg = fake_project / "src" / "demo_mcp" / "config.py"
+        cfg.write_text(
+            "from __future__ import annotations\n\n"
+            "from dataclasses import dataclass, field\n\n"
+            "from fastmcp_pvl_core import ServerConfig, env\n\n\n"
+            "@dataclass(frozen=True)\n"
+            "class ProjectConfig:\n"
+            "    server: ServerConfig = field(default_factory=ServerConfig)\n"
+            "    featured: str = field(\n"
+            '        default="x",\n'
+            '        metadata={"help": "Featured field.", "tags": ("persistence", "readme")},\n'
+            "    )\n"
+            "    unlisted: str = field(\n"
+            '        default="y",\n'
+            '        metadata={"help": "Unlisted field.", "tags": ("persistence",)},\n'
+            "    )\n\n"
+            "    @classmethod\n"
+            "    def from_env(cls) -> ProjectConfig:\n"
+            "        return cls(\n"
+            '            featured=env("DEMO_MCP", "FEATURED") or "x",\n'
+            '            unlisted=env("DEMO_MCP", "UNLISTED") or "y",\n'
+            "        )\n",
+            encoding="utf-8",
+        )
+        g.write_artifacts(fake_project, check=False)
+        text = (fake_project / "README.md").read_text(encoding="utf-8")
+        core_region = text.split("-CORE-START")[1].split("-CORE-END")[0]
+        domain_region = text.split("-DOMAIN-START")[1].split("-DOMAIN-END")[0]
+        assert "DEMO_MCP_FEATURED" in domain_region
+        assert "DEMO_MCP_UNLISTED" not in domain_region
+        assert "DEMO_MCP_FEATURED" not in core_region
 
 
 class TestCleanHelpForMarkdownTable:

@@ -1416,6 +1416,36 @@ Do by hand only if it applies:
   OWNER, MEMBER, or COLLABORATOR). An outside contributor's `@claude`
   mention is ignored by design — no run starts, nothing is posted.
 
-## Unreleased
+## Unreleased - Generated configuration reference, curated README tables
 
-_Nothing yet._
+The documentation side of the config surface is reshaped
+(template#<PR>): `docs/configuration.md` becomes the complete generated
+reference (one `GENERATED-ENV-TABLE-REF-*` region per section, domain
+vars grouped by their wizard `group` hints, with a `complete: true`
+guard that fails CI when a var would land in no section), and
+`README.md`'s `## Domain configuration` table becomes a curated subset
+instead of a dump of every domain var. Full background and worked
+migration steps: "The docs reference became generated, and the README
+domain table became curated" in `docs/design/config-migration.md` (also
+rendered in each project's own docs).
+
+Do by hand after `copier update`:
+
+1. Add `readme` to the `tags` metadata of the few domain fields the
+   README should feature (three to six; between the `CONFIG-FIELDS`
+   sentinels in `config.py`, or in the field's
+   `config-presentation.domain.yml` entry). Until you do, the README's
+   domain table renders as a short pointer at the reference — nothing
+   breaks, but nothing is featured either.
+2. Give domain fields `wizard: {group: ...}` hints if they lack them, so
+   the reference's domain section renders as grouped sub-sections
+   instead of one flat table.
+3. If you rewrote `docs/configuration.md` with hand-written tables,
+   resolve the update's conflicts by taking the template's page skeleton
+   and marker pairs, then move per-var prose into each field's `help`
+   metadata and conceptual prose into the `DOMAIN-CONFIG-VARS` sentinel
+   block. Delete the hand-written tables once the regenerated reference
+   carries every var; keeping them means every row drifts from the
+   generated truth.
+4. Rerun `python scripts/gen_config_surface.py` and check the diff of
+   `docs/configuration.md` and `README.md`.
