@@ -2948,9 +2948,7 @@ class TestConfigurationReference:
         assert "X_BOTH" in region_a and "X_BOTH" not in region_b
         assert "X_TASKS" in region_b
 
-    def test_without_claim_once_a_multi_tag_var_renders_in_both_regions(
-        self, tmp_path
-    ):
+    def test_without_claim_once_a_multi_tag_var_renders_in_both_regions(self, tmp_path):
         """The pre-existing behaviour, pinned: the OIDC docs' regions rely
         on independent selection and must not inherit the claim rule."""
         target = tmp_path / "doc.md"
@@ -3039,9 +3037,13 @@ class TestConfigurationReference:
 
     def test_provenance_filter_narrows_and_orders_regions_disjointly(self, tmp_path):
         target = tmp_path / "doc.md"
-        target.write_text(_marker_pair("CORE") + _marker_pair("DOMAIN"), encoding="utf-8")
+        target.write_text(
+            _marker_pair("CORE") + _marker_pair("DOMAIN"), encoding="utf-8"
+        )
         core_var = _splice_var("X_CORE", provenance="core", tags=("readme",))
-        domain_var = _splice_var("X_DOMAIN", provenance="domain", tags=("readme", "domain"))
+        domain_var = _splice_var(
+            "X_DOMAIN", provenance="domain", tags=("readme", "domain")
+        )
         file_spec = {
             "regions": [
                 {
@@ -3076,12 +3078,12 @@ class TestConfigurationReference:
     def test_unknown_provenance_token_raises(self):
         with pytest.raises(SystemExit, match="domian"):
             g._select_region_vars(
-                [], {"tags": ["t"], "provenance": ["domian"]}, source="doc.md region 'A'"
+                [],
+                {"tags": ["t"], "provenance": ["domian"]},
+                source="doc.md region 'A'",
             )
 
-    def test_group_by_group_renders_ungrouped_first_then_group_headings(
-        self, tmp_path
-    ):
+    def test_group_by_group_renders_ungrouped_first_then_group_headings(self, tmp_path):
         _one_region_file(tmp_path)
         ungrouped = _splice_var("X_PLAIN")
         alpha_one = _splice_var("X_A1", wizard={"group": "Alpha"})
@@ -3119,9 +3121,7 @@ class TestConfigurationReference:
         }
         ctx = g.PresentationContext(presentation={}, answers={})
         with pytest.raises(SystemExit, match="group_by"):
-            g.render_splice_file(
-                tmp_path, "doc.md", file_spec, [_splice_var("X")], ctx
-            )
+            g.render_splice_file(tmp_path, "doc.md", file_spec, [_splice_var("X")], ctx)
 
     def test_empty_region_with_note_renders_the_note_not_a_table(self, tmp_path):
         _one_region_file(tmp_path)
@@ -3150,9 +3150,7 @@ class TestConfigurationReference:
         text = g.render_splice_file(tmp_path, "doc.md", file_spec, [], ctx)
         assert "| Variable |" in text.split("-A-START")[1].split("-A-END")[0]
 
-    def test_reference_places_tasks_url_under_persistence_not_tasks(
-        self, fake_project
-    ):
+    def test_reference_places_tasks_url_under_persistence_not_tasks(self, fake_project):
         """End to end through `write_artifacts` against the real
         config-presentation.yml: TASKS_URL carries both `persistence` and
         `tasks` tags, and the claim-once rule must keep it under the
