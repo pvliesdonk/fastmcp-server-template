@@ -1712,6 +1712,8 @@ jobs:
             || { echo "::error::template-release.yml no longer promotes UPGRADING.md's Unreleased section — releases would ship it unpromoted"; exit 1; }
           grep -qE '^\s+git add .*UPGRADING\.md' .github/workflows/template-release.yml \
             || { echo "::error::template-release.yml promotes UPGRADING.md but never stages it — the rewrite would be discarded"; exit 1; }
+          grep -qE '^\s+git add .*UPGRADING\.md upgrading' .github/workflows/template-release.yml \
+            || { echo "::error::template-release.yml stages UPGRADING.md but not the upgrading/ per-minor files — a promoted section would be written and discarded"; exit 1; }
 
       - name: Lint scripts (ruff check matching downstream's config)
         # Mirror the rendered project's [tool.ruff.lint] block in

@@ -202,22 +202,32 @@ note; a change that will fail, or quietly do the wrong thing, until
 someone acts does. Write it as instructions to that person, not as a
 description of the diff.
 
-**Write it under `## Unreleased`, at the end of the file, and never
-under a version heading.** The version is not knowable while the change
-is being made — it is chosen later, by the `bump` input of the release
-dispatch — so a hand-written `## v5.2` is a guess that is simply wrong
-if the next release turns out to be a patch. `scripts/promote_upgrading.py`,
-which `template-release.yml` runs, renames the section to the real
-`## vX.Y` on a minor or major release, folds it into the existing
-minor's section on a patch (the file is organised by minor, and its
-preamble tells readers so), and leaves a fresh empty `## Unreleased`
-behind. Add a `## Unreleased - <short title>` heading if the file has
-none; the title carries through to the released heading.
+**Write it under `## Unreleased`, at the end of `UPGRADING.md`, and
+never under a version heading.** The version is not knowable while the
+change is being made — it is chosen later, by the `bump` input of the
+release dispatch — so a hand-written `## v5.2` is a guess that is simply
+wrong if the next release turns out to be a patch. Add a
+`## Unreleased - <short title>` heading if the file has none; the title
+carries through to the released heading.
 
-`template-ci` asserts the invariants — at most one `## Unreleased`, and
-it is the last section — and that the release workflow still both runs
-the promotion and stages the result. Run `python3
-scripts/promote_upgrading.py --check` locally to see what it sees.
+`UPGRADING.md` is an *index*: its released `## vX.Y` sections are
+one-line pointers, and each minor's full steps live in
+`upgrading/vX.Y.md` (the split exists because a single 1400-line file
+made a grep or a tail look complete while missing whole minors). Never
+write released content into the index — `scripts/promote_upgrading.py`,
+which `template-release.yml` runs, moves the Unreleased section into the
+right per-minor file at release time (creating file and pointer on a
+minor or major, appending on a patch) and leaves a fresh empty
+`## Unreleased` behind. `scripts/copier_update_notes.py` (rendered into
+every project) assembles a jump's notes from those per-minor files for
+the copier-update PR body.
+
+`template-ci` asserts the invariants — at most one `## Unreleased` and it
+is last, every index section is a pointer whose per-minor file exists,
+every per-minor file is indexed — and that the release workflow still
+both runs the promotion and stages the result (`upgrading/` included).
+Run `python3 scripts/promote_upgrading.py --check` locally to see what
+it sees.
 
 The release *model* that generated projects follow — trunk releases from
 a quiescent commit by default, short-lived `release/X.Y` branches as the
