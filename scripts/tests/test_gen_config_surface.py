@@ -3123,6 +3123,28 @@ class TestConfigurationReference:
         with pytest.raises(SystemExit, match="group_by"):
             g.render_splice_file(tmp_path, "doc.md", file_spec, [_splice_var("X")], ctx)
 
+    @pytest.mark.parametrize("bad_level", ["three", 1, 7, True])
+    def test_invalid_group_heading_level_raises_loudly(self, tmp_path, bad_level):
+        """A malformed `group_heading_level:` must fail as a `SystemExit`
+        naming the region, like every other presentation-config mistake —
+        never a bare `ValueError` from `int()` (a non-numeric value) or a
+        silently wrong heading (YAML `true` is an `int` of 1)."""
+        _one_region_file(tmp_path)
+        file_spec = {
+            "regions": [
+                {
+                    "id": "A",
+                    "tags": ["t"],
+                    "group_by": "group",
+                    "group_heading_level": bad_level,
+                    "columns": ["variable"],
+                },
+            ],
+        }
+        ctx = g.PresentationContext(presentation={}, answers={})
+        with pytest.raises(SystemExit, match="group_heading_level"):
+            g.render_splice_file(tmp_path, "doc.md", file_spec, [_splice_var("X")], ctx)
+
     def test_empty_region_with_note_renders_the_note_not_a_table(self, tmp_path):
         _one_region_file(tmp_path)
         file_spec = {

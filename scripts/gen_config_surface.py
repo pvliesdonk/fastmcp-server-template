@@ -2661,7 +2661,20 @@ def _render_region_body(
             "the only supported value is 'group' (the wizard group hint)."
         )
 
-    heading = "#" * int(region.get("group_heading_level", 3))
+    raw_level = region.get("group_heading_level", 3)
+    # `isinstance(raw_level, bool)` first: bool subclasses int, and YAML
+    # `true` silently multiplying into a one-`#` heading is exactly the
+    # quiet misrender the loud-SystemExit discipline here exists to stop.
+    if (
+        isinstance(raw_level, bool)
+        or not isinstance(raw_level, int)
+        or not 2 <= raw_level <= 6
+    ):
+        raise SystemExit(
+            f"ERROR: {source} has invalid 'group_heading_level' {raw_level!r} "
+            "— expected an integer between 2 and 6."
+        )
+    heading = "#" * raw_level
     ungrouped = [v for v in region_vars if not v.wizard.get("group")]
     groups: dict[str, list[Var]] = {}
     for var in region_vars:
