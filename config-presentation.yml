@@ -544,7 +544,13 @@ files:
         tags: [domain]
         group_by: group
         columns: [variable, default, required, description]
-        empty_note: "_No domain variables yet. Fields added between the `CONFIG-FIELDS` sentinels in `config.py` appear here automatically._"
+        # Operator-facing wording only (this note renders on the published
+        # docs site): the authoring guidance — fields added between the
+        # CONFIG-FIELDS sentinels appear here automatically — lives in the
+        # DOMAIN-CONFIG-VARS sentinel comment beside this region and in the
+        # config-contract skill, per the scrub of implementer prose from
+        # operator pages (#286/#287).
+        empty_note: "_This project defines no variables of its own yet, beyond the sections above._"
       - id: REF-SERVER
         tags: [server]
         columns: [variable, default, description]

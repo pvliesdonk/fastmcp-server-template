@@ -609,7 +609,7 @@ jobs:
           tasks_url_rows=$(grep -cF '| `SMOKE_MCP_TASKS_URL`' "$REFDOC" || true)
           [ "$tasks_url_rows" -eq 1 ] \
             || { echo "::error::$REFDOC lists SMOKE_MCP_TASKS_URL in $tasks_url_rows rows, expected exactly 1 — a multi-tag var must render once"; exit 1; }
-          refregion REF-DOMAIN | grep -qF 'No domain variables yet' \
+          refregion REF-DOMAIN | grep -qF 'defines no variables of its own yet' \
             || { echo "::error::$REFDOC REF-DOMAIN region missing its empty note in the no-domain-fields smoke render"; exit 1; }
 
       - name: README doc-site links resolve on a versioned deployment
