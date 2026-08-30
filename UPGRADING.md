@@ -1418,8 +1418,8 @@ Do by hand only if it applies:
 
 ## Unreleased - Generated configuration reference, curated README tables
 
-The documentation side of the config surface is reshaped
-(template#<PR>): `docs/configuration.md` becomes the complete generated
+The documentation side of the config surface is reshaped:
+`docs/configuration.md` becomes the complete generated
 reference (one `GENERATED-ENV-TABLE-REF-*` region per section, domain
 vars grouped by their wizard `group` hints, with a `complete: true`
 guard that fails CI when a var would land in no section), and

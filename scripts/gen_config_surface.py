@@ -2526,7 +2526,9 @@ def splice_region(text: str, region_id: str, body: str, *, source: str) -> str:
     return f"{before}{body}\n{after}" if body else f"{before}{after}"
 
 
-def _region_provenances(region: Mapping[str, Any], source: str) -> frozenset[str] | None:
+def _region_provenances(
+    region: Mapping[str, Any], source: str
+) -> frozenset[str] | None:
     """The region's validated `provenance:` filter, or ``None`` for no filter.
 
     Rejects a non-list value rather than coercing (``list("domain")``
@@ -2888,7 +2890,9 @@ _ARTIFACT_RENDERERS: dict[str, Callable[..., str]] = {
 }
 
 
-def _resolve_renderer(rel_path: str, file_spec: Mapping[str, Any]) -> Callable[..., str]:
+def _resolve_renderer(
+    rel_path: str, file_spec: Mapping[str, Any]
+) -> Callable[..., str]:
     """The renderer for one `files:` entry's ``kind``.
 
     An unrecognised ``kind`` fails loudly instead of either silently

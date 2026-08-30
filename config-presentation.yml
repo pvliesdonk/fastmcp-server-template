@@ -44,7 +44,7 @@ vars:
     provenance: template
     type_name: "int"
     default: 5678
-    help: "debugpy listen port; the image must be built with --build-arg DEBUG=true."
+    help: "debugpy listen port; the image must be built with `--build-arg DEBUG=true`."
     tags: [debug]
     # Development-only; read inside core's maybe_start_debugpy, not project
     # src/. Documented in the env artifacts but offered no wizard control —
@@ -68,7 +68,7 @@ vars:
     provenance: template
     type_name: "int"
     default: 1000
-    help: "Run the server process as this UID; the container entrypoint chowns writable paths to match."
+    help: "Run the server process as this UID; the container entrypoint reassigns ownership of writable paths to match."
     tags: [container]
     wizard: {control: none}
 
@@ -263,6 +263,9 @@ packaging:
 # tables (`JWTs` → `JSON Web Tokens`) rather than merely accepted.
 markdown_vocabulary:
   JWTs: "JSON Web Tokens"
+  # `ai-tells.OverusedVocabulary` rejects "meaningful"; core's TASKS_URL
+  # help uses it in this one transitional shape.
+  "Only meaningful when": "Only applies when"
 
 # The effective value a var falls back to at runtime when its own dataclass
 # `default` renders empty (see `_is_empty_default`) — core's field metadata
