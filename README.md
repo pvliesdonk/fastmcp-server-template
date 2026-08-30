@@ -1,5 +1,7 @@
 # fastmcp-server-template
 
+[![repowise](https://api.repowise.dev/badge/wiki/pvliesdonk/fastmcp-server-template.svg)](https://repowise.dev/repo/pvliesdonk/fastmcp-server-template) [![Code health](https://api.repowise.dev/badge/health/pvliesdonk/fastmcp-server-template.svg)](https://repowise.dev/repo/pvliesdonk/fastmcp-server-template)
+
 Copier template that scaffolds a production-ready FastMCP server on top of
 [`fastmcp-pvl-core`](https://pypi.org/project/fastmcp-pvl-core/): auth,
 middleware, logging, config surface, packaging channels (PyPI, Docker,
