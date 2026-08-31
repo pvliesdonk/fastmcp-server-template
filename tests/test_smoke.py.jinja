@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -115,10 +116,14 @@ def test_server_name_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     operator can rename an instance without editing template-owned code.
     """
     monkeypatch.setenv("{{ env_prefix }}_SERVER_NAME", "renamed-instance")
-    assert make_server().name == "renamed-instance"
+    server = make_server()
+    assert server.name == "renamed-instance"
+    assert (server.instructions or "").startswith(
+        "renamed-instance: {{ domain_description | trim }}"
+    )
 
 
-async def test_server_name_env_override_reaches_server_info(
+def test_server_name_env_override_reaches_server_info(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The overridden name also flows through to ``get_server_info``.
@@ -128,8 +133,12 @@ async def test_server_name_env_override_reaches_server_info(
     """
     monkeypatch.setenv("{{ env_prefix }}_SERVER_NAME", "renamed-instance")
     server = make_server()
-    async with Client(server) as smoke_client:
-        result = await smoke_client.call_tool("get_server_info", {})
+
+    async def _call_server_info() -> Any:
+        async with Client(server) as smoke_client:
+            return await smoke_client.call_tool("get_server_info", {})
+
+    result = asyncio.run(_call_server_info())
     first = result.content[0]
     assert hasattr(first, "text"), (
         f"expected text tool content, got {type(first).__name__}"
@@ -140,33 +149,40 @@ async def test_server_name_env_override_reaches_server_info(
 def test_instructions_env_override(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Legacy ``{{ env_prefix }}_INSTRUCTIONS`` still replaces everything, and
-    says so: pvl-core logs one deprecation warning pointing at ``_EXTRA``."""
+    """Legacy ``{{ env_prefix }}_INSTRUCTIONS`` replaces all generated text and
+    warns that both additive operator variables are ignored."""
     monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS", "Custom operator text.")
+    monkeypatch.setenv("{{ env_prefix }}_INSTANCE_DESCRIPTION", "Demo material.")
+    monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS_EXTRA", "House rule: be brief.")
     # Scope to core's logger: make_server() re-applies FASTMCP_LOG_LEVEL to the
     # root logger, which would otherwise drop the record under a stricter env.
     monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
     with caplog.at_level("WARNING", logger="fastmcp_pvl_core"):
         server = make_server()
     assert server.instructions == "Custom operator text."
-    assert any(
-        "{{ env_prefix }}_INSTRUCTIONS_EXTRA" in rec.getMessage() for rec in caplog.records
-    ), "expected the deprecation warning naming the _EXTRA replacement"
+    warning = next(
+        rec.getMessage()
+        for rec in caplog.records
+        if "{{ env_prefix }}_INSTRUCTIONS" in rec.getMessage()
+    )
+    assert "{{ env_prefix }}_INSTANCE_DESCRIPTION" in warning
+    assert "{{ env_prefix }}_INSTRUCTIONS_EXTRA" in warning
 
 
-def test_instructions_compose_identity_and_operator_extra(
+def test_instructions_compose_semantic_operator_roles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unset ``INSTRUCTIONS``, the text is composed: the identity line the
-    scaffold contributes comes first, and ``_EXTRA`` is appended verbatim."""
+    """Operator routing and policy retain their semantic positions."""
     monkeypatch.delenv("{{ env_prefix }}_INSTRUCTIONS", raising=False)
+    monkeypatch.setenv("{{ env_prefix }}_INSTANCE_DESCRIPTION", "Demo material.")
     monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS_EXTRA", "House rule: be brief.")
     text = make_server().instructions or ""
-    assert text.startswith(
-        "{{ domain_description | trim }}",
-    )
-    assert "https://{{ github_org }}.github.io/{{ project_name }}/latest/llms.txt" in text
-    assert text.rstrip().endswith("House rule: be brief.")
+    assert text.split("\n\n") == [
+        "{{ project_name }}: {{ domain_description | trim }}",
+        "Demo material.",
+        "House rule: be brief.",
+        "Full documentation for this server: https://{{ github_org }}.github.io/{{ project_name }}/latest/llms.txt",
+    ]
 
 
 def test_blank_overrides_fall_back_to_defaults(
@@ -185,7 +201,7 @@ def test_blank_overrides_fall_back_to_defaults(
     server = make_server()
     assert server.name == "{{ project_name }}"
     assert (server.instructions or "").startswith(
-        "{{ domain_description | trim }}",
+        "{{ project_name }}: {{ domain_description | trim }}",
     )
 
 
@@ -199,7 +215,7 @@ async def test_summarize_prompt_includes_context(client: Client[Any]) -> None:
     assert "hello world" in content.text
 
 
-async def test_no_file_exchange_scaffolding(
+def test_no_file_exchange_scaffolding(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -218,8 +234,12 @@ async def test_no_file_exchange_scaffolding(
     monkeypatch.setenv("MCP_EXCHANGE_DIR", str(tmp_path))
 
     server = make_server(transport="http")
-    async with Client(server) as smoke_client:
-        tools = {t.name for t in await smoke_client.list_tools()}
+
+    async def _list_tools() -> set[str]:
+        async with Client(server) as smoke_client:
+            return {t.name for t in await smoke_client.list_tools()}
+
+    tools = asyncio.run(_list_tools())
     assert "create_download_link" not in tools
     assert "fetch_file" not in tools
     assert "create_upload_link" not in tools

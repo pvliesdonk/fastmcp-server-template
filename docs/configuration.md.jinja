@@ -17,11 +17,17 @@ quick entry point.
 
 ## Server
 
-Transport, identity, and tool visibility. `{{ env_prefix }}_SERVER_NAME` and
-`{{ env_prefix }}_INSTRUCTIONS_EXTRA` let an operator rename an instance or
-append deployment notes to the generated MCP instructions without touching
-code; the legacy `{{ env_prefix }}_INSTRUCTIONS` replaces the generated text
-wholesale and logs a deprecation warning at startup.
+Transport, identity, and tool visibility. `{{ env_prefix }}_SERVER_NAME`
+identifies the deployment, `{{ env_prefix }}_INSTANCE_DESCRIPTION`
+distinguishes its material or responsibility for routing, and
+`{{ env_prefix }}_INSTRUCTIONS_EXTRA` supplies deployment-specific behavioral
+policy. The legacy `{{ env_prefix }}_INSTRUCTIONS` replaces all generated text,
+ignores both additive variables, and logs a deprecation warning at startup.
+
+Generated guidance targets 1,536 UTF-16 units, reserving 512 units for normal
+operator routing and policy within Claude Code's known 2,048-unit limit.
+Crossing either threshold logs a warning; startup continues and the server does
+not truncate the instructions.
 
 `{{ env_prefix }}_TOOLS_ALLOW` and `{{ env_prefix }}_TOOLS_DENY` trim which
 tools an instance exposes. Hidden tools disappear from `tools/list` and are

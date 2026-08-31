@@ -29,12 +29,16 @@
           "description": "Rename this server instance; defaults to the project name."
         },
         {
+          "name": "{{ env_prefix }}_INSTANCE_DESCRIPTION",
+          "description": "Concise routing context that distinguishes this deployment's material or responsibility."
+        },
+        {
           "name": "{{ env_prefix }}_INSTRUCTIONS_EXTRA",
-          "description": "Operator context appended to the generated MCP instructions."
+          "description": "Deployment-specific behavioral policy added to the generated MCP instructions."
         },
         {
           "name": "{{ env_prefix }}_INSTRUCTIONS",
-          "description": "Legacy: replaces the entire generated MCP instructions text (deprecated; prefer the _EXTRA variant)."
+          "description": "Legacy: replaces all generated MCP instructions (deprecated; use _INSTANCE_DESCRIPTION for routing and _INSTRUCTIONS_EXTRA for policy)."
         },
         {
           "name": "FASTMCP_LOG_LEVEL",
@@ -155,12 +159,16 @@
           "description": "Rename this server instance; defaults to the project name."
         },
         {
+          "name": "{{ env_prefix }}_INSTANCE_DESCRIPTION",
+          "description": "Concise routing context that distinguishes this deployment's material or responsibility."
+        },
+        {
           "name": "{{ env_prefix }}_INSTRUCTIONS_EXTRA",
-          "description": "Operator context appended to the generated MCP instructions."
+          "description": "Deployment-specific behavioral policy added to the generated MCP instructions."
         },
         {
           "name": "{{ env_prefix }}_INSTRUCTIONS",
-          "description": "Legacy: replaces the entire generated MCP instructions text (deprecated; prefer the _EXTRA variant)."
+          "description": "Legacy: replaces all generated MCP instructions (deprecated; use _INSTANCE_DESCRIPTION for routing and _INSTRUCTIONS_EXTRA for policy)."
         },
         {
           "name": "{{ env_prefix }}_HTTP_PATH",

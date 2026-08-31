@@ -33,7 +33,8 @@ docker inspect --format {% raw %}'{{ index .Config.Labels "org.opencontainers.im
 |----------|---------|-------------|
 | `{{ env_prefix }}_BEARER_TOKEN` | n/a | Enable bearer token auth |
 | `FASTMCP_LOG_LEVEL` | `INFO` | Log level (`DEBUG` / `INFO` / `WARNING` / `ERROR`) |
-| `{{ env_prefix }}_INSTRUCTIONS_EXTRA` | n/a | Operator context appended to the generated MCP instructions |
+| `{{ env_prefix }}_INSTANCE_DESCRIPTION` | n/a | Routing context that distinguishes this deployment |
+| `{{ env_prefix }}_INSTRUCTIONS_EXTRA` | n/a | Deployment-specific behavioral policy added to the generated MCP instructions |
 | `{{ env_prefix }}_INSTRUCTIONS` | (computed at startup) | Legacy full replacement of the generated instructions (deprecated) |
 | `{{ env_prefix }}_DEBUG_PORT` | n/a | Remote-debugger TCP port (see [Remote debugging](#remote-debugging); requires `--build-arg DEBUG=true` image) |
 | `{{ env_prefix }}_DEBUG_WAIT` | `false` | Block startup until IDE attaches (see [Remote debugging](#remote-debugging)) |

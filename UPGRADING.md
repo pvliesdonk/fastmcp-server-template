@@ -260,4 +260,46 @@ Steps: [upgrading/v6.1.md](upgrading/v6.1.md).
 
 ## Unreleased
 
-_Nothing yet._
+### fastmcp-pvl-core 6: semantic instruction roles
+
+The floor moves to `fastmcp-pvl-core>=6.0.0,<7`. pvl-core 6 replaces numeric
+instruction priorities with semantic roles, shapes identity as
+`identity(server_name, product_description)`, evaluates FastMCP's effective
+global tool listing during synchronous finalization, and separates operator
+routing from policy. `copier update` re-renders the standard server wiring and
+adds `<PREFIX>_INSTANCE_DESCRIPTION` to generated configuration surfaces.
+
+Do these steps after the update:
+
+1. Run `uv lock` to resolve the new major.
+2. Search project-owned instruction contributions for `priority=` or `tools=`.
+   Replace them with `role=InstructionRole.INSTANCE`,
+   `role=InstructionRole.CAPABILITIES`, or
+   `role=InstructionRole.WORKFLOWS`, and rename `tools=` to
+   `requires_tools=`. Import `InstructionRole` from `fastmcp_pvl_core`.
+   Routing, policy, identity, and documentation are reserved roles and cannot
+   be added through the general `add(...)` method.
+3. Keep `finalize_instructions(...)` in synchronous server construction, after
+   every registration and `apply_tool_visibility(...)`. Do not call
+   `make_server()` from an active event loop or move server construction to a
+   worker thread; construct it synchronously before entering the loop.
+4. Update seeded-once `tests/conftest.py` so a synchronous fixture constructs
+   the server before the async client fixture enters an event loop. Update
+   `tests/test_smoke.py` instruction assertions too: identity now begins
+   `<server-name>: <domain-description>`, routing from
+   `<PREFIX>_INSTANCE_DESCRIPTION` follows it, and policy from
+   `<PREFIX>_INSTRUCTIONS_EXTRA` follows enforced instance facts rather than
+   being appended at the end. Copy both files from a fresh render if the
+   project has no local variants.
+
+Operators should move concise descriptions of the data or responsibility that
+distinguishes a deployment from `<PREFIX>_INSTRUCTIONS_EXTRA` to
+`<PREFIX>_INSTANCE_DESCRIPTION`. Keep behavioral rules in
+`<PREFIX>_INSTRUCTIONS_EXTRA`. Legacy `<PREFIX>_INSTRUCTIONS` still replaces
+the complete generated text, ignores both additive variables, and logs a
+deprecation warning.
+
+pvl-core now measures instruction text in UTF-16 code units. Generated guidance
+targets 1,536 units, reserving 512 units for operator routing and policy within
+Claude Code's known 2,048-unit limit. Exceeding either threshold warns but does
+not truncate instructions or fail startup.

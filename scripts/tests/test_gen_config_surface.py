@@ -550,6 +550,14 @@ class TestCollectVars:
         assert "DEMO_MCP_BASE_URL" in names
         assert not any(n.startswith("SCHOLAR") for n in names)
 
+    def test_instance_description_is_template_owned_routing_context(self, fake_project):
+        vars_ = g.collect_vars(fake_project, g.load_answers(fake_project))
+        routing = next(v for v in vars_ if v.name == "DEMO_MCP_INSTANCE_DESCRIPTION")
+        assert routing.provenance == "template"
+        assert routing.tags == ("server",)
+        assert "routing context" in routing.help
+        assert routing.wizard == {"group": "Server"}
+
     def test_every_var_carries_at_least_one_tag(self, fake_project):
         untagged = [
             v.name
@@ -595,7 +603,7 @@ class TestCollectVars:
             g.collect_vars(fake_project, answers)
 
     def test_duplicate_var_name_raises_a_clear_error(self, fake_project, monkeypatch):
-        def _fake_load_presentation(project_root, env_prefix):  # noqa: ARG001
+        def _fake_load_presentation(_project_root, env_prefix):
             return {
                 "vars": [
                     {
@@ -674,9 +682,8 @@ class TestEnsureCoreAvailable:
 
     def test_matches_the_real_projects_declared_floor(self):
         """Pin against the repo's real pyproject.toml.jinja, not a fixture —
-        a fabricated fixture can't notice the declared floor lagging behind
-        the fastmcp-pvl-core version this generator actually needs (4.6.1, for
-        `domain_env_surface`'s field-name resolution of local-read vars)."""
+        a fabricated fixture can't notice the template retaining a core major
+        whose instruction contract the rendered server no longer implements."""
         real_pyproject = (
             Path(__file__).resolve().parent.parent.parent / "pyproject.toml.jinja"
         )
@@ -687,7 +694,7 @@ class TestEnsureCoreAvailable:
         floor = re.search(r">=\s*([0-9]+(?:\.[0-9]+)*)", constraint.group(1))
         assert floor is not None
         parts = tuple(int(part) for part in floor.group(1).split("."))
-        assert parts >= (4, 6, 1)
+        assert parts >= (6, 0, 0)
 
     def test_core_importable_false_when_a_needed_symbol_is_missing(self, monkeypatch):
         """#306: a pre-update core that imports but lacks `domain_env_surface`
@@ -730,7 +737,7 @@ class TestEnsureCoreAvailable:
 
         recorded = {}
 
-        def _record_execvpe(file, args, env):  # noqa: ARG001
+        def _record_execvpe(_file, args, _env):
             recorded["args"] = args
 
         monkeypatch.setattr(g.os, "execvpe", _record_execvpe)
@@ -1477,7 +1484,7 @@ class TestWriteArtifacts:
         answers = g.load_answers(fake_project)
         vars_ = g.collect_vars(fake_project, answers)
 
-        def _raising_collect_vars(project_root, answers):  # noqa: ARG001
+        def _raising_collect_vars(_project_root, _answers):
             raise AssertionError(
                 "collect_vars must not be called when vars_ is supplied"
             )
@@ -1567,7 +1574,7 @@ class TestDomainYamlTagging:
     def test_domain_yaml_var_gets_domain_tag_and_lands_in_env_example(
         self, fake_project, template_root, monkeypatch
     ):
-        def _fake_domain_presentation(presentation_root, env_prefix):  # noqa: ARG001
+        def _fake_domain_presentation(_presentation_root, env_prefix):
             return {
                 "vars": [
                     {
@@ -1593,7 +1600,7 @@ class TestDomainYamlTagging:
     def test_domain_yaml_var_with_no_tags_still_lands_via_the_domain_tag(
         self, fake_project, template_root, monkeypatch
     ):
-        def _fake_domain_presentation(presentation_root, env_prefix):  # noqa: ARG001
+        def _fake_domain_presentation(_presentation_root, env_prefix):
             return {
                 "vars": [
                     {
@@ -1627,7 +1634,7 @@ class TestDomainYamlRequiredness:
     """
 
     @staticmethod
-    def _fake_domain_presentation(presentation_root, env_prefix):  # noqa: ARG004
+    def _fake_domain_presentation(_presentation_root, env_prefix):
         return {
             "vars": [
                 {
@@ -2215,7 +2222,7 @@ class TestDomainWizardSections:
 
 class TestUnknownFileKind:
     def test_unknown_kind_in_files_raises(self, fake_project, monkeypatch):
-        def _fake_load_presentation(project_root, env_prefix):  # noqa: ARG001
+        def _fake_load_presentation(_project_root, _env_prefix):
             return {
                 "files": {
                     "mystery.txt": {"kind": "mystery"},
@@ -2313,7 +2320,7 @@ class TestMain:
 
 
 class TestRenderMdTable:
-    def test_two_column_shape(self, fake_project, template_root):  # noqa: ARG002
+    def test_two_column_shape(self, fake_project):
         answers = g.load_answers(fake_project)
         vars_ = [v for v in g.collect_vars(fake_project, answers) if "oidc" in v.tags]
         table = g.render_md_table(vars_, ["variable", "description"])
@@ -2325,7 +2332,6 @@ class TestRenderMdTable:
     def test_three_column_shape_includes_default(
         self,
         fake_project,
-        template_root,  # noqa: ARG002
     ):
         answers = g.load_answers(fake_project)
         vars_ = [v for v in g.collect_vars(fake_project, answers) if "readme" in v.tags]
@@ -2740,7 +2746,7 @@ class TestReadmeRegions:
             table.splitlines()[0] == "| Variable | Default | Required | Description |"
         )
 
-    def test_empty_domain_table_still_renders_a_header(self, fake_project):  # noqa: ARG002
+    def test_empty_domain_table_still_renders_a_header(self):
         """A fresh scaffold has no domain fields; the table must not collapse to nothing."""
         table = g.render_md_table(
             [], ["variable", "default", "required", "description"]
@@ -3512,6 +3518,8 @@ class TestServerJsonSplice:
         # shorthand label, so a stdio install wants it too.
         assert "FASTMCP_LOG_LEVEL" in pypi and "FASTMCP_LOG_LEVEL" in oci
         assert "DEMO_MCP_SERVER_NAME" in pypi and "DEMO_MCP_SERVER_NAME" in oci
+        assert "DEMO_MCP_INSTANCE_DESCRIPTION" in pypi
+        assert "DEMO_MCP_INSTANCE_DESCRIPTION" in oci
         assert "DEMO_MCP_KV_STORE_URL" in pypi and "DEMO_MCP_KV_STORE_URL" in oci
 
     def test_a_deprecated_fallback_is_in_neither(self, fake_project):
@@ -3956,10 +3964,15 @@ class TestMcpbUserConfig:
         g.write_artifacts(fake_project, check=False)
         manifest = _mcpb_manifest(fake_project)
         # The seeded STALE field and env entry are gone — replaced, not merged.
-        assert set(manifest["user_config"]) == {"server_name", "log_level"}
+        assert set(manifest["user_config"]) == {
+            "server_name",
+            "instance_description",
+            "log_level",
+        }
         env = manifest["server"]["mcp_config"]["env"]
         assert env == {
             "DEMO_MCP_SERVER_NAME": "${user_config.server_name}",
+            "DEMO_MCP_INSTANCE_DESCRIPTION": "${user_config.instance_description}",
             "FASTMCP_LOG_LEVEL": "${user_config.log_level}",
         }
         # Screen metadata falls back to the var's own surface metadata.
@@ -3968,6 +3981,8 @@ class TestMcpbUserConfig:
         assert server_name["title"] == "Server name"
         assert server_name["required"] is False
         assert server_name["description"]
+        instance = manifest["user_config"]["instance_description"]
+        assert "routing context" in instance["description"]
         # The envsubst placeholders the release flow owns survive untouched.
         assert manifest["version"] == "${VERSION}"
         assert "${VERSION}" in manifest["server"]["mcp_config"]["args"][1]
@@ -4022,6 +4037,7 @@ class TestMcpbUserConfig:
         manifest = _mcpb_manifest(fake_project)
         assert list(manifest["user_config"]) == [
             "server_name",
+            "instance_description",
             "source_dir",
             "git_token",
         ]

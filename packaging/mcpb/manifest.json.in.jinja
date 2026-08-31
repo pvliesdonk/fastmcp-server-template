@@ -26,6 +26,7 @@
       "args": ["--from", "{{ pypi_name }}[all]==${VERSION}", "{{ project_name }}", "serve"],
       "env": {
         "{{ env_prefix }}_SERVER_NAME": "${user_config.server_name}",
+        "{{ env_prefix }}_INSTANCE_DESCRIPTION": "${user_config.instance_description}",
         "FASTMCP_LOG_LEVEL":            "${user_config.log_level}"
       }
     }
@@ -37,6 +38,12 @@
       "description": "Name shown in the Claude tool list.",
       "required": false,
       "default": "{{ project_name }}"
+    },
+    "instance_description": {
+      "type": "string",
+      "title": "Instance description",
+      "description": "Concise routing context that distinguishes this deployment's material or responsibility.",
+      "required": false
     },
     "log_level": {
       "type": "string",
