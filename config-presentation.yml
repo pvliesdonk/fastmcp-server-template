@@ -16,11 +16,19 @@ vars:
     tags: [server]
     wizard: {group: Server, when: server}
 
+  - name: "{PREFIX}_INSTANCE_DESCRIPTION"
+    provenance: template
+    type_name: "str"
+    default: null
+    help: "Concise routing context that distinguishes this deployment's material or responsibility."
+    tags: [server]
+    wizard: {group: Server}
+
   - name: "{PREFIX}_INSTRUCTIONS_EXTRA"
     provenance: template
     type_name: "str"
     default: null
-    help: "Operator context appended to the generated MCP instructions."
+    help: "Deployment-specific behavioral policy added to the generated MCP instructions."
     tags: [server]
     wizard: {group: Server, when: server}
 
@@ -28,7 +36,7 @@ vars:
     provenance: template
     type_name: "str"
     default: null
-    help: "Legacy: replaces the entire generated MCP instructions text (deprecated; prefer the _EXTRA variant)."
+    help: "Legacy: replaces all generated MCP instructions (deprecated; use _INSTANCE_DESCRIPTION for routing and _INSTRUCTIONS_EXTRA for policy)."
     tags: [server]
     wizard: {group: Server, when: server}
 
@@ -224,6 +232,7 @@ packaging:
   FASTMCP_LOG_LEVEL: [pypi, oci]
   FASTMCP_ENABLE_RICH_LOGGING: [pypi, oci]
   "{PREFIX}_SERVER_NAME": [pypi, oci]
+  "{PREFIX}_INSTANCE_DESCRIPTION": [pypi, oci]
   "{PREFIX}_INSTRUCTIONS_EXTRA": [pypi, oci]
   "{PREFIX}_INSTRUCTIONS": [pypi, oci]
   "{PREFIX}_HTTP_PATH": [oci]
@@ -561,6 +570,9 @@ files:
       "{PREFIX}_SERVER_NAME":
         id: server_name
         title: "Server name"
+      "{PREFIX}_INSTANCE_DESCRIPTION":
+        id: instance_description
+        title: "Instance description"
       FASTMCP_LOG_LEVEL:
         id: log_level
         title: "Log level"

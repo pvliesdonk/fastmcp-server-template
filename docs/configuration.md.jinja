@@ -12,17 +12,26 @@ variables (`{{ env_prefix }}_TRANSPORT`, `{{ env_prefix }}_HOST`,
 
 ## Server identity
 
-These two let an operator rename an instance or override its
-instructions, with no configuration beyond the variable itself:
+These variables let an operator identify an instance, distinguish it for
+routing, or set deployment policy without editing server code:
 
 - `{{ env_prefix }}_SERVER_NAME`: the server name reported to clients and
   by `get_server_info`. Defaults to `{{ project_name }}`.
-- `{{ env_prefix }}_INSTRUCTIONS_EXTRA`: operator context appended to the
-  generated MCP instructions (deployment notes, house rules). The generated
-  text (identity, tool workflows, documentation pointer) stays intact.
+- `{{ env_prefix }}_INSTANCE_DESCRIPTION`: concise routing context describing
+  which material or responsibility distinguishes this deployment.
+- `{{ env_prefix }}_INSTRUCTIONS_EXTRA`: deployment-specific behavioral policy
+  such as house rules. The generated identity, capabilities, workflows, and
+  documentation pointer stay intact.
 - `{{ env_prefix }}_INSTRUCTIONS`: legacy. Replaces the entire generated
-  instructions text and logs a deprecation warning at startup; when both are
-  set, `_EXTRA` is ignored. Move operator context to `_EXTRA`.
+  instructions text and logs a deprecation warning at startup; when it is set
+  with either additive variable, both additive variables are ignored. Move
+  routing context to `_INSTANCE_DESCRIPTION` and behavioral rules to
+  `_INSTRUCTIONS_EXTRA`.
+
+Generated guidance targets 1,536 UTF-16 units, reserving 512 units for normal
+operator routing and policy within Claude Code's known 2,048-unit limit.
+Crossing either threshold logs a warning; startup continues and the server does
+not truncate the instructions.
 
 ## Tool visibility
 
