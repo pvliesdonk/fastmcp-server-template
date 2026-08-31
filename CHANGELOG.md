@@ -1,5 +1,12 @@
 # Changelog
 
+## v7.0.0 (2026-08-31)
+
+- #554 feat!: adopt fastmcp-pvl-core 6 instruction roles
+- #550 chore(deps): update dependency renovatebot/github-action to v46.2.5
+- #549 feat: add repowise badges to template and generated project README
+
+
 ## v6.1.0 (2026-08-30)
 
 - #546 refactor(upgrading): split UPGRADING.md into an index plus per-minor files
