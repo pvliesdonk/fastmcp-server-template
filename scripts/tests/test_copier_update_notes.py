@@ -193,3 +193,139 @@ def test_cli_pick_target_prints_the_chosen_ref(
     )
     assert copier_update_notes.main() == 0
     assert capsys.readouterr().out.strip() == "v4.1.1"
+
+
+section_files = copier_update_notes.section_files
+
+INDEX = """# Upgrading generated projects
+
+Preamble prose with reading instructions.
+
+## Before every upgrade
+
+Generic checklist.
+
+## v3.1 - Safe post-update generation
+
+Steps: [upgrading/v3.1.md](upgrading/v3.1.md).
+
+## v3.2 - Tool visibility
+
+Steps: [upgrading/v3.2.md](upgrading/v3.2.md).
+
+## v4.0 - Release branches
+
+Steps: [upgrading/v4.0.md](upgrading/v4.0.md).
+
+## Unreleased
+
+Rename the env var.
+"""
+
+
+class TestPerMinorSplit:
+    """The post-split shape: the index's released sections are pointers and
+    the full steps live in per-minor files the workflow fetches. `notes`
+    must embed the fetched files in full, degrade to the pointer for a file
+    that failed to fetch, and still take `## Unreleased` from the index."""
+
+    def _sections_dir(self, tmp_path: Path) -> Path:
+        sections = tmp_path / "sections"
+        sections.mkdir()
+        (sections / "v3.1.md").write_text(
+            "## v3.1 - Safe post-update generation\n\nFull v3.1 steps.\n",
+            encoding="utf-8",
+        )
+        (sections / "v3.2.md").write_text(
+            "## v3.2 - Tool visibility\n\nFull v3.2 steps.\n", encoding="utf-8"
+        )
+        return sections
+
+    def test_section_files_lists_exactly_the_jump_range(self) -> None:
+        assert section_files(INDEX, "v3.1.1", "v3.2.0") == [
+            "upgrading/v3.1.md",
+            "upgrading/v3.2.md",
+        ]
+        assert section_files(INDEX, "v3.2.0", "deadbeef") == [
+            "upgrading/v3.2.md",
+            "upgrading/v4.0.md",
+        ]
+        assert section_files(INDEX, "deadbeef", "v4.0.0") == []
+
+    def test_fetched_files_embed_in_full(self, tmp_path: Path) -> None:
+        notes = select_sections(
+            INDEX, "v3.1.1", "v3.2.0", sections_dir=self._sections_dir(tmp_path)
+        )
+        assert "Full v3.1 steps." in notes
+        assert "Full v3.2 steps." in notes
+        assert "Steps: [upgrading/v3.1.md]" not in notes
+
+    def test_a_missing_file_degrades_to_its_pointer_row(self, tmp_path: Path) -> None:
+        """A failed fetch must leave a working link, never a silent gap."""
+        notes = select_sections(
+            INDEX, "v3.1.1", "v4.0.0", sections_dir=self._sections_dir(tmp_path)
+        )
+        assert "Full v3.2 steps." in notes
+        assert "Steps: [upgrading/v4.0.md](upgrading/v4.0.md)." in notes
+
+    def test_unreleased_still_comes_from_the_index(self, tmp_path: Path) -> None:
+        notes = select_sections(
+            INDEX, "v3.2.0", "deadbeef", sections_dir=self._sections_dir(tmp_path)
+        )
+        assert "Full v3.2 steps." in notes
+        assert "Rename the env var." in notes
+
+    def test_no_sections_dir_keeps_the_index_selection(self) -> None:
+        """The pre-split call shape: an old rendered workflow embeds the
+        index rows for the range — degraded but linked, never empty."""
+        notes = select_sections(INDEX, "v3.1.1", "v3.2.0")
+        assert "Steps: [upgrading/v3.1.md](upgrading/v3.1.md)." in notes
+        assert "Steps: [upgrading/v3.2.md](upgrading/v3.2.md)." in notes
+
+    def test_cli_section_files_prints_the_paths(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        upgrading = tmp_path / "UPGRADING.md"
+        upgrading.write_text(INDEX, encoding="utf-8")
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "copier_update_notes.py",
+                "section-files",
+                "--upgrading",
+                str(upgrading),
+                "--previous",
+                "v3.1.1",
+                "--target",
+                "v3.2.0",
+            ],
+        )
+        assert copier_update_notes.main() == 0
+        assert capsys.readouterr().out.split() == [
+            "upgrading/v3.1.md",
+            "upgrading/v3.2.md",
+        ]
+
+    def test_cli_notes_with_sections_dir(self, tmp_path: Path, monkeypatch) -> None:
+        upgrading = tmp_path / "UPGRADING.md"
+        upgrading.write_text(INDEX, encoding="utf-8")
+        output = tmp_path / "notes.md"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "copier_update_notes.py",
+                "notes",
+                "--upgrading",
+                str(upgrading),
+                "--previous",
+                "v3.1.1",
+                "--target",
+                "v3.2.0",
+                "--sections-dir",
+                str(self._sections_dir(tmp_path)),
+                "--output",
+                str(output),
+            ],
+        )
+        assert copier_update_notes.main() == 0
+        assert "Full v3.1 steps." in output.read_text(encoding="utf-8")

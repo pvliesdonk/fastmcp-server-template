@@ -569,11 +569,48 @@ jobs:
           [ "$core_rows" -eq 3 ] \
             || { echo "::error::$README CORE region has $core_rows data rows, expected exactly 3"; exit 1; }
 
-          # --- DOMAIN region: header row present. The smoke render has no
-          # domain fields, so this only asserts the table header — NOT data
-          # rows, which the no-domain-fields smoke render would never have.
-          region DOMAIN | grep -qF '| Variable | Default | Required | Description |' \
-            || { echo "::error::$README DOMAIN region missing its table header row"; exit 1; }
+          # --- DOMAIN region: a curated `readme`-tagged subset since the
+          # generated-reference rework. The smoke render has no domain
+          # fields (and so none tagged `readme`), so the region must carry
+          # its declared empty note — pointing authors at the tagging
+          # mechanism and the full reference — and NOT a bare header-only
+          # table, which is exactly the rendering the note replaces.
+          region DOMAIN | grep -qF 'No variables are featured here yet' \
+            || { echo "::error::$README DOMAIN region missing its curated-subset empty note"; exit 1; }
+          if region DOMAIN | grep -qF '| Variable |'; then
+            echo "::error::$README DOMAIN region renders a table in a render with no readme-tagged domain fields — expected the empty note only"; exit 1
+          fi
+
+          # --- docs/configuration.md: the complete generated reference.
+          # Marker presence for every gate-on region (REF-AUTHZ included:
+          # smoke-answers sets enable_authorization: true), then two content
+          # probes. Idempotence and full coverage are the generator's own
+          # job (`--check` above, plus its `complete: true` guard, which a
+          # generation run enforces); this step pins what a broken splice
+          # would silently lose: that section tables actually carry rows,
+          # and that the claim-once rule keeps a multi-tag var (TASKS_URL
+          # is tagged both persistence and tasks) in its first-declared
+          # section, exactly once.
+          REFDOC=docs/configuration.md
+          refregion() {  # refregion <region-id>
+            sed -n "/GENERATED-ENV-TABLE-$1-START/,/GENERATED-ENV-TABLE-$1-END/p" "$REFDOC"
+          }
+          for kind in REF-DOMAIN REF-SERVER REF-AUTH REF-PERSISTENCE REF-TASKS REF-APPS REF-AUTHZ REF-LOGGING REF-CONTAINER REF-DEBUG; do
+            grep -qF "GENERATED-ENV-TABLE-$kind-START" "$REFDOC" \
+              || { echo "::error::$REFDOC missing GENERATED-ENV-TABLE-$kind-START marker"; exit 1; }
+            grep -qF "GENERATED-ENV-TABLE-$kind-END" "$REFDOC" \
+              || { echo "::error::$REFDOC missing GENERATED-ENV-TABLE-$kind-END marker"; exit 1; }
+          done
+          server_rows=$(refregion REF-SERVER | grep -cE '^\| `' || true)
+          [ "$server_rows" -ge 5 ] \
+            || { echo "::error::$REFDOC REF-SERVER region has $server_rows data rows — the server section lost its content"; exit 1; }
+          refregion REF-PERSISTENCE | grep -qF '`SMOKE_MCP_TASKS_URL`' \
+            || { echo "::error::$REFDOC TASKS_URL row not under REF-PERSISTENCE — the claim-once section rule regressed"; exit 1; }
+          tasks_url_rows=$(grep -cF '| `SMOKE_MCP_TASKS_URL`' "$REFDOC" || true)
+          [ "$tasks_url_rows" -eq 1 ] \
+            || { echo "::error::$REFDOC lists SMOKE_MCP_TASKS_URL in $tasks_url_rows rows, expected exactly 1 — a multi-tag var must render once"; exit 1; }
+          refregion REF-DOMAIN | grep -qF 'defines no variables of its own yet' \
+            || { echo "::error::$REFDOC REF-DOMAIN region missing its empty note in the no-domain-fields smoke render"; exit 1; }
 
       - name: README doc-site links resolve on a versioned deployment
         # docs.yml publishes with mike, which serves every file under a
@@ -1675,6 +1712,8 @@ jobs:
             || { echo "::error::template-release.yml no longer promotes UPGRADING.md's Unreleased section — releases would ship it unpromoted"; exit 1; }
           grep -qE '^\s+git add .*UPGRADING\.md' .github/workflows/template-release.yml \
             || { echo "::error::template-release.yml promotes UPGRADING.md but never stages it — the rewrite would be discarded"; exit 1; }
+          grep -qE '^\s+git add .*UPGRADING\.md upgrading' .github/workflows/template-release.yml \
+            || { echo "::error::template-release.yml stages UPGRADING.md but not the upgrading/ per-minor files — a promoted section would be written and discarded"; exit 1; }
 
       - name: Lint scripts (ruff check matching downstream's config)
         # Mirror the rendered project's [tool.ruff.lint] block in

@@ -1,5 +1,11 @@
 # Changelog
 
+## v6.1.0 (2026-08-30)
+
+- #546 refactor(upgrading): split UPGRADING.md into an index plus per-minor files
+- #544 feat(config): generated configuration reference, curated README tables
+
+
 ## v6.0.2 (2026-08-29)
 
 - #542 fix(release): accept rc.0 when promoting release notes

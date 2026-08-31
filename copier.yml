@@ -332,7 +332,8 @@ _exclude:
   - ".github/workflows/template-renovate.yml"  # upstream Renovate runner — template-repo only
   - ".github/workflows/template-labels.yml"  # this repo's label-ensure — template-repo only
   - "docs/superpowers"
-  - "UPGRADING.md"                             # template-consumer upgrade notes — template-repo only
+  - "UPGRADING.md"                             # template-consumer upgrade notes index — template-repo only
+  - "upgrading"                                # per-minor upgrade-note files the index points at — template-repo only
   - "uv.lock"                                 # generated projects create their own
   - "scripts/tests"                            # aggregator unit tests — template-only
   - "scripts/check_render_hygiene.py"          # template-ci render guard — template-only
