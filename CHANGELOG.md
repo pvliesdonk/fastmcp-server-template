@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.0.1 (2026-09-01)
+
+- #559 fix(docs): document OIDC remote mode and scope the Required column to oidc-proxy
+
+
 ## v7.0.0 (2026-08-31)
 
 - #554 feat!: adopt fastmcp-pvl-core 6 instruction roles
