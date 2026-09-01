@@ -37,7 +37,7 @@ No `CLIENT_ID` or `CLIENT_SECRET` needed. Tokens are validated locally via JWKS.
 
 ## JWT Signing Key
 
-This applies to oidc-proxy mode, the only mode that issues tokens. When `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.
+The signing key applies to oidc-proxy mode; remote mode does not use it. When `{{ env_prefix }}_OIDC_JWT_SIGNING_KEY` is unset, FastMCP derives the signing key from the OIDC client secret using deterministic key derivation, so the key stays the same across restarts and tokens keep validating.
 
 The real reason to set an explicit key is secret rotation: because the default key is derived from the client secret, rotating that secret changes the derived key and invalidates every token issued under the old one. Setting an explicit signing key decouples token validity from client-secret rotation:
 
