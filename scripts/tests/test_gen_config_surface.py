@@ -2014,6 +2014,25 @@ class TestWizardHintValidation:
             )
 
     @pytest.mark.parametrize("key", ["dockerVolume", "dockerPath"])
+    def test_an_empty_docker_path_raises_rather_than_being_ignored(self, key):
+        """Selecting on key presence, not truthiness (#569 review).
+
+        Truthiness let `dockerVolume: ""` read as "hint absent": it evaded the
+        absolute-path check, evaded mutual exclusion when paired with a real
+        `dockerPath`, and was then dropped before emission so the schema never
+        saw it either. An author who asked for a container path got silence in
+        all three places.
+        """
+        with pytest.raises(SystemExit, match="absolute container path"):
+            g._validate_wizard_hint(self._var(**{key: ""}))
+
+    def test_an_empty_value_still_trips_mutual_exclusion(self):
+        with pytest.raises(SystemExit, match="mutually exclusive"):
+            g._validate_wizard_hint(
+                self._var(dockerVolume="", dockerPath="/data/state/x.db")
+            )
+
+    @pytest.mark.parametrize("key", ["dockerVolume", "dockerPath"])
     def test_relative_docker_path_raises(self, key):
         """The schema's `pattern: ^/`. A relative container path would produce
         a `-v host:relative` mount Docker rejects at run time."""

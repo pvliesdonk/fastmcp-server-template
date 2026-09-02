@@ -992,8 +992,15 @@ def _validate_docker_path_hints(var: Var) -> None:
     spec is validated, with a jsonschema message pointing at a question index
     rather than at the var whose hint produced it. Failing here names the var
     and the rule, in the file the author was editing.
+
+    Declared means the KEY IS PRESENT, not that its value is truthy. Selecting
+    on truthiness would let `dockerVolume: ""` slip through as if the hint were
+    absent — evading the absolute-path check, evading mutual exclusion when
+    paired with a real `dockerPath`, and then being dropped by `_var_question`
+    so the schema never sees it either. The author asked for a container path
+    and would get silence in all three places.
     """
-    declared = [k for k in _DOCKER_PATH_HINT_KEYS if var.wizard.get(k)]
+    declared = [k for k in _DOCKER_PATH_HINT_KEYS if k in var.wizard]
     if len(declared) > 1:
         raise SystemExit(
             f"ERROR: {var.name} sets both wizard 'dockerVolume' and "
@@ -1129,14 +1136,16 @@ def _var_question(
     # set above, which is what the schema's two `if dockerVolume/dockerPath
     # then required: [var]` rules ask for — a question carrying either key
     # without a var would emit a dead bind mount or a silent no-op.
+    # Key presence, matching `_validate_docker_path_hints` — which has already
+    # rejected an empty value by the time this runs, so the two cannot select
+    # different sets.
     for key in _DOCKER_PATH_HINT_KEYS:
-        value = var.wizard.get(key)
-        if value:
+        if key in var.wizard:
             # `{PROJECT_NAME}` here, exactly as in the `examples:` map, so a
             # container path reads `/etc/my-service/acl.toml` rather than the
             # literal token. Nothing else in the spec is substituted, so this
             # is the one place `render_wizard_spec` needs the substituter.
-            question[key] = sub(str(value))
+            question[key] = sub(str(var.wizard[key]))
     return question
 
 
