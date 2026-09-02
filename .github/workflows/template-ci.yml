@@ -807,7 +807,7 @@ jobs:
       - name: vale exclusion-scope lockstep
         working-directory: /tmp/smoke
         run: |
-          # CI's vale_flags glob and pre-commit's exclude regex must scope to
+          # CI's Vale glob and pre-commit's exclude regex must scope to
           # the same subtrees. Drift means CI and pre-commit lint different file
           # sets — a finding visible to one is silent to the other.
           #
@@ -817,10 +817,17 @@ jobs:
           # canonicalize each to a sorted set of subtree names under docs/ and
           # compare the sets, not the raw strings.
           #
+          # Matches either the native `glob:` input (vale-action v3, what the
+          # template ships) or a `vale_flags:` string carrying `--glob=` (the
+          # pre-v3 form, and still the escape hatch for a downstream that adds
+          # its own flags). Accepting both keeps this from failing on a project
+          # that has not taken the v3 update yet, and the `!docs/` grep below
+          # picks the exclusion out of either shape.
+          #
           # CI extraction is scoped to the vale: job (same awk anchor as the
-          # version check above) to avoid false matches on other vale_flags
-          # values if a downstream adds a second Vale invocation.
-          CI_EXCL=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' .github/workflows/ci.yml \
+          # version check above) to avoid false matches if a downstream adds a
+          # second Vale invocation.
+          CI_EXCL=$(awk '/^  vale:/{f=1} f && /(^[[:space:]]+glob:|vale_flags:)/{print; exit}' .github/workflows/ci.yml \
             | grep -oE '!docs/[^"'"'"' ]*' || true)
           # Bounded by the NEXT `- id:` rather than a fixed-size window. The
           # old form was `grep -A15`, and reviews on #159 and #209 both called
@@ -836,7 +843,7 @@ jobs:
               f && /^[[:space:]]*-[[:space:]]*id:/{exit}
               f && /exclude:/{print; exit}' .pre-commit-config.yaml \
             | grep -oE 'docs/[^[:space:]]*' || true)
-          [ -n "$CI_EXCL" ] || { echo "::error::vale exclusion glob not found in ci.yml vale_flags"; exit 1; }
+          [ -n "$CI_EXCL" ] || { echo "::error::vale exclusion glob not found in ci.yml (checked the vale job's glob: and vale_flags: inputs)"; exit 1; }
           [ -n "$PC_EXCL" ] || { echo "::error::vale exclude not found in .pre-commit-config.yaml vale hook"; exit 1; }
           # Canonicalize to a sorted, comma-separated set of subtree names.
           # SPLIT FIRST, then normalize each element: drop {}/() grouping,
@@ -1068,18 +1075,26 @@ jobs:
             | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
           FILES_JSON=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+files:/{print; exit}' "$CI_YML" \
             | sed -E "s/^[[:space:]]*files:[[:space:]]*'//; s/'[[:space:]]*$//")
-          GLOB=$(awk '/^  vale:/{f=1} f && /vale_flags:/{print; exit}' "$CI_YML" \
-            | sed -E 's/^[[:space:]]*vale_flags:[[:space:]]*"//; s/"[[:space:]]*$//')
+          # vale-action v3's native `glob:` input carries the bare pattern,
+          # where the pre-v3 `vale_flags:` carried a whole `--glob=<pattern>`
+          # argument. This gate invokes vale directly, so it needs the flag
+          # form either way — reconstruct it from the input rather than asking
+          # ci.yml to keep spelling the flag out.
+          GLOB_VALUE=$(awk '/^  vale:/{f=1} f && /^[[:space:]]+glob:/{print; exit}' "$CI_YML" \
+            | sed -E 's/^[[:space:]]*glob:[[:space:]]*"//; s/"[[:space:]]*$//')
+          GLOB="--glob=${GLOB_VALUE}"
           # Non-empty assertions matter more than the comparison: a future
           # ci.yml restructure that breaks an anchor would otherwise leave this
           # gate silently linting nothing and still reporting success.
           [ -n "$VER" ]  || { echo "::error::vale version not extractable from rendered ci.yml"; exit 1; }
-          [ -n "$GLOB" ] || { echo "::error::vale_flags not extractable from rendered ci.yml"; exit 1; }
+          [ -n "$GLOB_VALUE" ] \
+            || { echo "::error::vale glob: input not extractable from rendered ci.yml"; exit 1; }
           mapfile -t FILES < <(echo "$FILES_JSON" | jq -er '.[]')
           [ "${#FILES[@]}" -gt 0 ] \
             || { echo "::error::vale files list not extractable from rendered ci.yml"; exit 1; }
-          # vale_flags is plural: split it so a second flag does not arrive as
-          # one argv element, which Vale would read as a path.
+          # Split anyway: the value is one flag today, and a word-split keeps
+          # a future multi-flag form from arriving as a single argv element
+          # that Vale would read as a path.
           read -ra VALE_FLAGS <<<"$GLOB"
           echo "gating on vale $VER over ${FILES[*]} with ${VALE_FLAGS[*]}"
 

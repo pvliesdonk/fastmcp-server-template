@@ -55,9 +55,23 @@ def _vale_inputs(rendered: Path) -> tuple[list[str], set[str]]:
             if "vale-action" in str(step.get("uses", "")):
                 with_ = step.get("with", {})
                 files = json.loads(with_["files"])
-                m = _EXCLUDE_GLOB_RE.search(str(with_.get("vale_flags", "")))
-                excluded = set(m.group(1).split(",")) if m else set()
-                return files, excluded
+                # vale-action v3's native `glob:` input, falling back to the
+                # pre-v3 `vale_flags:` string that carried `--glob=`. Reading
+                # only `vale_flags` after the move left `excluded` empty, so
+                # this test silently treated docs/{superpowers,design,
+                # decisions} as Vale-linted and a term used only there would
+                # have satisfied the dead-term check (#272 review).
+                source = str(with_.get("glob") or with_.get("vale_flags") or "")
+                m = _EXCLUDE_GLOB_RE.search(source)
+                # Assert rather than default to an empty set: an unmatched
+                # pattern here widens the linted set silently, which is the
+                # failure this test exists to prevent in the other direction.
+                assert m is not None, (
+                    "no `!docs/{...}/**` exclusion found in the rendered "
+                    f"ci.yml Vale step (glob/vale_flags = {source!r}) — the "
+                    "extraction has drifted from what the step now passes"
+                )
+                return files, set(m.group(1).split(","))
     raise AssertionError("no vale-action step in the rendered ci.yml")
 
 
