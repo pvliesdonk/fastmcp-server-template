@@ -464,7 +464,16 @@ files:
       Copy to /etc/{PROJECT_NAME}/env and edit for your deployment; the systemd
       unit (/usr/lib/systemd/system/{PROJECT_NAME}.service) sources
       /etc/{PROJECT_NAME}/env via EnvironmentFile=.
-    commented: false
+    # Commented, like .env.example and unlike the two `examples/` files (#290).
+    # The copy an operator makes of this becomes the unit's EnvironmentFile,
+    # whose role is to carry DEVIATIONS from the defaults — so emitting every
+    # default as a live assignment overwrote the handful of deliberate
+    # overrides a systemd install needs. A consumer migrating to generated
+    # artifacts lost a `/var/lib/...` cache path that way and got a service
+    # writing into a directory `ProtectSystem=strict` makes read-only.
+    # The header above already describes a template to copy and edit; the
+    # active form was the half that contradicted it.
+    commented: true
     sections:
       - {title: Logging, tags: [observability]}
       - title: Domain

@@ -859,9 +859,24 @@ class TestRenderEnvFile:
             if "DEMO_MCP_" in line:
                 assert line.lstrip().startswith("#")
 
-    def test_packaging_env_lines_are_not_commented(self, fake_project, template_root):
+    def test_packaging_env_emits_no_live_assignment(self, fake_project, template_root):
+        """The installed EnvironmentFile template carries deviations, so every
+        line must be commented (#290).
+
+        Asserted as "no line is an assignment" rather than by checking a
+        `DEMO_MCP_`-prefixed sample: the vars that actually regressed here
+        were the unprefixed FastMCP-native ones (`FASTMCP_LOG_LEVEL`,
+        `FASTMCP_ENABLE_RICH_LOGGING`), which a prefix-scoped check walks
+        straight past — the smoke render declares no domain fields, so those
+        two were the whole of what this file emitted live.
+        """
         text = self._env_text(fake_project, template_root, "packaging/env.example")
-        assert any(line.startswith("FASTMCP_LOG_LEVEL=") for line in text.splitlines())
+        live = [
+            line
+            for line in text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        assert live == [], f"packaging/env.example has live assignments: {live}"
 
     def test_section_titles_appear_in_declared_order(self, fake_project, template_root):
         text = self._env_text(fake_project, template_root)
