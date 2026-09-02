@@ -3982,7 +3982,7 @@ class TestRejectUnknownFieldVars:
 
     def _check(self, fields, vars_):
         g._reject_unknown_field_vars(
-            fields, {v.name: v for v in vars_}, vars_, "packaging/mcpb/manifest.json.in"
+            fields, {v.name: v for v in vars_}, "packaging/mcpb/manifest.json.in"
         )
 
     def test_every_named_var_present_is_not_an_error(self):
@@ -4004,22 +4004,33 @@ class TestRejectUnknownFieldVars:
         # It must NOT send the reader to the import when the import worked.
         assert "importing" not in message
 
-    def test_no_domain_vars_at_all_points_at_the_failed_import(self):
+    def test_no_domain_vars_at_all_leads_with_the_failed_import(self):
         """The #562 case: the config import failed, so domain discovery
         matched nothing and every correctly-spelled domain name looks
-        unknown. The abort must not propose a typo."""
+        unknown. The import must be named, and named first."""
         vars_ = [self._var("DEMO_MCP_SERVER_NAME", "template")]
         with pytest.raises(SystemExit) as excinfo:
             self._check({"DEMO_MCP_SOURCE_DIR": {}, "DEMO_MCP_GIT_TOKEN": {}}, vars_)
         message = str(excinfo.value)
-        assert "No domain config vars were collected at all" in message
+        assert "collected no domain config vars at all" in message
         assert "WARNING: importing" in message
-        assert "most likely NOT a typo" in message
         # Both names still reported, so the reader can see the whole set.
         assert "DEMO_MCP_GIT_TOKEN" in message
         assert "DEMO_MCP_SOURCE_DIR" in message
-        # The misleading two-cause phrasing is gone from this branch.
-        assert "check for a typo, or a var whose gate is off" not in message
+        # The import is named before the typo, not after it.
+        assert message.index("importing") < message.index("typo")
+
+    def test_no_domain_vars_still_admits_a_typo_of_a_template_var(self):
+        """A project that legitimately declares no domain fields — every
+        freshly scaffolded one — also collects no domain var. Telling its
+        maintainer a real typo is "not a typo" would reintroduce #562's own
+        defect with the causes swapped, so the typo stays on the list."""
+        vars_ = [self._var("DEMO_MCP_SERVER_NAME", "template")]
+        with pytest.raises(SystemExit) as excinfo:
+            self._check({"DEMO_MCP_SERVERNAME": {}}, vars_)
+        message = str(excinfo.value)
+        assert "typo, or a var whose gate is off" in message
+        assert "NOT a typo" not in message
 
 
 class TestMcpbUserConfig:

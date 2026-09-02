@@ -1965,7 +1965,6 @@ def _mcpb_field_id(name: str, spec: Mapping[str, Any], rel_path: str) -> str:
 def _reject_unknown_field_vars(
     fields: Mapping[str, Any],
     var_by_name: Mapping[str, Var],
-    vars_: Sequence[Var],
     rel_path: str,
 ) -> None:
     """Reject a `fields:` map naming vars the run did not collect.
@@ -1991,32 +1990,35 @@ def _reject_unknown_field_vars(
       produced. The warning scrolls past; the abort is what a CI log
       surfaces and what an exit code sends a reader to.
 
-    The second case is distinguishable without any plumbing: every
-    discovered domain var carries ``provenance == "domain"``, so a run in
-    which discovery worked and a run in which it failed differ in whether
-    *any* domain var is present. When none is, point at the import rather
-    than proposing two causes the generator's own earlier WARNING has
-    already ruled out.
+    Every discovered domain var carries ``provenance == "domain"``, so a run
+    in which discovery contributed something and one in which it
+    contributed nothing differ in whether *any* domain var is present. That
+    is a strong hint, not a proof, and the message is worded accordingly:
+    a project that legitimately declares no domain fields — every freshly
+    scaffolded one — also collects no domain var, so a plain typo of a
+    template-owned name there must not be told it is "not a typo". When
+    nothing was collected the import is named first, because it is the
+    likelier cause and the one the reader would otherwise never reach, but
+    the typo is kept on the list rather than ruled out.
     """
     unknown = sorted(name for name in fields if name not in var_by_name)
     if not unknown:
         return
-    if any(v.provenance == "domain" for v in vars_):
+    if any(v.provenance == "domain" for v in var_by_name.values()):
         raise SystemExit(
             f"ERROR: files[{rel_path!r}] names config vars that do not exist "
             f"(check for a typo, or a var whose gate is off): {unknown!r}."
         )
     raise SystemExit(
         f"ERROR: files[{rel_path!r}] names config vars that do not exist: "
-        f"{unknown!r}. No domain config vars were collected at all, so this "
-        "is most likely NOT a typo in that map: domain discovery found "
-        "nothing to match them against. Check for an earlier "
-        "'WARNING: importing ... failed' line — importing the project's "
-        "config module is best-effort and does not abort this generator, so "
-        "a failure there surfaces here instead. Re-run in an environment "
-        "that can import the project (its own venv, or with its "
-        "dependencies available). If the project genuinely declares no "
-        "domain config fields yet, remove these names from the map."
+        f"{unknown!r}. This run collected no domain config vars at all. If "
+        "these are domain vars, there was nothing to match them against: "
+        "look for an earlier 'WARNING: importing ... failed' line — "
+        "importing the project's config module is best-effort and does not "
+        "abort this generator, so a failure there surfaces here instead — "
+        "and re-run where the project imports (its own venv, or with its "
+        "dependencies available). Otherwise this is a typo, or a var whose "
+        "gate is off."
     )
 
 
@@ -2101,7 +2103,7 @@ def render_mcpb_user_config_file(
             "instead if that is really intended."
         )
     var_by_name = {v.name: v for v in vars_}
-    _reject_unknown_field_vars(fields, var_by_name, vars_, rel_path)
+    _reject_unknown_field_vars(fields, var_by_name, rel_path)
 
     user_config, env = _mcpb_screen_from_fields(
         fields, var_by_name, rel_path, ctx.required_names
@@ -2160,7 +2162,7 @@ def _screen_fields_or_die(
             "files entry instead if an empty screen is really intended."
         )
     var_by_name = {v.name: v for v in vars_}
-    _reject_unknown_field_vars(fields, var_by_name, vars_, rel_path)
+    _reject_unknown_field_vars(fields, var_by_name, rel_path)
     return _mcpb_screen_from_fields(fields, var_by_name, rel_path, required_names)
 
 
