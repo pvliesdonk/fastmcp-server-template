@@ -1962,6 +1962,64 @@ def _mcpb_field_id(name: str, spec: Mapping[str, Any], rel_path: str) -> str:
     return field_id
 
 
+def _reject_unknown_field_vars(
+    fields: Mapping[str, Any],
+    var_by_name: Mapping[str, Var],
+    vars_: Sequence[Var],
+    rel_path: str,
+) -> None:
+    """Reject a `fields:` map naming vars the run did not collect.
+
+    Fatal by design: a screen that silently dropped the vars it could not
+    resolve would ship an install UI missing every domain field, which is
+    worse than failing. Only the *diagnosis* is conditional.
+
+    Two very different conditions produce the same empty lookup, and naming
+    the wrong one costs real time (#562, and #525 before it, where the
+    investigation went to the install screen and this `files:` map first
+    because that is what the `ERROR` line named):
+
+    - Some domain vars were collected, but these particular names are not
+      among them — a genuine typo, or a var behind an answer gate that is
+      off.
+    - *No* domain var was collected at all, because
+      `_import_project_config` could not import the project's ``config``
+      module. That path is deliberately non-fatal — domain discovery is
+      best-effort enrichment that must never turn an unrelated project's
+      problem into a hard failure of this generator — so it warns and
+      returns `None`, and this guard runs later against the empty set it
+      produced. The warning scrolls past; the abort is what a CI log
+      surfaces and what an exit code sends a reader to.
+
+    The second case is distinguishable without any plumbing: every
+    discovered domain var carries ``provenance == "domain"``, so a run in
+    which discovery worked and a run in which it failed differ in whether
+    *any* domain var is present. When none is, point at the import rather
+    than proposing two causes the generator's own earlier WARNING has
+    already ruled out.
+    """
+    unknown = sorted(name for name in fields if name not in var_by_name)
+    if not unknown:
+        return
+    if any(v.provenance == "domain" for v in vars_):
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] names config vars that do not exist "
+            f"(check for a typo, or a var whose gate is off): {unknown!r}."
+        )
+    raise SystemExit(
+        f"ERROR: files[{rel_path!r}] names config vars that do not exist: "
+        f"{unknown!r}. No domain config vars were collected at all, so this "
+        "is most likely NOT a typo in that map: domain discovery found "
+        "nothing to match them against. Check for an earlier "
+        "'WARNING: importing ... failed' line — importing the project's "
+        "config module is best-effort and does not abort this generator, so "
+        "a failure there surfaces here instead. Re-run in an environment "
+        "that can import the project (its own venv, or with its "
+        "dependencies available). If the project genuinely declares no "
+        "domain config fields yet, remove these names from the map."
+    )
+
+
 def _mcpb_screen_from_fields(
     fields: Mapping[str, Any],
     var_by_name: Mapping[str, Var],
@@ -2043,12 +2101,7 @@ def render_mcpb_user_config_file(
             "instead if that is really intended."
         )
     var_by_name = {v.name: v for v in vars_}
-    unknown = sorted(name for name in fields if name not in var_by_name)
-    if unknown:
-        raise SystemExit(
-            f"ERROR: files[{rel_path!r}] names config vars that do not exist "
-            f"(check for a typo, or a var whose gate is off): {unknown!r}."
-        )
+    _reject_unknown_field_vars(fields, var_by_name, vars_, rel_path)
 
     user_config, env = _mcpb_screen_from_fields(
         fields, var_by_name, rel_path, ctx.required_names
@@ -2107,12 +2160,7 @@ def _screen_fields_or_die(
             "files entry instead if an empty screen is really intended."
         )
     var_by_name = {v.name: v for v in vars_}
-    unknown = sorted(name for name in fields if name not in var_by_name)
-    if unknown:
-        raise SystemExit(
-            f"ERROR: files[{rel_path!r}] names config vars that do not exist "
-            f"(check for a typo, or a var whose gate is off): {unknown!r}."
-        )
+    _reject_unknown_field_vars(fields, var_by_name, vars_, rel_path)
     return _mcpb_screen_from_fields(fields, var_by_name, rel_path, required_names)
 
 

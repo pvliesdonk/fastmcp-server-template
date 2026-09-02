@@ -3957,6 +3957,71 @@ class TestValidatePresentationKeys:
         g.validate_presentation_keys(presentation, vars_)
 
 
+class TestRejectUnknownFieldVars:
+    """The `fields:` guard, and which cause it names (#562).
+
+    The guard stays fatal in every case — a screen that dropped the vars it
+    could not resolve would ship an install UI missing every domain field.
+    Only the diagnosis is conditional, because two unrelated conditions
+    produce the same empty lookup.
+    """
+
+    @staticmethod
+    def _var(name, provenance):
+        return g.Var(
+            name=name,
+            suffix=name.removeprefix("DEMO_MCP_"),
+            provenance=provenance,
+            type_name="str",
+            default=None,
+            help="A var.",
+            tags=("domain",) if provenance == "domain" else (),
+            inferred=False,
+            wizard={},
+        )
+
+    def _check(self, fields, vars_):
+        g._reject_unknown_field_vars(
+            fields, {v.name: v for v in vars_}, vars_, "packaging/mcpb/manifest.json.in"
+        )
+
+    def test_every_named_var_present_is_not_an_error(self):
+        vars_ = [self._var("DEMO_MCP_SOURCE_DIR", "domain")]
+        self._check({"DEMO_MCP_SOURCE_DIR": {}}, vars_)
+
+    def test_a_typo_alongside_real_domain_vars_names_the_typo(self):
+        """Discovery worked — some domain var was collected — so the map is
+        genuinely wrong and the original two-cause message is correct."""
+        vars_ = [
+            self._var("DEMO_MCP_SOURCE_DIR", "domain"),
+            self._var("DEMO_MCP_SERVER_NAME", "template"),
+        ]
+        with pytest.raises(SystemExit) as excinfo:
+            self._check({"DEMO_MCP_SORUCE_DIR": {}}, vars_)
+        message = str(excinfo.value)
+        assert "check for a typo, or a var whose gate is off" in message
+        assert "DEMO_MCP_SORUCE_DIR" in message
+        # It must NOT send the reader to the import when the import worked.
+        assert "importing" not in message
+
+    def test_no_domain_vars_at_all_points_at_the_failed_import(self):
+        """The #562 case: the config import failed, so domain discovery
+        matched nothing and every correctly-spelled domain name looks
+        unknown. The abort must not propose a typo."""
+        vars_ = [self._var("DEMO_MCP_SERVER_NAME", "template")]
+        with pytest.raises(SystemExit) as excinfo:
+            self._check({"DEMO_MCP_SOURCE_DIR": {}, "DEMO_MCP_GIT_TOKEN": {}}, vars_)
+        message = str(excinfo.value)
+        assert "No domain config vars were collected at all" in message
+        assert "WARNING: importing" in message
+        assert "most likely NOT a typo" in message
+        # Both names still reported, so the reader can see the whole set.
+        assert "DEMO_MCP_GIT_TOKEN" in message
+        assert "DEMO_MCP_SOURCE_DIR" in message
+        # The misleading two-cause phrasing is gone from this branch.
+        assert "check for a typo, or a var whose gate is off" not in message
+
+
 class TestMcpbUserConfig:
     """`kind: mcpb-user-config` — the generated Claude Desktop install screen."""
 
