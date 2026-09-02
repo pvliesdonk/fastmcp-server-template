@@ -293,3 +293,26 @@ and need nothing from you: `fail_on_error: true` now fails on errors alone
 rather than any severity, which is already what `MinAlertLevel = error` in
 `.vale.ini` produces; and the `level:` input is now honoured rather than
 ignored, which the template leaves unset for exactly that reason.
+
+### Style packs now freeze until you bump them
+
+The same change makes the style-pack cache load-bearing, which it never was
+before: a cache hit now skips `vale sync` instead of having it wipe and
+re-download every pack. `Google`, `proselint` and `write-good` are listed in
+`.vale.ini` without an `@version`, so previously every CI run silently
+re-resolved them to whatever was latest. From now on a run uses the packs
+resolved the last time the cache key changed, and the key is a hash of
+`.vale.ini`.
+
+This is deliberate — an unpinned pack re-resolved on every run can turn a
+green CI red with no change to your repository, and it lands hardest on
+`main`. But it does mean **new upstream lint rules no longer arrive on their
+own**. To take them, edit the `Packages =` line in `.vale.ini` (bumping the
+pinned `ai-tells` release URL is the usual reason) or the `v1-` prefix on the
+cache key in `ci.yml`; either changes the key and the next run re-syncs.
+
+`.vale.ini` is seeded once, so your copy still carries the old comment saying
+the packs "resolve to the latest registry release on each sync". That is no
+longer true of your CI. The corrected wording is in the template's
+`.vale.ini.jinja` and will show up in `.copier-seeded-changes.md`; copy it
+across when convenient.
