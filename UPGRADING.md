@@ -264,4 +264,33 @@ Steps: [upgrading/v7.0.md](upgrading/v7.0.md).
 
 ## Unreleased
 
-_Nothing yet._
+### fastmcp-pvl-core 7: FastMCP 4
+
+The floor moves to `fastmcp-pvl-core>=7.0.0,<8`, which itself requires
+FastMCP 4 (`fastmcp[tasks]>=4,<5`). pvl-core 7's
+`configure_task_backend(mcp, env_prefix, config)` takes the server as its
+first argument and registers the SEP-2663 tasks extension on it; the
+`fastmcp.settings.docket` global the old form mutated no longer exists.
+`copier update` re-renders the standard `server.py` call site (now after
+`FastMCP(...)` construction) and `tests/test_task_backend.py`.
+
+Do these steps after the update:
+
+1. Run `uv lock` to resolve the two new majors.
+2. Search project-owned code — a local `server.py` variant, DOMAIN-WIRING
+   blocks, extra entry points — for two-argument
+   `configure_task_backend(<PREFIX>, config)` calls. Move each after the
+   `FastMCP(...)` construction of the server it configures and pass that
+   server first: `configure_task_backend(mcp, <PREFIX>, config)`. Register
+   on the server you `run()` — a mounted child's extensions do not
+   propagate to the root.
+3. Project code reading MCP SDK objects must use SDK v2 snake_case
+   (`icon.mime_type`, `annotations.read_only_hint`); the camelCase
+   attribute names emit deprecation warnings. Seeded-once files such as
+   `tools.py` are not re-rendered: existing camelCase keys in
+   `annotations={...}` dicts still validate, but prefer snake_case in new
+   code (the wire format stays camelCase either way).
+4. If any project tool uses `ctx.elicit()`, note it now raises on the
+   modern sessionless protocol era that FastMCP 4 clients negotiate by
+   default; see the FastMCP 3→4 upgrade guide for the return-and-resume
+   replacement.

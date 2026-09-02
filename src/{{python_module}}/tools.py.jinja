@@ -22,7 +22,7 @@ def register_tools(mcp: FastMCP) -> None:
     FastMCP tool reference: https://gofastmcp.com/servers/tools
     """
 
-    @mcp.tool(annotations={"readOnlyHint": True})
+    @mcp.tool(annotations={"read_only_hint": True})
     async def ping(service: Service = Depends(get_service)) -> str:
         """Health-check tool — returns ``"pong"`` if the service is alive.
 
@@ -47,5 +47,5 @@ def register_tools(mcp: FastMCP) -> None:
     # register_tool_icons(mcp, {"ping": "ping.svg"}, static_dir=STATIC)
     #
     # Per-tool decoration (replace the @mcp.tool line above; preserve the
-    # existing annotations to avoid losing readOnlyHint / etc.):
-    # @mcp.tool(icons=[make_icon(STATIC / "ping.svg")], annotations={"readOnlyHint": True})
+    # existing annotations to avoid losing read_only_hint / etc.):
+    # @mcp.tool(icons=[make_icon(STATIC / "ping.svg")], annotations={"read_only_hint": True})
