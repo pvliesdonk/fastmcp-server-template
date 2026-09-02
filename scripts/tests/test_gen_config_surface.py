@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import jsonschema
 import pytest
@@ -2012,6 +2012,100 @@ class TestWizardHintValidation:
     def test_unknown_control_value_raises_naming_the_var(self):
         with pytest.raises(SystemExit, match="DEMO_MCP_WIDGET"):
             g._validate_wizard_hint(self._var(control="delete"))
+
+    def test_docker_path_hints_are_known_keys(self):
+        """Both were rejected as unknown before #261, which is what made the
+        shipped schema's `dockerVolume`/`dockerPath` unreachable."""
+        g._validate_wizard_hint(self._var(dockerVolume="/etc/app/acl.toml"))
+        g._validate_wizard_hint(self._var(dockerPath="/data/state/index.db"))
+
+    def test_both_docker_hints_at_once_raises(self):
+        """The schema's `not: {required: [dockerVolume, dockerPath]}`, enforced
+        at generation so the message names the var rather than a question
+        index in a jsonschema failure."""
+        with pytest.raises(SystemExit, match="mutually exclusive"):
+            g._validate_wizard_hint(
+                self._var(dockerVolume="/etc/app/acl.toml", dockerPath="/data/x")
+            )
+
+    @pytest.mark.parametrize("key", ["dockerVolume", "dockerPath"])
+    def test_an_empty_docker_path_raises_rather_than_being_ignored(self, key):
+        """Selecting on key presence, not truthiness (#569 review).
+
+        Truthiness let `dockerVolume: ""` read as "hint absent": it evaded the
+        absolute-path check, evaded mutual exclusion when paired with a real
+        `dockerPath`, and was then dropped before emission so the schema never
+        saw it either. An author who asked for a container path got silence in
+        all three places.
+        """
+        with pytest.raises(SystemExit, match="absolute container path"):
+            g._validate_wizard_hint(self._var(**{key: ""}))
+
+    def test_an_empty_value_still_trips_mutual_exclusion(self):
+        with pytest.raises(SystemExit, match="mutually exclusive"):
+            g._validate_wizard_hint(
+                self._var(dockerVolume="", dockerPath="/data/state/x.db")
+            )
+
+    @pytest.mark.parametrize("key", ["dockerVolume", "dockerPath"])
+    def test_relative_docker_path_raises(self, key):
+        """The schema's `pattern: ^/`. A relative container path would produce
+        a `-v host:relative` mount Docker rejects at run time."""
+        with pytest.raises(SystemExit, match="absolute container path"):
+            g._validate_wizard_hint(self._var(**{key: "etc/app/acl.toml"}))
+
+
+class TestWizardDockerPathQuestions:
+    """`_var_question` emission of the two container-path keys (#261)."""
+
+    @staticmethod
+    def _var(**wizard):
+        return g.Var(
+            name="DEMO_MCP_ACL_PATH",
+            suffix="ACL_PATH",
+            provenance="template",
+            type_name="Path",
+            default=None,
+            help="An ACL file.",
+            tags=("authz",),
+            inferred=False,
+            wizard=wizard,
+        )
+
+    def _question(self, **wizard) -> dict[str, Any] | None:
+        return g._var_question(
+            self._var(**wizard),
+            {},
+            {},
+            g._name_substituter({"project_name": "demo-mcp"}),
+        )
+
+    def _emitted(self, **wizard) -> dict[str, Any]:
+        """A question this var must produce — asserts it is not skipped."""
+        question = self._question(**wizard)
+        assert question is not None
+        return question
+
+    def test_docker_volume_is_emitted_with_project_name_substituted(self):
+        q = self._emitted(dockerVolume="/etc/{PROJECT_NAME}/acl.toml")
+        assert q["dockerVolume"] == "/etc/demo-mcp/acl.toml"
+        # The schema requires `var` alongside either key — a question carrying
+        # one without it emits a dead bind mount.
+        assert q["var"] == "DEMO_MCP_ACL_PATH"
+
+    def test_docker_path_is_emitted_with_project_name_substituted(self):
+        q = self._emitted(dockerPath="/data/state/{PROJECT_NAME}.db")
+        assert q["dockerPath"] == "/data/state/demo-mcp.db"
+
+    def test_neither_key_appears_when_unhinted(self):
+        q = self._emitted(group="Authorization")
+        assert "dockerVolume" not in q and "dockerPath" not in q
+
+    def test_a_control_skipped_var_emits_no_question_at_all(self):
+        """`control: none` returns None before the keys are reached, so a
+        docker hint on such a var never reaches the spec — but the hint is
+        still validated, which the sibling class covers."""
+        assert self._question(control="none", dockerVolume="/etc/x/a.toml") is None
 
 
 class TestWizardHintOverrides:
