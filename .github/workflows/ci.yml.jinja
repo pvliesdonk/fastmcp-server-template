@@ -126,19 +126,37 @@ jobs:
           else
             OUTPUT=$(uv run diff-cover coverage.xml --compare-branch="origin/${BASE_REF}" --fail-under=80 2>&1) && RC=0 || RC=$?
             echo "$OUTPUT"
-            TOTAL=$(echo "$OUTPUT" | grep -oP 'Total:\s+\K[\d.]+' || true)
-            if [ -z "$TOTAL" ] && [ "$RC" -ne 0 ]; then
+            # `Coverage:`, NOT `Total:` — diff-cover's summary carries both,
+            # and `Total:` is the coverable-LINE COUNT, not a percentage:
+            #
+            #   Total:   4 lines
+            #   Missing: 0 lines
+            #   Coverage: 100%
+            #
+            # Reading `Total:` posted the line count with a `%` suffix (#562's
+            # sibling, #561): a small fully-covered diff read `Patch coverage:
+            # 4%`, and — worse, because it is the one a reader acts on — an
+            # 80-line diff at 50% posted `Patch coverage: 80% (minimum 80%)`
+            # on a FAILING status. Both keys appear only inside diff-cover's
+            # `{% raw %}{% if src_stats %}{% endraw %}` block, so they are absent together when the
+            # diff has no coverable lines — which is what keeps the two
+            # empty-value branches below meaning what they say.
+            #
+            # The pass/fail decision has never come from here: it is RC, from
+            # diff-cover's own --fail-under. This value is the description only.
+            PCT=$(echo "$OUTPUT" | grep -oP 'Coverage:\s+\K[\d.]+' || true)
+            if [ -z "$PCT" ] && [ "$RC" -ne 0 ]; then
               echo "state=error" >> "$GITHUB_OUTPUT"
               echo "description=diff-cover failed to compute patch coverage" >> "$GITHUB_OUTPUT"
-            elif [ -z "$TOTAL" ]; then
+            elif [ -z "$PCT" ]; then
               echo "state=success" >> "$GITHUB_OUTPUT"
               echo "description=No coverable lines in diff" >> "$GITHUB_OUTPUT"
             elif [ "$RC" -eq 0 ]; then
               echo "state=success" >> "$GITHUB_OUTPUT"
-              echo "description=Patch coverage: ${TOTAL}%" >> "$GITHUB_OUTPUT"
+              echo "description=Patch coverage: ${PCT}%" >> "$GITHUB_OUTPUT"
             else
               echo "state=failure" >> "$GITHUB_OUTPUT"
-              echo "description=Patch coverage: ${TOTAL}% (minimum 80%)" >> "$GITHUB_OUTPUT"
+              echo "description=Patch coverage: ${PCT}% (minimum 80%)" >> "$GITHUB_OUTPUT"
             fi
           fi
 
