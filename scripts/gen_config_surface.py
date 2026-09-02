@@ -1962,6 +1962,83 @@ def _mcpb_field_id(name: str, spec: Mapping[str, Any], rel_path: str) -> str:
     return field_id
 
 
+def _reject_unknown_field_vars(
+    fields: Mapping[str, Any],
+    var_by_name: Mapping[str, Var],
+    rel_path: str,
+) -> None:
+    """Reject a `fields:` map naming vars the run did not collect.
+
+    Fatal by design: a screen that silently dropped the vars it could not
+    resolve would ship an install UI missing every domain field, which is
+    worse than failing. Only the *diagnosis* is conditional.
+
+    Two very different conditions produce the same empty lookup, and naming
+    the wrong one costs real time (#562, and #525 before it, where the
+    investigation went to the install screen and this `files:` map first
+    because that is what the `ERROR` line named):
+
+    - Some domain vars were collected, but these particular names are not
+      among them — a genuine typo, or a var behind an answer gate that is
+      off.
+    - *No* domain var was collected at all, because
+      `_import_project_config` could not import the project's ``config``
+      module. That path is deliberately non-fatal — domain discovery is
+      best-effort enrichment that must never turn an unrelated project's
+      problem into a hard failure of this generator — so it warns and
+      returns `None`, and this guard runs later against the empty set it
+      produced. The warning scrolls past; the abort is what a CI log
+      surfaces and what an exit code sends a reader to.
+
+    Every domain var carries ``provenance == "domain"``, so a run in which
+    domain vars were collected and one in which none were differ in whether
+    *any* is present. That shifts the *emphasis* of the message. It is
+    explicitly not a proof of which condition holds, and neither branch
+    rules the other out, because the signal is imprecise in both directions:
+
+    - A project that legitimately declares no domain fields — every freshly
+      scaffolded one — also collects none, so the empty case must not tell a
+      plain typo of a template-owned name that it is "not a typo".
+    - ``provenance == "domain"`` does not mean *auto-discovery* worked. A var
+      hand-declared under ``vars:`` in `config-presentation.domain.yml` gets
+      that provenance too (`collect_vars` defaults it), entirely
+      independently of whether the config import succeeded. So a project
+      with one manual escape-hatch var and a broken import lands in the
+      non-empty branch while auto-discovery silently contributed nothing —
+      which is why that branch names the import as well, just last.
+
+    Distinguishing the two properly would mean carrying the discovery
+    outcome from `_discover_domain_vars` through `collect_vars` to here.
+    Deliberately not done: every branch already names every real cause, and
+    the alternative is run-scoped mutable state threaded through the
+    generator's widest-used function for a difference in ordering.
+    """
+    unknown = sorted(name for name in fields if name not in var_by_name)
+    if not unknown:
+        return
+    if any(v.provenance == "domain" for v in var_by_name.values()):
+        raise SystemExit(
+            f"ERROR: files[{rel_path!r}] names config vars that do not exist: "
+            f"{unknown!r}. Most likely a typo, or a var whose gate is off. If "
+            "these are domain fields you expect the config scan to have "
+            "found, check for an earlier 'WARNING: importing ... failed' "
+            "line: a failed config import contributes no auto-discovered "
+            "var, and this run's domain vars may all be hand-declared in "
+            "config-presentation.domain.yml."
+        )
+    raise SystemExit(
+        f"ERROR: files[{rel_path!r}] names config vars that do not exist: "
+        f"{unknown!r}. This run collected no domain config vars at all. If "
+        "these are domain vars, there was nothing to match them against: "
+        "look for an earlier 'WARNING: importing ... failed' line — "
+        "importing the project's config module is best-effort and does not "
+        "abort this generator, so a failure there surfaces here instead — "
+        "and re-run where the project imports (its own venv, or with its "
+        "dependencies available). Otherwise this is a typo, or a var whose "
+        "gate is off."
+    )
+
+
 def _mcpb_screen_from_fields(
     fields: Mapping[str, Any],
     var_by_name: Mapping[str, Var],
@@ -2043,12 +2120,7 @@ def render_mcpb_user_config_file(
             "instead if that is really intended."
         )
     var_by_name = {v.name: v for v in vars_}
-    unknown = sorted(name for name in fields if name not in var_by_name)
-    if unknown:
-        raise SystemExit(
-            f"ERROR: files[{rel_path!r}] names config vars that do not exist "
-            f"(check for a typo, or a var whose gate is off): {unknown!r}."
-        )
+    _reject_unknown_field_vars(fields, var_by_name, rel_path)
 
     user_config, env = _mcpb_screen_from_fields(
         fields, var_by_name, rel_path, ctx.required_names
@@ -2107,12 +2179,7 @@ def _screen_fields_or_die(
             "files entry instead if an empty screen is really intended."
         )
     var_by_name = {v.name: v for v in vars_}
-    unknown = sorted(name for name in fields if name not in var_by_name)
-    if unknown:
-        raise SystemExit(
-            f"ERROR: files[{rel_path!r}] names config vars that do not exist "
-            f"(check for a typo, or a var whose gate is off): {unknown!r}."
-        )
+    _reject_unknown_field_vars(fields, var_by_name, rel_path)
     return _mcpb_screen_from_fields(fields, var_by_name, rel_path, required_names)
 
 
