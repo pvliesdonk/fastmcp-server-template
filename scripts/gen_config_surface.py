@@ -908,7 +908,19 @@ _WIZARD_SHOW_IF: dict[str, dict[str, list[str]]] = {
 # an unknown `when`, and only `control: emit` was ever checked), which let a
 # typo silently promote a var to a primary, always-visible wizard question
 # instead of failing loudly.
-_KNOWN_WIZARD_HINT_KEYS = frozenset({"group", "when", "secret", "control"})
+_KNOWN_WIZARD_HINT_KEYS = frozenset(
+    {"group", "when", "secret", "control", "dockerVolume", "dockerPath"}
+)
+# The two container-path hints, mutually exclusive, each an absolute path.
+# `dockerVolume`: the answer is a HOST path, bind-mounted at this container
+# path, and the var is set to the container path — so the wizard's `docker
+# run` carries a matching `-v`. `dockerPath`: a fixed path on the state
+# volume, substituted for the answer only when the var is otherwise present;
+# never adds a mount. Both are consumed by the browser wizard's
+# `dockerVolumes()` / `dockerEnvMap()` (docs/javascripts/config-wizard/
+# generators.js), which have implemented them since #170 while no hint
+# vocabulary could set either — the gap #261 closed.
+_DOCKER_PATH_HINT_KEYS = ("dockerVolume", "dockerPath")
 # `emit`: a `wizard_routing` option already emits this var (no question of
 # its own). `none`: documented in the env artifacts, no wizard control at
 # all — the parallel of `emit` for a var nothing routes for (e.g. a
@@ -968,6 +980,34 @@ def _validate_wizard_hint(var: Var) -> None:
             f"{control!r} — known values are "
             f"{sorted(_KNOWN_WIZARD_CONTROL_VALUES)!r}."
         )
+    _validate_docker_path_hints(var)
+
+
+def _validate_docker_path_hints(var: Var) -> None:
+    """Enforce the two container-path rules the wizard schema already states.
+
+    `wizard-spec-schema.json` rejects both-at-once (`not: {required:
+    [dockerVolume, dockerPath]}`) and a non-absolute value (`pattern: ^/`),
+    so a bad hint would be caught eventually — but only once the generated
+    spec is validated, with a jsonschema message pointing at a question index
+    rather than at the var whose hint produced it. Failing here names the var
+    and the rule, in the file the author was editing.
+    """
+    declared = [k for k in _DOCKER_PATH_HINT_KEYS if var.wizard.get(k)]
+    if len(declared) > 1:
+        raise SystemExit(
+            f"ERROR: {var.name} sets both wizard 'dockerVolume' and "
+            "'dockerPath' — they are mutually exclusive: dockerVolume "
+            "bind-mounts the answer at a container path, dockerPath "
+            "substitutes a fixed state-volume path and never mounts."
+        )
+    for key in declared:
+        value = str(var.wizard[key])
+        if not value.startswith("/"):
+            raise SystemExit(
+                f"ERROR: {var.name} wizard {key!r} must be an absolute "
+                f"container path, got {value!r}."
+            )
 
 
 def _normalize_type_name(type_name: str) -> str:
@@ -1040,7 +1080,10 @@ def _routing_question(raw: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _var_question(
-    var: Var, labels: Mapping[str, str], help_overrides: Mapping[str, str]
+    var: Var,
+    labels: Mapping[str, str],
+    help_overrides: Mapping[str, str],
+    sub: Callable[[str], str],
 ) -> dict[str, Any] | None:
     """Render one `Var`'s wizard hint as a question, or ``None`` to emit nothing.
 
@@ -1082,6 +1125,18 @@ def _var_question(
     show_if = _wizard_show_if(var.wizard.get("when"), source=var.name)
     if show_if is not None:
         question["showIf"] = show_if
+    # Container-path hints, emitted last and in a fixed order. `var` is always
+    # set above, which is what the schema's two `if dockerVolume/dockerPath
+    # then required: [var]` rules ask for — a question carrying either key
+    # without a var would emit a dead bind mount or a silent no-op.
+    for key in _DOCKER_PATH_HINT_KEYS:
+        value = var.wizard.get(key)
+        if value:
+            # `{PROJECT_NAME}` here, exactly as in the `examples:` map, so a
+            # container path reads `/etc/my-service/acl.toml` rather than the
+            # literal token. Nothing else in the spec is substituted, so this
+            # is the one place `render_wizard_spec` needs the substituter.
+            question[key] = sub(str(value))
     return question
 
 
@@ -1194,6 +1249,7 @@ def render_wizard_spec(
     env_prefix = str(answers.get("env_prefix", ""))
     labels: Mapping[str, str] = pres.get("wizard_labels") or {}
     help_overrides: Mapping[str, str] = pres.get("wizard_help") or {}
+    sub = _name_substituter(answers)
 
     domain_pres = domain_pres or {}
     domain_routing_source = "config-presentation.domain.yml wizard_routing"
@@ -1215,7 +1271,7 @@ def render_wizard_spec(
         )
         questions.append(question)
     for var in vars_:
-        var_question = _var_question(var, labels, help_overrides)
+        var_question = _var_question(var, labels, help_overrides, sub)
         if var_question is not None:
             _register_question_id(var_question["id"], seen_ids, var.name)
             questions.append(var_question)
