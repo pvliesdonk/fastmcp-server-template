@@ -3999,10 +3999,12 @@ class TestRejectUnknownFieldVars:
         with pytest.raises(SystemExit) as excinfo:
             self._check({"DEMO_MCP_SORUCE_DIR": {}}, vars_)
         message = str(excinfo.value)
-        assert "check for a typo, or a var whose gate is off" in message
+        assert "Most likely a typo, or a var whose gate is off" in message
         assert "DEMO_MCP_SORUCE_DIR" in message
-        # It must NOT send the reader to the import when the import worked.
-        assert "importing" not in message
+        # The typo leads, but the import is still named: a domain var may be
+        # hand-declared in config-presentation.domain.yml, which carries
+        # `provenance="domain"` without auto-discovery having run at all.
+        assert message.index("typo") < message.index("importing")
 
     def test_no_domain_vars_at_all_leads_with_the_failed_import(self):
         """The #562 case: the config import failed, so domain discovery
@@ -4019,6 +4021,18 @@ class TestRejectUnknownFieldVars:
         assert "DEMO_MCP_SOURCE_DIR" in message
         # The import is named before the typo, not after it.
         assert message.index("importing") < message.index("typo")
+
+    def test_a_hand_declared_domain_var_still_names_the_import(self):
+        """`provenance == "domain"` does not prove auto-discovery ran — a var
+        declared under `vars:` in config-presentation.domain.yml gets it too.
+        Such a project with a broken import lands in the non-empty branch, so
+        that branch must name the import as well (#563 review)."""
+        vars_ = [self._var("DEMO_MCP_MANUAL_ALIAS", "domain")]
+        with pytest.raises(SystemExit) as excinfo:
+            self._check({"DEMO_MCP_SOURCE_DIR": {}}, vars_)
+        message = str(excinfo.value)
+        assert "WARNING: importing" in message
+        assert "config-presentation.domain.yml" in message
 
     def test_no_domain_vars_still_admits_a_typo_of_a_template_var(self):
         """A project that legitimately declares no domain fields — every

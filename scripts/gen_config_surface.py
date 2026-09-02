@@ -1990,24 +1990,41 @@ def _reject_unknown_field_vars(
       produced. The warning scrolls past; the abort is what a CI log
       surfaces and what an exit code sends a reader to.
 
-    Every discovered domain var carries ``provenance == "domain"``, so a run
-    in which discovery contributed something and one in which it
-    contributed nothing differ in whether *any* domain var is present. That
-    is a strong hint, not a proof, and the message is worded accordingly:
-    a project that legitimately declares no domain fields — every freshly
-    scaffolded one — also collects no domain var, so a plain typo of a
-    template-owned name there must not be told it is "not a typo". When
-    nothing was collected the import is named first, because it is the
-    likelier cause and the one the reader would otherwise never reach, but
-    the typo is kept on the list rather than ruled out.
+    Every domain var carries ``provenance == "domain"``, so a run in which
+    domain vars were collected and one in which none were differ in whether
+    *any* is present. That shifts the *emphasis* of the message. It is
+    explicitly not a proof of which condition holds, and neither branch
+    rules the other out, because the signal is imprecise in both directions:
+
+    - A project that legitimately declares no domain fields — every freshly
+      scaffolded one — also collects none, so the empty case must not tell a
+      plain typo of a template-owned name that it is "not a typo".
+    - ``provenance == "domain"`` does not mean *auto-discovery* worked. A var
+      hand-declared under ``vars:`` in `config-presentation.domain.yml` gets
+      that provenance too (`collect_vars` defaults it), entirely
+      independently of whether the config import succeeded. So a project
+      with one manual escape-hatch var and a broken import lands in the
+      non-empty branch while auto-discovery silently contributed nothing —
+      which is why that branch names the import as well, just last.
+
+    Distinguishing the two properly would mean carrying the discovery
+    outcome from `_discover_domain_vars` through `collect_vars` to here.
+    Deliberately not done: every branch already names every real cause, and
+    the alternative is run-scoped mutable state threaded through the
+    generator's widest-used function for a difference in ordering.
     """
     unknown = sorted(name for name in fields if name not in var_by_name)
     if not unknown:
         return
     if any(v.provenance == "domain" for v in var_by_name.values()):
         raise SystemExit(
-            f"ERROR: files[{rel_path!r}] names config vars that do not exist "
-            f"(check for a typo, or a var whose gate is off): {unknown!r}."
+            f"ERROR: files[{rel_path!r}] names config vars that do not exist: "
+            f"{unknown!r}. Most likely a typo, or a var whose gate is off. If "
+            "these are domain fields you expect the config scan to have "
+            "found, check for an earlier 'WARNING: importing ... failed' "
+            "line: a failed config import contributes no auto-discovered "
+            "var, and this run's domain vars may all be hand-declared in "
+            "config-presentation.domain.yml."
         )
     raise SystemExit(
         f"ERROR: files[{rel_path!r}] names config vars that do not exist: "
