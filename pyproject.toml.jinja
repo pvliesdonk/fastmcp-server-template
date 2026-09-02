@@ -101,6 +101,9 @@ dev = [
     # hostile, and liable to resolve a different fastmcp-pvl-core than this
     # project pins (#262). Declared here so the requirement is stated.
     "pyyaml>=6",
+    # PyYAML ships no inline types, so `import yaml` in tests/test_compose.py
+    # is an untyped import that fails `mypy src/ tests/` without these stubs.
+    "types-PyYAML>=6",
 ]
 
 docs = [
