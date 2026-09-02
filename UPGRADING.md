@@ -262,6 +262,34 @@ Steps: [upgrading/v6.1.md](upgrading/v6.1.md).
 
 Steps: [upgrading/v7.0.md](upgrading/v7.0.md).
 
-## Unreleased
+## Unreleased - Vale runs on pushes to main
 
-_Nothing yet._
+`ci.yml`'s Vale job moves to `vale-cli/vale-action` v3, which upgrades
+reviewdog from 0.17 to 0.21. Before this, a workflow triggered on `push` with
+a `github-pr-*` reporter — the default, and what your `ci.yml` uses — reported
+nothing and exited 0. Push runs now lint for real and can fail.
+
+Pull requests are unaffected: they were always linted. What changes is that a
+push to `main` or a `release/*` branch now gets the prose gate it silently
+skipped.
+
+Most projects will notice nothing. `filter_mode: added` is unchanged, so a
+push reports only findings on lines the pushed commits touch — and for a merge
+to `main` those are lines that already passed the same gate on the pull
+request. The exposure is a **direct push that bypassed a PR**, and any case
+where reviewdog cannot resolve a diff for the push and falls back to a wider
+file set.
+
+After the update:
+
+1. Watch the first push to `main` before treating a green `main` as routine.
+2. If it fails on prose that predates this change, either fix the findings or
+   set `reviewdog_version: "0.17.0"` on the `Run Vale` step to restore the old
+   silence. That step is template-owned, so record why if you add it — the
+   next `copier update` will offer to take it back out.
+
+Two other v3 behaviour changes were checked against the shipped configuration
+and need nothing from you: `fail_on_error: true` now fails on errors alone
+rather than any severity, which is already what `MinAlertLevel = error` in
+`.vale.ini` produces; and the `level:` input is now honoured rather than
+ignored, which the template leaves unset for exactly that reason.
