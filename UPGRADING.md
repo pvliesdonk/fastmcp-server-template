@@ -262,57 +262,6 @@ Steps: [upgrading/v6.1.md](upgrading/v6.1.md).
 
 Steps: [upgrading/v7.0.md](upgrading/v7.0.md).
 
-## Unreleased - Vale runs on pushes to main
+## Unreleased
 
-`ci.yml`'s Vale job moves to `vale-cli/vale-action` v3, which upgrades
-reviewdog from 0.17 to 0.21. Before this, a workflow triggered on `push` with
-a `github-pr-*` reporter — the default, and what your `ci.yml` uses — reported
-nothing and exited 0. Push runs now lint for real and can fail.
-
-Pull requests are unaffected: they were always linted. What changes is that a
-push to `main` or a `release/*` branch now gets the prose gate it silently
-skipped.
-
-Most projects will notice nothing. `filter_mode: added` is unchanged, so a
-push reports only findings on lines the pushed commits touch — and for a merge
-to `main` those are lines that already passed the same gate on the pull
-request. The exposure is a **direct push that bypassed a PR**, and any case
-where reviewdog cannot resolve a diff for the push and falls back to a wider
-file set.
-
-After the update:
-
-1. Watch the first push to `main` before treating a green `main` as routine.
-2. If it fails on prose that predates this change, either fix the findings or
-   set `reviewdog_version: "0.17.0"` on the `Run Vale` step to restore the old
-   silence. That step is template-owned, so record why if you add it — the
-   next `copier update` will offer to take it back out.
-
-Two other v3 behaviour changes were checked against the shipped configuration
-and need nothing from you: `fail_on_error: true` now fails on errors alone
-rather than any severity, which is already what `MinAlertLevel = error` in
-`.vale.ini` produces; and the `level:` input is now honoured rather than
-ignored, which the template leaves unset for exactly that reason.
-
-### Style packs now freeze until you bump them
-
-The same change makes the style-pack cache load-bearing, which it never was
-before: a cache hit now skips `vale sync` instead of having it wipe and
-re-download every pack. `Google`, `proselint` and `write-good` are listed in
-`.vale.ini` without an `@version`, so previously every CI run silently
-re-resolved them to whatever was latest. From now on a run uses the packs
-resolved the last time the cache key changed, and the key is a hash of
-`.vale.ini`.
-
-This is deliberate — an unpinned pack re-resolved on every run can turn a
-green CI red with no change to your repository, and it lands hardest on
-`main`. But it does mean **new upstream lint rules no longer arrive on their
-own**. To take them, edit the `Packages =` line in `.vale.ini` (bumping the
-pinned `ai-tells` release URL is the usual reason) or the `v1-` prefix on the
-cache key in `ci.yml`; either changes the key and the next run re-syncs.
-
-`.vale.ini` is seeded once, so your copy still carries the old comment saying
-the packs "resolve to the latest registry release on each sync". That is no
-longer true of your CI. The corrected wording is in the template's
-`.vale.ini.jinja` and will show up in `.copier-seeded-changes.md`; copy it
-across when convenient.
+_Nothing yet._

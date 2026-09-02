@@ -1,5 +1,14 @@
 # Changelog
 
+## v7.0.2 (2026-09-02)
+
+- #569 fix(config): give the generated wizard spec a route to dockerVolume/dockerPath
+- #566 fix(ci): make the Vale style-pack cache actually prevent a download
+- #565 fix(config): comment out packaging/env.example, like every other env template
+- #564 fix(ci): report diff-cover's coverage percentage, not its line count
+- #563 fix(config): name the failed config import when the mcpb fields guard aborts
+
+
 ## v7.0.1 (2026-09-01)
 
 - #559 fix(docs): document OIDC remote mode and scope the Required column to oidc-proxy
