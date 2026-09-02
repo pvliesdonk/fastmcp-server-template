@@ -294,3 +294,43 @@ Do these steps after the update:
    modern sessionless protocol era that FastMCP 4 clients negotiate by
    default; see the FastMCP 3→4 upgrade guide for the return-and-resume
    replacement.
+
+### `ProjectConfig` now owns `server_name`
+
+`config.py` gains a template-owned `server_name` field, declared **outside**
+the `CONFIG-FIELDS` sentinels, and `server.py` reads it instead of calling
+`env(...)` itself. That is what makes the shaped instruction identity and the
+live `FastMCP` name agree when a name is supplied programmatically; before
+this, `make_server(config=ProjectConfig(server_name="x"))` produced a server
+named `x` whose instructions still opened with the environment-derived
+default.
+
+Nothing to do if your project never declared a `server_name` of its own: the
+`{PREFIX}_SERVER_NAME` operator override behaves exactly as before, because
+the field's default is a factory that reads it.
+
+**If your project did declare one, act on it — one of the two failures is
+silent.**
+
+1. **Delete your `server_name` field from the `CONFIG-FIELDS` block.** Python
+   does not error on a repeated annotation in one class body; the later
+   definition simply wins, so yours silently shadows the template's. If yours
+   carried a plain literal default (`server_name: str = "my-service"`) rather
+   than a factory, that shadowing **stops `{PREFIX}_SERVER_NAME` from being
+   read at all** — a working operator override disappears with no message.
+2. **Delete any `server_name=...` line from your `CONFIG-FROM-ENV` block.**
+   The template's `from_env` deliberately does not pass the field, so yours
+   will not collide there — but if it reads the literal suffix
+   (`env(_ENV_PREFIX, "SERVER_NAME", ...)`), the config-surface generator's
+   AST scan discovers `{PREFIX}_SERVER_NAME` as a *domain* var while
+   `config-presentation.yml` already declares it with template provenance,
+   and generation aborts with the duplicate-name error. That one is loud:
+   `scripts/gen_config_surface.py` fails on the next update.
+3. **Drop any `mcp._mcp_server.name = ...` override from your
+   `DOMAIN-WIRING` block.** It runs after the identity snippet is composed,
+   so it reintroduces exactly the mismatch this change removes. Pass the name
+   through `ProjectConfig(server_name=...)` instead.
+
+The rendered `tests/test_config_contract.py` asserts the field stays outside
+the sentinels and that the env read stays out of `from_env`, so a project
+that reintroduces either fails its own suite rather than drifting.

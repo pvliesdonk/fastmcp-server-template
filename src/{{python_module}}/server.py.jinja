@@ -21,7 +21,7 @@ from fastmcp_pvl_core import (
     build_kv_store,  # noqa: F401  — re-exported for downstream projects' convenience
     configure_logging_from_env,
     configure_task_backend,
-    env,
+    env,  # noqa: F401  — re-exported so DOMAIN-WIRING additions don't need a new import
     finalize_instructions,
     instructions_for,
     register_server_info_tool,
@@ -61,10 +61,15 @@ def make_server(
     config = config or ProjectConfig.from_env()
     configure_logging_from_env()
 
-    # Operator override: SERVER_NAME renames this instance (falls back when
-    # unset/empty).  Instructions are composed by pvl-core's InstructionsBuilder
-    # below and finalised last; see finalize_instructions() at the end.
-    server_name = env(_ENV_PREFIX, "SERVER_NAME", "{{ project_name }}")
+    # One source for the name, so `FastMCP(name=...)` below and the shaped
+    # instruction identity cannot disagree.  `ProjectConfig.server_name`
+    # defaults to `{{ env_prefix }}_SERVER_NAME` (falling back to the project
+    # name) via a default_factory, so the operator override still works
+    # unchanged — but a config passed in programmatically now wins, which
+    # reading the environment here would have ignored.  Instructions are
+    # composed by pvl-core's InstructionsBuilder below and finalised last; see
+    # finalize_instructions() at the end.
+    server_name = config.server_name
 
     auth = build_auth(config.server)
     auth_mode = resolve_auth_mode(config.server) if auth is not None else "none"
