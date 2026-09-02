@@ -102,12 +102,19 @@ def _grep(pattern: str, text: str) -> list[str]:
     return proc.stdout.split()
 
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("grep") is None
-    or subprocess.run(
+def _grep_supports_pcre() -> bool:
+    """True when `grep -P` works. A grep built without PCRE exits 2 and
+    complains, where a supported one exits 0 (match) or 1 (no match)."""
+    if shutil.which("grep") is None:
+        return False
+    probe = subprocess.run(
         ["grep", "-qP", "x"], input="x", capture_output=True, text=True, check=False
-    ).returncode
-    not in (0, 1),
+    )
+    return probe.returncode in (0, 1)
+
+
+pytestmark = pytest.mark.skipif(
+    not _grep_supports_pcre(),
     reason="grep without PCRE (-P) support; CI runs GNU grep on ubuntu-latest",
 )
 
