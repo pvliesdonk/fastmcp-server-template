@@ -808,6 +808,22 @@ jobs:
           uv build --out-dir /tmp/publish-check
           uv run --no-project --with "$TWINE" --with "$PACKAGING" \
             twine check /tmp/publish-check/*
+          # The wheel carries the vendored SPA, not the source it was built
+          # from (#580).  Asserted on the artifact rather than on the
+          # pyproject `exclude` line, because the exclude is what could be
+          # wrong.  The smoke answers set include_mcp_apps_scaffold: true, so
+          # app.html must be present for this check to mean anything.
+          python3 - <<'PY'
+          import glob, sys, zipfile
+          names = zipfile.ZipFile(glob.glob("/tmp/publish-check/*.whl")[0]).namelist()
+          if not any(n.endswith("static/app.html") for n in names):
+              print("::error::wheel is missing the vendored static/app.html")
+              sys.exit(1)
+          leaked = [n for n in names if n.endswith("static/app.src.html")]
+          if leaked:
+              print(f"::error::wheel ships the SPA source, not just the build: {leaked}")
+              sys.exit(1)
+          PY
 
       - name: vale config structural check
         working-directory: /tmp/smoke

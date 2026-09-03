@@ -390,3 +390,51 @@ Also changed, and absorbed with no action: the file publishes `8000:8000`,
 declares a TCP liveness healthcheck, and marks its `env_file` entry
 `required: false` so a checkout without a `.env` still starts (needs Compose
 2.24.0 or newer).
+
+### Author and maintainer are asked for; the license choice now persists
+
+Two questions arrive on this update, and three lines in re-rendered files gain
+marker blocks. The defaults reproduce exactly what the template rendered
+before, so a project that does nothing sees its author fields unchanged.
+
+1. **Answer the two new questions, or accept the defaults.** `author_name`
+   defaults to your `github_org` answer and `author_email` to
+   `<github_org>@users.noreply.github.com` — which is what `packaging/nfpm.yaml`
+   already composed. The automated weekly update runs `copier update --defaults
+   --skip-answered`, so it will take those defaults silently; to set a real
+   name, either run `copier update` by hand and answer, or add the two keys to
+   `.copier-answers.yml`:
+
+   ```yaml
+   author_name: Jane Doe
+   author_email: jane@example.com
+   ```
+
+   They feed `[project] authors` in `pyproject.toml` and `maintainer` in
+   `packaging/nfpm.yaml`. If you had hand-edited either to a real name, set the
+   answers to that name and the hand edit becomes the rendered value.
+
+2. **`pyproject.toml`'s `authors` gains an `email` key.** It rendered as
+   `authors = [{ name = "..." }]` before and now carries `email` as well. This
+   is a one-time change to that line for every project; resolve it in favour of
+   the template side once your answers are right.
+
+3. **Nothing to do for the license, and one thing to stop doing.** The
+   `license` line and its trove classifier in `pyproject.toml`, and `license`
+   in `packaging/nfpm.yaml`, now sit inside `PROJECT-LICENSE` /
+   `PROJECT-LICENSE-CLASSIFIER` marker blocks. The template does not re-render
+   inside them, so a license you picked is no longer overwritten. If you were
+   carrying a hand-written marker such as `# project-owned — keep across copier
+   updates` on those lines, it is now redundant and can go; keep the value, and
+   keep the `PROJECT-LICENSE` markers themselves.
+
+   `LICENSE` also told you, incorrectly, that `packaging/nfpm.yaml` was
+   protected from re-rendering. It was not, which is why that line needed a
+   marker too. The corrected text ships with this update.
+
+Also changed, and absorbed with no action: `pyproject.toml` gains an empty
+`[tool.uv]` section carrying a `PROJECT-UV` block, which is where a temporary
+dependency bound belongs — `scripts/check_pins.py` already gated those entries
+but the section had no home. Projects rendered with
+`include_mcp_apps_scaffold` also stop shipping `static/app.src.html` inside the
+wheel; it is the vendoring input, not a distributable.

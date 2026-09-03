@@ -19,26 +19,29 @@ How to pick and apply a license
 
 2. Replace this file with the full text of the chosen license.
 
-3. Update the FOUR other places the scaffold claims a license:
+3. Update the FOUR other places the scaffold claims a license.  Two of them
+   sit inside `PROJECT-LICENSE` marker blocks; edit between the markers and
+   leave the markers in place:
 
-   a. pyproject.toml:
+   a. pyproject.toml, inside PROJECT-LICENSE:
         license = "LicenseRef-Proprietary"
                       ↓
         license = "MIT"                         # or "Apache-2.0", etc.
 
-   b. pyproject.toml classifiers list:
+   b. pyproject.toml classifiers list, inside PROJECT-LICENSE-CLASSIFIER:
         "License :: Other/Proprietary License",
                       ↓
         "License :: OSI Approved :: MIT License",
 
-      See https://pypi.org/classifiers/ for the full classifier list.
+      See https://pypi.org/classifiers/ for the full classifier list.  The
+      trove name is not the SPDX id: Apache-2.0 is "Apache Software License".
 
    c. packaging/mcpb/manifest.json.in:
         "license": "UNLICENSED"
                       ↓
         "license": "MIT"                        # or the SPDX id you chose
 
-   d. packaging/nfpm.yaml:
+   d. packaging/nfpm.yaml, inside PROJECT-LICENSE:
         license: "Proprietary"
                       ↓
         license: "MIT"
@@ -47,9 +50,15 @@ How to pick and apply a license
    proprietary.  Anyone you share the code with still has no license to
    use it unless you explicitly grant rights separately.
 
-Caveat: the files above are in _skip_if_exists in the template, so
-future ``copier update`` runs will NOT re-render them — your license
-choice is durable across template bumps.  However, pyproject.toml
-itself is NOT skip-if-exists, so if you accept the default on a template
-update, the ``license =`` and classifier lines may flip back to the
-template's defaults.  If that happens, revert those two lines.
+Why the marker blocks: this file and packaging/mcpb/manifest.json.in are in
+_skip_if_exists, so ``copier update`` never re-renders them — (c) above is
+safe by that route alone.  pyproject.toml and packaging/nfpm.yaml are NOT
+skip-listed — they carry tooling configuration that has to stay
+current — so the license lines in them are marked PROJECT-LICENSE instead.
+The template does not re-render inside those markers, so your choice
+persists there too.
+
+The template cannot make this step for you.  The declaration takes a
+different shape in every file above, over an unbounded set of licenses, so
+there is no single answer it could ask for and map onto all of them.  What
+it can do is not overwrite the answer you give.
