@@ -334,3 +334,59 @@ silent.**
 The rendered `tests/test_config_contract.py` asserts the field stays outside
 the sentinels and that the env read stays out of `from_env`, so a project
 that reintroduces either fails its own suite rather than drifting.
+
+### compose.yml is now a working quick start, and no longer ships a reverse proxy
+
+`compose.yml` is re-rendered on every update, so this arrives whether or not
+you edited it. Four things move.
+
+1. **The Traefik labels are gone from `compose.yml`.** They never worked as
+   shipped: the file declared no `networks:` stanza, so the service sat on the
+   compose project's default network and the proxy had no route to it. If your
+   deployment relied on them, copy the overlay from
+   `docs/deployment/docker.md` ("Behind a reverse proxy") into a
+   `compose.override.yml`, which Compose loads automatically alongside
+   `compose.yml`. Note the `ports: !reset []` line in it: an override file
+   cannot unpublish a port by leaving it out, because Compose appends to
+   sequences rather than replacing them, so without that line the service
+   joins the proxy network *and* keeps publishing 8000. `!reset` needs
+   Compose 2.24.4 or newer. Confirm with `docker compose config` before
+   starting.
+
+2. **Rename any public hostname you kept in `{PREFIX}_HOST`.** The old router
+   rule read that variable as a public FQDN; the server reads it as the
+   interface it binds to. Set your hostname directly in the overlay's
+   `Host(...)` rule and set `{PREFIX}_BASE_URL` to the public URL. Then reset
+   `{PREFIX}_HOST` to a bind address or remove the line — leaving an FQDN
+   there is now only a bind address, and the server will fail to start if the
+   name does not resolve to a local interface.
+
+3. **`build: .` is gone; the file pulls the published image.** If you relied on
+   `docker compose up -d` rebuilding from your checkout, build explicitly
+   first: `docker build -t <registry>/<project>:dev .`, then point `image:` at
+   that tag.
+
+4. **Stop setting `{PREFIX}_PORT` for containers, and check any `-p` mapping
+   that depended on it.** The image's `CMD` now pins `--port 8000` alongside
+   `--host 0.0.0.0`, so neither variable reaches the server inside a
+   container. A `docker run -e {PREFIX}_PORT=9000 -p 9000:9000 ...` that
+   worked before now serves 8000 behind a mapping pointing at a closed port,
+   and nothing reports an error — the container starts and the published port
+   simply refuses connections. Change the mapping's **host** side instead
+   (`-p 9000:8000`), and drop `{PREFIX}_PORT` from any `.env` a container
+   reads. Outside a container — the systemd and `serve` paths — the variable
+   is unchanged and still works.
+
+5. **Move any out-of-seam edits into the new sentinel blocks.** The file now
+   carries `DOMAIN-COMPOSE-VOLUMES`, `DOMAIN-COMPOSE-ENVIRONMENT`,
+   `DOMAIN-COMPOSE-SERVICES` and `DOMAIN-COMPOSE-VOLUME-NAMES`. Volumes,
+   environment and sidecars you added directly to the template-owned lines will
+   conflict on this update; resolve by taking the template side and re-adding
+   your content inside the matching block, where it survives from now on. A
+   *named* volume needs two entries: the mount in `DOMAIN-COMPOSE-VOLUMES` and
+   its declaration in `DOMAIN-COMPOSE-VOLUME-NAMES`.
+
+Also changed, and absorbed with no action: the file publishes `8000:8000`,
+declares a TCP liveness healthcheck, and marks its `env_file` entry
+`required: false` so a checkout without a `.env` still starts (needs Compose
+2.24.0 or newer).

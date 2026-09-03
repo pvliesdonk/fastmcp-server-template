@@ -677,6 +677,10 @@ jobs:
         working-directory: /tmp/smoke
         run: |
           for marker in \
+            "# DOCKERFILE-APT-DEPS-START" \
+            "# DOCKERFILE-APT-DEPS-END" \
+            "# DOCKERFILE-UV-EXTRAS-START" \
+            "# DOCKERFILE-UV-EXTRAS-END" \
             "# DOCKERFILE-STATE-DIRS-START" \
             "# DOCKERFILE-STATE-DIRS-END" \
             "# DOCKERFILE-VOLUMES-START" \
@@ -687,6 +691,44 @@ jobs:
             count=$(grep -cF "$marker" Dockerfile || true)
             [ "$count" = "1" ] || { echo "::error::expected 1 '$marker' sentinel, found $count"; exit 1; }
           done
+
+      - name: compose.yml sentinel structure and template-owned shape
+        working-directory: /tmp/smoke
+        run: |
+          # The rendered tests/test_compose.py asserts the behavioural contract in
+          # every downstream. These two assertions cannot live there: a project is
+          # *expected* to fill its seams and to add keys under `environment:`, so
+          # only a pristine render can check that the template ships the seams empty
+          # and the block holding exactly one key.
+          for seam in \
+            "DOMAIN-COMPOSE-VOLUMES" \
+            "DOMAIN-COMPOSE-ENVIRONMENT" \
+            "DOMAIN-COMPOSE-SERVICES" \
+            "DOMAIN-COMPOSE-VOLUME-NAMES"; do
+            for suffix in START END; do
+              count=$(grep -cF "# $seam-$suffix" compose.yml || true)
+              [ "$count" = "1" ] || { echo "::error::expected 1 '# $seam-$suffix' sentinel in compose.yml, found $count"; exit 1; }
+            done
+          done
+          python3 - <<'PY'
+          import sys, yaml
+          text = open("compose.yml", encoding="utf-8").read()
+          doc = yaml.safe_load(text)
+          service = doc["services"]["smoke-mcp"]
+          env = service.get("environment") or {}
+          if set(env) != {"FASTMCP_HOME"}:
+              print(f"::error::a pristine compose.yml must set FASTMCP_HOME and nothing else; found {sorted(env)}")
+              sys.exit(1)
+          for seam in ("DOMAIN-COMPOSE-VOLUMES", "DOMAIN-COMPOSE-ENVIRONMENT",
+                       "DOMAIN-COMPOSE-SERVICES", "DOMAIN-COMPOSE-VOLUME-NAMES"):
+              # Drop the rest of the START marker's own line: it carries the
+              # seam's description, which is template text, not seam content.
+              after_start = text.split(f"# {seam}-START", 1)[1].split("\n", 1)[1]
+              body = after_start.split(f"# {seam}-END", 1)[0]
+              if body.strip():
+                  print(f"::error::{seam} ships with content: {body.strip()!r} — seam blocks belong to the project")
+                  sys.exit(1)
+          PY
 
       - name: claude-code-review draft gate and per-commit concurrency
         working-directory: /tmp/smoke-claude-review-on
@@ -1628,6 +1670,20 @@ jobs:
         run: |
           mkdir -p dist
           VERSION=0.0.0 ARCH=amd64 nfpm package --packager rpm --target dist/ --config packaging/nfpm.yaml
+
+      - name: docker compose config (compose.yml is spec-valid without a .env)
+        # The rendered tests/test_compose.py asserts compose.yml's *contract*
+        # by parsing it as YAML; only the Compose implementation validates it
+        # as a Compose file, so that check belongs here, where a daemon
+        # exists.  Deliberately run with NO `.env` present: the fresh-project
+        # state is exactly the one that used to fail, because a named
+        # `env_file` that does not exist is an error rather than a skipped
+        # entry, and `docker compose up -d` was the documented quick start.
+        working-directory: /tmp/smoke
+        run: |
+          test ! -e .env || { echo "::error::the smoke render should not ship a .env"; exit 1; }
+          docker compose config >/dev/null \
+            || { echo "::error::compose.yml is not a valid Compose file without a .env"; exit 1; }
 
       - name: docker build smoke
         # Catches Dockerfile structural regressions (base-image drift,
