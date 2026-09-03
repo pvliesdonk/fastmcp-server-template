@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.0.0 (2026-09-03)
+
+- #585 feat(scaffold): give the package description and the keyword list a home
+- #584 docs: cover DOCKERFILE-* and GENERATED-* in the conflict-resolution policy
+- #582 feat(scaffold): own the license, ask for the author, and give [tool.uv] a home
+- #577 fix!: make compose.yml a working quick start, without a reverse proxy
+- #574 fix(config): preserve a comment prefix on a spliced region's END marker
+- #560 feat!: adopt fastmcp-pvl-core v7 / FastMCP 4
+
+
 ## v7.0.2 (2026-09-02)
 
 - #569 fix(config): give the generated wizard spec a route to dockerVolume/dockerPath
