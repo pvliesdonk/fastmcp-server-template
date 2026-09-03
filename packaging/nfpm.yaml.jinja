@@ -13,11 +13,15 @@ version: "${VERSION}"
 version_schema: semver
 section: utils
 priority: optional
-maintainer: "{{ github_org }} <{{ github_org }}@users.noreply.github.com>"
+maintainer: "{{ author_name }} <{{ author_email }}>"
 description: |
   {{ domain_description }}
 homepage: "https://{{ github_org }}.github.io/{{ project_name }}/"
+# PROJECT-LICENSE-START — the license you picked; replace the value below and
+# it is kept across copier update.  nfpm wants a short free-form name, which is
+# not necessarily the SPDX id used in pyproject.toml.  See LICENSE.
 license: "Proprietary"  # starter: TODO update when you pick a license (see LICENSE)
+# PROJECT-LICENSE-END
 
 # --- Package contents ---
 

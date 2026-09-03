@@ -402,6 +402,43 @@ github_org:
   default: "pvliesdonk"
   help: "Used for URLs, Docker registry path, and GitHub references"
 
+# Who the project is by, as opposed to which GitHub account hosts it (#579).
+# `github_org` is an account handle, and deriving a person from it is what these
+# two replace: pyproject's `[project] authors` and nfpm's `maintainer` both had
+# to be hand-edited in any project with a named maintainer, in files that
+# re-render on every update. The defaults reproduce exactly what those two
+# fields rendered before, so a project that never answers sees no diff and the
+# weekly `copier update --defaults --skip-answered` stays a no-op for it.
+#
+# Deliberately NOT the model used for `license`: an author is one string with
+# one obvious shape in each destination, so the template can map it. A license
+# is a different token in every file it appears in, over an unbounded set of
+# licenses, so the template protects that choice instead of asking for it
+# (#578).
+author_name:
+  type: str
+  default: "{{ github_org }}"
+  help: "Author/maintainer name for pyproject.toml and the Linux packages (e.g. Jane Doe)"
+  validator: >-
+    {% if not author_name.strip() %}
+    Required: the name that appears in pyproject.toml's [project] authors and packaging/nfpm.yaml's maintainer.
+    {% elif '"' in author_name or '\\' in author_name %}
+    Must not contain a double quote or a backslash: the name is interpolated verbatim into a TOML string literal (pyproject.toml) and a double-quoted YAML scalar (packaging/nfpm.yaml), and either character makes both files unparseable.
+    {% endif %}
+
+author_email:
+  type: str
+  default: "{{ github_org }}@users.noreply.github.com"
+  help: "Author/maintainer email for pyproject.toml and the Linux packages"
+  validator: >-
+    {% if not author_email.strip() %}
+    Required: the address that appears in pyproject.toml's [project] authors and packaging/nfpm.yaml's maintainer.
+    {% elif '"' in author_email or '\\' in author_email %}
+    Must not contain a double quote or a backslash: the address is interpolated verbatim into a TOML string literal (pyproject.toml) and a double-quoted YAML scalar (packaging/nfpm.yaml), and either character makes both files unparseable.
+    {% elif '<' in author_email or '>' in author_email %}
+    Must not contain angle brackets: nfpm's `maintainer` is composed as `Name <address>`, so the address supplies only the part inside the brackets.
+    {% endif %}
+
 docker_registry:
   type: str
   default: "ghcr.io/{{ github_org }}"
