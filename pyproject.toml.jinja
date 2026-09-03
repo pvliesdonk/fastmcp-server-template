@@ -11,7 +11,21 @@ license = "LicenseRef-Proprietary"  # starter: TODO update when you pick a licen
 # PROJECT-LICENSE-END
 requires-python = ">=3.11"
 authors = [{ name = "{{ author_name }}", email = "{{ author_email }}" }]
-keywords = []
+# The template knows the terms that are true of every server it generates and
+# the project's own names; it cannot know the domain terms, which go in the
+# seam.  An empty list was not a decision, just nobody's job (#583).
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "fastmcp",
+    "{{ project_name }}",
+{%- if pypi_name != project_name %}
+    "{{ pypi_name }}",
+{%- endif %}
+    # PROJECT-KEYWORDS-START — add this project's domain terms below (what it
+    # is *about*: "vault", "ocr", "patents"); kept across copier update.
+    # PROJECT-KEYWORDS-END
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",

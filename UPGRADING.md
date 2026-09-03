@@ -438,3 +438,24 @@ dependency bound belongs — `scripts/check_pins.py` already gated those entries
 but the section had no home. Projects rendered with
 `include_mcp_apps_scaffold` also stop shipping `static/app.src.html` inside the
 wheel; it is the vendoring input, not a distributable.
+
+### Package description and keywords become yours to write
+
+Both arrive as sentinel blocks, so nothing is lost on a later update. Neither
+step is required for the update to succeed.
+
+1. **Write a real package description, if you want one.**
+   `packaging/nfpm.yaml` now wraps its `description:` in
+   `DOMAIN-NFPM-DESCRIPTION` markers and still starts as your
+   `domain_description`. That answer is capped at 100 characters only because
+   the MCP registry rejects longer in `server.json`; `apt show` and `dnf info`
+   impose no limit, so a paragraph belongs here. If you had already rewritten
+   that description by hand, the value survives — move nothing, the markers
+   render around it.
+
+2. **Add your domain keywords.** `pyproject.toml`'s `keywords` list is no
+   longer empty: it renders `mcp`, `model-context-protocol`, `fastmcp` and
+   your project and distribution names, and carries a `PROJECT-KEYWORDS` block
+   for the terms only you know — what the server is *about*. If you had
+   populated the list by hand, expect a conflict on this line; keep your terms
+   by moving them inside the block, and take the template's entries above it.
