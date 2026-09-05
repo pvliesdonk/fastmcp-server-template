@@ -33,6 +33,12 @@ release-PR model:
   pass CI.  ``prepared`` counts only when it is itself a stable ``X.Y.Z``:
   an rc in ``pyproject.toml`` must never make an rc pin in the published
   manifests pass CI (the markdown-vault-mcp#1053 class).
+- The prepare-time version guard judges a candidate by its stable base as
+  well as its own tag: after ``vX.Y.Z`` ships from a branch, the default
+  branch's next rc prepare computes the untagged ``X.Y.Z-rc.N+1``, and an
+  exact-tag check let it through to fail later in the notes promotion
+  (fastmcp-server-template#587).  The step's shell is executed here with
+  ``knope`` and ``gh`` stubbed, so the refusal is asserted, not grepped.
 - Tags-absent behavior fails loudly only when the repo demonstrably has
   releases (``CHANGELOG.md`` carries version sections) while no tags are
   visible — the template#387 failure mode is a tag-less checkout of a
@@ -487,15 +493,12 @@ def _run_reserve_step(
     bin_dir = sandbox.parent / "bin"
     knope = bin_dir / "knope"
     knope.write_text(
-        "#!/bin/sh\n"
-        f"echo 'Would add the following to pyproject.toml: {computed}'\n",
+        f"#!/bin/sh\necho 'Would add the following to pyproject.toml: {computed}'\n",
         encoding="utf-8",
     )
     knope.chmod(0o755)
     heads = reserved or {}
-    listing = (
-        "\n".join(f"    echo {shlex.quote(head)}" for head in heads) or "    :"
-    )
+    listing = "\n".join(f"    echo {shlex.quote(head)}" for head in heads) or "    :"
     reads = "\n".join(
         f"      *'ref={head}'*) printf '%s' 'version = \"{version}\"' | base64 ;;"
         for head, version in heads.items()
@@ -602,8 +605,8 @@ def test_reserve_step_refuses_an_rc_whose_stable_base_is_reserved(
 
     The reservation half compared exact versions too: a candidate and the
     stable it is a candidate for, in flight from different bases, would
-    both pass and whichever merged second would tag an rc behind its own
-    stable.
+    both pass, and with merge order uncontrolled the stable could land
+    first, tagging the rc behind its own stable.
     """
     result, output = _run_reserve_step(
         reserve_sandbox,
@@ -611,8 +614,7 @@ def test_reserve_step_refuses_an_rc_whose_stable_base_is_reserved(
         reserved={"knope/prepare/release-4.1": "4.1.0"},
     )
     assert result.returncode != 0, (
-        "an rc for a reserved stable passed the guard: "
-        f"{result.stdout}{result.stderr}"
+        f"an rc for a reserved stable passed the guard: {result.stdout}{result.stderr}"
     )
     assert "knope/prepare/release-4.1" in result.stdout, result.stdout
     assert "version=" not in output
