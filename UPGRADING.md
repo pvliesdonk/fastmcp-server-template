@@ -266,6 +266,25 @@ Steps: [upgrading/v7.0.md](upgrading/v7.0.md).
 
 Steps: [upgrading/v8.0.md](upgrading/v8.0.md).
 
-## Unreleased
+## Unreleased - Port PRs after a branch release merge as merge commits
 
-_Nothing yet._
+After a stable release from a `release/X.Y` branch, the port PR that
+`release.yml` opens against the default branch now carries the release's
+ancestry (a real merge of the release commit, plus its version stamps)
+whenever that release is the newest stable. **Merge such a port PR with a
+merge commit** — the PR body says so — never a squash or a rebase, which
+discard the ancestry; Release Prepare on the default branch refuses the
+next release until it has landed, naming the remedy. An older backport's
+port PR is unchanged (files only) and merges any way you like.
+
+Check that the repository allows merge commits (Settings → General →
+Pull Requests → *Allow merge commits*); the shipped rulesets already
+permit them.
+
+If your default branch already sits in the state this fixes — a stable
+shipped from a branch, its files-only port merged, and the branch release
+is still the newest stable — land the ancestry by hand once: on a branch
+from the default branch run `git merge --no-ff vX.Y.Z`, resolve the
+changelog and stamp conflicts in favour of the default branch, open a PR
+and merge it with a merge commit. The next Release Prepare then computes
+from `vX.Y.Z`.
