@@ -99,7 +99,7 @@ def test_marker_counts_and_derived_fields(tmp_path: Path) -> None:
         root / "example.md",
         GOOD.replace(
             "status: stable",
-            "verified:\n  by: human:pvliesdonk\n  at: 2026-09-07T10:00:00",
+            "verified:\n  - by: human:pvliesdonk\n    at: 2026-09-07T10:00:00",
         ),
     )
     assert human.trust_tier == "human-reviewed"
@@ -155,7 +155,7 @@ def test_dates_must_be_iso(tmp_path: Path) -> None:
     problems = _findings(
         tmp_path, GOOD.replace("stale_after: 2027-03-06", "stale_after: next spring")
     )
-    assert any("`stale_after` must be an ISO date" in p for p in problems), problems
+    assert any("`stale_after` must be a calendar date" in p for p in problems), problems
     problems = _findings(tmp_path, GOOD.replace("  at: 2026-09-06", "  at: yesterday"))
     assert any("`generated.at` must be an ISO date" in p for p in problems), problems
 
@@ -227,6 +227,52 @@ def test_malformed_index_yaml_is_a_finding(tmp_path: Path) -> None:
     ]
 
 
+def test_verified_bare_mapping_is_rejected(tmp_path: Path) -> None:
+    text = GOOD.replace(
+        "status: stable", "verified:\n  by: human:pvliesdonk\n  at: 2026-09-07"
+    )
+    problems = _findings(tmp_path, text)
+    assert any("`verified` must be a list" in p for p in problems), problems
+    ref = cr.parse_reference(tmp_path / "x.md", text)
+    assert ref.trust_tier == "unverified"
+
+
+def test_stale_after_and_accessed_are_calendar_dates(tmp_path: Path) -> None:
+    problems = _findings(
+        tmp_path,
+        GOOD.replace("stale_after: 2027-03-06", 'stale_after: "2027-03-06T12:30:00"'),
+    )
+    assert any("`stale_after` must be a calendar date" in p for p in problems), problems
+    problems = _findings(
+        tmp_path,
+        GOOD.replace("    accessed: 2026-09-06", '    accessed: "2026-09-06T01:00:00"'),
+    )
+    assert any("needs a calendar `accessed` date" in p for p in problems), problems
+    for spelling in ('"20270306"', '"2027-W10-6"'):
+        problems = _findings(
+            tmp_path,
+            GOOD.replace("stale_after: 2027-03-06", f"stale_after: {spelling}"),
+        )
+        assert any("`stale_after` must be a calendar date" in p for p in problems), (
+            spelling,
+            problems,
+        )
+    problems = _findings(
+        tmp_path, GOOD.replace("    accessed: 2026-09-06", '    accessed: "20260906"')
+    )
+    assert any("needs a calendar `accessed` date" in p for p in problems), problems
+    problems = _findings(
+        tmp_path, GOOD.replace("  at: 2026-09-06", '  at: "20260906T08:00:00"')
+    )
+    assert any("`generated.at`" in p for p in problems), problems
+    assert (
+        _findings(
+            tmp_path, GOOD.replace("  at: 2026-09-06", "  at: 2026-09-06T08:00:00")
+        )
+        == []
+    )
+
+
 def test_status_is_okf_vocabulary(tmp_path: Path) -> None:
     problems = _findings(tmp_path, GOOD.replace("status: stable", "status: current"))
     assert any("`status` must be one of" in p for p in problems), problems
@@ -272,7 +318,7 @@ def test_sources_entries_are_validated(tmp_path: Path) -> None:
     )
     problems = _findings(tmp_path, text)
     assert any("has no `resource`" in p for p in problems), problems
-    assert any("needs an ISO `accessed` date" in p for p in problems), problems
+    assert any("needs a calendar `accessed` date" in p for p in problems), problems
     problems = _findings(
         tmp_path,
         GOOD.replace(

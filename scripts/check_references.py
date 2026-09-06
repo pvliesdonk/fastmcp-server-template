@@ -9,12 +9,13 @@ describes how one is written; the directory is an Open Knowledge Format
 can be checked mechanically:
 
 * the YAML frontmatter carries every key in ``REQUIRED_KEYS``; ``type`` is
-  ``Reference``; ``generated`` is ``{by, at}`` with an actor and an ISO date;
-  ``stale_after`` is an ISO date; ``status``, when present, is one of OKF's
-  ``draft`` / ``stable`` / ``deprecated``; ``verified`` entries are ``{by, at}``;
-  a ``superseded_by`` names a file under the reference root;
+  ``Reference``; ``generated`` is ``{by, at}`` with an actor and an ISO date
+  or datetime; ``stale_after`` is a calendar date (``YYYY-MM-DD``); ``status``,
+  when present, is one of OKF's ``draft`` / ``stable`` / ``deprecated``;
+  ``verified`` is a list of ``{by, at}`` entries; a ``superseded_by`` names a
+  file under the reference root;
 * ``sources`` is a non-empty list, each entry with an ``id``, a ``resource``
-  and an ``accessed`` date;
+  and an ``accessed`` calendar date;
 * every ``[source: id]`` marker in the body names a declared source, and every
   ``[pins: tests/x.py::test_y]`` marker names a pytest node that exists;
 * the bundle root carries an ``index.md`` declaring ``okf_version``, and a
@@ -135,12 +136,34 @@ def parse_reference(path: Path, text: str) -> Reference:
     return Reference(path=path, meta=meta, body=m.group("body"))
 
 
+# The contract spells dates ``YYYY-MM-DD``. ``date.fromisoformat`` also accepts
+# the basic (``20270306``) and week (``2027-W10-6``) ISO spellings from Python
+# 3.11 on, which a date-only consumer may not, so the text is checked first.
+_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DAY_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:$|[T ])")
+
+
+def _as_day(value: object) -> dt.date | None:
+    """A calendar date only (``YYYY-MM-DD``); a datetime is rejected."""
+    if isinstance(value, dt.datetime):
+        return None
+    if isinstance(value, dt.date):
+        return value
+    if isinstance(value, str) and _DAY_RE.match(value):
+        try:
+            return dt.date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _as_date(value: object) -> dt.date | None:
+    """A calendar date or a datetime whose date part is spelt ``YYYY-MM-DD``."""
     if isinstance(value, dt.datetime):
         return value.date()
     if isinstance(value, dt.date):
         return value
-    if isinstance(value, str):
+    if isinstance(value, str) and _DAY_PREFIX_RE.match(value):
         for parse in (dt.date.fromisoformat, dt.datetime.fromisoformat):
             try:
                 parsed = parse(value)
@@ -152,8 +175,6 @@ def _as_date(value: object) -> dt.date | None:
 
 def _verified_entries(meta: dict[str, Any]) -> list[dict[str, Any]]:
     value = meta.get("verified")
-    if isinstance(value, dict):
-        return [value]
     if isinstance(value, list):
         return [e for e in value if isinstance(e, dict)]
     return []
@@ -169,9 +190,10 @@ def _check_keys(ref: Reference) -> list[str]:
     ]
     if ref.meta.get("type") is not None and ref.meta["type"] != REFERENCE_TYPE:
         problems.append(f"`type` must be {REFERENCE_TYPE!r}, got {ref.meta['type']!r}")
-    if "stale_after" in ref.meta and _as_date(ref.meta["stale_after"]) is None:
+    if "stale_after" in ref.meta and _as_day(ref.meta["stale_after"]) is None:
         problems.append(
-            f"`stale_after` must be an ISO date (YYYY-MM-DD), got {ref.meta['stale_after']!r}"
+            "`stale_after` must be a calendar date (YYYY-MM-DD, no time part), "
+            f"got {ref.meta['stale_after']!r}"
         )
     for key in ("title", "description", "subject_version", "valid_for"):
         if key in ref.meta and not str(ref.meta[key]).strip():
@@ -202,10 +224,10 @@ def _check_trust(ref: Reference) -> list[str]:
     value = ref.meta.get("verified")
     if value is None:
         return problems
-    if isinstance(value, dict):
-        return [*problems, *_check_actor_entry("verified", value)]
     if not isinstance(value, list):
-        return [*problems, "`verified` must be a `{by, at}` mapping or a list of them"]
+        # OKF lets a single verifier be written as a bare mapping, but not
+        # every consumer honours that shorthand; the list form is read by all.
+        return [*problems, "`verified` must be a list of `{by, at}` mappings"]
     for i, entry in enumerate(value):
         problems += _check_actor_entry(f"verified[{i}]", entry)
     return problems
@@ -260,8 +282,10 @@ def _check_sources(ref: Reference) -> tuple[list[str], set[str]]:
             problems.append(
                 f"sources[{i}] ({sid or '?'}) has no `resource` (OKF's URI field)"
             )
-        if _as_date(entry.get("accessed")) is None:
-            problems.append(f"sources[{i}] ({sid or '?'}) needs an ISO `accessed` date")
+        if _as_day(entry.get("accessed")) is None:
+            problems.append(
+                f"sources[{i}] ({sid or '?'}) needs a calendar `accessed` date (YYYY-MM-DD)"
+            )
     return problems, ids
 
 
@@ -382,7 +406,7 @@ def expiry(ref: Reference, today: dt.date) -> str | None:
     """Why the reference should be re-researched, or ``None`` if it is current."""
     if ref.status == "deprecated":
         return None
-    stale_after = _as_date(ref.meta.get("stale_after"))
+    stale_after = _as_day(ref.meta.get("stale_after"))
     if stale_after is not None and today >= stale_after:
         return f"stale since {stale_after.isoformat()} (`stale_after`)"
     return None
