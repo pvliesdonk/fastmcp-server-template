@@ -428,11 +428,14 @@ def test_bundle_marker_and_log_headings(tmp_path: Path) -> None:
     assert any("must declare `okf_version" in p for p in cr.bundle_findings(root))
     (root / "index.md").write_text(INDEX, encoding="utf-8")
     (root / "log.md").write_text(
-        "# Log\n\n## 2026-09-06\n\n- added\n\n## last week\n\n- x\n", encoding="utf-8"
+        "# Log\n\n## 2026-09-06\n\n- added\n\n## last week\n\n- x\n"
+        "\n## 2026-09-06T12:30:00\n\n- y\n\n## 20260906\n\n- z\n",
+        encoding="utf-8",
     )
     problems = cr.bundle_findings(root)
     assert problems == [
-        f"{root / 'log.md'}: heading `## last week` is not a `## YYYY-MM-DD` date"
+        f"{root / 'log.md'}: heading `## {bad}` is not a `## YYYY-MM-DD` date"
+        for bad in ("last week", "2026-09-06T12:30:00", "20260906")
     ]
     (root / "example.md").unlink()
     assert cr.bundle_findings(root) == []  # no pages, no bundle expected
