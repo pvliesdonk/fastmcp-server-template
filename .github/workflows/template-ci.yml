@@ -1813,12 +1813,12 @@ jobs:
             --ignore E501 \
             --line-length 88 \
             --target-version py311 \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Format check scripts (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 --target-version py311 \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
         # The scripts that render into every project (gen_config_surface.py,
@@ -1853,7 +1853,7 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             --target-version py311 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/report_seeded_changes.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py
 
   pr-title:
     name: PR Title
