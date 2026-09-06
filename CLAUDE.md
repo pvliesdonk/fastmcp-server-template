@@ -37,8 +37,8 @@ create new projects.
   are copied verbatim into generated projects and re-rendered on
   `copier update`.
 - `scripts/check_references.py` — shipped to every project; enforces the
-  frontmatter, source-id and test-pin contract of the external-behaviour
-  references under `docs/design/reference/` that the
+  OKF v0.2 frontmatter, source-id, test-pin and bundle contract of the
+  external-behaviour references under `docs/design/reference/` that the
   `researching-references` skill writes. `tests/test_reference_docs.py`
   (copied verbatim) runs it in a downstream's CI;
   `scripts/tests/test_check_references.py` unit-tests it here.
