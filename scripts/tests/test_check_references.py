@@ -186,6 +186,47 @@ def test_actor_convention(tmp_path: Path) -> None:
     assert any("`verified` must be a" in p for p in problems), problems
 
 
+def test_verified_list_entries_are_all_validated(tmp_path: Path) -> None:
+    text = GOOD.replace(
+        "status: stable",
+        "verified:\n  - by: process:refute\n    at: 2026-09-06\n  - nobody",
+    )
+    problems = _findings(tmp_path, text)
+    assert any("`verified[1]` must be a mapping" in p for p in problems), problems
+
+
+def test_deprecated_requires_a_successor(tmp_path: Path) -> None:
+    problems = _findings(tmp_path, GOOD.replace("status: stable", "status: deprecated"))
+    assert any("`status: deprecated` requires `superseded_by" in p for p in problems), (
+        problems
+    )
+
+
+def test_pin_path_cannot_escape_tests(tmp_path: Path) -> None:
+    repo, root = _repo(tmp_path)
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "test_x.py").write_text(
+        "def test_claim() -> None:\n    pass\n", encoding="utf-8"
+    )
+    text = GOOD.replace(
+        "tests/test_example.py::test_claim", "tests/../scripts/test_x.py::test_claim"
+    )
+    ref = cr.parse_reference(root / "example.md", text)
+    problems = cr.findings(ref, repo_root=repo, root=root)
+    assert any("resolves outside tests/" in p for p in problems), problems
+
+
+def test_malformed_index_yaml_is_a_finding(tmp_path: Path) -> None:
+    _, root = _repo(tmp_path)
+    (root / "index.md").write_text(
+        "---\nokf_version: [unclosed\n---\n", encoding="utf-8"
+    )
+    problems = cr.bundle_findings(root)
+    assert problems == [
+        f"{root / 'index.md'}: frontmatter is missing or not valid YAML"
+    ]
+
+
 def test_status_is_okf_vocabulary(tmp_path: Path) -> None:
     problems = _findings(tmp_path, GOOD.replace("status: stable", "status: current"))
     assert any("`status` must be one of" in p for p in problems), problems
@@ -322,8 +363,10 @@ def test_expiry_follows_okf_staleness(tmp_path: Path) -> None:
     assert (
         cr.expiry(ref, dt.date(2027, 3, 6)) == "stale since 2027-03-06 (`stale_after`)"
     )
+    (root / "newer.md").write_text(GOOD, encoding="utf-8")
     deprecated = cr.parse_reference(
-        root / "example.md", GOOD.replace("status: stable", "status: deprecated")
+        root / "example.md",
+        GOOD.replace("status: stable", "status: deprecated\nsuperseded_by: newer.md"),
     )
     assert cr.expiry(deprecated, dt.date(2030, 1, 1)) is None
     assert "RE-RESEARCH" in cr.summary_line(ref, dt.date(2027, 3, 6))
