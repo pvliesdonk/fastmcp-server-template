@@ -248,6 +248,23 @@ def test_stale_after_and_accessed_are_calendar_dates(tmp_path: Path) -> None:
         GOOD.replace("    accessed: 2026-09-06", '    accessed: "2026-09-06T01:00:00"'),
     )
     assert any("needs a calendar `accessed` date" in p for p in problems), problems
+    for spelling in ('"20270306"', '"2027-W10-6"'):
+        problems = _findings(
+            tmp_path,
+            GOOD.replace("stale_after: 2027-03-06", f"stale_after: {spelling}"),
+        )
+        assert any("`stale_after` must be a calendar date" in p for p in problems), (
+            spelling,
+            problems,
+        )
+    problems = _findings(
+        tmp_path, GOOD.replace("    accessed: 2026-09-06", '    accessed: "20260906"')
+    )
+    assert any("needs a calendar `accessed` date" in p for p in problems), problems
+    problems = _findings(
+        tmp_path, GOOD.replace("  at: 2026-09-06", '  at: "20260906T08:00:00"')
+    )
+    assert any("`generated.at`" in p for p in problems), problems
     assert (
         _findings(
             tmp_path, GOOD.replace("  at: 2026-09-06", "  at: 2026-09-06T08:00:00")
