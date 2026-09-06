@@ -9,6 +9,7 @@ can trust it.
 from __future__ import annotations
 
 import datetime as dt
+import re
 import sys
 from pathlib import Path
 
@@ -96,6 +97,27 @@ def test_every_required_key_is_enforced(tmp_path: Path, key: str) -> None:
         ]
     problems = _findings(tmp_path, "".join(lines))
     assert any(f"missing frontmatter key `{key}`" in p for p in problems), problems
+
+
+def test_null_required_keys_are_missing(tmp_path: Path) -> None:
+    text = GOOD
+    for key in ("title", "subject", "subject_version", "valid_for", "status"):
+        text = re.sub(rf"^{key}:.*$", f"{key}:", text, flags=re.MULTILINE)
+    text = re.sub(r"^sources:\n(?:  .*\n)+", "sources:\n", text, flags=re.MULTILINE)
+    problems = _findings(tmp_path, text)
+    for key in (
+        "title",
+        "subject",
+        "subject_version",
+        "valid_for",
+        "status",
+        "sources",
+    ):
+        assert any(f"missing frontmatter key `{key}`" in p for p in problems), (
+            key,
+            problems,
+        )
+    assert any("`sources` must be a non-empty list" in p for p in problems), problems
 
 
 def test_dates_must_be_iso(tmp_path: Path) -> None:
