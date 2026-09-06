@@ -28,6 +28,7 @@ skipped.
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime as dt
 import re
 import sys
@@ -57,6 +58,7 @@ _MARKER_RE = re.compile(
     r"\[(?P<kind>source|observed|unverified|pins)(?::\s*(?P<arg>[^\]]*))?\]"
 )
 _PIN_RE = re.compile(r"^(?P<file>[^:\s]+\.py)::(?P<name>[A-Za-z_][A-Za-z0-9_:]*)$")
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -69,10 +71,16 @@ class Reference:
 
     @property
     def markers(self) -> tuple[tuple[str, str], ...]:
-        """``(kind, argument)`` for every marker in the body, in order."""
+        """``(kind, argument)`` for every marker in the body, in order.
+
+        HTML comments are skipped first: the page template carries
+        marker-shaped examples inside ``<!-- ... -->`` guidance, and those are
+        instructions to the writer, not claims.
+        """
+        visible = _HTML_COMMENT_RE.sub("", self.body)
         return tuple(
             (m.group("kind"), (m.group("arg") or "").strip())
-            for m in _MARKER_RE.finditer(self.body)
+            for m in _MARKER_RE.finditer(visible)
         )
 
     def count(self, kind: str) -> int:
@@ -133,14 +141,19 @@ def _check_status(ref: Reference, root: Path) -> list[str]:
         return []
     if status not in STATUSES:
         return [f"`status` must be one of {sorted(STATUSES)}, got {status!r}"]
-    if status != "superseded":
-        return []
+    return _check_superseded(ref, root) if status == "superseded" else []
+
+
+def _check_superseded(ref: Reference, root: Path) -> list[str]:
     target = ref.meta.get("superseded_by")
     if not target:
         return [
             "`status: superseded` requires `superseded_by: <file under the reference root>`"
         ]
-    if not (root / str(target)).is_file():
+    resolved = (root / str(target)).resolve()
+    if not resolved.is_relative_to(root.resolve()):
+        return [f"`superseded_by` names {target!r}, which is outside {root}"]
+    if not resolved.is_file():
         return [f"`superseded_by` names {target!r}, which does not exist under {root}"]
     return []
 
@@ -203,14 +216,27 @@ def _check_pin(pin: str, repo_root: Path) -> str:
     test_file = repo_root / m.group("file")
     if not test_file.is_file():
         return f"`[pins: {pin}]` names {m.group('file')}, which does not exist"
-    name = m.group("name").rsplit("::", 1)[-1]
-    if not re.search(
-        rf"^\s*(?:async\s+)?def\s+{re.escape(name)}\s*\(",
-        test_file.read_text(encoding="utf-8"),
-        re.MULTILINE,
-    ):
-        return f"`[pins: {pin}]` names test {name!r}, which is not defined in {m.group('file')}"
+    qualname = m.group("name")
+    if not _defined(test_file.read_text(encoding="utf-8"), qualname.split("::")):
+        return f"`[pins: {pin}]` names {qualname!r}, which is not defined in {m.group('file')}"
     return ""
+
+
+def _defined(source: str, parts: list[str]) -> bool:
+    """Whether ``Class::...::function`` exists in ``source`` with that nesting."""
+    try:
+        body: list[ast.stmt] = ast.parse(source).body
+    except SyntaxError:
+        return False
+    for part in parts[:-1]:
+        classes = [n for n in body if isinstance(n, ast.ClassDef) and n.name == part]
+        if not classes:
+            return False
+        body = classes[0].body
+    return any(
+        isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef) and n.name == parts[-1]
+        for n in body
+    )
 
 
 def findings(ref: Reference, *, repo_root: Path, root: Path) -> list[str]:

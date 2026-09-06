@@ -175,6 +175,48 @@ def test_pins_accept_class_methods_and_lists(tmp_path: Path) -> None:
     assert cr.findings(ref, repo_root=repo, root=root) == []
 
 
+def test_class_qualified_pin_must_match_its_class(tmp_path: Path) -> None:
+    repo, root = _repo(tmp_path)
+    (repo / "tests" / "test_example.py").write_text(
+        "class TestX:\n    def test_m(self) -> None:\n        pass\n\n\n"
+        "def test_claim() -> None:\n    pass\n",
+        encoding="utf-8",
+    )
+    for bad in (
+        "tests/test_example.py::TestY::test_m",
+        "tests/test_example.py::test_m",
+    ):
+        text = GOOD.replace("tests/test_example.py::test_claim", bad)
+        ref = cr.parse_reference(root / "example.md", text)
+        problems = cr.findings(ref, repo_root=repo, root=root)
+        assert any("is not defined in" in p for p in problems), (bad, problems)
+
+
+def test_markers_inside_html_comments_are_ignored(tmp_path: Path) -> None:
+    text = GOOD.replace(
+        "# Example subject\n",
+        "# Example subject\n\n<!-- guidance: [source: nope] [pins: tests/none.py::test_x]\n"
+        "spanning lines [unverified] -->\n",
+    )
+    assert _findings(tmp_path, text) == []
+    _, root = _repo(tmp_path)
+    assert cr.parse_reference(root / "example.md", text).count("unverified") == 1
+
+
+def test_superseded_by_must_stay_under_the_reference_root(tmp_path: Path) -> None:
+    repo, root = _repo(tmp_path)
+    (repo / "docs" / "design" / "outside.md").write_text(
+        "---\ntitle: x\n---\n", encoding="utf-8"
+    )
+    for escape in ("../outside.md", str(repo / "docs" / "design" / "outside.md")):
+        text = GOOD.replace(
+            "status: current", f"status: superseded\nsuperseded_by: {escape}"
+        )
+        ref = cr.parse_reference(root / "example.md", text)
+        problems = cr.findings(ref, repo_root=repo, root=root)
+        assert any("is outside" in p for p in problems), (escape, problems)
+
+
 def test_a_reference_with_only_memory_is_rejected(tmp_path: Path) -> None:
     text = GOOD.replace("[source: spec] ", "").replace(
         "[observed: ran `example --dump`]", "[unverified]"
