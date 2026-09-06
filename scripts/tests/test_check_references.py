@@ -154,6 +154,10 @@ def test_dangling_pin_forms(tmp_path: Path) -> None:
         ("tests/test_example.py::test_missing", "is not defined in"),
         ("tests/test_nope.py::test_claim", "does not exist"),
         ("not-a-pin", "is not of the form"),
+        ("scripts/check_references.py::_defined", "is not of the form"),
+        ("tests/test_example.py::helper", "is not of the form"),
+        ("tests/test_example.py::Helper::test_claim", "is not of the form"),
+        ("src/pkg/tests/test_x.py::test_claim", "is not of the form"),
     ):
         problems = _findings(
             tmp_path, GOOD.replace("tests/test_example.py::test_claim", bad)
