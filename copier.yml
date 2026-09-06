@@ -88,7 +88,7 @@ _migrations:
   # scripts/migrate_agent_instructions.py and scripts/tests/test_shared_skill_paths.py.
   - command: >-
       for d in applying-template-updates authoring-issues-prs code-review config-contract logging-standard releasing
-      repository-protection tool-registration writing-release-notes; do
+      repository-protection researching-references tool-registration writing-release-notes; do
       p=".claude/skills/$d"; if [ -d "$p" ] && [ ! -L "$p" ]; then echo
       "copier migration: removing real directory $p (the template now ships
       it as a symlink into .agents/skills/)"; rm -rf "$p"; fi; done

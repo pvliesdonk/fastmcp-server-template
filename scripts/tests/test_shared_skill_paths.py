@@ -24,6 +24,7 @@ TEMPLATE_SKILLS = (
     "logging-standard",
     "releasing",
     "repository-protection",
+    "researching-references",
     "tool-registration",
     "writing-release-notes",
 )

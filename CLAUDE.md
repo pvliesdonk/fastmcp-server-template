@@ -36,6 +36,12 @@ create new projects.
   rather than a copy of its target, by copier's `_preserve_symlinks: true`)
   are copied verbatim into generated projects and re-rendered on
   `copier update`.
+- `scripts/check_references.py` — shipped to every project; enforces the
+  frontmatter, source-id and test-pin contract of the external-behaviour
+  references under `docs/design/reference/` that the
+  `researching-references` skill writes. `tests/test_reference_docs.py`
+  (copied verbatim) runs it in a downstream's CI;
+  `scripts/tests/test_check_references.py` unit-tests it here.
 - `scripts/migrate_agent_instructions.py` — the `copier update` migration
   that splices a downstream's `CLAUDE.md` DOMAIN blocks into `AGENTS.md` and
   rewrites `CLAUDE.md` as the stub; it is copier's after-stage `_migrations`
@@ -133,10 +139,11 @@ DOMAIN content. When new guidance is task-shaped rather than
 always-needed, put it in a skill under `.agents/skills/` instead of
 growing `AGENTS.md.jinja` — that is the lever both budgets expect you to
 pull. The template-skill names must stay
-identical across three places — `TEMPLATE_SKILLS` in
+identical across four places — `TEMPLATE_SKILLS` in
 `scripts/migrate_agent_instructions.py`, the same tuple in
-`scripts/tests/test_shared_skill_paths.py`, and the before-stage shell
-guard's directory list in `copier.yml` — and that test file is the guard
+`scripts/tests/test_shared_skill_paths.py` and in the verbatim-shipped
+`tests/test_agent_instructions.py`, and the before-stage shell guard's
+directory list in `copier.yml` — and the first test file is the guard
 against drift.
 
 ## Breaking changes
