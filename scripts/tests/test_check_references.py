@@ -298,6 +298,14 @@ def test_markers_inside_html_comments_are_ignored(tmp_path: Path) -> None:
     assert cr.parse_reference(root / "example.md", text).count("unverified") == 1
 
 
+def test_observed_marker_needs_its_evidence(tmp_path: Path) -> None:
+    text = GOOD.replace("[observed: ran `example --dump`]", "[observed]")
+    problems = _findings(tmp_path, text)
+    assert any("`[observed]` marker without its evidence" in p for p in problems), (
+        problems
+    )
+
+
 def test_a_reference_with_only_memory_is_rejected(tmp_path: Path) -> None:
     text = GOOD.replace("[source: spec] ", "").replace(
         "[observed: ran `example --dump`]", "[unverified]"
