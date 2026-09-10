@@ -1,5 +1,17 @@
 # Changelog
 
+## v8.1.0 (2026-09-10)
+
+- #607 feat(scaffold): serve pvl-core 7.1 health routes and probe /health from compose and the image
+- #601 fix(scripts): check log.md headings with the calendar-only date parser
+- #599 fix(scripts): calendar-only stale_after and accessed; verified must be a list
+- #596 feat(skills): make the reference contract an OKF v0.2 bundle
+- #594 feat(skills): researching-references skill and a checked reference contract
+- #592 fix(release): port a branch release's ancestry to the default branch
+- #591 docs: reword three verb tricolons the current Vale flags
+- #589 fix(release): refuse an rc whose stable base is already tagged or reserved
+
+
 ## v8.0.0 (2026-09-03)
 
 - #585 feat(scaffold): give the package description and the keyword list a home
