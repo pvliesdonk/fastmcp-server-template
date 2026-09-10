@@ -1722,6 +1722,41 @@ jobs:
             stat -c "%U" /data/state/fastmcp | grep -qx appuser
           '
 
+      - name: docker compose up --wait (the shipped healthcheck passes inside the image)
+        # The only place the compose healthcheck is *executed* rather than
+        # parsed: tests/test_compose.py asserts the command's shape, and
+        # this proves the image's own interpreter can GET /health on the
+        # server the CMD starts, with the state volume the file mounts.
+        # `--wait` blocks until the service reports healthy and fails on
+        # the timeout, so a probe that cannot pass fails the job instead of
+        # leaving a container forever `starting`.  Readiness is checked by
+        # hand afterwards: /health/ready must find the KV store writable on
+        # the mounted volume, which is the failure the route exists for; a
+        # 503 body is printed before the failure so the log names the check.
+        # The image's own HEALTHCHECK is asserted by inspection, since the
+        # compose `healthcheck:` overrides it at runtime.
+        working-directory: /tmp/smoke
+        run: |
+          docker inspect --format '{{json .Config.Healthcheck.Test}}' smoke-mcp-ci | grep -q '127.0.0.1:8000/health' \
+            || { echo "::error::the image declares no /health HEALTHCHECK"; exit 1; }
+          docker tag smoke-mcp-ci ghcr.io/pvliesdonk/smoke-mcp:latest
+          docker compose up -d --pull never --wait --wait-timeout 90 \
+            || { docker compose logs; echo "::error::compose service never became healthy"; exit 1; }
+          docker compose exec -T smoke-mcp python - <<'PY' \
+            || { docker compose logs; docker compose down -v; echo "::error::/health/ready did not report the KV store ready"; exit 1; }
+          import urllib.error
+          import urllib.request
+
+          try:
+              body = urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=5).read().decode()
+          except urllib.error.HTTPError as exc:
+              print(exc.read().decode())
+              raise
+          print(body)
+          assert '"kv_store":true' in body.replace(" ", ""), body
+          PY
+          docker compose down -v
+
   update-regression:
     name: Copier-update keeps domain vars
     runs-on: ubuntu-latest

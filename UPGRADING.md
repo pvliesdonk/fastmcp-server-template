@@ -266,7 +266,7 @@ Steps: [upgrading/v7.0.md](upgrading/v7.0.md).
 
 Steps: [upgrading/v8.0.md](upgrading/v8.0.md).
 
-## Unreleased - Port PRs after a branch release merge as merge commits
+## Unreleased - Health routes, the compose probe, and merge-commit port PRs
 
 After a stable release from a `release/X.Y` branch, the port PR that
 `release.yml` opens against the default branch now carries the release's
@@ -288,3 +288,32 @@ from the default branch run `git merge --no-ff vX.Y.Z`, resolve the
 changelog and stamp conflicts in favour of the default branch, open a PR
 and merge it with a merge commit. The next Release Prepare then computes
 from `vX.Y.Z`.
+
+### Health routes and the compose probe (pvl-core 7.1)
+
+`make_server` now registers `fastmcp-pvl-core` 7.1's unauthenticated
+`/health` (liveness) and `/health/ready` (readiness) routes under HTTP,
+`compose.yml`'s healthcheck probes `/health` instead of opening a
+socket, and the Dockerfile gains the same probe as its `HEALTHCHECK`.
+`pyproject.toml`'s floor rises to `fastmcp-pvl-core>=7.1.0`.
+
+1. **Relock after the update.** The copier-update pull request does not
+   refresh `uv.lock`, and the Dockerfile's `uv sync --frozen` installs
+   whatever the lock names — a 7.0 lock builds an image whose server
+   fails at import time on `register_health_routes`. Run `uv lock` on the
+   update branch and commit the result.
+2. **Remove any hand-rolled health route.** A `custom_route` at `/health`
+   inside `DOMAIN-WIRING` now collides with the template's; delete it,
+   and move whatever it checked into the `health_checks` dict declared
+   just above the block (a zero-arg callable per check; the name
+   `kv_store` is reserved).
+3. **Move the probe if you moved the mount.** The health prefix follows
+   `<PREFIX>_HTTP_PATH` with a trailing `mcp` segment stripped, so a
+   `.env` that mounts under `/name/mcp` publishes `/name/health`. The
+   shipped probes assume the default `/mcp`; adjust the URL in
+   `compose.yml`'s healthcheck (and any `compose.override.yml`) and in
+   the Dockerfile's `HEALTHCHECK` to match.
+
+Absorbed with no action: `<PREFIX>_HEALTH_DETAIL` (`status` / `standard`
+/ `full`, default `standard`) appears in the generated env surfaces and
+the configuration wizard.
