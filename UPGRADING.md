@@ -270,6 +270,33 @@ Steps: [upgrading/v8.0.md](upgrading/v8.0.md).
 
 Steps: [upgrading/v8.1.md](upgrading/v8.1.md).
 
-## Unreleased
+## Unreleased - Container and systemd logs switch to one line per record
 
-_Nothing yet._
+The container image and the packaged systemd unit now set
+`FASTMCP_ENABLE_RICH_LOGGING=false`. Neither stream is a terminal, so Rich
+was falling back to 80 columns and wrapping every structured request-log
+record across three space-padded lines. Each record is now one line: a JSON
+object from the request-logging middleware, `LEVEL: message` from the rest of
+FastMCP's own loggers. Your project's `<module>.*` lines are unchanged — the
+CLI gives the root logger its own one-line handler, which Rich never touched.
+
+**This changes the log format, not just its layout.** Act on it if any of
+the following apply.
+
+1. **Anything that parses these logs.** A Loki/Grafana pipeline, an alert
+   rule or a `grep` keyed on the Rich layout (the leading `[date time]`
+   column, the trailing `file.py:123`) matches nothing after the update.
+   Re-key on the JSON fields, which is the format that replaces it.
+2. **A `COLUMNS` or `FASTMCP_ENABLE_RICH_LOGGING` workaround you added
+   yourself.** Deployments that hit this before the fix commonly set one in
+   `compose.yml`'s `environment:` block or in `.env`. Remove it: an
+   `environment:` entry outranks the image default and keeps the old
+   behavior, and a stale `.env` line does the same.
+3. **Timestamps.** Rich printed the time column that this mode drops.
+   `docker logs -t` and `journalctl` both supply one per line; a collector
+   stamps its own.
+
+To keep Rich output in a container, set both `FASTMCP_ENABLE_RICH_LOGGING=true`
+and `COLUMNS=200` in `.env` — Rich reads `COLUMNS` in place of asking a
+terminal it does not have, and without it the records wrap again. On a
+package install, `/etc/<name>/env` overrides the unit the same way.

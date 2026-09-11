@@ -1722,7 +1722,7 @@ jobs:
             stat -c "%U" /data/state/fastmcp | grep -qx appuser
           '
 
-      - name: docker compose up --wait (the shipped healthcheck passes inside the image)
+      - name: docker compose up --wait (the shipped healthcheck passes, and records log one line each)
         # The only place the compose healthcheck is *executed* rather than
         # parsed: tests/test_compose.py asserts the command's shape, and
         # this proves the image's own interpreter can GET /health on the
@@ -1743,9 +1743,12 @@ jobs:
           docker compose up -d --pull never --wait --wait-timeout 90 \
             || { docker compose logs; echo "::error::compose service never became healthy"; exit 1; }
           docker compose exec -T smoke-mcp python - <<'PY' \
-            || { docker compose logs; docker compose down -v; echo "::error::/health/ready did not report the KV store ready"; exit 1; }
+            || { docker compose logs; docker compose down -v; echo "::error::/health/ready did not report the KV store ready, or the MCP endpoint did not answer"; exit 1; }
+          import asyncio
           import urllib.error
           import urllib.request
+
+          from fastmcp import Client
 
           try:
               body = urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=5).read().decode()
@@ -1754,7 +1757,38 @@ jobs:
               raise
           print(body)
           assert '"kv_store":true' in body.replace(" ", ""), body
+
+
+          async def _one_mcp_request() -> None:
+              """Drive one request through the logging middleware.
+
+              Nothing else in this job does: the startup banner and the health
+              probes never reach that middleware, so without this the log
+              assertions below would read a stream it never wrote to and pass
+              no matter how the server logs.
+              """
+              async with Client("http://127.0.0.1:8000/mcp") as client:
+                  await client.list_tools()
+
+
+          asyncio.run(_one_mcp_request())
           PY
+          # One line per log record, which is what the image's
+          # FASTMCP_ENABLE_RICH_LOGGING=false default buys: a container has no
+          # TTY, so with Rich on the middleware's records render as `key=value`
+          # text that falls back to 80 columns and wraps across three
+          # space-padded lines. Read straight from the container (not
+          # `docker compose logs`, which prefixes every line with the service
+          # name and would make the wrap check pass on anything).
+          CID=$(docker compose ps -q smoke-mcp)
+          docker logs "$CID" > /tmp/container-logs.txt 2>&1
+          grep -q '^INFO: {"event": "request_completed"' /tmp/container-logs.txt \
+            || { sed -n '1,40p' /tmp/container-logs.txt; docker compose down -v; echo "::error::no one-line JSON request record in the container log — the image's FASTMCP_ENABLE_RICH_LOGGING default is not reaching the server"; exit 1; }
+          if grep -n '^[[:space:]]' /tmp/container-logs.txt; then
+            echo "::error::container log lines are wrapped across lines — one record no longer means one line"
+            docker compose down -v
+            exit 1
+          fi
           docker compose down -v
 
   update-regression:
