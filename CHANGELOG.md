@@ -1,5 +1,11 @@
 # Changelog
 
+## v8.2.0 (2026-09-12)
+
+- #613 feat(planning): define story epics and release package milestones
+- #609 fix(scaffold): log one line per record in the image and the systemd unit
+
+
 ## v8.1.0 (2026-09-10)
 
 - #607 feat(scaffold): serve pvl-core 7.1 health routes and probe /health from compose and the image

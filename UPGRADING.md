@@ -270,79 +270,10 @@ Steps: [upgrading/v8.0.md](upgrading/v8.0.md).
 
 Steps: [upgrading/v8.1.md](upgrading/v8.1.md).
 
-## Unreleased - Container logs and roadmapping convention
+## v8.2 - Container logs and roadmapping convention
 
-The container image and the packaged systemd unit now set
-`FASTMCP_ENABLE_RICH_LOGGING=false`. Neither stream is a terminal, so Rich
-was falling back to 80 columns and wrapping every structured request-log
-record across three space-padded lines. Each record is now one line: a JSON
-object from the request-logging middleware, `LEVEL: message` from the rest of
-FastMCP's own loggers. Your project's `<module>.*` lines are unchanged — the
-CLI gives the root logger its own one-line handler, which Rich never touched.
+Steps: [upgrading/v8.2.md](upgrading/v8.2.md).
 
-**This changes the log format, not just its layout.** Act on it if any of
-the following apply.
+## Unreleased
 
-1. **Anything that parses these logs.** A Loki/Grafana pipeline, an alert
-   rule or a `grep` keyed on the Rich layout (the leading `[date time]`
-   column, the trailing `file.py:123`) matches nothing after the update.
-   Re-key on the JSON fields, which is the format that replaces it.
-2. **A `COLUMNS` or `FASTMCP_ENABLE_RICH_LOGGING` workaround you added
-   yourself.** Deployments that hit this before the fix commonly set one in
-   `compose.yml`'s `environment:` block or in `.env`. Remove it: an
-   `environment:` entry outranks the image default and keeps the old
-   behavior, and a stale `.env` line does the same.
-3. **Timestamps.** Rich printed the time column that this mode drops.
-   `docker logs -t` and `journalctl` both supply one per line; a collector
-   stamps its own.
-
-To keep Rich output in a container, set both `FASTMCP_ENABLE_RICH_LOGGING=true`
-and `COLUMNS=200` in `.env` — Rich reads `COLUMNS` in place of asking a
-terminal it does not have, and without it the records wrap again. On a
-package install, `/etc/<name>/env` overrides the unit the same way.
-
-### Adopt the roadmapping convention
-
-The new `roadmapping` skill distinguishes story epics (parent issues)
-from release packages (milestones). Apply these steps after `copier update`:
-
-1. Re-run Bootstrap to ensure the `research`, `refinement` and
-   `breaking` labels. Ensure `RELEASE_TOKEN` can write issues and
-   milestones; the release helper warns if bookkeeping cannot complete.
-2. Review open milestones. Rename the current release's to
-   `010 <content-name>`. Rename credible future cuts to ordered content
-   names such as `020 <name>`; dissolve speculative version buckets to
-   backlog (no milestone). Convert thematic milestones into parent epic
-   issues with native children. Do not discard deliverable packages just
-   because their predicted version became stale.
-3. Give every epic a frozen outcome ("Done when") and a refinement
-   sub-issue. Leave spanning epics without a milestone; assign packages
-   to their children. Use `breaking` for known compatibility breaks,
-   not every change touching an operator or library surface.
-4. Fill `docs/design/roadmap.md` with the direction and ordering
-   argument. If that path already exists, adapt it by hand: it is seeded
-   once and preserved thereafter. The same applies to reference bundle
-   navigation: add a link to `github-planning-objects.md` in an existing
-   `docs/design/reference/index.md` and record the addition in `log.md`.
-   New projects receive these entries automatically.
-5. Keep new specs and plans in ignored `docs/superpowers/` scratch and
-   include the approved spec in its PR's Design section. Older projects
-   with a seeded `.gitignore` that lacks this path must add it manually.
-   Leave historical tracked documents as history; port enduring decisions
-   from new work to `docs/design/` or an ADR.
-6. If the personal roadmapping plugin is installed, disable or retire its
-   conflicting milestone-as-epic skill when adopting the shipped skill.
-   The template does not change installed plugins or migrate GitHub
-   issues for you.
-
-Release Prepare warns about open items in the lowest-ordinal package.
-After a stable trunk release, Release records the version in its title,
-returns remaining open issues and PRs to backlog, and closes it. Check
-the job summary and deliberately assign leftovers to a later package.
-If an API call fails, it warns and leaves the package open. After
-verifying the stable trunk version, use the released helper directly:
-`python3 scripts/package_milestones.py close --repo OWNER/REPO --version X.Y.Z --resume`.
-The releasing skill documents recovery before finalizing another package.
-Workflow retries and `--resume` never select a new package if no
-reservation exists, including when the original cut had no package.
-Do not rely on rerunning the whole release workflow after newer tags exist.
+_Nothing yet._
