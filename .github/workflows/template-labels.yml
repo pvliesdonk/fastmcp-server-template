@@ -54,7 +54,19 @@ jobs:
             --force
           gh label create ships-atomically \
             --color b60205 \
-            --description "No release may be cut while this epic is mid-flight (fallback for a release milestone)" \
+            --description "No release may be cut while this epic is mid-flight (fallback for a package milestone)" \
+            --force
+          gh label create research \
+            --color 0e8a16 \
+            --description "Research spike: answers a question, carries an appetite" \
+            --force
+          gh label create refinement \
+            --color c5def5 \
+            --description "Refine an epic into feature issues" \
+            --force
+          gh label create breaking \
+            --color e11d21 \
+            --description "Breaks an operator or library surface; lands in a major" \
             --force
           gh label create dependencies \
             --color 0366d6 \

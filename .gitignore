@@ -39,6 +39,11 @@ site/
 # Superpowers subagent-driven-development scratch (briefs, reports, diffs, ledger)
 .superpowers/
 
+# Agent working specs and plans: scratch, never committed going forward.
+# A feature's spec ships in its pull-request body; durable design lives in
+# docs/design/ and ADRs. Already-tracked files under here stay as history.
+docs/superpowers/
+
 # Local MCP + scratch artifacts from agent sessions
 .mcp.json
 # Editor-local config; the only IDE entry here by design, matching

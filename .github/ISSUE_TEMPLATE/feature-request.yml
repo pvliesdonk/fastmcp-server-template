@@ -21,6 +21,24 @@ body:
       description: Describe the outcome, not how to implement it.
     validations:
       required: true
+  - type: dropdown
+    id: surface-impact
+    attributes:
+      label: Surface impact
+      description: >
+        Which compatibility surfaces the outcome would touch, as far as you
+        can tell. Operator or library surface means the change lands in a
+        major; the `breaking` label is applied after filing so "what would a
+        major sweep up" stays one search. Pick "Not sure" rather than guess.
+      multiple: true
+      options:
+        - Operator surface (config, env vars, CLI, deployment)
+        - Public library API
+        - MCP tool surface (tools, resources, prompts)
+        - None (internal only)
+        - Not sure
+    validations:
+      required: true
   - type: textarea
     id: implementation-ideas
     attributes:
