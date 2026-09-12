@@ -97,7 +97,12 @@ def test_reference_bundle_valid(smoke_render: Path) -> None:
     assert (smoke_render / "docs/design/reference/index.md").is_file()
     assert (smoke_render / "docs/design/reference/log.md").is_file()
     proc = subprocess.run(
-        [sys.executable, "scripts/check_references.py", "docs/design/reference"],
+        [
+            sys.executable,
+            "scripts/check_references.py",
+            "--root",
+            "docs/design/reference",
+        ],
         cwd=smoke_render,
         capture_output=True,
         text=True,

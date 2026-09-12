@@ -209,8 +209,10 @@ when the current package still has open items, and Release closes it.
 - **At the cut** the release workflow prepends the computed version to
   the title (`v4.3.0 okf-read`), unassigns any still-open items and lists
   them in the job summary, and closes the milestone. A failure warns and
-  leaves the milestone open for retry; a rerun resumes that release's
-  milestone instead of consuming the next package. Re-commit leftovers
+  leaves the milestone open for recovery with the helper's `--resume`
+  mode (see the `releasing` skill). Workflow retries and `--resume`
+  select only a reservation already carrying that version; they never
+  choose a new package. Re-commit leftovers
   to the next package deliberately; nothing moves them for you.
 - **Horizon.** Create packages only as far ahead as you can genuinely see
   them, typically two or three. Beyond that, order lives in the index and

@@ -101,7 +101,9 @@ def test_release_prepare_warns_on_current_package() -> None:
         for step in steps
         if "Warn about open ships-atomically" in step.get("name", "")
     )
-    assert 'python3 scripts/package_milestones.py warn --repo "$REPO"' in advisory["run"]
+    assert (
+        'python3 scripts/package_milestones.py warn --repo "$REPO"' in advisory["run"]
+    )
     assert "github.event.repository.default_branch" in advisory["if"]
     assert "Release milestone" in advisory["run"]  # legacy migration signal
 

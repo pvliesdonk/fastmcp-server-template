@@ -339,6 +339,10 @@ Release Prepare warns about open items in the lowest-ordinal package.
 After a stable trunk release, Release records the version in its title,
 returns remaining open issues and PRs to backlog, and closes it. Check
 the job summary and deliberately assign leftovers to a later package.
-If an API call fails, it warns and leaves the package open; retry that
-release's workflow before finalizing another package. A retry of a
-completed package does not consume the next one.
+If an API call fails, it warns and leaves the package open. After
+verifying the stable trunk version, use the released helper directly:
+`python3 scripts/package_milestones.py close --repo OWNER/REPO --version X.Y.Z --resume`.
+The releasing skill documents recovery before finalizing another package.
+Workflow retries and `--resume` never select a new package if no
+reservation exists, including when the original cut had no package.
+Do not rely on rerunning the whole release workflow after newer tags exist.

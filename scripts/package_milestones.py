@@ -5,7 +5,8 @@ GitHub behavior: docs/design/reference/github-planning-objects.md.
 Packages are open milestones named NNN content-name. Listing always
 collects every page before choosing the lowest ordinal. A versioned title
 reserves the selected milestone for that release before membership changes:
-retries resume it, and a completed retry never consumes the next package.
+workflow retries and explicit --resume calls resume only that reservation,
+so even a cut originally made without a package cannot consume the next one.
 Failures are advisory, but an unsuccessful removal never closes a package.
 """
 
@@ -80,7 +81,7 @@ def warn(milestones: list[dict[str, Any]]) -> None:
     for milestone in pending:
         report(
             f"Package finalization unfinished: {milestone['title']}; "
-            "retry its release workflow before the next cut",
+            "resume its package bookkeeping before the next cut",
             warning=True,
         )
     package = current(milestones)
@@ -93,7 +94,7 @@ def warn(milestones: list[dict[str, Any]]) -> None:
 
 
 def reserve(
-    milestones: list[dict[str, Any]], repo: str, version: str
+    milestones: list[dict[str, Any]], repo: str, version: str, *, resume_only: bool
 ) -> dict[str, Any] | None:
     """Bind this cut to one milestone, resuming an earlier attempt if present."""
     prefix = f"v{version} "
@@ -108,6 +109,13 @@ def reserve(
             report(f"Package for v{version} already closed; no changes")
             return None
     else:
+        if resume_only:
+            report(
+                f"No package reserved for v{version}; recovery selects nothing. "
+                "Verify the original cut before starting any new finalization",
+                warning=True,
+            )
+            return None
         if any(m["state"] == "open" and RELEASED.match(m["title"]) for m in milestones):
             raise ValueError(
                 "An earlier package finalization is unfinished; retry it first"
@@ -150,11 +158,11 @@ def finalize(package: dict[str, Any], repo: str, version: str) -> None:
         raise ValueError("Open items remain in the package; retry before closing it")
     closed = api(endpoint, fields={"state": "closed"})
     if closed["state"] != "closed":
-        raise ValueError("Package closure was not applied; retry its release workflow")
+        raise ValueError("Package closure was not applied; resume its bookkeeping")
     report(f"Closed package {package['title']} (milestone #{package['number']})")
 
 
-def run(mode: str, repo: str, version: str = "") -> None:
+def run(mode: str, repo: str, version: str = "", *, resume_only: bool = False) -> None:
     """Apply the package convention; callers restrict close to stable trunk."""
     if mode == "close" and not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
         raise ValueError("Package closure requires a stable X.Y.Z version")
@@ -162,7 +170,11 @@ def run(mode: str, repo: str, version: str = "") -> None:
     if mode == "warn":
         warn(milestones)
         return
-    package = reserve(milestones, repo, version)
+    # Actions sets this to >1 on every rerun, including rerun-all-jobs.
+    # Before a reservation exists we cannot know whether the prior attempt
+    # saw no package or failed before selecting one. Recovery must not guess.
+    resume_only = resume_only or int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")) > 1
+    package = reserve(milestones, repo, version, resume_only=resume_only)
     if package is not None:
         finalize(package, repo, version)
 
@@ -172,9 +184,12 @@ def main() -> int:
     parser.add_argument("mode", choices=("warn", "close"))
     parser.add_argument("--repo", required=True)
     parser.add_argument("--version", default="")
+    parser.add_argument(
+        "--resume", action="store_true", help="Only resume this version's reservation"
+    )
     args = parser.parse_args()
     try:
-        run(args.mode, args.repo, args.version)
+        run(args.mode, args.repo, args.version, resume_only=args.resume)
     except (
         OSError,
         ValueError,

@@ -103,6 +103,7 @@ cover GitHub Projects, enterprise-server compatibility, or version computation.
 - `gh api --paginate` fetches all pages; `--slurp` wraps those pages in an
   outer array. Selecting a minimum separately on each page does not select
   the overall minimum. [source: gh-api]
+  [pins: tests/test_package_milestones.py::test_api_combines_pages_and_sends_json_null]
 - Creating a milestone requires a title; description and due date are
   optional. Milestone updates accept either Issues-write or
   Pull-requests-write repository permissions. [source: milestones-rest]
@@ -122,7 +123,7 @@ cover GitHub Projects, enterprise-server compatibility, or version computation.
   or JSON `null` to clear it. Without push access, milestone changes can be
   silently dropped; successful HTTP status alone does not establish removal.
   Check returned membership or read it again. [source: issues-rest]
-  [pins: tests/test_release_flow_contract.py::test_release_closes_current_package]
+  [pins: tests/test_package_milestones.py::test_partial_failure_leaves_package_open_and_retry_resumes]
 - `gh api -X PATCH ... -F milestone=null` sends JSON null; `-f` sends a
   string. Supplying fields otherwise changes the default method to POST,
   so PATCH must be explicit. [source: gh-api]

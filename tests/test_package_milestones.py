@@ -64,6 +64,7 @@ def tracker(monkeypatch: pytest.MonkeyPatch) -> Tracker:
     instance = Tracker()
     monkeypatch.setattr(packages, "api", instance.api)
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.delenv("GITHUB_RUN_ATTEMPT", raising=False)
     return instance
 
 
@@ -112,6 +113,20 @@ def test_no_package_is_a_noop(tracker: Tracker) -> None:
     assert not tracker.mutations
 
 
+@pytest.mark.parametrize("workflow_retry", [False, True])
+def test_retry_after_no_package_does_not_consume_new_package(
+    tracker: Tracker, monkeypatch: pytest.MonkeyPatch, workflow_retry: bool
+) -> None:
+    tracker.milestones = []
+    packages.run("close", "owner/repo", "4.3.0")
+    tracker.milestones = [milestone(10, "010 next-cut")]
+    if workflow_retry:
+        monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    packages.run("close", "owner/repo", "4.3.0", resume_only=not workflow_retry)
+    assert not tracker.mutations
+    assert tracker.milestones[0]["title"] == "010 next-cut"
+
+
 def test_duplicate_ordinal_refuses_mutations(tracker: Tracker) -> None:
     tracker.milestones.append(milestone(30, "010 ambiguous"))
     with pytest.raises(ValueError, match="Duplicate"):
@@ -148,7 +163,7 @@ def test_api_combines_pages_and_sends_json_null(
         stdout = json.dumps(payload if "--paginate" in command else {"milestone": None})
         return subprocess.CompletedProcess(command, 0, stdout, "")
 
-    monkeypatch.setattr(packages.subprocess, "run", execute)
+    monkeypatch.setattr(subprocess, "run", execute)
     assert packages.api("repos/o/r/milestones") == [{"number": 20}, {"number": 10}]
     assert "--paginate" in calls[0][0] and "--slurp" in calls[0][0]
     assert packages.api("repos/o/r/issues/1", fields={"milestone": None}) == {
