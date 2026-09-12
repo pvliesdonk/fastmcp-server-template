@@ -27,9 +27,10 @@ body:
       label: Surface impact
       description: >
         Which compatibility surfaces the outcome would touch, as far as you
-        can tell. Operator or library surface means the change lands in a
-        major; the `breaking` label is applied after filing so "what would a
-        major sweep up" stays one search. Pick "Not sure" rather than guess.
+        can tell. Touching a surface does not by itself break compatibility.
+        Apply `breaking` after filing only if an existing operator or
+        library contract must break under the breaking-change policy.
+        Pick "Not sure" rather than guess.
       multiple: true
       options:
         - Operator surface (config, env vars, CLI, deployment)

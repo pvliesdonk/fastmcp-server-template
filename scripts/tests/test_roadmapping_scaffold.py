@@ -11,7 +11,6 @@ guarded separately by test_shared_skill_paths.py.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -80,7 +79,7 @@ def test_roadmapping_skill_rendered(smoke_render: Path) -> None:
     ).is_file()
     link = smoke_render / ".claude/skills/roadmapping"
     assert link.is_symlink()
-    assert os.readlink(link) == "../../.agents/skills/roadmapping"
+    assert link.readlink() == Path("../../.agents/skills/roadmapping")
 
 
 def test_roadmap_index_seeded(smoke_render: Path) -> None:
