@@ -155,7 +155,7 @@ def test_dates_must_be_iso(tmp_path: Path) -> None:
     problems = _findings(
         tmp_path, GOOD.replace("stale_after: 2027-03-06", "stale_after: next spring")
     )
-    assert any("`stale_after` must be a calendar date" in p for p in problems), problems
+    assert any("`stale_after` must be" in p for p in problems), problems
     problems = _findings(tmp_path, GOOD.replace("  at: 2026-09-06", "  at: yesterday"))
     assert any("`generated.at` must be an ISO date" in p for p in problems), problems
 
@@ -227,22 +227,42 @@ def test_malformed_index_yaml_is_a_finding(tmp_path: Path) -> None:
     ]
 
 
-def test_verified_bare_mapping_is_rejected(tmp_path: Path) -> None:
+def test_verified_bare_mapping_is_one_entry(tmp_path: Path) -> None:
+    """OKF v0.2 §5.2: a bare ``verified`` mapping is a one-element list (#603)."""
     text = GOOD.replace(
         "status: stable", "verified:\n  by: human:pvliesdonk\n  at: 2026-09-07"
     )
-    problems = _findings(tmp_path, text)
-    assert any("`verified` must be a list" in p for p in problems), problems
+    assert _findings(tmp_path, text) == []
     ref = cr.parse_reference(tmp_path / "x.md", text)
-    assert ref.trust_tier == "unverified"
+    assert ref.trust_tier == "human-reviewed"
+    bad = GOOD.replace("status: stable", "verified:\n  by: nobody\n  at: 2026-09-07")
+    problems = _findings(tmp_path, bad)
+    assert any("`verified[0].by`" in p for p in problems), problems
+    scalar = GOOD.replace("status: stable", "verified: yes")
+    problems = _findings(tmp_path, scalar)
+    assert any("`verified` must be a list" in p for p in problems), problems
 
 
-def test_stale_after_and_accessed_are_calendar_dates(tmp_path: Path) -> None:
+def test_stale_after_is_an_offset_datetime_or_a_date(tmp_path: Path) -> None:
+    """OKF v0.2 (2026-08-21): ``stale_after`` is an instant with an explicit
+    offset; a bare calendar date stays accepted for pages that predate it (#603)."""
+    for spelling in (
+        "2027-03-06T12:30:00+00:00",
+        '"2027-03-06T12:30:00+02:00"',
+        "2027-03-06T12:30:00Z",
+    ):
+        assert (
+            _findings(
+                tmp_path,
+                GOOD.replace("stale_after: 2027-03-06", f"stale_after: {spelling}"),
+            )
+            == []
+        ), spelling
     problems = _findings(
         tmp_path,
         GOOD.replace("stale_after: 2027-03-06", 'stale_after: "2027-03-06T12:30:00"'),
     )
-    assert any("`stale_after` must be a calendar date" in p for p in problems), problems
+    assert any("explicit offset" in p for p in problems), problems
     problems = _findings(
         tmp_path,
         GOOD.replace("    accessed: 2026-09-06", '    accessed: "2026-09-06T01:00:00"'),
@@ -253,7 +273,7 @@ def test_stale_after_and_accessed_are_calendar_dates(tmp_path: Path) -> None:
             tmp_path,
             GOOD.replace("stale_after: 2027-03-06", f"stale_after: {spelling}"),
         )
-        assert any("`stale_after` must be a calendar date" in p for p in problems), (
+        assert any("`stale_after` must be" in p for p in problems), (
             spelling,
             problems,
         )
@@ -409,6 +429,23 @@ def test_expiry_follows_okf_staleness(tmp_path: Path) -> None:
     assert (
         cr.expiry(ref, dt.date(2027, 3, 6)) == "stale since 2027-03-06 (`stale_after`)"
     )
+    # An instant is stale from the UTC calendar day it falls in: 01:00 at
+    # +02:00 on the 7th is 23:00 UTC on the 6th.
+    for spelling, first_stale_day in (
+        ("2027-03-06T22:00:00+02:00", dt.date(2027, 3, 6)),
+        ("2027-03-07T01:00:00+02:00", dt.date(2027, 3, 6)),
+        ("2027-03-07T01:00:00Z", dt.date(2027, 3, 7)),
+    ):
+        instant = cr.parse_reference(
+            root / "example.md",
+            GOOD.replace("stale_after: 2027-03-06", f"stale_after: {spelling}"),
+        )
+        day_before = first_stale_day - dt.timedelta(days=1)
+        assert cr.expiry(instant, day_before) is None, spelling
+        canonical = dt.datetime.fromisoformat(spelling.replace("Z", "+00:00"))
+        assert cr.expiry(instant, first_stale_day) == (
+            f"stale since {canonical.isoformat()} (`stale_after`)"
+        ), spelling
     (root / "newer.md").write_text(GOOD, encoding="utf-8")
     deprecated = cr.parse_reference(
         root / "example.md",
