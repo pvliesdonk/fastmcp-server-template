@@ -524,7 +524,10 @@ def main(argv: list[str] | None = None) -> int:
         help="print findings only, no per-reference summary",
     )
     args = parser.parse_args(argv)
-    today = dt.date.today()
+    # The UTC calendar day, to match how ``expiry`` reads ``stale_after``;
+    # the local date lags it on a machine behind UTC and would report a
+    # page stale a day late.
+    today = dt.datetime.now(dt.UTC).date()
 
     problems: list[str] = bundle_findings(args.root)
     for path in discover(args.root):
