@@ -384,21 +384,6 @@ a major. Work through these in order:
    the rewrite also adds the renderer's rules for reserved field names,
    quoting and malformed calls.
 
-<<<<<<< HEAD
-### Startup log lines that moved to pvl-core
-
-`make_server` no longer logs `auth_enabled mode=…` / `auth_disabled mode=none`;
-pvl-core's own `auth_mode_resolved mode=… source=…` line (pvl-core#310) is the
-announcement, and the `server_configured … auth=…` field still carries the
-mode. Re-key anything that matched the two removed events. On the stdio
-transport with an auth provider configured, a new WARNING,
-`auth_configured_but_stdio_skips_enforcement mode=…`, says that FastMCP does
-not enforce it there. `serve` now prints a malformed configuration value as
-one `ERROR: configuration error: …` line on stderr with exit code 1 instead
-of a Rich traceback; a wrapper that parsed the traceback has nothing to
-parse. The `pip-audit` step no longer carries `--ignore-vuln CVE-2026-42561`;
-a project that removed it by hand converges on the render again.
-=======
 ### The package version attribute and the app-tool hash key
 
 `<module>.__version__` now reports the installed distribution's version
@@ -412,4 +397,17 @@ fastmcp's public `tool_hash` key. The previous `_tool_hash` key was stripped
 from the protocol-visible metadata by FastMCP 4, so app-tool addressing never
 saw it (#614). A project that worked around this with its own
 sentinel-safe helper can delete that helper after `copier update`.
->>>>>>> origin/main
+
+### Startup log lines that moved to pvl-core
+
+`make_server` no longer logs `auth_enabled mode=…` / `auth_disabled mode=none`;
+pvl-core's own `auth_mode_resolved mode=… source=…` line (pvl-core#310) is the
+announcement, and the `server_configured … auth=…` field still carries the
+mode. Re-key anything that matched the two removed events. On the stdio
+transport with an auth provider configured, a new WARNING,
+`auth_configured_but_stdio_skips_enforcement mode=…`, says that FastMCP does
+not enforce it there. `serve` now prints a malformed configuration value as
+one `ERROR: configuration error: …` line on stderr with exit code 1 instead
+of a Rich traceback; a wrapper that parsed the traceback has nothing to
+parse. The `pip-audit` step no longer carries `--ignore-vuln CVE-2026-42561`;
+a project that removed it by hand converges on the render again.
