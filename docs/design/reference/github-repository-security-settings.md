@@ -64,7 +64,10 @@ Enterprise Server, or organisation-level security configurations.
   status. [source: repos-rest]
 - An anonymous `GET` on a public repository answers 200 with
   `{"enabled": false}` where the feature is off, so the read needs no
-  privilege on a public repository. [observed]
+  privilege on a public repository.
+  [observed: unauthenticated `curl` of the endpoint on
+  `pvliesdonk/fastmcp-server-template`, 2026-09-18, answered 200 with
+  `{"enabled": false}`]
 - GitHub documents the feature for public repositories: owners and
   administrators of public repositories can enable it, from
   **Settings → Advanced Security → Private vulnerability reporting**.
@@ -86,7 +89,9 @@ Enterprise Server, or organisation-level security configurations.
   are enabled and 404 when they are not; `PUT` enables them with 204, and
   the authenticated user must have admin access. [source: repos-rest]
 - The `GET` is not anonymous: without admin credentials it answers 403 on a
-  public repository. [observed]
+  public repository.
+  [observed: unauthenticated `curl` of the endpoint on
+  `pvliesdonk/fastmcp-server-template`, 2026-09-18, answered 403]
 
 ### Secret scanning and push protection
 

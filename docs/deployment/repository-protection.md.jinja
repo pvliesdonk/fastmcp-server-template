@@ -180,16 +180,16 @@ security-settings failure show up apart:
 Without private vulnerability reporting, a researcher's only path is a public
 issue asking for a private one, which is how a project generated from this
 template was contacted. `SECURITY.md` at the repository root is the policy
-GitHub shows next to that button: it names the reporting path, the response
-targets, the supported versions and where a fix lands. The response targets
-and the scope live inside its `DOMAIN-SECURITY` block, so a project can
-change them and keep them across template updates.
+GitHub shows next to that button. It covers the reporting path, the response
+targets, the supported versions, and where a fix lands. The response targets
+and the scope live inside its `DOMAIN-SECURITY` block, which a project edits
+once and keeps across template updates.
 
 The job runs with `RELEASE_TOKEN`, the same `administration: write` the
-rulesets need. It is idempotent: each call converges to "enabled" and a
-re-run changes nothing. If your organisation applies a security
-configuration to the repository, that configuration wins, and the job's
-calls may be rejected; the run log says which one.
+rulesets need. Each call is idempotent, so a re-run converges on the same
+enabled state. An organisation-level security configuration outranks these
+repository settings. Where one applies, GitHub may reject the job's calls,
+and the run log names the rejected one.
 
 ## Applying by hand
 

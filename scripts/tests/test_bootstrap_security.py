@@ -40,7 +40,9 @@ def _security_run_script() -> str:
     workflow = yaml.safe_load(_render(_BOOTSTRAP))
     job = workflow["jobs"]["security"]
     steps = job["steps"]
-    assert len(steps) == 1, "the security job is one step, so one run log names every setting"
+    assert len(steps) == 1, (
+        "the security job is one step, so one run log names every setting"
+    )
     assert steps[0]["env"]["GH_TOKEN"] == "${{ secrets.RELEASE_TOKEN }}", (
         "the security calls need administration:write, which only RELEASE_TOKEN carries"
     )
@@ -76,13 +78,17 @@ def test_security_policy_links_the_projects_own_reporting_form() -> None:
     assert rendered.index("<!-- DOMAIN-SECURITY-START -->") < rendered.index(
         "<!-- DOMAIN-SECURITY-END -->"
     )
-    assert "{{" not in rendered and "{%" not in rendered, "unrendered Jinja in the policy"
+    assert "{{" not in rendered and "{%" not in rendered, (
+        "unrendered Jinja in the policy"
+    )
 
 
 def test_security_policy_is_rendered_not_copied() -> None:
     plain = _REPO / "SECURITY.md"
     assert plain.exists() and _SECURITY.exists()
-    assert "fastmcp-server-template/security/advisories/new" in plain.read_text(encoding="utf-8")
+    assert "fastmcp-server-template/security/advisories/new" in plain.read_text(
+        encoding="utf-8"
+    )
     assert "{{ github_org }}" in _SECURITY.read_text(encoding="utf-8"), (
         "the rendered policy must point at the generated project's repository, "
         "never at the template's"
