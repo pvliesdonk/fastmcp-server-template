@@ -1,7 +1,7 @@
 ---
 name: logging-standard
 description: >-
-  Use before adding or changing any logging call in src/: the structlog-based standard, log levels, exception handling, and message format every module follows.
+  Use before adding or changing any logging call in src/: log levels, exception handling, and the event_name key=value message grammar every module follows and tests/test_logging_standard.py enforces on standard-library logging.
 ---
 
 <!-- ===== TEMPLATE-OWNED — re-rendered on template updates. ===== -->
@@ -52,6 +52,57 @@ try to make them conform:
 - `ErrorHandlingMiddleware` is a safety net. If it catches something, that's a bug to fix.
 
 ### Message Format
-- Pseudo-structured: `logger.info("event_name key=%s", value)`
-- Event name as first token (snake_case), then key=value pairs via `%s` formatting.
-- Never use f-strings in log calls (defeats lazy evaluation).
+
+Pseudo-structured: `logger.info("event_name key=%s", value)`. Standard
+library logging keeps the template (`record.msg`) and the values
+(`record.args`) apart on the record, so a consumer that parses the
+*template* recovers typed fields from every call, but only when the
+template follows the grammar below. `fastmcp-pvl-core` (>= 7.2.0) owns that
+grammar and ships the check; `tests/test_logging_standard.py` runs it over
+`src/` and fails the build on any call that breaks it.
+
+**The grammar.** A template is an event name, then zero or more
+space-separated fields:
+
+- **Event name**: the first token, `snake_case` (`[a-z][a-z0-9_]*`).
+  Nothing before it.
+- **Field**: `name=value`, where `name` is `snake_case` and `value` is
+  either one `%`-conversion (`%s`, `%d`, `%i`, `%f`, `%.1f`, `%r`, `%x`,
+  `%e`, `%g` and their upper-case forms, with optional flags, width and
+  precision) or a fixed token with no space, `%` or `=` in it
+  (`status=configured`).
+- **Arguments**: exactly one positional argument per conversion, in order.
+  No `*args`; the count must be readable from the source.
+- **Nothing else**: no prose before, between or after the fields; no
+  colons, dashes, parentheses or units outside a field; no `%%`.
+
+**Cases the grammar settles.** Each left column is a real call from the
+family, each right column is the conforming form:
+
+| Do not write | Write |
+|---|---|
+| `"Service started"` | `"service_started"` |
+| `"Auth enabled: mode=%s"` | `"auth_enabled mode=%s"` |
+| `"OllamaProvider initialised: host=%s"` | `"ollama_provider_initialised host=%s"` |
+| `"s2_rate_limited attempt=%d/%d"` | `"s2_rate_limited attempt=%d max_attempts=%d"` |
+| `"s2_rate_limited waiting=%.1fs"` | `"s2_rate_limited waiting_s=%.1f"` |
+| `"cache_hit ratio=%d%%"` | `"cache_hit ratio_pct=%d"` |
+| `"scaffold inactive (no app_domain)"` | `"apps_scaffold_inactive reason=no_app_domain"` |
+| `f"fetch_failed url={url}"` | `"fetch_failed url=%s", url` |
+
+A compound value becomes two fields; a unit or a percent sign moves into
+the field name; a reason that used to be prose becomes a fixed-token
+value; a traceback goes through `exc_info=True`, never into the message.
+
+**Rules the check relies on.**
+
+- Never use f-strings in log calls (defeats lazy evaluation, and hides the
+  fields from the parser).
+- The logger is the module-level `logger = logging.getLogger(__name__)`
+  and the call is one of `debug` / `info` / `warning` / `error` /
+  `exception` / `critical` on it. The check judges only that shape: a
+  logger reached as `self.logger` or imported from another module, and
+  `logger.log(level, ...)`, are invisible to it. That is a limit of the
+  check, not permission to use those forms to route around it.
+- Run `uv run pytest tests/test_logging_standard.py -q` to list every
+  non-conforming call with its file, line and reason.

@@ -21,7 +21,7 @@
 - `hatchling` build backend
 - Conventional commits, one type from `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test` — optionally scoped (`feat(search): ...`) and with `!` for a breaking change. Only `feat`, `fix`, and the `!` marker drive releases: `feat` cuts a minor, `fix` a patch, `!` a major. Every other type — `perf` included — cuts nothing and never reaches `CHANGELOG.md`; a performance change that must ship on its own is either honestly a `fix:` (it fixes a performance defect) or released with Release Prepare's explicit `override_version` input.
 - Google-style docstrings on all public functions
-- `logging.getLogger(__name__)` throughout, no `print()`
+- `logging.getLogger(__name__)` throughout, no `print()`; messages are `event_name key=%s` (see the `logging-standard` skill), and `tests/test_logging_standard.py` fails on any first-party call that is not
 - Type hints everywhere
 - Tests: `pytest` with fixtures in `tests/fixtures/`
 
