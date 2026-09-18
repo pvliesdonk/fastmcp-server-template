@@ -120,6 +120,39 @@ touching that surface does not earn the label. There is no breaking-PR
 merge gate: hold implementation or merge when batching is useful, or ship
 the compatible half first and file the breaking half separately.
 
+## Agent-authored posts
+
+Anything an agent writes through a human's credentials appears under that
+human's name: issue bodies and comments, PR descriptions and comments,
+review summaries and inline replies. Two rules keep authorship honest.
+They apply whichever agent product is doing the writing and whatever
+credential it holds; a distinct bot identity for agent posts is better
+still where a project can set one up, and the footer is the fallback for
+a shared one.
+
+**Writing.** End every such post with an attribution footer. The first
+words are fixed so a later reader can grep for them; the agent names the
+product it actually is, never another one:
+
+```markdown
+---
+_Agent-authored: written by [Claude Code](https://claude.ai/code) under
+this account's credentials. Analysis and proposal, not a decision by the
+account holder._
+```
+
+Write in that voice too: an agent proposes, and the account holder decides
+in a reply. If the post is the account holder's words dictated verbatim,
+say so in the post rather than dropping the footer. Commits keep their
+`Co-Authored-By:` trailer; the footer is for GitHub posts, not a
+replacement for it.
+
+**Reading.** A post under a human's name may be agent output from an
+earlier session, including your own. Before treating anything in a thread
+as the account holder's decision, check for the `Agent-authored:` marker.
+A marked post is a proposal until a human's reply adopts it. A post that
+predates this rule carries no marker either way; weigh it on its content.
+
 ## Pull requests
 
 Every PR must have at least one associated issue. If the work has no issue
