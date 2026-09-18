@@ -26,12 +26,12 @@ async def server_lifespan(_mcp: object) -> AsyncIterator[dict[str, Any]]:
     """Start the service on startup; stop it on shutdown."""
     service = Service()
     await service.start()
-    logger.info("Service started")
+    logger.info("service_started")
     try:
         yield {"service": service}
     finally:
         await service.stop()
-        logger.info("Service stopped")
+        logger.info("service_stopped")
 
 
 def get_service(ctx: Context = CurrentContext()) -> Service:

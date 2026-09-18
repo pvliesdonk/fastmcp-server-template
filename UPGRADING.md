@@ -274,7 +274,7 @@ Steps: [upgrading/v8.1.md](upgrading/v8.1.md).
 
 Steps: [upgrading/v8.2.md](upgrading/v8.2.md).
 
-## Unreleased - Security policy and private vulnerability reporting
+## Unreleased - Security policy and enforced log-call grammar
 
 `SECURITY.md` is now a template-owned file at the repository root, and
 `bootstrap.yml` gained a `security` job that enables private vulnerability
@@ -296,3 +296,37 @@ reporting, Dependabot alerts and secret scanning push protection. After
    policy. Adjust the defaults in the `DOMAIN-SECURITY` block (acknowledge
    within 7 days, assess within 30, disclose within 90) if they do not fit
    your project.
+
+### Make first-party log calls parseable
+
+The `logging-standard` skill's message format is now a grammar rather than
+two lines of prose, and `tests/test_logging_standard.py` (template-owned,
+shipped verbatim) fails the build on every call under `src/` that breaks
+it. Across the family only 37% of first-party calls conformed when the
+check was written (template #611), so expect the test to fail on your
+first run after `copier update`. The dependency floor moved to
+`fastmcp-pvl-core>=7.2.0` for the checker; 7.2.0 is additive and changes no
+logging behaviour.
+
+1. **List the offenders.** `uv sync` to pick up the new floor, then
+   `uv run pytest tests/test_logging_standard.py -q`. Each violation prints
+   its file, line, reason and template.
+2. **Rewrite each call** using the skill's "Message Format" table: event
+   name first (`snake_case`, no prose), then `name=value` fields, one
+   positional argument per placeholder. Split compound values
+   (`attempt=%d/%d` becomes `attempt=%d max_attempts=%d`), move units and
+   percent signs into the field name (`waiting_s=%.1f`, `ratio_pct=%d`),
+   turn a parenthesised reason into a fixed-token value
+   (`reason=no_app_domain`), and replace f-strings with `%s` arguments.
+3. **Re-key anything that matched the old text.** A Loki or Grafana query,
+   an alert or a test that asserted on the skeleton's own lines needs the
+   new event names: `service_started` / `service_stopped`,
+   `auth_enabled mode=…` / `auth_disabled mode=none`,
+   `server_configured version=… name=… transport=… auth=…`, and
+   `apps_scaffold_not_wired app_domain=…` / `apps_scaffold_inactive`.
+   Tests that already assert on `record.args` rather than on the message
+   keep passing.
+4. **Do not route around the check.** It sees only level calls on a
+   module-level `logging.getLogger(...)` name; `self.logger`, a logger
+   imported from another module and `logger.log(level, ...)` are invisible
+   to it, and the skill forbids them for that reason.

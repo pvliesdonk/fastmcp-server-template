@@ -87,12 +87,15 @@ def make_server(
 
     auth = build_auth(config.server)
     auth_mode = resolve_auth_mode(config.server) if auth is not None else "none"
+    # Both lines follow the ``event_name key=value`` grammar the
+    # ``logging-standard`` skill sets out (``tests/test_logging_standard.py``
+    # fails the build on any first-party call that does not), so the
+    # "accepts unauthenticated connections" meaning lives in the event name
+    # and this comment rather than in prose a consumer cannot parse.
     if auth_mode == "none":
-        logger.warning(
-            "No auth configured — server accepts unauthenticated connections"
-        )
+        logger.warning("auth_disabled mode=none")
     else:
-        logger.info("Auth enabled: mode=%s", auth_mode)
+        logger.info("auth_enabled mode=%s", auth_mode)
 
     try:
         pkg_ver = _pkg_version("{{ pypi_name }}")
@@ -100,7 +103,7 @@ def make_server(
         pkg_ver = "unknown"
 
     logger.info(
-        "Server config: version=%s name=%s transport=%s auth=%s",
+        "server_configured version=%s name=%s transport=%s auth=%s",
         pkg_ver,
         server_name,
         transport,
