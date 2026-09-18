@@ -108,3 +108,23 @@ def test_serve_http_cli_flags_override_env(monkeypatch: pytest.MonkeyPatch) -> N
     assert result.exit_code == 0, result.output
     assert captured.get("host") == "10.0.0.1"
     assert captured.get("port") == 7777
+
+
+def test_serve_reports_a_configuration_error_in_one_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed operator value is one ``ERROR:`` line and exit 1, no traceback.
+
+    ``ServerConfig.from_env`` raises ``ConfigurationError`` for a non-integer
+    port; before #616 that reached Typer, which rendered it as a multi-screen
+    Rich traceback.
+    """
+    monkeypatch.setenv(f"{_ENV_PREFIX}_PORT", "notanint")
+
+    result = CliRunner().invoke(app, ["serve", "--transport", "http"])
+
+    assert result.exit_code == 1
+    assert "ERROR: configuration error:" in result.output
+    assert f"{_ENV_PREFIX}_PORT" in result.output
+    assert "Traceback" not in result.output
+    assert "\u2502" not in result.output, "Rich traceback frame detected"

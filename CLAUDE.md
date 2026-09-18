@@ -153,8 +153,8 @@ The canonical breaking-change policy ships in the generated project's
 `AGENTS.md.jinja`.  In short: a change is breaking only if it breaks
 the operator surface (env var, config file, CLI flag, deployment
 layout, on-disk state) or the public library interface, assessed
-against the last stable release; MCP tool-surface changes are not
-breaking on their own.
+against the last stable release; MCP-surface changes (tools, resources,
+prompts) are not breaking on their own.
 
 The same test governs this repo, one level up: a template change is
 breaking when it breaks a surface that generated projects' *users*
