@@ -165,6 +165,32 @@ require this context and a fork pull request stalls on it, check the **Post
 Coverage Status** workflow's runs rather than the CI run: the status comes
 from there.
 
+## Security reporting and alerts
+
+The same workflow turns on three settings that GitHub otherwise leaves for
+someone to click, in a separate `security` job so a ruleset failure and a
+security-settings failure show up apart:
+
+| Setting | Effect | Applied when |
+|---|---|---|
+| Private vulnerability reporting | Adds **Report a vulnerability** to the Security tab, the channel the root `SECURITY.md` sends researchers to | Public repositories only; GitHub does not offer it on private ones |
+| Dependabot alerts | Lists known-vulnerable dependencies on the Security tab; Renovate still owns the update pull requests | Every repository |
+| Secret scanning push protection | Blocks a push that contains a recognised secret | Public repositories, when the plan allows it; a refusal is a warning in the run, not a failure |
+
+Without private vulnerability reporting, a researcher's only path is a public
+issue asking for a private one, which is how a project generated from this
+template was contacted. `SECURITY.md` at the repository root is the policy
+GitHub shows next to that button: it names the reporting path, the response
+targets, the supported versions and where a fix lands. The response targets
+and the scope live inside its `DOMAIN-SECURITY` block, so a project can
+change them and keep them across template updates.
+
+The job runs with `RELEASE_TOKEN`, the same `administration: write` the
+rulesets need. It is idempotent: each call converges to "enabled" and a
+re-run changes nothing. If your organisation applies a security
+configuration to the repository, that configuration wins, and the job's
+calls may be rejected; the run log says which one.
+
 ## Applying by hand
 
 Without the bootstrap workflow (or when importing into another repository):

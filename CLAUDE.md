@@ -180,6 +180,13 @@ are `.json.jinja`: they require the generated `ci.yml`'s aggregate
 empty answer must render the single-context form every existing downstream
 already has, and a non-empty one must still render valid JSON.  The tag
 ruleset has no status checks and stays plain JSON.
+`bootstrap.yml.jinja`'s `security` job also enables private vulnerability
+reporting, Dependabot alerts and push protection; `SECURITY.md.jinja` is the
+policy generated projects get, and the plain `SECURITY.md` beside it is this
+repo's own (kept out of renders by copier's `.jinja` precedence, like
+`CLAUDE.md`). `scripts/tests/test_bootstrap_security.py` guards both, and
+`docs/design/reference/github-repository-security-settings.md` records the
+GitHub behaviour they rely on.
 
 This template repo itself does NOT run bootstrap and has no aggregate
 check — `template-ci.yml` exposes per-job contexts instead — so its own
