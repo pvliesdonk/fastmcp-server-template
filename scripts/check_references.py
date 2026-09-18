@@ -162,6 +162,20 @@ def _as_day(value: object) -> dt.date | None:
     return None
 
 
+def _instant_from_text(text: str) -> dt.datetime | None:
+    """The string half of :func:`_as_instant`: ``YYYY-MM-DD`` or an offset datetime."""
+    if not _DAY_PREFIX_RE.match(text):
+        return None
+    try:
+        if _DAY_RE.match(text):
+            day = dt.date.fromisoformat(text)
+            return dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC)
+        parsed = dt.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
 def _as_instant(value: object) -> dt.datetime | None:
     """``stale_after`` as an aware instant, or ``None`` when it is not one.
 
@@ -174,19 +188,7 @@ def _as_instant(value: object) -> dt.datetime | None:
         return value if value.tzinfo is not None else None
     if isinstance(value, dt.date):
         return dt.datetime.combine(value, dt.time.min, tzinfo=dt.UTC)
-    if isinstance(value, str) and _DAY_PREFIX_RE.match(value):
-        if _DAY_RE.match(value):
-            try:
-                day = dt.date.fromisoformat(value)
-            except ValueError:
-                return None
-            return dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC)
-        try:
-            parsed = dt.datetime.fromisoformat(value)
-        except ValueError:
-            return None
-        return parsed if parsed.tzinfo is not None else None
-    return None
+    return _instant_from_text(value) if isinstance(value, str) else None
 
 
 def _as_date(value: object) -> dt.date | None:
