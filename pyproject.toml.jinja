@@ -39,8 +39,15 @@ classifiers = [
     # PROJECT-LICENSE-CLASSIFIER-END
 ]
 dependencies = [
-    # >=7.2.0 for find_nonconforming_log_calls: the AST check
-    # tests/test_logging_standard.py runs over src/, which turns the
+    # >=8.0.0 for the logging topology and the HTTP seam: pvl-core owns the
+    # root logger, configure_logging_from_env takes the env prefix as its
+    # first argument (7.x's call without one no longer exists), run_http
+    # replaces the uvicorn.run call cli.py used to make, and the logging
+    # variables moved from FASTMCP_* to {{ env_prefix }}_LOG_LEVEL /
+    # _LOG_FORMAT (template #624).
+    #
+    # 7.2.0 was the previous floor, for find_nonconforming_log_calls: the AST
+    # check tests/test_logging_standard.py runs over src/, which turns the
     # logging-standard skill's ``event_name key=value`` message format from
     # prose into a build gate (#611).  7.2.0 is additive; nothing about
     # logging behaviour changed with it.
@@ -96,12 +103,12 @@ dependencies = [
     # this whole constraint rather than the floor alone (#335), but a floor
     # naming a release nobody can install is still a trap for anyone pinning
     # to it.
-    "fastmcp-pvl-core>=7.2.0,<8",
+    "fastmcp-pvl-core>=8.0.0,<9",
     "typer>=0.12",
 {% if include_mcp_apps_scaffold %}
     # fastmcp.apps and fastmcp.server.providers.addressing are imported
     # directly by _server_apps.py, so the floor is declared here even though
-    # fastmcp-pvl-core>=7 already guarantees fastmcp>=4 transitively.
+    # fastmcp-pvl-core>=8 already guarantees fastmcp>=4 transitively.
     "fastmcp>=4",
 {% endif %}
     # PROJECT-DEPS-START — add domain dependencies below; kept across copier update

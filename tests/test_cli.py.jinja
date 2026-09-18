@@ -17,6 +17,7 @@ from {{ python_module }}.cli import app
 
 if TYPE_CHECKING:
     import pytest
+    from fastmcp_pvl_core import ServerConfig
 
 _ENV_PREFIX = "{{ env_prefix }}"
 
@@ -53,20 +54,29 @@ def _invoke_http_serve(
 ) -> tuple[Result, dict[str, object]]:
     """Invoke ``serve --transport http`` with all blocking side effects patched.
 
-    Patches ``make_server``, ``build_event_store``, and ``uvicorn.run`` so the
-    test never tries to start a server or write to ``/data``.  Returns the
-    CliRunner result and the kwargs captured by the fake ``uvicorn.run``.
+    Patches ``make_server``, ``build_event_store``, and pvl-core's
+    ``run_http`` so the test never binds a socket or writes to ``/data``.
+    Returns the CliRunner result and the bind address the fake ``run_http``
+    resolved the way the real one does: a CLI flag beats ``config.server``,
+    and ``None`` means the flag was not given.
     """
     captured: dict[str, object] = {}
 
-    def fake_uvicorn_run(_asgi_app: object, **kwargs: object) -> None:
-        captured.update(kwargs)
+    def fake_run_http(
+        _asgi_app: object,
+        *,
+        config: ServerConfig,
+        host: str | None = None,
+        port: int | None = None,
+    ) -> None:
+        captured["host"] = config.host if host is None else host
+        captured["port"] = config.port if port is None else port
 
     fake_server = MagicMock()
     fake_server.http_app.return_value = MagicMock()
 
     with (
-        patch("uvicorn.run", side_effect=fake_uvicorn_run),
+        patch("{{ python_module }}.cli.run_http", side_effect=fake_run_http),
         patch("{{ python_module }}.server.make_server", return_value=fake_server),
         patch("{{ python_module }}.cli.build_event_store", return_value=MagicMock()),
     ):

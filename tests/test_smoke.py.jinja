@@ -154,8 +154,10 @@ def test_instructions_env_override(
     monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS", "Custom operator text.")
     monkeypatch.setenv("{{ env_prefix }}_INSTANCE_DESCRIPTION", "Demo material.")
     monkeypatch.setenv("{{ env_prefix }}_INSTRUCTIONS_EXTRA", "House rule: be brief.")
-    # Scope to core's logger: make_server() re-applies FASTMCP_LOG_LEVEL to the
-    # root logger, which would otherwise drop the record under a stricter env.
+    # Scope to core's logger: make_server() re-applies {{ env_prefix }}_LOG_LEVEL
+    # (or its deprecated FASTMCP_LOG_LEVEL fallback) to the root logger, which
+    # would otherwise drop the record under a stricter env.
+    monkeypatch.delenv("{{ env_prefix }}_LOG_LEVEL", raising=False)
     monkeypatch.delenv("FASTMCP_LOG_LEVEL", raising=False)
     with caplog.at_level("WARNING", logger="fastmcp_pvl_core"):
         server = make_server()
