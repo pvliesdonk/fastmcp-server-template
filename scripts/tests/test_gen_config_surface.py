@@ -2921,7 +2921,7 @@ class TestReadmeRegions:
         rows = _table_rows_by_variable(table, default_column=2)
         assert rows == {
             "`DEMO_MCP_LOG_LEVEL`": "`INFO`",
-            "`DEMO_MCP_LOG_FORMAT`": "`(none)`",
+            "`DEMO_MCP_LOG_FORMAT`": "(none)",
             "`DEMO_MCP_KV_STORE_URL`": "`file:///data/state`",
         }
 

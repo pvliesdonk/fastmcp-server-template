@@ -113,7 +113,7 @@ vars:
     provenance: template
     type_name: "str"
     default: null
-    help: "Log rendering: rich (colour, one event key=value line per record, for a terminal) or json (one JSON object per record, for a collector). Unset picks rich when stderr is a terminal and json everywhere else, so a container or journald gets JSON with no configuration."
+    help: "Log rendering. rich is one colour event key=value line per record, for a terminal; json is one JSON object per record, for a collector. Unset picks rich when stderr is a terminal and json everywhere else, so a container or journald gets JSON with no configuration."
     tags: [observability, readme]
     wizard: {group: Logging}
 

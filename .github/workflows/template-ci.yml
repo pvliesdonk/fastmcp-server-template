@@ -565,8 +565,8 @@ jobs:
           # generator's `(none)` placeholder and the help text says the rest.
           format_row=$(region CORE | grep -F '`SMOKE_MCP_LOG_FORMAT`') \
             || { echo "::error::$README CORE region missing the SMOKE_MCP_LOG_FORMAT row"; exit 1; }
-          echo "$format_row" | grep -qF '| `(none)` |' \
-            || { echo "::error::$README LOG_FORMAT row does not show Default \`(none)\`: $format_row"; exit 1; }
+          echo "$format_row" | grep -qF '| (none) |' \
+            || { echo "::error::$README LOG_FORMAT row does not show Default (none): $format_row"; exit 1; }
 
           core_rows=$(region CORE | grep -cE '^\| `' || true)
           [ "$core_rows" -eq 3 ] \

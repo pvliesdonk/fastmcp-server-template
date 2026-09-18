@@ -68,6 +68,15 @@ dependencies = [
     # replacement, and added {PREFIX}_INSTRUCTIONS_EXTRA as the additive path;
     # add_transfer_workflow contributes capability-link prose for path-2 tools.
     #
+    # >=8.0.0 for the logging topology and the HTTP seam: pvl-core owns the
+    # root logger, configure_logging_from_env takes the env prefix as its
+    # first argument (7.x's call without one no longer exists), run_http
+    # replaces the uvicorn.run call cli.py used to make, and the logging
+    # variables moved from FASTMCP_* to {{ env_prefix }}_LOG_LEVEL /
+    # _LOG_FORMAT (template #624).  7.2.0 was the floor before that, for
+    # find_nonconforming_log_calls, which tests/test_logging_standard.py
+    # runs (template #611).
+    #
     # 4.11.3 was the floor before that, for ServerConfig.oidc_advertised_scopes, which
     # config-presentation.yml names: the config-surface generator rejects a
     # presentation entry for a var core does not declare, so generation fails
