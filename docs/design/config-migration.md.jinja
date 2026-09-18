@@ -321,10 +321,14 @@ see.
 auth vars such as `{{ env_prefix }}_OIDC_CLIENT_ID` and
 `{{ env_prefix }}_BEARER_TOKEN` now appear only in the `oci` package's
 array, the one a remote HTTP deployment reads. The `pypi` package's
-array keeps only what a stdio install needs: the log-level and
-rich-logging switches, together with `{{ env_prefix }}_SERVER_NAME`,
-`{{ env_prefix }}_INSTANCE_DESCRIPTION`, the two instruction overrides, and
-`{{ env_prefix }}_KV_STORE_URL`.
+array keeps only what a stdio install needs: `{{ env_prefix }}_LOG_LEVEL`
+and `{{ env_prefix }}_LOG_FORMAT`, the tool-visibility pair
+`{{ env_prefix }}_TOOLS_ALLOW` and `{{ env_prefix }}_TOOLS_DENY`, together
+with `{{ env_prefix }}_SERVER_NAME`, `{{ env_prefix }}_INSTANCE_DESCRIPTION`,
+the two instruction overrides, and `{{ env_prefix }}_KV_STORE_URL`.
+`{{ env_prefix }}_SHUTDOWN_GRACE_S` is `oci`-only for the same reason the
+OIDC vars are: it is the SIGTERM drain window of the HTTP listener a stdio
+install never starts.
 If you diff your project's old `server.json` against the regenerated
 one, expect the `pypi` array to shrink. That is the intended split, not
 lost data; the vars that dropped out of the `pypi` array are still

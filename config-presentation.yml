@@ -259,6 +259,9 @@ packaging:
   "{PREFIX}_INSTRUCTIONS": [pypi, oci]
   "{PREFIX}_HTTP_PATH": [oci]
   "{PREFIX}_HEALTH_DETAIL": [oci]
+  # HTTP-only: the SIGTERM drain window run_http gives uvicorn. A stdio
+  # (pypi/uvx) install has no listener to drain, so nothing to set.
+  "{PREFIX}_SHUTDOWN_GRACE_S": [oci]
   # Not HTTP-specific: apply_tool_visibility runs in make_server regardless
   # of transport, so a stdio (pypi/uvx) install can trim its tool set too.
   "{PREFIX}_TOOLS_ALLOW": [pypi, oci]

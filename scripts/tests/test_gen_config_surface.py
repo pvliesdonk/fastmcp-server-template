@@ -4635,3 +4635,64 @@ class TestClaudePluginUserConfig:
         monkeypatch.setattr(g, "_load_domain_presentation", _fake)
         with pytest.raises(SystemExit, match="fields_from"):
             g.write_artifacts(fake_project, check=False)
+
+
+class TestSeedServerJson:
+    """`server.json.jinja`, the seed the generator splices on every copy and
+    update, must declare exactly the vars `config-presentation.yml`'s
+    `packaging:` map puts in each package (#634).
+
+    The generator replaces both arrays wholesale, so a stale seed never
+    reaches a rendered project's `server.json` — but it is what a reader of
+    the template sees, what a render carries until the copy-time task runs,
+    and, since #609 and the pvl-core v8 cutover both edited it by hand, the
+    one declared surface nothing else pointed at: it kept advertising
+    `FASTMCP_LOG_LEVEL` and the retired `FASTMCP_ENABLE_RICH_LOGGING` after
+    the map had moved on. Membership is asserted per package against the
+    map, not against a generator run, so a pvl-core help-text change does
+    not fail this test; only a var joining or leaving a package does.
+
+    To refresh the seed after such a change: render the smoke answers, copy
+    the two generated arrays back into `server.json.jinja`, and put
+    `{{ env_prefix }}` and `{{ project_name }}` back where the render spelt
+    them out.
+    """
+
+    _PACKAGES: ClassVar[tuple[tuple[int, str], ...]] = ((0, "pypi"), (1, "oci"))
+
+    @pytest.fixture
+    def seed_packages(self, template_root) -> list[dict[str, Any]]:
+        raw = (template_root / "server.json.jinja").read_text(encoding="utf-8")
+        text = re.sub(r"\{\{\s*env_prefix\s*\}\}", "{PREFIX}", raw)
+        # Every other answer the seed interpolates is a plain string inside
+        # a JSON string literal, so any placeholder keeps the document valid.
+        text = re.sub(r"\{\{[^}]*\}\}", "x", text)
+        return json.loads(text)["packages"]
+
+    @pytest.fixture
+    def packaging(self, template_root) -> dict[str, list[str]]:
+        presentation = yaml.safe_load(
+            (template_root / "config-presentation.yml").read_text(encoding="utf-8")
+        )
+        return presentation["packaging"]
+
+    @pytest.mark.parametrize(("index", "packaging_id"), _PACKAGES)
+    def test_seed_declares_exactly_the_packaging_map_members(
+        self, seed_packages, packaging, index, packaging_id
+    ):
+        package = seed_packages[index]
+        assert package["registryType"] == packaging_id
+        seed_names = {entry["name"] for entry in package["environmentVariables"]}
+        expected = {name for name, ids in packaging.items() if packaging_id in ids}
+        assert seed_names == expected, (
+            f"server.json.jinja packages[{index}] ({packaging_id}) drifted from "
+            f"config-presentation.yml's packaging: map — seed-only "
+            f"{sorted(seed_names - expected)}, map-only "
+            f"{sorted(expected - seed_names)}. Refresh the seed from a smoke "
+            "render's generated arrays (see this class's docstring)."
+        )
+
+    def test_seed_names_are_unique_within_a_package(self, seed_packages):
+        for package in seed_packages:
+            names = [entry["name"] for entry in package["environmentVariables"]]
+            assert len(names) == len(set(names)), package["registryType"]
