@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 class Var:
     """One config variable, from whichever provenance produced it."""
 
-    name: str  # full env var name, e.g. "SCHOLAR_MCP_BASE_URL" or "FASTMCP_LOG_LEVEL"
+    name: str  # full env var name, e.g. "SCHOLAR_MCP_BASE_URL" or "FASTMCP_DOCKET_CONCURRENCY"
     suffix: str | None  # part after "{PREFIX}_", or None for unprefixed vars
     provenance: str  # "core" | "template" | "external" | "domain"
     type_name: str

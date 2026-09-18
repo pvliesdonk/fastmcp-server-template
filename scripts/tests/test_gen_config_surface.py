@@ -495,7 +495,7 @@ class TestLoadPresentation:
     def test_unprefixed_external_vars_are_left_alone(self, template_root):
         pres = g.load_presentation(template_root, "DEMO_MCP")
         names = [v["name"] for v in pres["vars"]]
-        assert "FASTMCP_LOG_LEVEL" in names
+        assert "FASTMCP_DOCKET_CONCURRENCY" in names
 
 
 class TestCollectVars:
@@ -2877,7 +2877,7 @@ class TestReadmeRegions:
         answers = g.load_answers(fake_project)
         vars_ = [v for v in g.collect_vars(fake_project, answers) if "readme" in v.tags]
         table = g.render_md_table(vars_, ["variable", "default", "description"])
-        assert "FASTMCP_LOG_LEVEL" in table
+        assert "DEMO_MCP_LOG_LEVEL" in table
         assert "DEMO_MCP_KV_STORE_URL" in table
         assert "DEMO_MCP_OIDC_CLIENT_SECRET" not in table
 
@@ -2920,8 +2920,8 @@ class TestReadmeRegions:
         table = _core_table(fake_project)
         rows = _table_rows_by_variable(table, default_column=2)
         assert rows == {
-            "`FASTMCP_LOG_LEVEL`": "`INFO`",
-            "`FASTMCP_ENABLE_RICH_LOGGING`": "`true`",
+            "`DEMO_MCP_LOG_LEVEL`": "`INFO`",
+            "`DEMO_MCP_LOG_FORMAT`": "`(none)`",
             "`DEMO_MCP_KV_STORE_URL`": "`file:///data/state`",
         }
 
@@ -3030,7 +3030,7 @@ class TestReadmeRegions:
         text = (fake_project / "README.md").read_text(encoding="utf-8")
 
         assert "# Demo MCP" in text
-        assert "FASTMCP_LOG_LEVEL" in text
+        assert "DEMO_MCP_LOG_LEVEL" in text
         core_table = text.split("GENERATED-ENV-TABLE-CORE-START")[1].split(
             "GENERATED-ENV-TABLE-CORE-END"
         )[0]
@@ -3711,7 +3711,7 @@ class TestServerJsonSplice:
         # Shared: the server's own identity, log verbosity, and state
         # persistence — which is not HTTP-specific despite the wizard's
         # shorthand label, so a stdio install wants it too.
-        assert "FASTMCP_LOG_LEVEL" in pypi and "FASTMCP_LOG_LEVEL" in oci
+        assert "DEMO_MCP_LOG_LEVEL" in pypi and "DEMO_MCP_LOG_LEVEL" in oci
         assert "DEMO_MCP_SERVER_NAME" in pypi and "DEMO_MCP_SERVER_NAME" in oci
         assert "DEMO_MCP_INSTANCE_DESCRIPTION" in pypi
         assert "DEMO_MCP_INSTANCE_DESCRIPTION" in oci
@@ -4258,7 +4258,7 @@ class TestMcpbUserConfig:
         assert env == {
             "DEMO_MCP_SERVER_NAME": "${user_config.server_name}",
             "DEMO_MCP_INSTANCE_DESCRIPTION": "${user_config.instance_description}",
-            "FASTMCP_LOG_LEVEL": "${user_config.log_level}",
+            "DEMO_MCP_LOG_LEVEL": "${user_config.log_level}",
         }
         # Screen metadata falls back to the var's own surface metadata.
         server_name = manifest["user_config"]["server_name"]
@@ -4311,7 +4311,7 @@ class TestMcpbUserConfig:
                                 "sensitive": True,
                             },
                             # Curation can also drop a template baseline field.
-                            "FASTMCP_LOG_LEVEL": None,
+                            "DEMO_MCP_LOG_LEVEL": None,
                         }
                     }
                 },
@@ -4333,7 +4333,7 @@ class TestMcpbUserConfig:
         assert manifest["user_config"]["git_token"]["sensitive"] is True
         env = manifest["server"]["mcp_config"]["env"]
         assert env["DEMO_MCP_SOURCE_DIR"] == "${user_config.source_dir}"
-        assert "FASTMCP_LOG_LEVEL" not in env
+        assert "DEMO_MCP_LOG_LEVEL" not in env
 
     def test_generation_is_idempotent(self, fake_project):
         g.write_artifacts(fake_project, check=False)
@@ -4373,7 +4373,7 @@ class TestMcpbUserConfig:
                 "vars": [],
                 "files": {
                     "packaging/mcpb/manifest.json.in": {
-                        # FASTMCP_LOG_LEVEL is a baseline field; this is not.
+                        # DEMO_MCP_LOG_LEVEL is a baseline field; this is not.
                         "fields": {"FASTMCP_LOGLEVEL": None}
                     }
                 },
@@ -4392,7 +4392,7 @@ class TestMcpbUserConfig:
                 "vars": [],
                 "files": {
                     "packaging/mcpb/manifest.json.in": {
-                        "fields": {"FASTMCP_LOG_LEVEL": None}
+                        "fields": {"DEMO_MCP_LOG_LEVEL": None}
                     }
                 },
             }
@@ -4410,7 +4410,7 @@ class TestMcpbUserConfig:
                 "files": {
                     "packaging/mcpb/manifest.json.in": {
                         # server_name is the template baseline's id.
-                        "fields": {"FASTMCP_LOG_LEVEL": {"id": "server_name"}}
+                        "fields": {"DEMO_MCP_LOG_LEVEL": {"id": "server_name"}}
                     }
                 },
             }

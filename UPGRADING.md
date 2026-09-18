@@ -274,7 +274,7 @@ Steps: [upgrading/v8.1.md](upgrading/v8.1.md).
 
 Steps: [upgrading/v8.2.md](upgrading/v8.2.md).
 
-## Unreleased - Security policy and enforced log-call grammar
+## Unreleased - pvl-core v8 logging, security policy and enforced log-call grammar
 
 `SECURITY.md` is now a template-owned file at the repository root, and
 `bootstrap.yml` gained a `security` job that enables private vulnerability
@@ -330,3 +330,56 @@ logging behaviour.
    module-level `logging.getLogger(...)` name; `self.logger`, a logger
    imported from another module and `logger.log(level, ...)` are invisible
    to it, and the skill forbids them for that reason.
+
+### Adopt fastmcp-pvl-core v8: prefixed logging variables, pvl-core-run uvicorn
+
+The dependency floor moved to `fastmcp-pvl-core>=8.0.0,<9`. v8 owns the
+root logger and runs uvicorn for the HTTP transport, and the template stopped
+attaching its own handler and calling `uvicorn.run`. This renames two
+operator variables and removes one, so the template release carrying it is
+a major. Work through these in order:
+
+1. **Refresh the lockfile.** `uv lock`, then commit `uv.lock` with the update
+   pull request; CI installs with `--locked` and fails on the stale file.
+2. **Rename the log-level variable.** `FASTMCP_LOG_LEVEL` is now
+   `<PREFIX>_LOG_LEVEL`, in `.env`, a compose `environment:` block,
+   `/etc/<name>/env`, an orchestrator manifest, and the Claude Desktop
+   `.mcpb` user config (the regenerated manifest already reads the new
+   name). The old name keeps working for one major and logs
+   `log_level_env_deprecated` once at startup, so a missed one is loud, not
+   silent.
+3. **Remove `FASTMCP_ENABLE_RICH_LOGGING`** wherever you set it; the
+   variable is gone. Its replacement, `<PREFIX>_LOG_FORMAT`, takes `rich` or
+   `json`, and unset picks `rich` on a terminal and `json` everywhere else,
+   which is what the image and the unit bought with `false` before. Neither
+   the image, the packaged unit nor the wizard's unit sets anything now. A
+   `COLUMNS` entry you added to get Rich output in a container is no longer
+   needed either: `LOG_FORMAT=rich` renders one line per record without it.
+4. **Re-key anything that parses the container or journal log.** Every
+   record now renders through pvl-core's formatter. In JSON mode that is
+   `{"ts": …, "level": …, "logger": …, "event": …, <fields>}` for a
+   conforming call, a `"message"` key for anything else, and
+   `client`/`method`/`path`/`status` for an access line. The
+   `INFO: {"event": …}` and `LEVEL: message` shapes the v7 container log
+   carried are gone.
+5. **Tests that read stderr.** pytest's stderr is not a terminal, so the
+   server logs JSON under test. A test that asserted on Rich-shaped output
+   sets `<PREFIX>_LOG_FORMAT=rich` through `monkeypatch` before the code
+   under test calls `configure_logging_from_env`, or asserts on
+   `caplog.records` instead.
+6. **`<PREFIX>_SHUTDOWN_GRACE_S`** now sets the SIGTERM drain window that
+   `serve --transport http` hard-coded at 3 seconds. The default is 3, so
+   nothing changes unless you set it.
+7. **If your `cli.py` diverged from the template** in `_root` or in the
+   HTTP branch of `serve`, resolve the update conflict toward the template:
+   `configure_logging_from_env` takes the env prefix as its first argument,
+   the root `StreamHandler` and the `httpx`/`httpcore` quieting are
+   pvl-core's now (keeping yours renders every line twice), and
+   `run_http(app, config=config.server, host=host, port=port)` replaces
+   `uvicorn.run(...)`. `make_server()` passes the prefix too.
+8. **Re-read the `logging-standard` skill.** Six of its statements were
+   wrong against v8 (the level variable, the removed Rich switch, what
+   happens to `uvicorn.access`, who governs `httpx`, whose function
+   `configure_logging_from_env` is, and why access lines are rewritten);
+   the rewrite also adds the renderer's rules for reserved field names,
+   quoting and malformed calls.

@@ -448,7 +448,7 @@ jobs:
           # listener and no OAuth callback, so no OIDC/auth/container var
           # belongs there.
           pypi_names=$(jq -r '.packages[0].environmentVariables[].name' "$SERVER")
-          for var in SMOKE_MCP_KV_STORE_URL FASTMCP_LOG_LEVEL; do
+          for var in SMOKE_MCP_KV_STORE_URL SMOKE_MCP_LOG_LEVEL SMOKE_MCP_LOG_FORMAT; do
             echo "$pypi_names" | grep -qxF "$var" \
               || { echo "::error::server.json packages[0] (pypi) missing $var"; exit 1; }
           done
@@ -555,15 +555,18 @@ jobs:
           echo "$kv_row" | grep -qF '| `file:///data/state` |' \
             || { echo "::error::$README KV_STORE_URL row does not show Default \`file:///data/state\`: $kv_row"; exit 1; }
 
-          log_row=$(region CORE | grep -F '`FASTMCP_LOG_LEVEL`') \
-            || { echo "::error::$README CORE region missing the FASTMCP_LOG_LEVEL row"; exit 1; }
+          log_row=$(region CORE | grep -F '`SMOKE_MCP_LOG_LEVEL`') \
+            || { echo "::error::$README CORE region missing the SMOKE_MCP_LOG_LEVEL row"; exit 1; }
           echo "$log_row" | grep -qF '| `INFO` |' \
             || { echo "::error::$README LOG_LEVEL row does not show Default \`INFO\`: $log_row"; exit 1; }
 
-          rich_row=$(region CORE | grep -F '`FASTMCP_ENABLE_RICH_LOGGING`') \
-            || { echo "::error::$README CORE region missing the FASTMCP_ENABLE_RICH_LOGGING row"; exit 1; }
-          echo "$rich_row" | grep -qF '| `true` |' \
-            || { echo "::error::$README RICH_LOGGING row does not show Default \`true\`: $rich_row"; exit 1; }
+          # No default: unset means auto (rich on a terminal, json elsewhere),
+          # which is not a value an operator writes, so the cell is the
+          # generator's `(none)` placeholder and the help text says the rest.
+          format_row=$(region CORE | grep -F '`SMOKE_MCP_LOG_FORMAT`') \
+            || { echo "::error::$README CORE region missing the SMOKE_MCP_LOG_FORMAT row"; exit 1; }
+          echo "$format_row" | grep -qF '| `(none)` |' \
+            || { echo "::error::$README LOG_FORMAT row does not show Default \`(none)\`: $format_row"; exit 1; }
 
           core_rows=$(region CORE | grep -cE '^\| `' || true)
           [ "$core_rows" -eq 3 ] \
@@ -1773,17 +1776,20 @@ jobs:
 
           asyncio.run(_one_mcp_request())
           PY
-          # One line per log record, which is what the image's
-          # FASTMCP_ENABLE_RICH_LOGGING=false default buys: a container has no
-          # TTY, so with Rich on the middleware's records render as `key=value`
-          # text that falls back to 80 columns and wraps across three
-          # space-padded lines. Read straight from the container (not
-          # `docker compose logs`, which prefixes every line with the service
-          # name and would make the wrap check pass on anything).
+          # One JSON object per log record: a container has no TTY, so
+          # pvl-core's auto mode picks the JSON renderer with nothing set in
+          # the image (pvl-core >= 8; the FASTMCP_ENABLE_RICH_LOGGING=false
+          # default that bought this before is gone with the variable). The
+          # request-logging middleware's terminal record for the list_tools
+          # call above is the probe: its `event` and `method` keys prove the
+          # JSON renderer, not a Rich `key=value` line, wrote the stream.
+          # Read straight from the container (not `docker compose logs`,
+          # which prefixes every line with the service name and would make
+          # the wrap check pass on anything).
           CID=$(docker compose ps -q smoke-mcp)
           docker logs "$CID" > /tmp/container-logs.txt 2>&1
-          grep -q '^INFO: {"event": "request_completed"' /tmp/container-logs.txt \
-            || { sed -n '1,40p' /tmp/container-logs.txt; docker compose down -v; echo "::error::no one-line JSON request record in the container log — the image's FASTMCP_ENABLE_RICH_LOGGING default is not reaching the server"; exit 1; }
+          grep -q '^{"ts": "[^"]*", "level": "INFO", "logger": "[^"]*", "event": "request_completed", "method": "tools/list"' /tmp/container-logs.txt \
+            || { sed -n '1,40p' /tmp/container-logs.txt; docker compose down -v; echo "::error::no one-line JSON request record in the container log — pvl-core's auto log format is not resolving to JSON in the container"; exit 1; }
           if grep -n '^[[:space:]]' /tmp/container-logs.txt; then
             echo "::error::container log lines are wrapped across lines — one record no longer means one line"
             docker compose down -v
