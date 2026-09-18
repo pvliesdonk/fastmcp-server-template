@@ -383,3 +383,17 @@ a major. Work through these in order:
    `configure_logging_from_env` is, and why access lines are rewritten);
    the rewrite also adds the renderer's rules for reserved field names,
    quoting and malformed calls.
+
+### The package version attribute and the app-tool hash key
+
+`<module>.__version__` now reports the installed distribution's version
+(`importlib.metadata`) instead of the `0.1.0` literal the skeleton shipped,
+so it matches `pyproject.toml` after every release; an import from an
+uninstalled checkout reads `0.0.0+unknown`. Nothing to do unless a test of
+yours asserted the literal.
+
+`_server_apps._app_tool_meta` writes the deterministic app-tool hash under
+fastmcp's public `tool_hash` key. The previous `_tool_hash` key was stripped
+from the protocol-visible metadata by FastMCP 4, so app-tool addressing never
+saw it (#614). A project that worked around this with its own
+sentinel-safe helper can delete that helper after `copier update`.
