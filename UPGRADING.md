@@ -274,6 +274,25 @@ Steps: [upgrading/v8.1.md](upgrading/v8.1.md).
 
 Steps: [upgrading/v8.2.md](upgrading/v8.2.md).
 
-## Unreleased
+## Unreleased - Security policy and private vulnerability reporting
 
-_Nothing yet._
+`SECURITY.md` is now a template-owned file at the repository root, and
+`bootstrap.yml` gained a `security` job that enables private vulnerability
+reporting, Dependabot alerts and secret scanning push protection. After
+`copier update`:
+
+1. **If your project already had a `SECURITY.md`**, copier reports a
+   conflict, because the template's version knows nothing of yours. Keep the
+   template-owned sections and move your own scope, contacts and response
+   targets into the `DOMAIN-SECURITY` block; that block survives later
+   updates.
+2. **Merging the update pull request re-runs Bootstrap**, since the
+   workflow's own file changed. Check the run. The new job needs
+   `RELEASE_TOKEN` with `administration: write`, which the rulesets already
+   required. On a private repository it skips private vulnerability
+   reporting, which GitHub offers on public repositories only, and it warns
+   instead of failing when push protection is not available on your plan.
+3. **Confirm the Security tab** now shows **Report a vulnerability** and the
+   policy. Adjust the defaults in the `DOMAIN-SECURITY` block (acknowledge
+   within 7 days, assess within 30, disclose within 90) if they do not fit
+   your project.
