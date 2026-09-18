@@ -384,7 +384,6 @@ a major. Work through these in order:
    the rewrite also adds the renderer's rules for reserved field names,
    quoting and malformed calls.
 
-
 ### The package version attribute and the app-tool hash key
 
 `<module>.__version__` now reports the installed distribution's version
