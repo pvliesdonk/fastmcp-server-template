@@ -383,3 +383,17 @@ a major. Work through these in order:
    `configure_logging_from_env` is, and why access lines are rewritten);
    the rewrite also adds the renderer's rules for reserved field names,
    quoting and malformed calls.
+
+### Startup log lines that moved to pvl-core
+
+`make_server` no longer logs `auth_enabled mode=…` / `auth_disabled mode=none`;
+pvl-core's own `auth_mode_resolved mode=… source=…` line (pvl-core#310) is the
+announcement, and the `server_configured … auth=…` field still carries the
+mode. Re-key anything that matched the two removed events. On the stdio
+transport with an auth provider configured, a new WARNING,
+`auth_configured_but_stdio_skips_enforcement mode=…`, says that FastMCP does
+not enforce it there. `serve` now prints a malformed configuration value as
+one `ERROR: configuration error: …` line on stderr with exit code 1 instead
+of a Rich traceback; a wrapper that parsed the traceback has nothing to
+parse. The `pip-audit` step no longer carries `--ignore-vuln CVE-2026-42561`;
+a project that removed it by hand converges on the render again.

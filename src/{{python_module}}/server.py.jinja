@@ -28,7 +28,7 @@ from fastmcp_pvl_core import (
     normalise_http_path,
     register_health_routes,
     register_server_info_tool,
-    resolve_auth_mode,
+    get_current_auth_mode,
     wire_middleware_stack,
 )
 
@@ -86,16 +86,19 @@ def make_server(
     server_name = config.server_name
 
     auth = build_auth(config.server)
-    auth_mode = resolve_auth_mode(config.server) if auth is not None else "none"
-    # Both lines follow the ``event_name key=value`` grammar the
-    # ``logging-standard`` skill sets out (``tests/test_logging_standard.py``
-    # fails the build on any first-party call that does not), so the
-    # "accepts unauthenticated connections" meaning lives in the event name
-    # and this comment rather than in prose a consumer cannot parse.
-    if auth_mode == "none":
-        logger.warning("auth_disabled mode=none")
-    else:
-        logger.info("auth_enabled mode=%s", auth_mode)
+    # pvl-core records the mode ``build_auth`` resolved and announces it as
+    # ``auth_mode_resolved mode=… source=…`` (pvl-core#310); reading it back
+    # here replaces a second ``resolve_auth_mode`` run and a second
+    # announcement (#605).
+    auth_mode = get_current_auth_mode() or "none"
+    if transport == "stdio" and auth is not None:
+        # FastMCP applies auth on the HTTP transports only; stdio inherits
+        # the security of its local execution environment, so the provider
+        # built above is never consulted there. Say so rather than let the
+        # ``auth=`` field below read as enforcement (#617).
+        logger.warning(
+            "auth_configured_but_stdio_skips_enforcement mode=%s", auth_mode
+        )
 
     try:
         pkg_ver = _pkg_version("{{ pypi_name }}")

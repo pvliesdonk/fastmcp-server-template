@@ -6,6 +6,7 @@ from typing import Literal
 
 import typer
 from fastmcp_pvl_core import (
+    ConfigurationError,
     build_event_store,
     configure_logging_from_env,
     maybe_start_debugpy,
@@ -82,13 +83,23 @@ def serve(
     # than Python's lastResort.
     maybe_start_debugpy(_ENV_PREFIX)
 
-    config = ProjectConfig.from_env()
-    # Resolved once, ahead of ``make_server``: the health routes it registers
-    # derive their prefix from the mount path, so the value handed to
-    # ``http_app(path=...)`` below and the one the server saw must be the
-    # same object, not two reads that could drift.
-    path = normalise_http_path(http_path or os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH"))
-    server = make_server(transport=transport, config=config, http_path=path)
+    try:
+        config = ProjectConfig.from_env()
+        # Resolved once, ahead of ``make_server``: the health routes it
+        # registers derive their prefix from the mount path, so the value
+        # handed to ``http_app(path=...)`` below and the one the server saw
+        # must be the same object, not two reads that could drift.
+        path = normalise_http_path(
+            http_path or os.environ.get(f"{_ENV_PREFIX}_HTTP_PATH")
+        )
+        server = make_server(transport=transport, config=config, http_path=path)
+    except ConfigurationError as exc:
+        # A malformed or missing operator value is one actionable line on
+        # stderr, not Typer's Rich traceback: the message already names the
+        # variable and the problem (#616). stderr keeps stdout clean for the
+        # stdio transport.
+        typer.echo(f"ERROR: configuration error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
     if transport == "http":
         event_store = build_event_store(_ENV_PREFIX, config.server)
