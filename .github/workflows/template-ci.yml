@@ -452,17 +452,20 @@ jobs:
             echo "$pypi_names" | grep -qxF "$var" \
               || { echo "::error::server.json packages[0] (pypi) missing $var"; exit 1; }
           done
-          if echo "$pypi_names" | grep -qxF SMOKE_MCP_OIDC_CLIENT_SECRET; then
-            echo "::error::server.json packages[0] (pypi) carries an OIDC var"
-            exit 1
-          fi
+          for var in SMOKE_MCP_OIDC_CLIENT_SECRET SMOKE_MCP_SHUTDOWN_GRACE_S; do
+            if echo "$pypi_names" | grep -qxF "$var"; then
+              echo "::error::server.json packages[0] (pypi) carries HTTP-only var $var"
+              exit 1
+            fi
+          done
 
           # --- oci package: the OIDC/auth/container vars, present here
           # because smoke-answers.yml sets enable_authorization: true.
           oci_names=$(jq -r '.packages[1].environmentVariables[].name' "$SERVER")
           for var in SMOKE_MCP_OIDC_CONFIG_URL SMOKE_MCP_OIDC_CLIENT_ID \
               SMOKE_MCP_OIDC_CLIENT_SECRET SMOKE_MCP_BASE_URL SMOKE_MCP_BEARER_TOKEN \
-              SMOKE_MCP_ACL_PATH SMOKE_MCP_AUTHZ_CLAIM PUID PGID; do
+              SMOKE_MCP_ACL_PATH SMOKE_MCP_AUTHZ_CLAIM PUID PGID \
+              SMOKE_MCP_SHUTDOWN_GRACE_S SMOKE_MCP_LOG_LEVEL SMOKE_MCP_LOG_FORMAT; do
             echo "$oci_names" | grep -qxF "$var" \
               || { echo "::error::server.json packages[1] (oci) missing $var"; exit 1; }
           done

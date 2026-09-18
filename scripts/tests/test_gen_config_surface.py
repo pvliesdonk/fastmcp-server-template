@@ -4635,3 +4635,165 @@ class TestClaudePluginUserConfig:
         monkeypatch.setattr(g, "_load_domain_presentation", _fake)
         with pytest.raises(SystemExit, match="fields_from"):
             g.write_artifacts(fake_project, check=False)
+
+
+class TestSeedServerJson:
+    """`server.json.jinja`, the seed the generator splices on every copy and
+    update, must declare exactly the vars `config-presentation.yml`'s
+    `packaging:` map puts in each package (#634).
+
+    The generator replaces both arrays wholesale, so a stale seed never
+    reaches a rendered project's `server.json` — but it is what a reader of
+    the template sees, what a render carries until the copy-time task runs,
+    and, since #609 and the pvl-core v8 cutover both edited it by hand, the
+    one declared surface nothing else pointed at: it kept advertising
+    `FASTMCP_LOG_LEVEL` and the retired `FASTMCP_ENABLE_RICH_LOGGING` after
+    the map had moved on. Membership is asserted per package against the
+    map, not against a generator run, so a pvl-core help-text change does
+    not fail this test; only a var joining or leaving a package does.
+
+    To refresh the seed after such a change: render the smoke answers, copy
+    the two generated arrays back into `server.json.jinja`, and put
+    `{{ env_prefix }}` and `{{ project_name }}` back where the render spelt
+    them out.
+    """
+
+    _PACKAGES: ClassVar[tuple[tuple[int, str], ...]] = ((0, "pypi"), (1, "oci"))
+
+    @pytest.fixture
+    def seed_packages(self, template_root) -> list[dict[str, Any]]:
+        raw = (template_root / "server.json.jinja").read_text(encoding="utf-8")
+        text = re.sub(r"\{\{\s*env_prefix\s*\}\}", "{PREFIX}", raw)
+        # Every other answer the seed interpolates is a plain string inside
+        # a JSON string literal, so any placeholder keeps the document valid.
+        text = re.sub(r"\{\{[^}]*\}\}", "x", text)
+        return json.loads(text)["packages"]
+
+    @pytest.fixture
+    def packaging(self, template_root) -> dict[str, list[str]]:
+        presentation = yaml.safe_load(
+            (template_root / "config-presentation.yml").read_text(encoding="utf-8")
+        )
+        return presentation["packaging"]
+
+    @pytest.mark.parametrize(("index", "packaging_id"), _PACKAGES)
+    def test_seed_declares_exactly_the_packaging_map_members(
+        self, seed_packages, packaging, index, packaging_id
+    ):
+        package = seed_packages[index]
+        assert package["registryType"] == packaging_id
+        seed_names = {entry["name"] for entry in package["environmentVariables"]}
+        expected = {name for name, ids in packaging.items() if packaging_id in ids}
+        assert seed_names == expected, (
+            f"server.json.jinja packages[{index}] ({packaging_id}) drifted from "
+            f"config-presentation.yml's packaging: map — seed-only "
+            f"{sorted(seed_names - expected)}, map-only "
+            f"{sorted(expected - seed_names)}. Refresh the seed from a smoke "
+            "render's generated arrays (see this class's docstring)."
+        )
+
+    def test_seed_names_are_unique_within_a_package(self, seed_packages):
+        for package in seed_packages:
+            names = [entry["name"] for entry in package["environmentVariables"]]
+            assert len(names) == len(set(names)), package["registryType"]
+
+
+def _conflicted_server_json(project_root: Path, *, where: str) -> None:
+    """Rewrite the fixture `server.json` as `copier update --conflict=inline`
+    leaves it: git diff3 markers around one region, the project's side first.
+
+    *where* is ``"array"`` for a hunk inside the pypi package's
+    `environmentVariables` (text the generator overwrites anyway) or
+    ``"version"`` for a hunk on the top-level `version` key (text the
+    release flow owns and the generator never touches).
+    """
+    if where == "array":
+        version = '  "version": "9.9.9",\n'
+        pypi_entries = (
+            "<<<<<<< before updating\n"
+            '        {"name": "DEMO_MCP_OLD", "description": "the project side"}\n'
+            "||||||| last update\n"
+            '        {"name": "STALE", "description": "gone"}\n'
+            "=======\n"
+            '        {"name": "DEMO_MCP_NEW", "description": "the template side"}\n'
+            ">>>>>>> after updating\n"
+        )
+    else:
+        version = (
+            "<<<<<<< before updating\n"
+            '  "version": "9.9.9",\n'
+            "||||||| last update\n"
+            '  "version": "0.1.0",\n'
+            "=======\n"
+            '  "version": "0.1.0",\n'
+            ">>>>>>> after updating\n"
+        )
+        pypi_entries = '        {"name": "STALE", "description": "gone"}\n'
+    (project_root / "server.json").write_text(
+        "{\n"
+        '  "name": "io.github.demo/demo-mcp",\n'
+        '  "description": "Demo MCP server for template tests.",\n'
+        + version
+        + '  "packages": [\n'
+        "    {\n"
+        '      "registryType": "pypi",\n'
+        '      "identifier": "demo-mcp",\n'
+        '      "version": "9.9.9",\n'
+        '      "transport": {"type": "stdio"},\n'
+        '      "environmentVariables": [\n' + pypi_entries + "      ]\n"
+        "    },\n"
+        "    {\n"
+        '      "registryType": "oci",\n'
+        '      "identifier": "ghcr.io/demo/demo-mcp:v9.9.9",\n'
+        '      "transport": {"type": "streamable-http", "url": "http://localhost:{--port}/mcp"},\n'
+        '      "environmentVariables": [\n'
+        '        {"name": "STALE", "description": "gone"}\n'
+        "      ]\n"
+        "    }\n"
+        "  ]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+
+class TestServerJsonConflictMarkers:
+    """`copier update` merges `server.json` three ways and, under its default
+    `--conflict=inline`, leaves diff3 markers where the project's committed
+    file (the generator's own earlier output) and the re-rendered seed both
+    changed a region. The update-time migration then runs this generator
+    against that merged file, so a seed edit inside an array used to fail
+    every downstream's update as "not valid JSON" — for text the generator
+    was about to replace wholesale (#635)."""
+
+    def test_a_conflict_inside_a_generated_array_is_resolved_by_regenerating(
+        self, fake_project
+    ):
+        _conflicted_server_json(fake_project, where="array")
+        g.write_artifacts(fake_project, check=False)
+        names = _env_names(fake_project, 0)
+        assert "DEMO_MCP_OLD" not in names and "DEMO_MCP_NEW" not in names
+        assert "STALE" not in names and names, names
+        text = (fake_project / "server.json").read_text(encoding="utf-8")
+        assert "<<<<<<<" not in text and ">>>>>>>" not in text
+
+    def test_the_project_side_wins_for_the_release_managed_keys(self, fake_project):
+        """Only the arrays conflicted, so the surrounding keys are identical
+        on both sides; asserting them pins that the project's document, not
+        the template's, is the one the generator carries forward."""
+        _conflicted_server_json(fake_project, where="array")
+        g.write_artifacts(fake_project, check=False)
+        data = _server_json(fake_project)
+        assert data["version"] == "9.9.9"
+        assert data["packages"][1]["identifier"] == "ghcr.io/demo/demo-mcp:v9.9.9"
+
+    def test_a_conflict_outside_the_generated_arrays_is_a_human_job(self, fake_project):
+        """A hunk on `version` is the merge hazard config-migration.md
+        documents: the generator must neither pick a side nor report it as a
+        JSON syntax error, but name the markers and hand it over."""
+        _conflicted_server_json(fake_project, where="version")
+        with pytest.raises(SystemExit) as excinfo:
+            g.write_artifacts(fake_project, check=False)
+        message = str(excinfo.value)
+        assert "conflict markers outside" in message
+        assert "is not valid JSON" not in message
+        assert "config-migration.md" in message
