@@ -1,6 +1,10 @@
 repos:
   - repo: local
     hooks:
+      # Both ruff hooks read the root ruff.toml, the same rule set
+      # template-ci's lint and format steps apply (#568); a hook failure
+      # therefore means the change violates something the project enforces,
+      # not whatever the installed ruff enables by default this month.
       - id: ruff-check
         name: ruff check
         language: system

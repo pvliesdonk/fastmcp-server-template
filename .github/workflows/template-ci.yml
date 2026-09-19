@@ -1881,21 +1881,21 @@ jobs:
             || { echo "::error::template-release.yml stages UPGRADING.md but not the upgrading/ per-minor files — a promoted section would be written and discarded"; exit 1; }
 
       - name: Lint scripts (ruff check matching downstream's config)
-        # Mirror the rendered project's [tool.ruff.lint] block in
-        # pyproject.toml.jinja: same `select` list, same `ignore = ["E501"]`,
-        # same line-length 88. Catch regressions here before they surface in
+        # The rule set comes from the root ruff.toml, the same file the
+        # pre-commit hook reads, so hook and CI cannot disagree (#568); it
+        # mirrors the rendered project's [tool.ruff.lint] block in
+        # pyproject.toml.jinja (same `select`, same `ignore = ["E501"]`, same
+        # line-length 88), and scripts/tests/test_ruff_config_mirror.py fails
+        # when the two drift. Catch regressions here before they surface in
         # downstream CI on the next copier-update.
         run: |
           uv run --with ruff ruff check \
-            --select E,W,F,I,B,C4,UP,ARG,SIM,TC,PTH,RUF \
-            --ignore E501 \
-            --line-length 88 \
-            --target-version py311 \
             scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/tests/
 
       - name: Format check scripts (ruff format matching downstream)
+        # Line length and target come from the root ruff.toml (see above).
         run: |
-          uv run --with ruff ruff format --check --line-length 88 --target-version py311 \
+          uv run --with ruff ruff format --check \
             scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
@@ -1922,10 +1922,12 @@ jobs:
         #
         # The thresholds are pinned explicitly to the same values
         # pyproject.toml.jinja's `[tool.ruff.lint.mccabe]` / `[...pylint]`
-        # blocks set. They equal ruff's current defaults, so this repo (which
-        # has no root pyproject/ruff.toml) would apply them by fallback anyway
-        # — but pinning keeps the template-side gate from silently diverging
+        # blocks set. They equal ruff's current defaults, so this repo (whose
+        # root ruff.toml sets neither) would apply them by fallback anyway —
+        # but pinning keeps the template-side gate from silently diverging
         # from the downstream gate if a future ruff changes those defaults.
+        # `--select` on the command line replaces ruff.toml's `select`, so
+        # the base lint set does not leak into this stricter pass.
         run: |
           uv run --with ruff ruff check \
             --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
