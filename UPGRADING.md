@@ -274,7 +274,7 @@ Steps: [upgrading/v8.1.md](upgrading/v8.1.md).
 
 Steps: [upgrading/v8.2.md](upgrading/v8.2.md).
 
-## Unreleased - pvl-core v8 logging, security policy and enforced log-call grammar
+## Unreleased - pvl-core v8 and v9, security policy and enforced log-call grammar
 
 `SECURITY.md` is now a template-owned file at the repository root, and
 `bootstrap.yml` gained a `security` job that enables private vulnerability
@@ -442,3 +442,81 @@ project whose registrars need no configuration. Two cases need a hand:
    test that calls such a registrar on a bare `FastMCP()` must then call
    `bind_config(mcp, config)` first, or build the server through
    `make_server`.
+
+### Adopt fastmcp-pvl-core v9: one configuration error, auth that refuses to start
+
+The dependency floor moved to `fastmcp-pvl-core>=9.0.0,<10`. Two of the
+changes below break code a project may have written against v8, and one
+changes whether a misconfigured server starts at all. v9 also closes several
+paths that published operator-URL credentials into logs and into a response
+header, so prioritise the upgrade if any of your operator URLs carry a
+`user:pass@`.
+
+1. **Catch `ConfigurationError`, not `ValueError` or `ImportError`.** An
+   unusable `<PREFIX>_KV_STORE_URL` (unrecognised scheme, malformed
+   `file://`, `dynamodb://` with no table name) and a backend extra that is
+   not installed both raise `ConfigurationError` now (pvl-core #337). It
+   reaches five public entry points, not only the two that name the store:
+   `build_kv_store`, `build_event_store`, `build_jobs`,
+   `register_health_routes`, and the `transfer` namespace's
+   `register_transfer_routes` / `build_transfer_links`. `ConfigurationError`
+   is exported from `fastmcp_pvl_core`, and the template's own `serve`
+   already catches it, so the generated CLI needs no change; a project that
+   added handling of its own around any of those calls must swap the type.
+   One `ValueError` survives: an empty `namespace=` argument to
+   `build_kv_store`, which is your literal rather than an operator's value.
+2. **Stop wrapping what `jobs.start` and `jobs.defer` return.** Inside a
+   native SEP-2663 task both verbs now await the work and return its own
+   result, the way `run_with_deadline` always has, and their annotations
+   widen to `Any` (pvl-core #324). pvl-core's own docs taught
+   `return dict(await jobs.defer(...))` until this release, and that line
+   raises `TypeError` under a task-negotiating client as soon as the work
+   returns anything that is not a mapping. Drop the `dict(...)`:
+
+   ```python
+   # before: TypeError under a task-negotiating client as soon as the
+   # work returns something that is not a mapping
+   return dict(await jobs.start(work(), tool="rebuild_index"))
+
+   # after
+   return await jobs.start(work(), tool="rebuild_index")
+   ```
+
+   A tool that reads `handle["job_id"]` out of the return value has to
+   branch on the mode or stop needing the id. FastMCP 4's default client
+   negotiates the tasks extension, so this path is reached in ordinary use.
+3. **A configured auth mode that builds no provider now refuses to start.**
+   Where v8 logged `auth_mode_resolved ... server accepts unauthenticated
+   connections` and carried on, v9 raises `ConfigurationError` naming the
+   unset variables (pvl-core #316), and `serve` turns that into one line on
+   stderr and exit 1. Auto-detection cannot produce this, since a mode is
+   only detected when its variables are present; what reaches it is an
+   explicit `<PREFIX>_AUTH_MODE=remote` or `=oidc-proxy` whose variables are
+   not all set. If a deployment starts failing here, read the missing names
+   off the error before assuming the release broke it: the server it refuses
+   to start is one that was already serving without the authentication its
+   configuration asked for. `AUTH_MODE` unset with nothing else configured
+   still resolves to `none` and still serves unauthenticated.
+4. **Credentials no longer travel in the MCP Apps origin.**
+   `compute_app_domain` returned `urlparse(base_url).netloc`, which includes
+   any `user:pass@`, and that value becomes the MCP Apps iframe and CSP
+   origin; it now returns host and port only (pvl-core #343). Nothing to do
+   for a `<PREFIX>_BASE_URL` without userinfo, which should be every one of
+   them. The same change covers the wider leak behind it: `urlparse` echoes
+   the raw netloc in one of its error messages, so several operator-URL
+   paths were publishing credentials into logs. If an operator URL of yours
+   does carry embedded credentials, treat them as exposed in whatever sink
+   collected those logs and rotate them.
+5. **Re-key anything matching pvl-core's own log lines.** v9 finishes moving
+   core's messages to the `event_name key=value` grammar the
+   `logging-standard` skill states, so a query or alert written against v8's
+   text needs the new names: `tool_allowlist_active` /
+   `tool_denylist_active` / `tool_allowlist_zero_match` (was `Tool allowlist
+   active: ...`), `kv_store_legacy_fallback`, `kv_store_default_fallback`,
+   `tasks_url_env_conflict`, `tasks_url_dropped`,
+   `tasks_extension_not_registered`, `env_value_rejected`, and the
+   `debugpy_*` family. Lines that already had an event name kept it and
+   moved their trailing prose into `consequence=` and `action=` fields,
+   `auth_mode_resolved` among them.
+6. **Refresh the lockfile.** `uv lock`, then commit `uv.lock` with the update
+   pull request; CI installs with `--locked` and fails on a stale file.
