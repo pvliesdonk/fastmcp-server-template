@@ -21,6 +21,14 @@ def register_tools(mcp: FastMCP) -> None:
 
     FastMCP tool reference: https://gofastmcp.com/servers/tools
     """
+    # Configuration at registration time: ``config_for(mcp)`` (from
+    # ``{{ python_module }}._server_deps``) returns the ProjectConfig the
+    # server was built from — a caller-supplied one included — for a
+    # subsystem that must exist before its tools register (a jobs backend,
+    # an upstream client, a parameter default).  In a handler, take it as
+    # ``config: ProjectConfig = Depends(get_config)`` next to the service.
+    # Reading environment variables here instead silently disagrees with a
+    # config passed to ``make_server``.
 
     @mcp.tool(annotations={"read_only_hint": True})
     async def ping(service: Service = Depends(get_service)) -> str:

@@ -245,3 +245,61 @@ def test_no_file_exchange_scaffolding(
     assert "create_download_link" not in tools
     assert "fetch_file" not in tools
     assert "create_upload_link" not in tools
+
+
+def test_config_passed_to_make_server_reaches_registration() -> None:
+    """``config_for(mcp)`` hands a registrar the very ``ProjectConfig`` object
+    ``make_server`` was given, so a subsystem built at registration time
+    cannot disagree with one ``make_server`` wires from ``config`` itself
+    (pvliesdonk/fastmcp-server-template#534).
+    """
+    from {{ python_module }}._server_deps import config_for
+    from {{ python_module }}.config import ProjectConfig
+
+    config = ProjectConfig.from_env()
+    server = make_server(config=config)
+    assert config_for(server) is config
+
+
+def test_config_for_refuses_an_unbound_server() -> None:
+    """A server not built through ``make_server`` has no bound config, and
+    the accessor says so instead of quietly reading the environment."""
+    from fastmcp import FastMCP
+
+    from {{ python_module }}._server_deps import config_for
+
+    with pytest.raises(RuntimeError, match="make_server"):
+        config_for(FastMCP("unbound"))
+
+
+def test_get_config_resolves_in_a_handler() -> None:
+    """``Depends(get_config)`` inside a handler resolves to the bound config.
+
+    The server is built synchronously, as ``make_server`` requires (its
+    instruction finalisation refuses to run inside an event loop), and only
+    the client round-trip runs under ``asyncio.run``.
+    """
+    from fastmcp.dependencies import Depends
+
+    from {{ python_module }}._server_deps import get_config
+    from {{ python_module }}.config import ProjectConfig
+
+    config = ProjectConfig.from_env()
+    server = make_server(config=config)
+
+    @server.tool
+    async def bound_server_name(
+        config: ProjectConfig = Depends(get_config),  # noqa: B008
+    ) -> str:
+        return config.server_name
+
+    async def _call() -> str:
+        async with Client(server) as smoke_client:
+            result = await smoke_client.call_tool("bound_server_name", {})
+        first = result.content[0]
+        assert hasattr(first, "text"), (
+            f"expected text tool content, got {type(first).__name__}"
+        )
+        return str(first.text)
+
+    assert asyncio.run(_call()) == config.server_name

@@ -421,3 +421,24 @@ project added that same key inside its `PROJECT-RUFF-IGNORES` block as a
 workaround, delete your copy before merging the update: TOML rejects a
 duplicate key in one table, so `uv sync`, `ruff` and every CI job fail on
 `pyproject.toml` until it is gone.
+
+### Read the resolved config from registrars through `config_for(mcp)`
+
+`make_server` now binds the `ProjectConfig` it resolved to the server before
+`register_tools`, `register_resources`, `register_prompts` and
+`register_apps` run. A registrar reads it with `config_for(mcp)` from
+`<module>._server_deps`; a handler takes
+`config: ProjectConfig = Depends(get_config)` (#534). Nothing changes for a
+project whose registrars need no configuration. Two cases need a hand:
+
+1. **You edited the template-owned `register_tools(mcp)` line in
+   `server.py`** to pass a config. `copier update` reverts that line and
+   your registrar's environment fallback takes over silently. Restore the
+   scaffold's signature, read `config_for(mcp)` inside the registrar, and
+   drop the fallback.
+2. **Your registrars build a subsystem from environment variables** (a jobs
+   backend, an upstream client, a parameter default). Switch them to
+   `config_for(mcp)` so a config passed to `make_server` reaches them. A
+   test that calls such a registrar on a bare `FastMCP()` must then call
+   `bind_config(mcp, config)` first, or build the server through
+   `make_server`.
