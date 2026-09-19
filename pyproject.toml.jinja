@@ -39,14 +39,29 @@ classifiers = [
     # PROJECT-LICENSE-CLASSIFIER-END
 ]
 dependencies = [
-    # >=8.0.0 for the logging topology and the HTTP seam: pvl-core owns the
-    # root logger, configure_logging_from_env takes the env prefix as its
-    # first argument (7.x's call without one no longer exists), run_http
-    # replaces the uvicorn.run call cli.py used to make, and the logging
-    # variables moved from FASTMCP_* to {{ env_prefix }}_LOG_LEVEL /
-    # _LOG_FORMAT (template #624).
+    # >=9.0.0 for the operator-input contract and the reworded config help.
+    # Every config-driven builder (build_kv_store / build_event_store,
+    # build_jobs, register_health_routes, register_transfer_routes /
+    # build_transfer_links) raises ConfigurationError where 8.x raised
+    # ValueError or ImportError, so a malformed
+    # {{ env_prefix }}_KV_STORE_URL reaches cli.py's one-line handler
+    # instead of a traceback (pvl-core #337).  A resolved auth mode that
+    # builds no provider now refuses to start instead of serving
+    # unauthenticated (pvl-core #316), and compute_app_domain strips
+    # userinfo from the value it hands the MCP Apps CSP origin (pvl-core
+    # #343).  The cap matters as much as the floor here: the config-surface
+    # generator resolves this whole constraint, and only 9.0.0's
+    # SHUTDOWN_GRACE_S help text keeps the generated table in
+    # docs/configuration.md clear of ai-tells' MicDrop rule (#639).
     #
-    # 7.2.0 was the previous floor, for find_nonconforming_log_calls: the AST
+    # 8.0.0 was the previous floor, for the logging topology and the HTTP
+    # seam: pvl-core owns the root logger, configure_logging_from_env takes
+    # the env prefix as its first argument (7.x's call without one no longer
+    # exists), run_http replaces the uvicorn.run call cli.py used to make,
+    # and the logging variables moved from FASTMCP_* to
+    # {{ env_prefix }}_LOG_LEVEL / _LOG_FORMAT (template #624).
+    #
+    # 7.2.0 was the floor before that, for find_nonconforming_log_calls: the AST
     # check tests/test_logging_standard.py runs over src/, which turns the
     # logging-standard skill's ``event_name key=value`` message format from
     # prose into a build gate (#611).  7.2.0 is additive; nothing about
@@ -103,7 +118,7 @@ dependencies = [
     # this whole constraint rather than the floor alone (#335), but a floor
     # naming a release nobody can install is still a trap for anyone pinning
     # to it.
-    "fastmcp-pvl-core>=8.0.0,<9",
+    "fastmcp-pvl-core>=9.0.0,<10",
     "typer>=0.12",
 {% if include_mcp_apps_scaffold %}
     # fastmcp.apps and fastmcp.server.providers.addressing are imported
