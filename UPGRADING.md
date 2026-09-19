@@ -411,3 +411,13 @@ one `ERROR: configuration error: …` line on stderr with exit code 1 instead
 of a Rich traceback; a wrapper that parsed the traceback has nothing to
 parse. The `pip-audit` step no longer carries `--ignore-vuln CVE-2026-42561`;
 a project that removed it by hand converges on the render again.
+
+### Remove the local exemption for `scripts/migrate_agent_instructions.py`
+
+`pyproject.toml`'s template-owned `per-file-ignores` now carry
+`"scripts/migrate_agent_instructions.py" = ["S603", "S607"]`, like the
+sibling scripts that make the same fixed-argv `git` call (#524). If your
+project added that same key inside its `PROJECT-RUFF-IGNORES` block as a
+workaround, delete your copy before merging the update: TOML rejects a
+duplicate key in one table, so `uv sync`, `ruff` and every CI job fail on
+`pyproject.toml` until it is gone.

@@ -1891,12 +1891,12 @@ jobs:
             --ignore E501 \
             --line-length 88 \
             --target-version py311 \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/tests/
 
       - name: Format check scripts (ruff format matching downstream)
         run: |
           uv run --with ruff ruff format --check --line-length 88 --target-version py311 \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
         # The scripts that render into every project (gen_config_surface.py,
@@ -1912,7 +1912,13 @@ jobs:
         # diff) with the same per-file `S606` ignore the rendered
         # pyproject.toml carries, so it matches exactly what a downstream sees.
         # Template-only scripts (scripts/tests/, check_render_hygiene.py,
-        # check_update_regression.py) are excluded from render and so omitted.
+        # check_update_regression.py, promote_upgrading.py) are excluded from
+        # render and so omitted. `scripts/tests/test_shipped_scripts_gated.py`
+        # asserts every other plain `scripts/*.py` is listed here, and that the
+        # `--per-file-ignores` below restate pyproject.toml.jinja's shipped
+        # `scripts/` entries exactly: migrate_agent_instructions.py was missing
+        # from both, so its S607 shipped green and reddened every adopter's
+        # diff-gate on the first update that touched it (#524).
         #
         # The thresholds are pinned explicitly to the same values
         # pyproject.toml.jinja's `[tool.ruff.lint.mccabe]` / `[...pylint]`
@@ -1923,7 +1929,7 @@ jobs:
         run: |
           uv run --with ruff ruff check \
             --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
-            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310,scripts/report_seeded_changes.py:S603,scripts/report_seeded_changes.py:S606,scripts/report_seeded_changes.py:S607,scripts/package_milestones.py:S603,scripts/package_milestones.py:S607" \
+            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310,scripts/report_seeded_changes.py:S603,scripts/report_seeded_changes.py:S606,scripts/report_seeded_changes.py:S607,scripts/package_milestones.py:S603,scripts/package_milestones.py:S607,scripts/migrate_agent_instructions.py:S603,scripts/migrate_agent_instructions.py:S607" \
             --config "lint.mccabe.max-complexity=10" \
             --config "lint.pylint.max-args=5" \
             --config "lint.pylint.max-branches=12" \
@@ -1931,7 +1937,7 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             --target-version py311 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/package_milestones.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py
 
   pr-title:
     name: PR Title
