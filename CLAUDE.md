@@ -42,6 +42,11 @@ create new projects.
   `researching-references` skill writes. `tests/test_reference_docs.py`
   (copied verbatim) runs it in a downstream's CI;
   `scripts/tests/test_check_references.py` unit-tests it here.
+- `ruff.toml` — lint configuration for this repo's own Python under
+  `scripts/`, read by the pre-commit hooks and `template-ci`'s lint and
+  format steps alike; excluded from renders (a generated project carries
+  its own `[tool.ruff]` block, which this file mirrors and
+  `scripts/tests/test_ruff_config_mirror.py` keeps equal).
 - `scripts/migrate_agent_instructions.py` — the `copier update` migration
   that splices a downstream's `CLAUDE.md` DOMAIN blocks into `AGENTS.md` and
   rewrites `CLAUDE.md` as the stub; it is copier's after-stage `_migrations`

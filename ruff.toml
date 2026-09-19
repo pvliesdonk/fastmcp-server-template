@@ -1,0 +1,18 @@
+# Lint configuration for the template repository's OWN Python (scripts/ and
+# scripts/tests/), read by the pre-commit hooks and by template-ci's lint and
+# format steps alike, so the two cannot disagree (#568).  Without it ruff fell
+# back to its built-in defaults, a moving target: 0.16 promoted BLE001 and
+# blocked every commit touching gen_config_surface.py on two deliberate,
+# documented catches CI never selected.
+#
+# Mirrors the rendered project's [tool.ruff] block in pyproject.toml.jinja
+# (same select, ignore, line length and target); scripts/tests/
+# test_ruff_config_mirror.py asserts the two stay equal.  Listed in
+# copier.yml's `_exclude`: a generated project carries its own block in
+# pyproject.toml, and a stray root ruff.toml would shadow it.
+target-version = "py311"
+line-length = 88
+
+[lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "TC", "PTH", "RUF"]
+ignore = ["E501"]
