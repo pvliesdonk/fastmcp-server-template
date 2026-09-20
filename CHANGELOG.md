@@ -1,5 +1,24 @@
 # Changelog
 
+## v9.0.0 (2026-09-20)
+
+- #642 fix(ci): collect coverage only on required Python 3.14
+- #640 feat(deps)!: adopt fastmcp-pvl-core v9 and drop the MicDrop workaround
+- #638 fix(ci): give the template repo a root ruff.toml so the pre-commit hook and CI enforce one rule set
+- #637 feat(scaffold): bind make_server's resolved config to the server so registrars can read it
+- #636 fix(scaffold): exempt migrate_agent_instructions.py from S603/S607 like its sibling scripts
+- #635 fix(scaffold): server.json seed declares the v8 logging vars and the shutdown grace window
+- #633 fix(references): batch 3 — stale_after as an OKF v0.2 instant, bare verified mapping as one entry
+- #632 fix(scaffold): batch 2 — app-tool hash under fastmcp's public key, __version__ from the installed distribution
+- #631 fix(scaffold): batch 1 — stale pip-audit suppression, auth announcement, one-line config errors, MCP-surface wording
+- #630 feat(logging)!: adopt fastmcp-pvl-core v8 — prefixed logging env, run_http, no template root handler
+- #629 feat(logging): enforce the event_name key=value log grammar with pvl-core 7.2
+- #628 feat(bootstrap): enable private vulnerability reporting and ship a SECURITY.md
+- #626 docs(contributing): require agents to identify themselves on every GitHub post
+- #610 chore(deps): update dependency astral-sh/setup-uv to v10.1.0
+- #602 chore(deps): update dependency renovatebot/github-action to v46.3.1
+
+
 ## v8.2.0 (2026-09-12)
 
 - #613 feat(planning): define story epics and release package milestones
