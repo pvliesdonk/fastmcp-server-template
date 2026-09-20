@@ -199,6 +199,11 @@ uv run mypy src/ tests/                              # type-check
 
 Pre-commit runs a subset of the gate on each commit; see `.pre-commit-config.yaml` for details, or [`AGENTS.md`](AGENTS.md) for the full Hard PR Acceptance Gates.
 
+CI requires tests to pass on Python 3.11 through 3.14. Python 3.14 also collects
+branch coverage and enforces the 80% total and patch coverage thresholds.
+To reproduce that test command, run
+`uv run --python 3.14 pytest --cov --cov-report=xml --durations=20`.
+
 ## Troubleshooting
 
 ### Moving a scaffolded project
