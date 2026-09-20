@@ -67,8 +67,8 @@ jobs:
           # Gate the review on the CI workflow: only review code the gate
           # accepted. Poll the CI run for THIS PR head SHA (not github.sha,
           # which is the merge commit) until it completes; tolerate the
-          # not-yet-created race by looping. Gate on the run *conclusion*
-          # so CI's continue-on-error 3.14 matrix job never blocks.
+          # not-yet-created race by looping. Review only when the completed
+          # CI run's conclusion is success.
           deadline=$(( SECONDS + 25 * 60 ))
           conclusion=""
           while [ "$SECONDS" -lt "$deadline" ]; do
