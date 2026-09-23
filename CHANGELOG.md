@@ -1,5 +1,10 @@
 # Changelog
 
+## v9.0.1 (2026-09-23)
+
+- #648 fix(cli): report event-store configuration errors in one line
+
+
 ## v9.0.0 (2026-09-20)
 
 - #642 fix(ci): collect coverage only on required Python 3.14
