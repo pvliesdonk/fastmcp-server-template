@@ -76,9 +76,18 @@ def _invoke_http_serve(
     fake_server.http_app.return_value = MagicMock()
 
     with (
-        patch("{{ python_module }}.cli.run_http", side_effect=fake_run_http),
-        patch("{{ python_module }}.server.make_server", return_value=fake_server),
-        patch("{{ python_module }}.cli.build_event_store", return_value=MagicMock()),
+        patch(
+            "{{ python_module }}.cli.run_http",
+            side_effect=fake_run_http,
+        ),
+        patch(
+            "{{ python_module }}.server.make_server",
+            return_value=fake_server,
+        ),
+        patch(
+            "{{ python_module }}.cli.build_event_store",
+            return_value=MagicMock(),
+        ),
     ):
         args = ["serve", "--transport", "http"] + (extra_args or [])
         result = CliRunner().invoke(app, args)
@@ -146,7 +155,10 @@ def test_serve_http_reports_an_event_store_configuration_error_in_one_line(
     fake_server = MagicMock()
     with (
         patch("{{ python_module }}.cli.run_http") as fake_run_http,
-        patch("{{ python_module }}.server.make_server", return_value=fake_server),
+        patch(
+            "{{ python_module }}.server.make_server",
+            return_value=fake_server,
+        ),
     ):
         result = CliRunner().invoke(app, ["serve", "--transport", "http"])
 

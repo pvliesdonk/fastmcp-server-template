@@ -278,6 +278,25 @@ Steps: [upgrading/v8.2.md](upgrading/v8.2.md).
 
 Steps: [upgrading/v9.0.md](upgrading/v9.0.md).
 
-## Unreleased
+## Unreleased - Identifier-length-proof test and import layout
 
-_Nothing yet._
+`tests/test_health.py`, `tests/test_compose.py` and `src/<module>/server.py`
+no longer put `project_name`, `python_module` or `env_prefix` inline on a
+line whose length depends on it (#649). A project with a long name used to
+get a render that `ruff format` rewrapped.
+
+- **If you ran `ruff format` over one of these re-rendered files** after an
+  earlier update, `copier update` may report a conflict on the lines ruff
+  rewrapped. The two `/<project_name>/health` asserts in
+  `tests/test_health.py` were rewrapped for any `project_name` of 18
+  characters or more. The `re.findall` call in `tests/test_compose.py` was
+  rewrapped for an `env_prefix` over 23. The `_server_deps` import in
+  `src/<module>/server.py` was rewrapped for a `python_module` over 34. Keep
+  the template side in each case: the hoisted
+  `health = "/<project_name>/health"` variable, or the one-argument-per-line
+  form with a trailing comma. Drop your wrapped form, then check that
+  `uv run ruff format --check .` passes.
+- **Seeded `tests/test_smoke.py` and `tests/test_cli.py`** received the same
+  treatment upstream. `.copier-seeded-changes.md` lists the diff. Applying
+  it is optional: it only matters if your identifiers are long enough that
+  `ruff format` already rewraps those lines.

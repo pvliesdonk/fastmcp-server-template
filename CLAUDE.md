@@ -123,12 +123,24 @@ The classic trap (issue #251) is a Jinja block tag at EOF — Jinja has no
 `trim_blocks` here, so the newline after `{% endif %}` survives and the
 render ends with a blank line.  Use `{%- endif %}` or put real content
 after it.  `scripts/check_render_hygiene.py` is the guard; in
-`render-and-gate` it covers four renders — default, gate-off,
-authorization-off, and the clean-tree opt-out render.  A variant is
+`render-and-gate` it covers six renders — default, gate-off,
+authorization-off, automatic-review-on, the clean-tree opt-out render, and
+the long-identifiers render.  A variant is
 only covered if it is rendered *above* the hygiene step and named in its
 argument list, so a new render step belongs in both places.  The
 idempotence render (`/tmp/smoke2`) is deliberately excluded: it is already
 asserted byte-identical to the default render.
+
+The same latent-conflict mechanism applies to `ruff format`, which is
+also a shipped hook.  A Python line that holds `{{ project_name }}`,
+`{{ python_module }}` or `{{ env_prefix }}` inline gets longer with the
+name.  The smoke answers use 9-character names, so such a line can pass
+every gate here and still be rewrapped downstream (#649).  Write any
+call or import whose length depends on an identifier either with the
+identifier hoisted into a variable, or exploded one argument per line
+with a trailing comma, which ruff keeps as it is at any length.  The
+long-identifiers render (all four names at 32 characters, checked with
+the smoke project's locked ruff) is the guard.
 
 ### Always-loaded budget
 

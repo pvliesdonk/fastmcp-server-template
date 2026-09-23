@@ -168,6 +168,26 @@ jobs:
             --data structural_gate_assert_clean_tree=false \
             . /tmp/smoke-cleantree-off
 
+      - name: long-identifiers render
+        # smoke-answers' identifiers are 9 characters, so a line that holds
+        # {{ project_name }}, {{ python_module }} or {{ env_prefix }} inline can
+        # pass every gate here and still exceed ruff's 88 columns for a real
+        # project. `ruff format` then rewraps it downstream, and each
+        # `copier update` hands back the unwrapped form (#649). This variant
+        # sets all four identifiers to 32 characters; the format check below
+        # runs it through the smoke project's locked ruff. Rendered here, above
+        # the hygiene step, for the same reason as the variants before it.
+        run: |
+          rm -rf /tmp/smoke-long-names
+          uv run --no-project --with copier \
+            copier copy --trust --defaults --vcs-ref=HEAD \
+            --data-file tests/fixtures/smoke-answers.yml \
+            --data project_name=a-deliberately-long-name-for-mcp \
+            --data pypi_name=a-deliberately-long-name-for-mcp \
+            --data python_module=a_deliberately_long_name_for_mcp \
+            --data env_prefix=A_DELIBERATELY_LONG_NAME_FOR_MCP \
+            . /tmp/smoke-long-names
+
       - name: render hygiene (pristine render already satisfies the shipped hooks)
         # The template ships `trailing-whitespace` and `end-of-file-fixer`
         # (.pre-commit-config.yaml.jinja). Both REWRITE files, so anything they
@@ -195,7 +215,8 @@ jobs:
         run: |
           python3 scripts/check_render_hygiene.py \
             /tmp/smoke /tmp/smoke-gate-off /tmp/smoke-authz-off \
-            /tmp/smoke-claude-review-on /tmp/smoke-cleantree-off
+            /tmp/smoke-claude-review-on /tmp/smoke-cleantree-off \
+            /tmp/smoke-long-names
 
       - name: Claude workflow presence matrix
         run: |
@@ -267,6 +288,15 @@ jobs:
       - name: ruff format --check
         working-directory: /tmp/smoke
         run: uv run ruff format --check .
+
+      - name: ruff over the long-identifiers render
+        # The smoke project's own locked ruff, so this cannot drift from the
+        # version the gate above uses; ruff reads the long render's own
+        # pyproject.toml for its configuration.
+        working-directory: /tmp/smoke-long-names
+        run: |
+          /tmp/smoke/.venv/bin/ruff format --check .
+          /tmp/smoke/.venv/bin/ruff check .
 
       - name: mypy
         working-directory: /tmp/smoke
