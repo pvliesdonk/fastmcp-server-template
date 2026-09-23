@@ -33,7 +33,10 @@ from fastmcp_pvl_core import (
 )
 
 from {{ python_module }}._server_apps import register_apps
-from {{ python_module }}._server_deps import bind_config, server_lifespan
+from {{ python_module }}._server_deps import (
+    bind_config,
+    server_lifespan,
+)
 from {{ python_module }}.config import ProjectConfig
 from {{ python_module }}.prompts import register_prompts
 from {{ python_module }}.resources import register_resources
