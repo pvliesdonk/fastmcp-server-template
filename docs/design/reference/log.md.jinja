@@ -1,13 +1,20 @@
 # Reference research log
 
-## 2026-09-12
+## 2026-09-23
 
-- Added [GitHub planning objects](github-planning-objects.md), checked
-  against GitHub.com documentation and GitHub CLI 2.97.0. Covered milestone
-  identity, pagination, PR membership, nullable updates, issue hierarchy and
-  dependencies, and documented attachment support. Refute pass retained the
-  cross-owner REST documentation conflict and marked unreproduced UI/search
-  observations explicitly. Next review: 2027-03-12.
+- Added [MCP model-facing text](mcp-model-facing-text.md), checked against
+  the MCP 2026-07-28 and 2025-11-25 schemas, the Claude, OpenAI, Gemini,
+  VS Code and Cursor documentation, and FastMCP 4.0.5 by probe. Covered
+  who reads each description field, Claude Code's 2,048-unit cut and
+  tool-search deferral, FastMCP's docstring parsing (the issue 4952 leak
+  and the unparsed resource docstring), pvl-core's instruction roles,
+  the markdown-vault-mcp surface baseline, and SEP-2640 skills over MCP
+  with FastMCP's skills provider probed on the wire. Refute pass re-fetched the
+  claims the skill depends on; the Cursor tool cap and the Claude Desktop
+  resource UI stay unverified. The same pass found the scaffold's own
+  `ping`, `status` and `summarize` docstrings shipping developer
+  commentary and a framework link as their wire descriptions, and fixed
+  them. Next review: 2027-03-23.
 
 ## 2026-09-18
 
@@ -18,3 +25,12 @@
   the security policy file's locations. Single pass, no refute pass and no
   writes: the page is `draft` until a generated project's bootstrap run
   confirms the calls. Next review: 2027-03-18.
+
+## 2026-09-12
+
+- Added [GitHub planning objects](github-planning-objects.md), checked
+  against GitHub.com documentation and GitHub CLI 2.97.0. Covered milestone
+  identity, pagination, PR membership, nullable updates, issue hierarchy and
+  dependencies, and documented attachment support. Refute pass retained the
+  cross-owner REST documentation conflict and marked unreproduced UI/search
+  observations explicitly. Next review: 2027-03-12.
