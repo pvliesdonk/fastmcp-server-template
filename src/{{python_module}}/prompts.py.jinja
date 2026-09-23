@@ -1,21 +1,32 @@
 """Prompt registrations for {{ human_name }}.
 
+Docstrings here are model-facing wire text; what belongs in one is
+decided by the ``writing-model-facing-text`` skill on the evidence in
+``docs/design/reference/mcp-model-facing-text.md``.
+
 See FastMCP prompt docs: https://gofastmcp.com/servers/prompts
 """
 
-from __future__ import annotations
-
+# No ``from __future__ import annotations`` here: with postponed annotations
+# FastMCP 4.0.5 cannot tell a ``str`` argument apart from a JSON one and
+# appends "Provide a value matching the following JSON schema ..." to every
+# prompt argument's description.
 from fastmcp import FastMCP
 
 
 def register_prompts(mcp: FastMCP) -> None:
     """Register all domain prompts on *mcp*."""
 
+    # The docstring summary is the prompt description a client shows in its
+    # prompt picker; each ``Args:`` entry becomes that argument's
+    # description (without one FastMCP emits a generic JSON-schema
+    # sentence).  See https://gofastmcp.com/servers/prompts#prompt-arguments
+    # for the full signature surface.
     @mcp.prompt()
     async def summarize(context: str) -> str:
-        """Summarize ``context`` in one paragraph.
+        """Summarize a passage in one paragraph.
 
-        See https://gofastmcp.com/servers/prompts#prompt-arguments for
-        the full signature surface.
+        Args:
+            context: The text to summarize.
         """
         return f"Summarize the following in one paragraph:\n\n{context}"

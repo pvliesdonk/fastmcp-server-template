@@ -27,6 +27,7 @@ TEMPLATE_SKILLS = (
     "researching-references",
     "roadmapping",
     "tool-registration",
+    "writing-model-facing-text",
     "writing-release-notes",
 )
 _FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)

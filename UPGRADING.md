@@ -278,7 +278,7 @@ Steps: [upgrading/v8.2.md](upgrading/v8.2.md).
 
 Steps: [upgrading/v9.0.md](upgrading/v9.0.md).
 
-## Unreleased - Identifier-length-proof test and import layout
+## Unreleased - Identifier-length-proof test and import layout; model-facing text skill and hygiene test
 
 `tests/test_health.py`, `tests/test_compose.py` and `src/<module>/server.py`
 no longer put `project_name`, `python_module` or `env_prefix` inline on a
@@ -300,3 +300,38 @@ get a render that `ruff format` rewrapped.
   treatment upstream. `.copier-seeded-changes.md` lists the diff. Applying
   it is optional: it only matters if your identifiers are long enough that
   `ruff format` already rewraps those lines.
+
+### Model-facing text skill and hygiene test
+
+A new template-owned test, `tests/test_model_facing_text.py`, lists your
+server through a FastMCP client and fails when a description reaches the
+wire with a docstring section heading in it (`Args:`, `Arguments:`,
+`Parameters:`, `Returns:`, `Yields:` or `Raises:` on a line of its own;
+FastMCP ships a tool or prompt docstring whole whenever it finds no
+`Args:` entry and never parses a resource docstring, so parameterless
+tools, argumentless prompts and every resource are the usual cases), when
+a tool has no description, when a `str` prompt argument carries FastMCP's
+"Provide a value matching the following JSON schema" sentence (it does
+whenever `prompts.py` has `from __future__ import annotations`), or when a
+tool description or the server instructions exceed 2,048 UTF-16 units
+(Claude Code's cut). If it fails after this update:
+
+1. Run `uv run pytest tests/test_model_facing_text.py -q` and read the
+   named components.
+2. For a parameterless tool or an argumentless prompt, pass `description=`
+   on the decorator or keep a one-line docstring; for a resource, keep the
+   docstring to one line; for a prompt with arguments, add an `Args:`
+   entry per argument and drop `from __future__ import annotations` from
+   `prompts.py`.
+3. For a description over the cut, apply the `writing-model-facing-text`
+   skill (`.agents/skills/writing-model-facing-text/SKILL.md`): keep what
+   the model needs when it chooses the call, move operator and developer
+   facts to the docs or to comments.
+
+The new skill and the reference page
+`docs/design/reference/mcp-model-facing-text.md` arrive with `copier
+update` on their own. The bundle's `index.md` and `log.md` are yours
+(seeded once), so add the page's row to `index.md` and the 2026-09-23
+entry to `log.md` by hand; the template's `docs/design/reference/index.md.jinja`
+and `log.md.jinja` carry the text to copy. The `tool-registration` skill's
+docstring bullet now points at the new skill.

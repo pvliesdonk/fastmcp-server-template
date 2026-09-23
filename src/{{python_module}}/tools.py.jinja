@@ -1,5 +1,9 @@
 """Tool registrations for {{ human_name }}.
 
+Docstrings here are model-facing wire text; what belongs in one is
+decided by the ``writing-model-facing-text`` skill on the evidence in
+``docs/design/reference/mcp-model-facing-text.md``.
+
 See FastMCP tool docs: https://gofastmcp.com/servers/tools
 """
 
@@ -30,14 +34,15 @@ def register_tools(mcp: FastMCP) -> None:
     # Reading environment variables here instead silently disagrees with a
     # config passed to ``make_server``.
 
-    @mcp.tool(annotations={"read_only_hint": True})
+    # Pattern: declare domain args, take the shared service via ``Depends``,
+    # return a JSON-serialisable value; see
+    # https://gofastmcp.com/servers/tools#async-tools for async + DI.  The
+    # docstring is the description the model reads when it chooses a tool
+    # (the ``writing-model-facing-text`` skill says what belongs there);
+    # notes for developers go in comments like this one.
+    @mcp.tool(annotations={"title": "Ping", "read_only_hint": True})
     async def ping(service: Service = Depends(get_service)) -> str:
-        """Health-check tool — returns ``"pong"`` if the service is alive.
-
-        Pattern: declare domain args, take the shared service via
-        ``Depends``, return a JSON-serialisable value. See
-        https://gofastmcp.com/servers/tools#async-tools for async + DI.
-        """
+        """Check that the service is alive; returns "pong"."""
         return await service.ping()
 
     # Optional: attach Lucide-compatible SVG/PNG/ICO/JPEG icons to tools.
@@ -56,4 +61,4 @@ def register_tools(mcp: FastMCP) -> None:
     #
     # Per-tool decoration (replace the @mcp.tool line above; preserve the
     # existing annotations to avoid losing read_only_hint / etc.):
-    # @mcp.tool(icons=[make_icon(STATIC / "ping.svg")], annotations={"read_only_hint": True})
+    # @mcp.tool(icons=[make_icon(STATIC / "ping.svg")], annotations={"title": "Ping", "read_only_hint": True})
