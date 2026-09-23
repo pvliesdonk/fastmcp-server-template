@@ -1,5 +1,11 @@
 # Changelog
 
+## v9.0.2 (2026-09-23)
+
+- #651 feat(skills): writing-model-facing-text skill, reference and wire-text test
+- #650 fix: keep renders ruff-format-clean for long project identifiers
+
+
 ## v9.0.1 (2026-09-23)
 
 - #648 fix(cli): report event-store configuration errors in one line
