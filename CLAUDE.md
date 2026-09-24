@@ -49,7 +49,11 @@ create new projects.
   it against `HEAD` and the previous ref to write
   `.copier-template-drift.md`, the drift an update carries forward without
   a conflict marker; the `applying-template-updates` skill works from that
-  report. `scripts/tests/test_check_template_conformance.py` unit-tests it
+  report. Its `--since BASE` mode reports only the drift a range adds,
+  each commit judged against the template version it pinned; the
+  `code-review` skill runs it, and `REVIEW.md` asks hosted reviewers to
+  report the same drift by reading.
+  `scripts/tests/test_check_template_conformance.py` unit-tests it
   and `check_update_regression.py` asserts it end to end.
 - `ruff.toml` — lint configuration for this repo's own Python under
   `scripts/`, read by the pre-commit hooks and `template-ci`'s lint and
