@@ -99,7 +99,11 @@ _migrations:
   - "python scripts/migrate_agent_instructions.py"
   # Seeded-file change report (#519): renders the previous and target refs
   # and diffs every `_skip_if_exists` path into .copier-seeded-changes.md,
-  # so an update is never applied blind to what it cannot re-render.
+  # so an update is never applied blind to what it cannot re-render.  From
+  # the previous ref's render it also writes .copier-template-drift.md: the
+  # template-owned files HEAD had forked outside their sentinels, which the
+  # update carries forward without a marker wherever the template did not
+  # touch the same lines (#653; scripts/check_template_conformance.py).
   - "python scripts/report_seeded_changes.py"
 
 # Starter files: written once on first `copier copy`, protected from

@@ -19,6 +19,9 @@ end-to-end with a real ``copier update``:
 4. Assert both Claude workflow variants and the var survived, and that
    ``gen_config_surface.py --check`` exits clean — the exact state the
    pre-fix ordering could not produce without a manual re-run.
+5. Assert the drift report (#653) names the line planted outside every
+   sentinel in ``docs/index.md`` and does not name ``config.py``, whose
+   only edits sit inside its ``CONFIG-*`` blocks.
 
 Runs copier via ``uv run --no-project --with copier`` (matching how
 template-ci and the local workflow invoke it), so ``uv`` must be on PATH.
@@ -48,6 +51,7 @@ _FIELD = (
 )
 _READ = '            vault_path=env(_ENV_PREFIX, "VAULT_PATH", "/data/vault"),\n'
 _VAR = "SMOKE_MCP_VAULT_PATH"
+_DRIFT = "Project prose written outside every sentinel block."
 
 
 def _run(args: list[str], cwd: Path) -> None:
@@ -85,6 +89,32 @@ def _inject_domain_var(project: Path) -> None:
             raise SystemExit(f"ERROR: {config} is missing sentinel {marker!r}")
         text = text.replace(marker, insert + marker)
     config.write_text(text, encoding="utf-8")
+
+
+def _plant_drift(project: Path) -> None:
+    index = project / "docs" / "index.md"
+    index.write_text(
+        index.read_text(encoding="utf-8") + f"\n{_DRIFT}\n", encoding="utf-8"
+    )
+
+
+def _assert_drift_report(project: Path) -> None:
+    report = project / ".copier-template-drift.md"
+    if not report.is_file():
+        raise SystemExit("ERROR: copier update did not write .copier-template-drift.md")
+    text = report.read_text(encoding="utf-8")
+    problems = [
+        message
+        for message, bad in (
+            ("was not computed", "could not be made" in text),
+            ("does not list docs/index.md", "## `docs/index.md`" not in text),
+            ("does not show the planted line", f"+{_DRIFT}" not in text),
+            ("lists config.py (sentinel-only edits)", "config.py`" in text),
+        )
+        if bad
+    ]
+    if problems:
+        raise SystemExit(f"ERROR: drift report {'; '.join(problems)}:\n{text[:4000]}")
 
 
 def _assert_var(project: Path, rel_path: str, *, expected: bool) -> None:
@@ -175,6 +205,7 @@ def main() -> int:
             answers.write_text(answer_text, encoding="utf-8")
 
             _inject_domain_var(project)
+            _plant_drift(project)
             _run([sys.executable, "scripts/gen_config_surface.py"], project)
             _assert_var(project, ".env.example", expected=True)
 
@@ -188,6 +219,7 @@ def main() -> int:
             _copier(["update", "--trust", "--defaults", "--vcs-ref=HEAD"], project)
             _assert_review_workflows(project, enabled=enabled)
             _assert_seeded_report(project)
+            _assert_drift_report(project)
 
             _assert_var(project, ".env.example", expected=True)
             _assert_var(
