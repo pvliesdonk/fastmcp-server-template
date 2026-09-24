@@ -1,5 +1,12 @@
 # Changelog
 
+## v9.1.0 (2026-09-24)
+
+- #661 fix(skills): rename the code-review skill to self-reviewing
+- #659 feat(review): flag template-owned drift a change adds, in self-review and hosted review
+- #657 feat(updates): report template-owned drift and treat it as the project's debt
+
+
 ## v9.0.2 (2026-09-23)
 
 - #651 feat(skills): writing-model-facing-text skill, reference and wire-text test
