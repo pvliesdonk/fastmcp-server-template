@@ -400,3 +400,90 @@ def test_update_drift_report_survives_a_missing_checker(
     monkeypatch.setitem(sys.modules, "check_template_conformance", None)
     text = r._drift_report("gh:x/t", "v1", {}, tmp_path)
     assert "could not be made" in text
+
+
+def _drift_of(project: str, path: str = "docs/index.md") -> c.Drift:
+    drift = c.compare_text(project, PRISTINE_MD, python=False)
+    drift.path = path
+    return drift
+
+
+def test_new_since_keeps_only_hunks_the_base_lacks() -> None:
+    old = PRISTINE_MD.replace("Template prose.", "Old drift.")
+    new = old + "\nNew drift.\n"
+    (kept,) = c.new_since([_drift_of(new)], [_drift_of(old)])
+    assert len(kept.hunks) == 1
+    assert "+New drift." in kept.hunks[0]
+    assert "Old drift." not in kept.hunks[0]
+
+
+def test_new_since_ignores_drift_that_only_moved() -> None:
+    old = PRISTINE_MD + "\nMoved drift.\n"
+    moved = PRISTINE_MD.replace("# Title", "# Title\n\nMoved drift.")
+    assert c.new_since([_drift_of(moved)], [_drift_of(old)]) == []
+
+
+def test_new_since_counts_repeated_hunks() -> None:
+    old = PRISTINE_MD + "\nSame.\n"
+    twice = PRISTINE_MD.replace("# Title", "# Title\n\nSame.") + "\nSame.\n"
+    (kept,) = c.new_since([_drift_of(twice)], [_drift_of(old)])
+    assert len(kept.hunks) == 1
+
+
+def test_new_since_reports_a_new_note_and_drops_an_old_one() -> None:
+    gone = c.Drift("gone.md", note="deleted in the project")
+    assert c.new_since([gone], [gone]) == []
+    assert c.new_since([gone], []) == [gone]
+
+
+def test_since_against_a_branch_reports_only_the_branch_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    render = _render(tmp_path)
+    repo = _tree(
+        tmp_path / "repo",
+        {
+            "docs/index.md": PRISTINE_MD + "\nOld drift on main.\n",
+            "src/pkg/config.py": PRISTINE_PY,
+        },
+    )
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "main")
+    (repo / "src/pkg/config.py").write_text(
+        PRISTINE_PY.replace('name: str = "x"', 'name: str = "x"\n    extra: int = 1')
+    )
+    _git(repo, "commit", "-qam", "feat: field outside the sentinel")
+    monkeypatch.chdir(repo)
+    head = c.check(render, c.read_revision("HEAD"), [])
+    base = c.check(render, c.read_revision("main~1"), [])
+    new = c.new_since(head, base)
+    assert [d.path for d in new] == ["src/pkg/config.py"]
+    assert "+    extra: int = 1" in new[0].hunks[0]
+
+
+def test_base_drift_renders_the_version_the_base_pinned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _tree(tmp_path / "repo", {".copier-answers.yml": "_commit: v8.0.0\n"})
+    _git(repo, "init", "-q")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "pinned at v8")
+    monkeypatch.chdir(repo)
+    seen: list[str] = []
+
+    def fake_drift_at(
+        _src: str, ref: str, _answers: object, _read: object, _root: Path
+    ) -> list[c.Drift]:
+        seen.append(ref)
+        return []
+
+    monkeypatch.setattr(c, "drift_at", fake_drift_at)
+    assert c._base_drift("gh:x/t", "HEAD", tmp_path) == []
+    assert seen == ["v8.0.0"]
+
+
+def test_since_report_does_not_claim_the_tree_conforms() -> None:
+    text = c.render_report([], "# h\n", clean="Nothing new.")
+    assert "Nothing new." in text
+    assert "Every template-owned file" not in text

@@ -16,9 +16,17 @@ Usage::
     python scripts/check_template_conformance.py            # working tree vs _commit
     python scripts/check_template_conformance.py --ref v9.1.0
     python scripts/check_template_conformance.py --rev HEAD --output drift.md
+    python scripts/check_template_conformance.py --rev HEAD --since origin/main
 
-Exit status: 0 when every template-owned file conforms, 1 when at least one
-differs, 2 when the comparison could not be made (no answers file, the
+``--since BASE`` reports only the drift the compared tree adds over
+``BASE`` — what a branch introduced — both judged against the same render.
+A hunk counts as already present when ``BASE`` has a hunk with the same
+lines, wherever it sits, so moved drift is not new; a new change that
+touches existing drift can merge with it into one larger hunk, which is
+then reported whole.
+
+Exit status: 0 when every template-owned file conforms (with ``--since``:
+when nothing new differs), 1 when at least one differs, 2 when the comparison could not be made (no answers file, the
 render failed, copier unavailable).
 
 The comparison ignores trailing whitespace and blank lines, compares a
@@ -312,6 +320,35 @@ def check(
     return [d for d in found if d is not None]
 
 
+def _body(hunk: str) -> str:
+    return hunk.split("\n", 1)[1] if "\n" in hunk else ""
+
+
+def new_since(drifts: list[Drift], base: list[Drift]) -> list[Drift]:
+    """The part of *drifts* that *base* does not already have.
+
+    A hunk is old when *base* holds a hunk with the same body for the same
+    file (as many times as *base* holds it); a note is old when *base*
+    carries the same note."""
+    before = {d.path: d for d in base}
+    out: list[Drift] = []
+    for drift in drifts:
+        old = before.get(drift.path)
+        bodies = [_body(h) for h in old.hunks] if old else []
+        kept = Drift(
+            drift.path, note="" if old and old.note == drift.note else drift.note
+        )
+        for hunk, span in zip(drift.hunks, drift.ranges, strict=False):
+            if _body(hunk) in bodies:
+                bodies.remove(_body(hunk))
+            else:
+                kept.hunks.append(hunk)
+                kept.ranges.append(span)
+        if kept.hunks or kept.note:
+            out.append(kept)
+    return out
+
+
 def read_worktree(root: Path) -> ReadProject:
     """File bytes, symlink target (str), or None, from the working tree."""
 
@@ -423,11 +460,12 @@ def render_report(
     drifts: list[Drift],
     header: str,
     describe: Callable[[Drift], str] | None = None,
+    clean: str = "Every template-owned file matches the render outside its sentinel blocks.",
 ) -> str:
     """The markdown report; *describe* adds a paragraph per drifted file."""
     text = header
     if not drifts:
-        text += "\nEvery template-owned file matches the render outside its sentinel blocks.\n"
+        text += f"\n{clean}\n"
         return text
     text += _EXPLAIN.format(count=len(drifts))
     for d in drifts:
@@ -454,6 +492,31 @@ def render_report(
 # --------------------------------------------------------------------------- #
 # Command line
 # --------------------------------------------------------------------------- #
+def drift_at(
+    src: str, ref: str, answers: dict[str, object], read: ReadProject, root: Path
+) -> list[Drift]:
+    """Render *src* at *ref* with *answers* into *root* and check *read* against it."""
+    from report_seeded_changes import _render, _render_pattern, _skip_patterns
+
+    _render(src, ref, answers, root)
+    patterns = [_render_pattern(p, answers) for p in _skip_patterns(src, ref)]
+    return check(root, read, patterns)
+
+
+def _base_drift(src: str, rev: str, tmp: Path) -> list[Drift]:
+    """The drift at *rev*, judged against the template version *rev* itself
+    pinned: a range that crosses a template update must not count the
+    update's own changes as drift the branch added."""
+    from report_seeded_changes import _read_simple_answers
+
+    read = read_revision(rev)
+    pinned = read(ANSWERS.as_posix())
+    if not isinstance(pinned, bytes):
+        raise ValueError(f"{rev} has no {ANSWERS}")
+    answers = _read_simple_answers(pinned.decode("utf-8"))
+    return drift_at(src, str(answers.get("_commit", "")), answers, read, tmp / "base")
+
+
 def _reexec_with_deps() -> bool:
     """Re-exec under `uv run --no-project` when copier is missing; True when
     the caller should give up instead."""
@@ -492,6 +555,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--rev", help="compare this git revision instead of the working tree"
     )
     parser.add_argument(
+        "--since",
+        help="report only drift not already present at this git revision",
+    )
+    parser.add_argument(
         "--output", type=Path, help="write the markdown report here instead of stdout"
     )
     return parser.parse_args(argv)
@@ -500,12 +567,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from report_seeded_changes import (
-        _read_simple_answers,
-        _render,
-        _render_pattern,
-        _skip_patterns,
-    )
+    from report_seeded_changes import _read_simple_answers
 
     if not ANSWERS.is_file():
         print(
@@ -532,10 +594,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         read = read_revision(args.rev) if args.rev else read_worktree(Path.cwd())
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "render"
-            _render(src, ref, answers, root)
-            patterns = [_render_pattern(p, answers) for p in _skip_patterns(src, ref)]
-            drifts = check(root, read, patterns)
+            drifts = drift_at(src, ref, answers, read, Path(tmp) / "render")
+            if args.since:
+                drifts = new_since(drifts, _base_drift(src, args.since, Path(tmp)))
     except Exception as exc:  # report, never a traceback
         print(
             f"check_template_conformance: could not render {src}@{ref}: {type(exc).__name__}: {exc}",
@@ -543,8 +604,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     what = f"commit `{args.rev}`" if args.rev else "the working tree"
+    if args.since:
+        what += f", counting only what is not already at `{args.since}`"
     header = report_header(src=src, ref=ref, what=what)
-    report = render_report(drifts, header, lambda d: blame_note(d, args.rev))
+    clean = (
+        f"Nothing differs from the template here that did not already at `{args.since}`."
+        if args.since
+        else "Every template-owned file matches the render outside its sentinel blocks."
+    )
+    report = render_report(
+        drifts, header, lambda d: blame_note(d, args.rev), clean=clean
+    )
     if args.output:
         args.output.write_text(report, encoding="utf-8")
     else:
