@@ -282,7 +282,9 @@ Steps: [upgrading/v9.0.md](upgrading/v9.0.md).
 
 Steps: [upgrading/v9.1.md](upgrading/v9.1.md).
 
-## Unreleased - Project classifiers get a seam; Python 3.14 classifier
+## Unreleased - Project classifiers seam, Python 3.14 classifier, pre-push conformance hook
+
+### Project classifiers
 
 `pyproject.toml`'s classifiers gain a `PROJECT-CLASSIFIERS` block, holding
 `Development Status :: 3 - Alpha` as its starting value, and the template
@@ -295,3 +297,24 @@ conflict or as drift in `.copier-template-drift.md`. Put the project's
 classifiers inside `PROJECT-CLASSIFIERS` and take the template's lines
 everywhere else. A `3.14` line added by hand needs nothing: the template now
 renders the same line.
+
+### Pre-push template-conformance hook
+
+`.pre-commit-config.yaml` gains a `template-conformance` hook at the
+pre-push stage: it fails a push that adds content outside a sentinel block
+in a file `copier update` re-renders, compared with the branch's base, and
+passes with a warning when it cannot render the template (offline). Deliberate
+drift that a Decay issue tracks is pushed with
+`SKIP=template-conformance git push`.
+
+`default_install_hook_types: [pre-commit, pre-push]` is now rendered for
+every project, not only those with the structural gate enabled. In a project
+with the gate **disabled**, every existing clone has only the commit-time
+hook installed, so the new hook never runs until each clone re-installs:
+
+```bash
+uv run pre-commit install
+```
+
+A project with the structural gate enabled already installed the pre-push
+stage and needs nothing.

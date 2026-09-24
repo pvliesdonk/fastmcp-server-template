@@ -78,8 +78,12 @@ jobs:
             || { echo "::error::conditional filename left a stray tests/.jinja"; exit 1; }
           ! grep -q 'structural-diff-gate' .pre-commit-config.yaml \
             || { echo "::error::pre-push hook rendered with gate off"; exit 1; }
-          ! grep -q 'default_install_hook_types' .pre-commit-config.yaml \
-            || { echo "::error::default_install_hook_types rendered with gate off"; exit 1; }
+          # Gate off still installs the pre-push stage: the template-conformance
+          # hook runs there for every project (#259).
+          grep -q 'default_install_hook_types: \[pre-commit, pre-push\]' .pre-commit-config.yaml \
+            || { echo "::error::gate-off render does not install the pre-push stage the conformance hook needs"; exit 1; }
+          grep -q 'id: template-conformance' .pre-commit-config.yaml \
+            || { echo "::error::template-conformance hook missing with gate off"; exit 1; }
           ! grep -qE '^  structure:' .github/workflows/ci.yml \
             || { echo "::error::structure CI job rendered with gate off"; exit 1; }
           ! grep -q 'tool.ruff.lint.mccabe' pyproject.toml \
@@ -1396,6 +1400,9 @@ jobs:
           rm -f scripts/migrate_agent_instructions.py
           rm -f scripts/report_seeded_changes.py .copier-seeded-changes.md
           rm -f scripts/check_template_conformance.py .copier-template-drift.md
+          sed -i.bak '/# >>> template-tracking: conformance hook/,/# <<< template-tracking: conformance hook/d' .pre-commit-config.yaml && rm -f .pre-commit-config.yaml.bak
+          ! grep -q 'check_template_conformance' .pre-commit-config.yaml \
+            || { echo "::error::detach left the template-conformance hook in .pre-commit-config.yaml"; exit 1; }
           rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
           rm -f docs/deployment/template-updates.md
           sed -i.bak '/Template Updates: deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
@@ -1470,6 +1477,9 @@ jobs:
           # at the backtick: count_occurrences passes it to `grep -F` bare,
           # and a leading `- ` would be read as an option.
           check_anchor 1 '`applying-template-updates` — when working through'
+          # The AGENTS.md bullet for the template-conformance pre-push hook,
+          # which Step 2 removes (#259).
+          check_anchor 1 '**Template conformance runs at push time:**'
           check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS BELOW'
           check_anchor 1 '<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->'
           check_anchor 3 ' Kept across copier update.'
@@ -1495,6 +1505,7 @@ jobs:
               -e '/<!-- ===== TEMPLATE-OWNED SECTIONS BELOW/d' \
               -e '/<!-- ===== TEMPLATE-OWNED SECTIONS END ===== -->/d' \
               -e '/^- `applying-template-updates` — /d' \
+              -e '/^- \*\*Template conformance runs at push time:\*\*/d' \
               -e 's/ Kept across copier update\.//' \
               -e 's/ on top of the shipped defaults survive `copier update`\./ on top of the shipped defaults are yours to maintain./' \
               -e 's/ are preserved across `copier update`\./ are domain-owned./' \

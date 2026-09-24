@@ -8,10 +8,8 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    import pytest
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -493,3 +491,75 @@ def test_since_report_does_not_claim_the_tree_conforms() -> None:
     assert message in text
     assert "Every template-owned file" not in text
     assert c.clean_message(None).startswith("Every template-owned file matches")
+
+
+def _clone_with_origin(tmp_path: Path) -> Path:
+    """A clone whose origin/main is one commit behind a local feature branch."""
+    origin = _tree(tmp_path / "origin", {"a.txt": "a\n"})
+    _git(origin, "init", "-q", "-b", "main")
+    _git(origin, "add", "-A")
+    _git(origin, "commit", "-qm", "base")
+    subprocess.run(
+        ["git", "clone", "-q", str(origin), str(tmp_path / "clone")], check=True
+    )
+    clone = tmp_path / "clone"
+    _git(clone, "checkout", "-qb", "feature")
+    (clone / "b.txt").write_text("b\n")
+    _git(clone, "add", "-A")
+    _git(clone, "commit", "-qm", "feature")
+    return clone
+
+
+def test_derive_base_is_the_merge_base_with_origin_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clone = _clone_with_origin(tmp_path)
+    monkeypatch.chdir(clone)
+    monkeypatch.delenv("TEMPLATE_CONFORMANCE_BASE", raising=False)
+    assert c.derive_base() == _git(clone, "rev-parse", "HEAD~1").strip()
+    monkeypatch.setenv("TEMPLATE_CONFORMANCE_BASE", "some-ref")
+    assert c.derive_base() == "some-ref"
+
+
+def test_derive_base_without_a_remote_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _tree(tmp_path, {"a.txt": "a\n"})
+    _git(repo, "init", "-q")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "c")
+    monkeypatch.chdir(repo)
+    monkeypatch.delenv("TEMPLATE_CONFORMANCE_BASE", raising=False)
+    with pytest.raises(ValueError, match="origin/main"):
+        c.derive_base()
+
+
+def test_hook_mode_passes_when_it_cannot_compare(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)  # no answers file: the comparison cannot run
+    assert c.main([]) == 2
+    assert c.main(["--hook"]) == 0
+
+
+def test_hook_mode_fails_on_added_drift_and_says_how_to_skip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    clone = _clone_with_origin(tmp_path)
+    (clone / ".copier-answers.yml").write_text("_commit: v1\n_src_path: gh:x/t\n")
+    _git(clone, "add", "-A")
+    _git(clone, "commit", "-qm", "answers")
+    monkeypatch.chdir(clone)
+    monkeypatch.delenv("TEMPLATE_CONFORMANCE_BASE", raising=False)
+    monkeypatch.setattr(c, "_reexec_with_deps", lambda: False)
+    added = c.Drift(
+        "docs/index.md", hunks=["@@ project line 3 @@\n+new"], ranges=[(3, 3)]
+    )
+    monkeypatch.setattr(c, "drift_at", lambda *_a: [added])
+    monkeypatch.setattr(c, "_base_drift", lambda *_a: [])
+    assert c.main(["--rev", "HEAD", "--since", "auto", "--hook"]) == 1
+    out = capsys.readouterr().out
+    assert "## `docs/index.md`" in out
+    assert "SKIP=template-conformance git push" in out

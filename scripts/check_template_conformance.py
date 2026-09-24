@@ -17,6 +17,7 @@ Usage::
     python scripts/check_template_conformance.py --ref v9.1.0
     python scripts/check_template_conformance.py --rev HEAD --output drift.md
     python scripts/check_template_conformance.py --rev HEAD --since origin/main
+    python scripts/check_template_conformance.py --rev HEAD --since auto --hook
 
 ``--since BASE`` reports only the drift the compared tree adds over
 ``BASE`` — what a branch introduced — both judged against the same render.
@@ -24,6 +25,12 @@ A hunk counts as already present when ``BASE`` has a hunk with the same
 lines, wherever it sits, so moved drift is not new; a new change that
 touches existing drift can merge with it into one larger hunk, which is
 then reported whole.
+
+``--since auto`` compares against the branch's base: ``$TEMPLATE_CONFORMANCE_BASE``
+when set, else the merge-base with the nearest of ``origin/main`` and
+``origin/release/*`` (the structural gate's rule).  ``--hook`` is the
+pre-push hook's mode: a comparison that cannot be made (offline, no ``uv``)
+warns and passes, and a failure says how to push deliberate drift.
 
 Exit status: 0 when every template-owned file conforms (with ``--since``:
 when nothing new differs), 1 when at least one differs, 2 when the comparison could not be made (no answers file, the
@@ -570,13 +577,77 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="report only drift not already present at this git revision",
     )
     parser.add_argument(
+        "--hook",
+        action="store_true",
+        help="pre-push mode: pass with a warning when the comparison cannot be made",
+    )
+    parser.add_argument(
         "--output", type=Path, help="write the markdown report here instead of stdout"
     )
     return parser.parse_args(argv)
 
 
+_HOOK_FOOTER = """
+This push adds content outside the template's sentinel blocks. Move it into
+the block the file declares, or into a file the template does not render.
+If the drift is deliberate and a Decay issue in this project tracks it, push
+with `SKIP=template-conformance git push`.
+"""
+
+
+def derive_base() -> str:
+    """The commit a branch started from: ``$TEMPLATE_CONFORMANCE_BASE``, else
+    the most recent merge-base with ``origin/main`` or ``origin/release/*``."""
+    if override := os.environ.get("TEMPLATE_CONFORMANCE_BASE"):
+        return override
+    refs = subprocess.run(
+        [
+            "git",
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/remotes/origin/main",
+            "refs/remotes/origin/release/*",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    best, best_time = "", -1
+    for ref in refs:
+        mb = subprocess.run(
+            ["git", "merge-base", "HEAD", ref], capture_output=True, text=True
+        ).stdout.strip()
+        if not mb:
+            continue
+        when = int(
+            subprocess.run(
+                ["git", "show", "-s", "--format=%ct", mb],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+        )
+        if when > best_time:  # strict: origin/main wins a tie, as in the gate
+            best, best_time = mb, when
+    if not best:
+        raise ValueError("no origin/main or origin/release/* to compare against")
+    return best
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    code = _run(args)
+    if code == 2 and args.hook:
+        print(
+            "check_template_conformance: WARNING could not compare with the "
+            "template; the push goes ahead unchecked",
+            file=sys.stderr,
+        )
+        return 0
+    return code
+
+
+def _run(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from report_seeded_changes import _read_simple_answers
 
@@ -603,6 +674,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     try:
+        if args.since == "auto":
+            args.since = derive_base()
         read = read_revision(args.rev) if args.rev else read_worktree(Path.cwd())
         with tempfile.TemporaryDirectory() as tmp:
             drifts = drift_at(src, ref, answers, read, Path(tmp) / "render")
@@ -622,6 +695,8 @@ def main(argv: list[str] | None = None) -> int:
     report = render_report(
         drifts, header, lambda d: blame_note(d, args.rev), clean=clean
     )
+    if drifts and args.hook:
+        report += _HOOK_FOOTER
     if args.output:
         args.output.write_text(report, encoding="utf-8")
     else:
