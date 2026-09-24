@@ -282,6 +282,16 @@ Steps: [upgrading/v9.0.md](upgrading/v9.0.md).
 
 Steps: [upgrading/v9.1.md](upgrading/v9.1.md).
 
-## Unreleased
+## Unreleased - Project classifiers get a seam; Python 3.14 classifier
 
-_Nothing yet._
+`pyproject.toml`'s classifiers gain a `PROJECT-CLASSIFIERS` block, holding
+`Development Status :: 3 - Alpha` as its starting value, and the template
+now lists `Programming Language :: Python :: 3.14`, matching the versions CI
+requires.
+
+If this project changed `Development Status`, or added audience, topic or
+framework classifiers outside any block, the update shows that line as a
+conflict or as drift in `.copier-template-drift.md`. Put the project's
+classifiers inside `PROJECT-CLASSIFIERS` and take the template's lines
+everywhere else. A `3.14` line added by hand needs nothing: the template now
+renders the same line.
