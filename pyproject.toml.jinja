@@ -27,11 +27,18 @@ keywords = [
     # PROJECT-KEYWORDS-END
 ]
 classifiers = [
+    # PROJECT-CLASSIFIERS-START — kept across copier update: this project's
+    # development status, and any audience/topic/framework classifiers.
     "Development Status :: 3 - Alpha",
+    # PROJECT-CLASSIFIERS-END
+    # The Python versions are the ones ci.yml's matrix requires (its
+    # non-experimental entries); scripts/tests/test_python_classifiers.py in
+    # the template keeps the two equal.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     # PROJECT-LICENSE-CLASSIFIER-START — kept across copier update; the trove
     # name is not the SPDX id (Apache-2.0 is "Apache Software License"), which
     # is one reason this is a separate edit rather than a derived one.
