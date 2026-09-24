@@ -32,6 +32,7 @@ rm -f .github/workflows/copier-update.yml \
 rm -f scripts/copier_update_notes.py
 rm -f scripts/migrate_agent_instructions.py
 rm -f scripts/report_seeded_changes.py .copier-seeded-changes.md
+rm -f scripts/check_template_conformance.py .copier-template-drift.md
 rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
 rm -f docs/deployment/template-updates.md
 # The page above is in the MkDocs nav; a dangling entry fails `mkdocs build --strict`.
@@ -52,6 +53,10 @@ What this removes and why:
 - `scripts/report_seeded_changes.py` and its output `.copier-seeded-changes.md`
   — the seeded-file report a `copier update` writes; nothing writes it after
   detaching.
+- `scripts/check_template_conformance.py` and its update-time output
+  `.copier-template-drift.md` — the comparison of template-owned files with
+  a pristine template render; a detached fork owns every line, so there is
+  nothing left to compare.
 - the `applying-template-updates` skill and `docs/deployment/template-updates.md`
   — the procedure for the weekly template update pull request, which a
   detached fork never receives. The `sed` line removes the page's nav

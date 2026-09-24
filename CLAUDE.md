@@ -42,6 +42,15 @@ create new projects.
   `researching-references` skill writes. `tests/test_reference_docs.py`
   (copied verbatim) runs it in a downstream's CI;
   `scripts/tests/test_check_references.py` unit-tests it here.
+- `scripts/check_template_conformance.py` — shipped to every project;
+  renders the template with the project's answers and lists every
+  re-rendered file that differs from the render outside its sentinel
+  blocks. `report_seeded_changes.py` (the last after-stage migration) runs
+  it against `HEAD` and the previous ref to write
+  `.copier-template-drift.md`, the drift an update carries forward without
+  a conflict marker; the `applying-template-updates` skill works from that
+  report. `scripts/tests/test_check_template_conformance.py` unit-tests it
+  and `check_update_regression.py` asserts it end to end.
 - `ruff.toml` — lint configuration for this repo's own Python under
   `scripts/`, read by the pre-commit hooks and `template-ci`'s lint and
   format steps alike; excluded from renders (a generated project carries
