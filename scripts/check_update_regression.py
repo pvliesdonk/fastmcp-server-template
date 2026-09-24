@@ -117,6 +117,21 @@ def _assert_drift_report(project: Path) -> None:
         raise SystemExit(f"ERROR: drift report {'; '.join(problems)}:\n{text[:4000]}")
 
 
+def _assert_skill_links_resolve(project: Path) -> None:
+    """copier update leaves a retired skill's symlink dangling; the
+    after-stage migration must prune it (#655)."""
+    skills = project / ".claude" / "skills"
+    dangling = (
+        sorted(p.name for p in skills.iterdir() if p.is_symlink() and not p.exists())
+        if skills.is_dir()
+        else []
+    )
+    if dangling:
+        raise SystemExit(
+            f"ERROR: dangling .claude/skills links after update: {dangling}"
+        )
+
+
 def _assert_var(project: Path, rel_path: str, *, expected: bool) -> None:
     text = (project / rel_path).read_text(encoding="utf-8")
     if (_VAR in text) is not expected:
@@ -220,6 +235,7 @@ def main() -> int:
             _assert_review_workflows(project, enabled=enabled)
             _assert_seeded_report(project)
             _assert_drift_report(project)
+            _assert_skill_links_resolve(project)
 
             _assert_var(project, ".env.example", expected=True)
             _assert_var(

@@ -103,7 +103,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          # Full history: the code-review skill computes a three-dot range via
+          # Full history: the code-review plugin computes a three-dot range via
           # `git merge-base`, which does not exist in a depth-1 clone — the
           # reviewer then silently falls back to a two-dot diff that includes
           # base-branch drift (template#536).
@@ -169,7 +169,7 @@ jobs:
           # inline-comment tool (what lets the reviewer post inline — not in the
           # default allow-set), `gh api`, gh pr/run read commands, scoped `uv run`
           # for targeted investigation (REVIEW.md sets norms), plus Skill (launch
-          # the /code-review skill) and Task (dispatch its review subagents —
+          # the /code-review plugin) and Task (dispatch its review subagents —
           # synchronous under the pinned 2.1.197). contents: read above keeps the
           # reviewer from committing — it only reads and comments.
           claude_args: |

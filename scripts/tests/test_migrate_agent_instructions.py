@@ -104,3 +104,21 @@ def test_migrate_noop_without_head_claude_or_agents(tmp_path: Path) -> None:
 def test_stub_matches_the_template() -> None:
     # CLAUDE.md.jinja has no Jinja in it, so its bytes ARE the render.
     assert (REPO / "CLAUDE.md.jinja").read_text(encoding="utf-8") == mig.STUB
+
+
+def test_migrate_prunes_a_dangling_template_skill_link(tmp_path: Path) -> None:
+    """A renamed skill leaves its old symlink dangling after copier update
+    (#655); it goes on every update, not only the one-time CLAUDE.md move."""
+    skills = tmp_path / ".claude" / "skills"
+    skills.mkdir(parents=True)
+    (tmp_path / ".agents" / "skills" / "kept").mkdir(parents=True)
+    (skills / "old-name").symlink_to("../../.agents/skills/old-name")
+    (skills / "kept").symlink_to("../../.agents/skills/kept")
+    (skills / "elsewhere").symlink_to("/nonexistent/project-own")
+    actions = mig.migrate(tmp_path, head_claude=None)
+    assert not (skills / "old-name").is_symlink()
+    assert (skills / "kept").is_symlink()
+    assert (skills / "elsewhere").is_symlink()
+    assert actions == [
+        "removed .claude/skills/old-name: its target ../../.agents/skills/old-name is gone"
+    ]
