@@ -484,6 +484,12 @@ def test_base_drift_renders_the_version_the_base_pinned(
 
 
 def test_since_report_does_not_claim_the_tree_conforms() -> None:
-    text = c.render_report([], "# h\n", clean="Nothing new.")
-    assert "Nothing new." in text
+    message = c.clean_message("origin/main")
+    assert message == (
+        "Nothing here differs from the template that did not already differ "
+        "at `origin/main`."
+    )
+    text = c.render_report([], "# h\n", clean=message)
+    assert message in text
     assert "Every template-owned file" not in text
+    assert c.clean_message(None).startswith("Every template-owned file matches")

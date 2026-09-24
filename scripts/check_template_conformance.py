@@ -517,6 +517,17 @@ def _base_drift(src: str, rev: str, tmp: Path) -> list[Drift]:
     return drift_at(src, str(answers.get("_commit", "")), answers, read, tmp / "base")
 
 
+def clean_message(since: str | None) -> str:
+    """What the report says when nothing is listed; with *since* the tree may
+    still drift, so it must not claim conformance."""
+    if since:
+        return (
+            "Nothing here differs from the template that did not already "
+            f"differ at `{since}`."
+        )
+    return "Every template-owned file matches the render outside its sentinel blocks."
+
+
 def _reexec_with_deps() -> bool:
     """Re-exec under `uv run --no-project` when copier is missing; True when
     the caller should give up instead."""
@@ -607,11 +618,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.since:
         what += f", counting only what is not already at `{args.since}`"
     header = report_header(src=src, ref=ref, what=what)
-    clean = (
-        f"Nothing differs from the template here that did not already at `{args.since}`."
-        if args.since
-        else "Every template-owned file matches the render outside its sentinel blocks."
-    )
+    clean = clean_message(args.since)
     report = render_report(
         drifts, header, lambda d: blame_note(d, args.rev), clean=clean
     )

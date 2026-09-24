@@ -197,10 +197,11 @@ For each candidate:
 - Re-read the cited lines with their full surrounding context.
 - Strike it if it matches the exclusion list: pre-existing on untouched
   lines; territory of a linter, type-checker, or CI job; an intentional
-  change serving the PR's stated goal (template-owned drift stays a finding
-  whatever the goal, until it moves or a Decay issue justifies it); silenced in code with an
-  explanatory `# noqa` / `# type: ignore`; a general quality opinion no
-  written rule codifies; something a senior reviewer would not raise.
+  change serving the PR's stated goal (template-owned drift stays a
+  finding whatever the goal, until it moves or a Decay issue justifies
+  it); silenced in code with an explanatory `# noqa` / `# type: ignore`; a
+  general quality opinion no written rule codifies; something a senior
+  reviewer would not raise.
 - Where one command can settle it, run that one command and believe the
   result over your reasoning.
 
