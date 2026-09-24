@@ -51,7 +51,7 @@ create new projects.
   a conflict marker; the `applying-template-updates` skill works from that
   report. Its `--since BASE` mode reports only the drift a range adds,
   each commit judged against the template version it pinned; the
-  `code-review` skill runs it, and `REVIEW.md` asks hosted reviewers to
+  `self-reviewing` skill runs it, and `REVIEW.md` asks hosted reviewers to
   report the same drift by reading.
   `scripts/tests/test_check_template_conformance.py` unit-tests it
   and `check_update_regression.py` asserts it end to end.
