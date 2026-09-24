@@ -1,5 +1,11 @@
 # Changelog
 
+## v9.2.0 (2026-09-24)
+
+- #665 feat(hooks): pre-push template-conformance hook
+- #664 feat(pyproject): a PROJECT-CLASSIFIERS seam, and classifiers that match CI's Python matrix
+
+
 ## v9.1.0 (2026-09-24)
 
 - #661 fix(skills): rename the code-review skill to self-reviewing
