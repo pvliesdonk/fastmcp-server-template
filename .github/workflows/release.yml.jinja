@@ -317,10 +317,13 @@ jobs:
             echo
             if [ "$IS_PRERELEASE" = "true" ]; then
               # rcs deploy no versioned docs; the page travels in the tag.
+              # The rolling `unstable` docs version (docs.yml, every push to
+              # main) is the live docs a reader can open now — it follows
+              # main, not this tag, so say so.
               if [ -f "$page" ]; then
                 echo "- Release notes (draft, in-tag): https://github.com/${REPO}/blob/${TAG}/${page}"
               fi
-              echo "- Documentation: https://{{ github_org }}.github.io/{{ project_name }}/ (the v${minor} pages publish when the stable ships)"
+              echo "- Documentation (rolling \`unstable\`, built from \`main\` rather than this tag): https://{{ github_org }}.github.io/{{ project_name }}/unstable/ — the v${minor} pages publish when the stable ships"
             else
               if [ -f "$page" ]; then
                 echo "- Release notes: https://{{ github_org }}.github.io/{{ project_name }}/${minor}/releases/${minor}/"
