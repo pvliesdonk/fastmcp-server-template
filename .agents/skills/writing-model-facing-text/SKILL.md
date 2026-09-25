@@ -44,6 +44,26 @@ Every sentence passes both or moves.
    needs for one argument lives in that parameter's description, not also
    in the tool description and again in instructions.
 
+## The contract, not the failures
+
+A description states the contract: what the call does, what it needs and
+what comes back. It never says how the call can fail. Failing is the
+exception, and the error text of that call handles it. That text reaches the
+model at the one moment it can act on it, and it carries its own
+instructions (`designing-tool-outcomes`, "Writing the message"). A failure
+listed in the description costs context on every turn and helps with none
+of them.
+
+The line falls between a precondition and its violation. When the model has
+to know something *before* the call to choose it or fill an argument, that
+is contract: state it positively in the parameter it constrains
+(`path: Vault-relative path ending in .md.`). What happens when the model
+gets it wrong belongs to the error: `fails if`, `raises when`, `returns an
+error when` and `on a conflict, ...` never appear in a description. Absence
+is contract only where the return type promises it: a search that says
+it returns an empty list when nothing matches is stating a result, not a
+failure.
+
 ## Where each fact goes
 
 | Fact | Goes in |
@@ -55,6 +75,7 @@ Every sentence passes both or moves.
 | A sequence that spans tools, or what this server is for | an instructions snippet, `WORKFLOWS` or `CAPABILITIES` role |
 | A fact about this deployment (read-only, which instance) | instructions `INSTANCE` role, driven by config, never hand-written prose |
 | What to do after the call given its outcome (index stale, task queued) | the result or the error text of that call |
+| How the call can fail, and what to do then | the error text of that call, never the description |
 | Side effects: read-only, destructive, idempotent | `annotations=`; plus one clause in the description only when it changes the choice |
 | Operator configuration, env vars, CLI commands, limits | `docs/configuration.md` and the operator guides |
 | How it is implemented, links to framework docs, `Returns:`, `Raises:` | a `#` comment, or a docstring section FastMCP strips |
@@ -70,7 +91,8 @@ The docstring is the description. Its parts, in order:
 2. One sentence on when to choose it over its siblings, only if a sibling
    exists. `Use read for a single known path.`
 3. One constraint the model must honour for the call to succeed that no
-   parameter carries. Optional.
+   parameter carries, stated as what to do, never as what fails
+   otherwise. Optional.
 
 Then an `Args:` section with one sentence per parameter: meaning, format,
 what omitting it does. `if_match: Etag from read; omit for a new file.`
@@ -178,8 +200,10 @@ async def save_recipe(path: str, content: str, if_match: str | None = None):
     """
 ```
 
-The conflict error's text says "re-read and retry with the new etag"; the
-instructions snippet is gone because nothing spans tools.
+The conflict handling left the docstring because it describes a failure,
+not the contract: the conflict error's text now says "re-read and retry
+with the new etag". The instructions snippet is gone because nothing spans
+tools.
 
 ## Measure it
 
@@ -211,4 +235,7 @@ total down by writing each description to this skill.
 - Any URL, env var, CLI command, exception class or framework name? Move it.
 - Does a resource or prompt description instruct the model? Move it.
 - Does an instructions snippet restate a tool description? Cut it.
+- Does a description say how the call fails or what to do on an error?
+  Move it to the error text; keep the precondition, stated positively, in
+  the parameter it constrains.
 - Does a parameterless tool, or a resource, ship a docstring section?

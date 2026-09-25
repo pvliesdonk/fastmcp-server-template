@@ -525,6 +525,14 @@ skill turns these facts into a recipe; this page holds the evidence.
   duplicate tool descriptions. This project puts the when-to-choose sentence
   in the tool description and reserves instructions for what spans tools
   (decided in the same skill, "Where each fact goes").
+- Anthropic lists "any important caveats or limitations" among what a
+  description should cover. This project reads that as preconditions and
+  limits of the contract, stated positively in the parameter they
+  constrain, and keeps how a call fails and what to do then out of every
+  description: that goes in the error text of the call, which the model
+  reads at the moment it can act on it (decided in the same skill, "The
+  contract, not the failures", and in `designing-tool-outcomes`, "Writing
+  the message").
 
 ## Not covered
 
