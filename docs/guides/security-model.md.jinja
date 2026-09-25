@@ -4,13 +4,13 @@ This page states what {{ project_name }} protects and what it leaves to the oper
 
 ## Authentication is the boundary
 
-Over HTTP, authentication is the only access control: a bearer token, a mapped bearer token file, or OIDC. A request without a valid credential is refused before it reaches a tool.{% if enable_authorization %} [Authorization](authorization.md) then narrows which tools an authenticated caller may use.{% endif %} This is the same model as any MCP server that speaks streamable HTTP.
+Over HTTP, authentication is the only access control: a bearer token, a mapped bearer token file, or OIDC. A request without a valid credential is refused before it reaches a tool.{% if enable_authorization %} [Authorization](authorization.md) then narrows which tools an authenticated caller may use.{% endif %} It is the same model as any other MCP server reached over HTTP.
 
 ## Running without authentication
 
 With no authentication variables set, the server starts in mode `none` and logs `auth_mode_resolved` at warning level with `mode=none`. Every client that can open a connection to the port then has the full tool surface. Turning authentication off is a decision to trust everything that can reach the port.
 
-The bind address decides which machines can reach the port, and nothing more. Binding to `127.0.0.1` keeps other machines out, but every process on the host can still connect, and so can a web page open in a browser on the host, through DNS rebinding. Run without authentication only where you trust everything that can reach the port: a single-user workstation, or a private network you control.
+The bind address decides which machines reach the port, and nothing more. Binding to `127.0.0.1` keeps other machines out. It does not keep out other processes on the host, nor a web page in a browser on the host that uses DNS rebinding. Without authentication, run the server only where everything that reaches the port is trusted, such as a single-user workstation or a private network you control.
 
 ## stdio
 
@@ -18,7 +18,7 @@ Over stdio there is no network listener and no authentication. The MCP client st
 
 ## What an authenticated caller can reach
 
-An authenticated caller can call every tool the instance exposes, and each tool runs with the server's own privileges: its filesystem and network access, and any credential in its configuration. `{{ env_prefix }}_TOOLS_ALLOW` and `{{ env_prefix }}_TOOLS_DENY` trim that set for an instance; see [Configuration](../configuration.md).
+An authenticated caller has every tool the instance exposes. Each tool runs with the server's own privileges: its filesystem and network access, and any credential in its configuration. `{{ env_prefix }}_TOOLS_ALLOW` and `{{ env_prefix }}_TOOLS_DENY` trim that set for an instance; see [Configuration](../configuration.md).
 
 <!-- DOMAIN-SECURITY-MODEL-SURFACE-START — what THIS server's tools reach; kept across copier update -->
 <!-- Replace with what this server's tools can do with the server's privileges:
