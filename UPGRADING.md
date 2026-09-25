@@ -286,7 +286,7 @@ Steps: [upgrading/v9.1.md](upgrading/v9.1.md).
 
 Steps: [upgrading/v9.2.md](upgrading/v9.2.md).
 
-## Unreleased - Repository About block from pyproject, compose publishes on loopback
+## Unreleased - Repository About block from pyproject, compose publishes on loopback, security-model page
 
 ### Repository About block from pyproject
 
@@ -332,3 +332,25 @@ services:
 
 Mention this in the project's release notes for the release that carries
 the update.
+
+### Security-model page
+
+The docs gain `docs/guides/security-model.md`, which states the shared
+security model, and `SECURITY.md` and the authentication guide now point at
+it. The page arrives with the update, but two steps are yours:
+
+1. Add it to the navigation. `mkdocs.yml`'s `nav:` is inside `PROJECT-NAV`,
+   so the update leaves it alone. Under `Guides:`, after `Authentication`,
+   add:
+
+   ```yaml
+         - Security Model: guides/security-model.md
+   ```
+
+   The `llmstxt` plugin's `guides/*.md` glob indexes the page without a
+   change.
+
+2. Fill the `DOMAIN-SECURITY-MODEL-SURFACE` block with what this server's
+   tools can reach using the server's privileges: which data they read and
+   change, which outbound requests they make, and which credentials they use.
+   Until it is filled, the page describes the shared model only.
