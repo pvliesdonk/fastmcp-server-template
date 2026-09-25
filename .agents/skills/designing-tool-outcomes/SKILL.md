@@ -128,3 +128,4 @@ site, logged at WARNING when it heals itself.
 | A server-side failure message that only says what happened ("not permitted to access X") | Add the strategy: retry later, or tell the user. |
 | The same class logged at INFO in one tool and WARNING or ERROR in another | Take the level from the table's "who acts" rule, not from how alarming the exception name sounds. |
 | Returning `[]` or `None` when the lookup itself failed | Outcome 4. |
+| Returning an error string or `{"error": ...}` for an outcome the contract does not promise | Raise `ToolError` (outcomes 2 to 4). A status field is outcome 1 only when the declared return type includes it. |
