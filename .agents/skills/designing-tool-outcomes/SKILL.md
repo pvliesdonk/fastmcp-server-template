@@ -18,7 +18,11 @@ rule is in `docs/design/reference/mcp-tool-outcomes-and-errors.md` and
 
 The **contract** is what the tool's description and return type promise. An
 outcome that fits the contract is a result. An outcome that cannot produce the
-promised thing is an error, however ordinary it is.
+promised thing is an error, however ordinary it is. The two texts split the
+work: the description states the contract, limits that hold for every call
+included, and never lists failures (`writing-model-facing-text`, "The
+contract, not the failures"). So the error text is the one place a failure
+is explained, and it has to stand on its own.
 
 | # | Outcome | Examples | Code | The message tells the model | Log |
 |---|---|---|---|---|---|
@@ -48,6 +52,33 @@ makes every mistyped path an operator alert.
 - Do not return `ToolResult(is_error=True)`. FastMCP and the request-logging
   middleware record it as a completed call, so a real failure disappears from
   the failure logs.
+
+## Writing the message
+
+The model reads the error text once, straight after the call, and acts on it
+next. Assume it has nothing else: the tool description may have been
+deferred by tool search, cut at 2,048 characters or read many turns ago, and
+it does not mention this failure anyway.
+
+- **Outcomes 2 and 3**: what was wrong, naming the argument and quoting the
+  value the model sent; then the exact next step, by tool name and parameter
+  name. For outcome 3, also say that the same call will fail again and where
+  the fresh value comes from. `No note at 'inbox/todo.md'. Find the path with
+  search_notes.` `Note 'plan.md' changed since version 'a1b2', so resending
+  this call fails again. Call read_note for the current text and version,
+  reapply the edit, and pass the new version as if_match.`
+- **Outcome 4**: the request was fine, nothing about it should change; retry
+  later if the condition heals itself, otherwise tell the user. No cause the
+  model cannot act on. `tool_boundary`'s fixed message is the pattern.
+- **Self-contained**: never "see the description", "as documented" or an
+  error code the model has to look up. In outcomes 2 and 3, name the tool and
+  the parameter, even when it is the tool just called.
+- **Written to the model**: the same exclusions as a description. No
+  exception class, server path, stack frame, log line, environment variable
+  or CLI command: the model cannot catch, open, set or run any of them. What
+  an operator needs goes in the log record at the same `raise`.
+- **Short**: one or two sentences. The message says how to recover from this
+  failure. It does not restate the contract.
 
 ## The boundary
 
@@ -114,4 +145,7 @@ a `register_long_running_tool` coroutine, before or after its deadline.
 | A server-side failure message that only says what happened ("not permitted to access X") | Add the strategy: retry later, or tell the user. |
 | The same class logged at INFO in one tool and WARNING or ERROR in another | Take the level from the table's "who acts" rule, not from how alarming the exception name sounds. |
 | Returning `[]` or `None` when the lookup itself failed | Outcome 4. |
+| A tool description that lists its errors or says what to do on one | Move it into the `ToolError` text; the description keeps the contract. |
+| Error text naming an exception class, a server path or an env var | Say what the model should change or call instead; log the detail. |
+| Error text pointing at the description, or at an error code | Say the next step in the message itself, by tool and parameter name. |
 | Returning an error string or `{"error": ...}` for an outcome the contract does not promise | Raise `ToolError` (outcomes 2 to 4). A status field is outcome 1 only when the declared return type includes it. |
