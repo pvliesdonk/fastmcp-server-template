@@ -90,6 +90,7 @@ test calls `configure_logging_from_env`, or — better — asserts on
 - Optional enrichment failures: catch, log at `DEBUG` with `exc_info=True`, continue.
 - Primary result errors: catch, log at `WARNING` or `ERROR`, return error string.
 - `ErrorHandlingMiddleware` is a safety net. If it catches something, that's a bug to fix.
+- Inside an MCP tool, the `designing-tool-outcomes` skill decides the level: an outcome only the model must act on (not found, invalid input, a stale version) is a `ToolError` at INFO, and a server fault is ERROR with the traceback, logged once by the tool's boundary.
 
 ### Message Format
 
