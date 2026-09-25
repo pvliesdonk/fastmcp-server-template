@@ -13,6 +13,7 @@ import logging
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp_pvl_core import tool_boundary
 
 from {{ python_module }}._server_deps import get_service
 from {{ python_module }}.domain import Service
@@ -40,7 +41,15 @@ def register_tools(mcp: FastMCP) -> None:
     # docstring is the description the model reads when it chooses a tool
     # (the ``writing-model-facing-text`` skill says what belongs there);
     # notes for developers go in comments like this one.
+    #
+    # ``@tool_boundary`` goes under ``@mcp.tool`` on every tool: an exception
+    # that is not a ``ToolError`` becomes one logged server fault instead of
+    # reaching FastMCP's own handler.  Raise ``ToolError(msg,
+    # log_level=logging.INFO)`` for an outcome the model can act on; the
+    # ``designing-tool-outcomes`` skill classifies each case, and
+    # ``tests/test_tool_outcomes.py`` fails a tool registered without it.
     @mcp.tool(annotations={"title": "Ping", "read_only_hint": True})
+    @tool_boundary
     async def ping(service: Service = Depends(get_service)) -> str:
         """Check that the service is alive; returns "pong"."""
         return await service.ping()
@@ -59,6 +68,7 @@ def register_tools(mcp: FastMCP) -> None:
     # rename the mapping to your tool→file pairs):
     # register_tool_icons(mcp, {"ping": "ping.svg"}, static_dir=STATIC)
     #
-    # Per-tool decoration (replace the @mcp.tool line above; preserve the
-    # existing annotations to avoid losing read_only_hint / etc.):
+    # Per-tool decoration (replace the @mcp.tool line above and keep
+    # @tool_boundary under it; preserve the existing annotations to avoid
+    # losing read_only_hint / etc.):
     # @mcp.tool(icons=[make_icon(STATIC / "ping.svg")], annotations={"title": "Ping", "read_only_hint": True})

@@ -270,6 +270,11 @@ def make_server(
     #         # the generic tool descriptions — context only, no shape change.
     #     )
     #
+    # _my_validator rejects a ref only by raising
+    # ToolError(msg, log_level=logging.INFO), and the model reads msg. Any other
+    # exception, a ValueError included, is reported to the model as a server
+    # fault ("the request was fine; retry later").
+    #
     # Path 2 — your own tool over the same capability-link machinery, when the
     # generic pair cannot express it (a different name, a domain-accurate
     # description, domain-specific parameters). build_transfer_links mounts the
@@ -277,13 +282,18 @@ def make_server(
     # caller ref itself, then mints over the already-validated sink handle:
     #
     # if transport != "stdio":
-    #     from fastmcp_pvl_core import add_transfer_workflow, build_transfer_links
+    #     from fastmcp_pvl_core import (
+    #         add_transfer_workflow,
+    #         build_transfer_links,
+    #         tool_boundary,
+    #     )
     #
     #     links = build_transfer_links(
     #         mcp, config.server, config.transfer, sink=_my_transfer_sink
     #     )
     #
     #     @mcp.tool
+    #     @tool_boundary
     #     async def share_document(doc_id: str) -> dict[str, object]:
     #         """Mint a one-shot download link for a document."""
     #         handle = _resolve_and_check(doc_id)  # your validation -> sink handle
