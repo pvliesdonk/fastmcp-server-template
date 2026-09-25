@@ -286,7 +286,9 @@ Steps: [upgrading/v9.1.md](upgrading/v9.1.md).
 
 Steps: [upgrading/v9.2.md](upgrading/v9.2.md).
 
-## Unreleased - Repository About block from pyproject
+## Unreleased - Repository About block from pyproject, compose publishes on loopback
+
+### Repository About block from pyproject
 
 `bootstrap.yml` now sets the GitHub repository's description, website and
 topics, from `pyproject.toml`'s `description`, `[project.urls] Documentation`
@@ -304,3 +306,29 @@ to `pyproject.toml`'s `PROJECT-KEYWORDS` block, or the run removes it.
 
 `RELEASE_TOKEN` needs no new permission: the About block uses the same
 `administration: write` the rulesets already need.
+
+### Compose publishes on loopback
+
+`compose.yml` now publishes the server as `127.0.0.1:8000:8000` instead of
+`8000:8000`, so the quick start is reachable only from the Docker host. The
+config wizard's `docker run` and compose output change the same way. The
+update applies cleanly unless this project edited the `ports:` line.
+
+Nothing changes for a deployment behind a reverse proxy that reaches the
+container over a shared network (the `ports: !reset []` override in
+`docs/deployment/docker.md`).
+
+A deployment that runs the project's `compose.yml` directly and is reached
+from other machines stops being reachable after the update. Tell its
+operators to confirm authentication is configured (a bearer token or OIDC in
+`.env`), then publish on every interface from `compose.override.yml`:
+
+```yaml
+services:
+  <project>:
+    ports: !override
+      - "8000:8000"
+```
+
+Mention this in the project's release notes for the release that carries
+the update.
