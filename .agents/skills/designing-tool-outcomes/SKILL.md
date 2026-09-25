@@ -19,9 +19,10 @@ rule is in `docs/design/reference/mcp-tool-outcomes-and-errors.md` and
 The **contract** is what the tool's description and return type promise. An
 outcome that fits the contract is a result. An outcome that cannot produce the
 promised thing is an error, however ordinary it is. The two texts split the
-work: the description states only the contract and never lists failures
-(`writing-model-facing-text`, "The contract, not the failures"), so the error
-text is the one place a failure is explained, and it has to stand on its own.
+work: the description states the contract, limits that hold for every call
+included, and never lists failures (`writing-model-facing-text`, "The
+contract, not the failures"). So the error text is the one place a failure
+is explained, and it has to stand on its own.
 
 | # | Outcome | Examples | Code | The message tells the model | Log |
 |---|---|---|---|---|---|

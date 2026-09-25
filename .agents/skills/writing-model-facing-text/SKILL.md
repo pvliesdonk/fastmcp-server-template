@@ -54,15 +54,25 @@ instructions (`designing-tool-outcomes`, "Writing the message"). A failure
 listed in the description costs context on every turn and helps with none
 of them.
 
-The line falls between a precondition and its violation. When the model has
-to know something *before* the call to choose it or fill an argument, that
-is contract: state it positively in the parameter it constrains
-(`path: Vault-relative path ending in .md.`). What happens when the model
-gets it wrong belongs to the error: `fails if`, `raises when`, `returns an
-error when` and `on a conflict, ...` never appear in a description. Absence
-is contract only where the return type promises it: a search that says
-it returns an empty list when nothing matches is stating a result, not a
-failure.
+The contract includes its limits. Where the tool does less than its name
+and signature suggest, the model would otherwise expect more, so say so up
+front. The line falls on *why* a call does not deliver:
+
+- **By design, true of every call**: a limit of scope or coverage. `read`
+  opens files in the notes folder only; `search` covers titles and
+  frontmatter, not body text. This is contract. State it positively, in the
+  parameter it constrains (`path: Path relative to the notes folder, ending
+  in .md.`) or, when no parameter carries it, as the tool's constraint
+  sentence.
+- **Because of what this call ran into**: the file is corrupt, the version
+  is stale, the path does not exist, the model broke a stated limit. This
+  is an error. It belongs to the error text, and `fails if`, `raises when`,
+  `returns an error when` and `on a conflict, ...` never appear in a
+  description.
+
+Absence is contract only where the return type promises it: a search that
+says it returns an empty list when nothing matches is stating a result, not
+a failure.
 
 ## Where each fact goes
 
@@ -90,9 +100,9 @@ The docstring is the description. Its parts, in order:
    and meaning; returns paths, titles and snippets ranked by score.`
 2. One sentence on when to choose it over its siblings, only if a sibling
    exists. `Use read for a single known path.`
-3. One constraint the model must honour for the call to succeed that no
-   parameter carries, stated as what to do, never as what fails
-   otherwise. Optional.
+3. One limit of scope the model would not assume from the name, or one
+   constraint it must honour, that no parameter carries. Stated as what
+   the tool does or needs, never as what fails otherwise. Optional.
 
 Then an `Args:` section with one sentence per parameter: meaning, format,
 what omitting it does. `if_match: Etag from read; omit for a new file.`
@@ -236,6 +246,6 @@ total down by writing each description to this skill.
 - Does a resource or prompt description instruct the model? Move it.
 - Does an instructions snippet restate a tool description? Cut it.
 - Does a description say how the call fails or what to do on an error?
-  Move it to the error text; keep the precondition, stated positively, in
-  the parameter it constrains.
+  Move it to the error text. Keep a limit that holds for every call by
+  design, stated positively, in the parameter it constrains.
 - Does a parameterless tool, or a resource, ship a docstring section?
