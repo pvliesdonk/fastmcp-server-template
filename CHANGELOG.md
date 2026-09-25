@@ -1,5 +1,11 @@
 # Changelog
 
+## v10.1.0 (2026-09-25)
+
+- #686 feat(skills): descriptions state the contract, error text explains the failure
+- #684 fix(skills): separate an opt-in feature left off from missing configuration
+
+
 ## v10.0.0 (2026-09-25)
 
 - #682 feat(deps)!: adopt fastmcp-pvl-core v10 and its tool boundary
