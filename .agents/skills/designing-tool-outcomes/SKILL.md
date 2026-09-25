@@ -49,54 +49,15 @@ makes every mistyped path an operator alert.
 
 No exception may reach FastMCP's own handler, which logs ERROR with a
 traceback. Catch the domain exceptions that mean outcome 2 or 3 at the call
-site and raise them as INFO `ToolError`s. Wrap every tool so that anything else
-becomes outcome 4. `mask_error_details` stays as a safety net, not the handler.
+site and raise them as INFO `ToolError`s. Wrap every tool in pvl-core's
+`tool_boundary` so that anything else becomes outcome 4.
+`mask_error_details` stays as a safety net, not the handler.
 
 ```python
-import functools
-import inspect
 import logging
 
 from fastmcp.exceptions import ToolError
-
-logger = logging.getLogger(__name__)
-
-_FAULT = (
-    "{tool} failed because of a server-side error; the request was fine. "
-    "Retry later, and tell the user if it keeps failing."
-)
-
-
-def tool_boundary(fn):
-    """Turn any exception that is not already a ToolError into outcome 4."""
-
-    def fault() -> ToolError:
-        logger.exception("tool_failed tool=%s", fn.__name__)
-        return ToolError(_FAULT.format(tool=fn.__name__))
-
-    if inspect.iscoroutinefunction(fn):
-
-        @functools.wraps(fn)
-        async def wrapper(*args, **kwargs):
-            try:
-                return await fn(*args, **kwargs)
-            except ToolError:
-                raise
-            except Exception as exc:
-                raise fault() from exc
-
-    else:
-
-        @functools.wraps(fn)
-        def wrapper(*args, **kwargs):
-            try:
-                return fn(*args, **kwargs)
-            except ToolError:
-                raise
-            except Exception as exc:
-                raise fault() from exc
-
-    return wrapper
+from fastmcp_pvl_core import tool_boundary
 
 
 @mcp.tool
@@ -113,18 +74,39 @@ def read_note(path: str) -> dict:
     return {"text": note.text, "version": note.version}
 ```
 
-Put `@mcp.tool` above `@tool_boundary`. `functools.wraps` keeps the signature,
-so the input and output schemas are unchanged. A server-side condition the
-model can name more precisely than the generic message, such as "the index is
-rebuilding, retry in a minute", gets its own outcome 4 `ToolError` at the call
-site, logged at WARNING when it heals itself.
+Put `@mcp.tool` above `@tool_boundary`. It passes a FastMCP error, and a
+missing-client-capability protocol error, through unchanged. An upstream
+rate limit or timeout becomes a WARNING and a "retry" message. Anything
+else it logs once as `tool_failed` at ERROR with the traceback and replaces
+with a fixed message: the request was fine, retry later, tell the user if
+it keeps failing. The wrapper keeps the signature,
+so the input and output schemas, `Context` injection and `task=`
+registration are unchanged. A server-side condition the model can name more
+precisely than the generic message, such as "the index is rebuilding, retry
+in a minute", gets its own outcome 4 `ToolError` at the call site, logged
+at WARNING when it heals itself. `tests/test_tool_outcomes.py` fails any
+registered tool without the boundary, app-only and hidden tools included.
+Why it is a pvl-core helper and not a per-server copy is
+[pvl-core ADR 0005](https://github.com/pvliesdonk/fastmcp-pvl-core/blob/main/docs/adr/0005-tool-boundary.md).
+
+The request-logging middleware logs `tool_call_failed` at the `ToolError`'s
+`log_level`, so an outcome 2 or 3 produces no ERROR line anywhere.
+
+## Hooks that end a pvl-core tool
+
+A domain hook that runs inside a tool pvl-core registers follows the same
+rule: raise `ToolError(msg, log_level=logging.INFO)` for an outcome the
+model can act on, and let anything else be a fault. The transfer
+`validate` hook rejects a ref this way; a `ValueError` from it is reported
+to the model as a server-side error. So is anything but a `ToolError` from
+a `register_long_running_tool` coroutine, before or after its deadline.
 
 ## Common mistakes
 
 | Mistake | Fix |
 |---|---|
 | `raise ToolError(msg)` for not-found, a bad path or a stale version | Pass `log_level=logging.INFO`: outcome 2 or 3. |
-| Relying on `mask_error_details=True` to handle unexpected exceptions | Wrap the tool in `tool_boundary`. |
+| Relying on `mask_error_details=True` to handle unexpected exceptions | Wrap the tool in pvl-core's `tool_boundary`. |
 | A server-side failure message that only says what happened ("not permitted to access X") | Add the strategy: retry later, or tell the user. |
 | The same class logged at INFO in one tool and WARNING or ERROR in another | Take the level from the table's "who acts" rule, not from how alarming the exception name sounds. |
 | Returning `[]` or `None` when the lookup itself failed | Outcome 4. |

@@ -28,6 +28,7 @@ import re
 from typing import Any
 
 from fastmcp import FastMCP
+from fastmcp_pvl_core import tool_boundary
 
 try:
     from fastmcp.apps import AppConfig
@@ -168,12 +169,14 @@ def register_apps(mcp: FastMCP) -> None:
     # Each app-only tool must use:
     #   meta=_app_tool_meta("<name>")
     #   app=AppConfig(resource_uri=_APP_URI, visibility=["app"])
+    # and ``@tool_boundary`` under ``@mcp.tool``, like every other tool.
     # Kept across copier update.
 
     @mcp.tool(
         meta=_app_tool_meta("get_status"),
         app=AppConfig(resource_uri=_APP_URI, visibility=["app"]),
     )
+    @tool_boundary
     async def get_status() -> dict[str, Any]:
         """Return server status (app-only; hidden from the LLM)."""
         return {"status": "ok", "server": "{{ project_name }}"}
@@ -182,6 +185,7 @@ def register_apps(mcp: FastMCP) -> None:
         meta=_app_tool_meta("get_info"),
         app=AppConfig(resource_uri=_APP_URI, visibility=["app"]),
     )
+    @tool_boundary
     async def get_info() -> dict[str, Any]:
         """Return server info (app-only; hidden from the LLM)."""
         return {"name": "{{ human_name }}", "version": "0.0.0"}

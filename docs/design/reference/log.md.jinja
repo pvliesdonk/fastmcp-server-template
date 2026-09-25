@@ -2,6 +2,14 @@
 
 ## 2026-09-25
 
+- Revised [MCP tool outcomes and errors](mcp-tool-outcomes-and-errors.md)
+  for fastmcp-pvl-core 10.0.0 by source and by re-running the in-memory
+  probe on FastMCP 4.0.9. The request-logging middleware now logs
+  `tool_call_failed` at a `ToolError`'s `log_level`, and a new claim
+  records pvl-core's `tool_boundary`: one ERROR `tool_failed` record with
+  the traceback and a fixed "the request itself was fine" message for any
+  exception that is not a FastMCP error. The other table rows are unchanged
+  from 9.0.1. Next review unchanged: 2027-03-25.
 - Revised [MCP model-facing text](mcp-model-facing-text.md): markdown-vault-mcp
   removed `tests/test_client_surface_budget.py` and its aggregate ceilings
   (markdown-vault-mcp#1600, #1601). The 2026-09 baseline now cites the last
