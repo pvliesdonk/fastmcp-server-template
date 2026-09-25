@@ -1933,13 +1933,13 @@ jobs:
         # downstream CI on the next copier-update.
         run: |
           uv run --with ruff ruff check \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/repo_about.py scripts/tests/
 
       - name: Format check scripts (ruff format matching downstream)
         # Line length and target come from the root ruff.toml (see above).
         run: |
           uv run --with ruff ruff format --check \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/repo_about.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
         # The scripts that render into every project (gen_config_surface.py,
@@ -1982,7 +1982,7 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             --target-version py311 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/repo_about.py
 
   pr-title:
     name: PR Title

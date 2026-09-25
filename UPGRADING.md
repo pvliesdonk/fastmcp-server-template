@@ -286,6 +286,21 @@ Steps: [upgrading/v9.1.md](upgrading/v9.1.md).
 
 Steps: [upgrading/v9.2.md](upgrading/v9.2.md).
 
-## Unreleased
+## Unreleased - Repository About block from pyproject
 
-_Nothing yet._
+`bootstrap.yml` now sets the GitHub repository's description, website and
+topics, from `pyproject.toml`'s `description`, `[project.urls] Documentation`
+and `keywords`, plus the `mcp-server` topic. It overwrites them on every run,
+and the first run comes when this update merges.
+
+Before merging the update pull request, check the repository's About block
+on GitHub. If it holds a description you wrote by hand, and it differs from
+`domain_description`, run `copier update` again with
+`--data domain_description="..."` to carry it over. The answer takes at
+most 100 characters and no double quote or backslash, so shorten it first if
+needed. Add any topic you set by
+hand, other than the project's names and the MCP terms the template lists,
+to `pyproject.toml`'s `PROJECT-KEYWORDS` block, or the run removes it.
+
+`RELEASE_TOKEN` needs no new permission: the About block uses the same
+`administration: write` the rulesets already need.
