@@ -15,6 +15,17 @@
   docstrings, Anthropic's `is_error` wording and the Sentry and filesystem
   sources; host-side handling of `isError` stays unverified. Next review:
   2027-03-25.
+- Added [Negative outcomes and faults outside MCP](negative-outcomes-and-faults.md),
+  widening the same question beyond MCP: RFC 9110 and 9457, gRPC status codes,
+  google.rpc.Code, AIP-193/194, the SRE Workbook, OpenTelemetry semconv v1.44.0
+  (HTTP, gRPC, recording errors) and the Trace API, GraphQL September2025 with
+  graphql.org, Apollo and Shopify, JSON-RPC 2.0, and the Rust, Go, Python,
+  .NET, Java and Swift error-handling docs. Found broad agreement that a
+  valid negative outcome is not a fault (OpenTelemetry leaves server-side 4xx
+  and NOT_FOUND unset; only 5xx burns the SRE example SLO), and disagreement
+  on which wire slot carries not-found. Refute pass re-read the OpenTelemetry,
+  RFC 9110, gRPC, SRE, graphql.org, Rust and Python quotes. Next review:
+  2027-09-25.
 
 ## 2026-09-23
 

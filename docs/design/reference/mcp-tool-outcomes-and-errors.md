@@ -129,7 +129,9 @@ the model vendors and published servers say and do about telling those
 apart: on the wire (`isError`, JSON-RPC errors, normal results) and in the
 server's logs. It records the world, not a decision. A project's own rule
 for which outcomes set `isError` belongs in its design docs, with a link
-back here.
+back here. How older protocols, telemetry conventions and language error
+models answer the same question is in the companion page,
+[Negative outcomes and faults outside MCP](negative-outcomes-and-faults.md).
 
 ## Scope
 
