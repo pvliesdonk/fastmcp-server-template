@@ -1,5 +1,12 @@
 # Changelog
 
+## v9.3.0 (2026-09-25)
+
+- #674 docs(guides): state the security model in a template-owned page
+- #673 fix(compose): publish the quick start on loopback only
+- #670 feat(bootstrap): fill the repository About block from pyproject
+
+
 ## v9.2.0 (2026-09-24)
 
 - #665 feat(hooks): pre-push template-conformance hook
