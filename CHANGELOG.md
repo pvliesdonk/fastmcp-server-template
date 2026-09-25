@@ -1,5 +1,15 @@
 # Changelog
 
+## v9.4.0 (2026-09-25)
+
+- #681 fix(skills): stop citing markdown-vault-mcp's removed surface-budget test
+- #680 fix(docs): re-verify the OIDC discovery-route note against FastMCP 4
+- #679 fix(release): link a pre-release's page to the live unstable docs
+- #676 feat(skills): add designing-tool-outcomes, with the references it rests on
+- #644 chore(deps): update dependency astral-sh/setup-uv to v10.2.0
+- #643 chore(deps): update dependency renovatebot/github-action to v46.3.3
+
+
 ## v9.3.0 (2026-09-25)
 
 - #674 docs(guides): state the security model in a template-owned page
