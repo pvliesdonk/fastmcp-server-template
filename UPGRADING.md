@@ -290,55 +290,10 @@ Steps: [upgrading/v9.2.md](upgrading/v9.2.md).
 
 Steps: [upgrading/v9.3.md](upgrading/v9.3.md).
 
-## Unreleased - pvl-core v10 and the tool boundary
+## v10.0 - pvl-core v10 and the tool boundary
 
-### Adopt fastmcp-pvl-core v10: every tool ends through `tool_boundary`
+Steps: [upgrading/v10.0.md](upgrading/v10.0.md).
 
-The dependency floor moved to `fastmcp-pvl-core>=10.0.0,<11`. v10 ships
-`tool_boundary`, the wrapper the `designing-tool-outcomes` skill used to have
-every server copy, and a new template-owned test,
-`tests/test_tool_outcomes.py`, fails any registered tool that does not carry
-it. The first `copier update` to this version turns your test suite red until
-every tool is wrapped. That includes tools inside the `DOMAIN-APP-TOOLS` and
-`DOMAIN-WIRING` blocks and app-only tools hidden from the model.
+## Unreleased
 
-1. **Wrap every tool.** Import `tool_boundary` from `fastmcp_pvl_core` and put
-   `@tool_boundary` directly under each `@mcp.tool`:
-
-   ```python
-   from fastmcp_pvl_core import tool_boundary
-
-   @mcp.tool(annotations={"title": "Search Notes", "read_only_hint": True})
-   @tool_boundary
-   async def search_notes(query: str) -> list[dict[str, str]]:
-       ...
-   ```
-
-   The wrapper keeps the signature, so input and output schemas, `Depends`
-   and `Context` injection are unchanged. An exception that is not a
-   `ToolError` now reaches the model as a fixed "the request itself was
-   fine; retry later" message instead of FastMCP's `Error calling tool`
-   text, and is logged once as `tool_failed` at ERROR with the traceback.
-   Any exception a tool raised for the model to act on, such as a
-   `ValueError` for bad input, must become
-   `ToolError(msg, log_level=logging.INFO)` or the model loses the message.
-   `tools.py` is a starter file that `copier update` does not re-render, so
-   the template's own `ping` example changes only in new projects.
-2. **Delete a copied `tool_boundary`.** A project that copied the wrapper
-   out of the skill replaces it with the import above; the test cannot find
-   a copy, only pvl-core's marker.
-3. **A transfer `validate` hook rejects only with `ToolError`.** A hook passed
-   to `register_transfer_routes(validate=...)` that raises `ValueError` (or
-   anything but a `ToolError`) is now reported to the model as a server fault,
-   not as the hook's message. Raise `ToolError(msg, log_level=logging.INFO)`
-   (pvl-core #376).
-4. **A `register_long_running_tool` coroutine likewise.** Anything but a
-   `ToolError` from it now ends as a server fault, before and after the
-   deadline; the poller of `get_job_result` gets the fixed message, never
-   the exception's text (pvl-core #375).
-5. **Log alerts on `tool_call_failed` change level.** The request-logging
-   middleware now logs `tool_call_failed` at the `ToolError`'s `log_level`
-   rather than always at ERROR (pvl-core #363). An alert that keys on the
-   ERROR level stops firing for outcomes raised at INFO, which is the
-   intent. An alert that keys on the event name alone still fires for them;
-   add the level to it.
+_Nothing yet._

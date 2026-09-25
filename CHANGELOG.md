@@ -1,5 +1,10 @@
 # Changelog
 
+## v10.0.0 (2026-09-25)
+
+- #682 feat(deps)!: adopt fastmcp-pvl-core v10 and its tool boundary
+
+
 ## v9.4.0 (2026-09-25)
 
 - #681 fix(skills): stop citing markdown-vault-mcp's removed surface-budget test
