@@ -66,8 +66,8 @@ throughout.
     child pull request would suddenly show its siblings' changes as its own,
     and the reviewed commits would no longer exist. A merge keeps them, and
     it records any conflict resolution where a reviewer can find it. Pushing
-    the merge directly relies on the repository admin's ruleset bypass;
-    anyone else opens a pull request from `main` into the integration branch
+    the merge directly relies on the ruleset bypass that the repository
+    admin role holds; anyone else opens a pull request from `main` into the integration branch
     and merges it with a merge commit.
 
 5. **Finish with a merge commit.** Before merging the final pull request,
@@ -77,7 +77,7 @@ throughout.
 
     knope computes the next version and the changelog from every commit
     reachable from `main` since the last release, including the ones a merge
-    commit brings in, and counts each commit once. A merge commit therefore
+    commit brings in, and counts each commit once. So a merge commit
     keeps one changelog entry per child, and any child's `!` still decides
     the version bump. A squash would collapse the whole epic into the final
     pull request's single title.
