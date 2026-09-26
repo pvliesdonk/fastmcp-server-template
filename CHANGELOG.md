@@ -1,5 +1,10 @@
 # Changelog
 
+## v10.2.0 (2026-09-26)
+
+- #689 feat: non-strict required checks and integration-branch support
+
+
 ## v10.1.0 (2026-09-25)
 
 - #686 feat(skills): descriptions state the contract, error text explains the failure
