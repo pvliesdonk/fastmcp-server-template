@@ -80,7 +80,8 @@ throughout.
     commit brings in, and counts each commit once. With a merge commit, the
     changelog keeps one entry per child, and any child's `!` still decides
     the version bump. A squash would collapse the whole epic into the final
-    pull request's single title.
+    pull request's single title. It also keeps the project's rule that
+    roughly every issue and pull request maps to one commit on `main`.
 
 6. **Delete the branch** through GitHub, or let automatic head-branch
    deletion do it. Deleting it with `git push --delete` while a child pull

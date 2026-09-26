@@ -179,6 +179,11 @@ or the public library interface, assessed against the **last stable
 release**, not the previous commit. MCP-surface changes (tools, resources,
 prompts) are not breaking on their own.
 
+Squash-merge issue and feature PRs; merge an integration branch's final PR
+with a merge commit. Either way, roughly every issue and PR maps to one
+commit on `main`: the squash commit, or the child's squash commit that the
+merge commit brings in.
+
 State what the PR deliberately does **not** do, with each deferral's tracking
 issue. A change that says what it left out is easier to trust than one that
 appears to have found nothing.
