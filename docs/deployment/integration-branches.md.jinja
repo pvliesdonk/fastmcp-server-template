@@ -77,8 +77,8 @@ throughout.
 
     knope computes the next version and the changelog from every commit
     reachable from `main` since the last release, including the ones a merge
-    commit brings in, and counts each commit once. So a merge commit
-    keeps one changelog entry per child, and any child's `!` still decides
+    commit brings in, and counts each commit once. With a merge commit, the
+    changelog keeps one entry per child, and any child's `!` still decides
     the version bump. A squash would collapse the whole epic into the final
     pull request's single title.
 
