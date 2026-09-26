@@ -59,7 +59,9 @@ merge. On a busy trunk that happens once per sibling merge.
 The cost of turning it off is the semantic conflict: two pull requests that
 each pass alone and break together. CI runs on every push to `main`,
 `release/*` and `integration/*`, so such a break shows up on the merged
-commit rather than slipping through unseen. GitHub's merge queue is the tool
+commit rather than slipping through unseen. A release pull request is the
+one place this needs care: nothing stops it merging after its base moved
+on, so re-dispatch Release Prepare first (see the release process page). GitHub's merge queue is the tool
 that closes the gap without the update chore, but it needs a `merge_group`
 trigger in every required workflow and is not available on repositories
 owned by a personal account.
