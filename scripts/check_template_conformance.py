@@ -614,6 +614,9 @@ def derive_base() -> str:
         text=True,
         check=True,
     ).stdout.split()
+    # for-each-ref sorts by refname, and origin/integration/* sorts before
+    # origin/main; put main first so the strict comparison below prefers it.
+    refs.sort(key=lambda ref: ref != "origin/main")
     best, best_time = "", -1
     for ref in refs:
         mb = subprocess.run(

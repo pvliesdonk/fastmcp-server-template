@@ -19,7 +19,10 @@ set -euo pipefail
 base="${STRUCTURAL_GATE_BASE:-}"
 if [ -z "$base" ]; then
     best_ts=0
-    for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/main 'refs/remotes/origin/release/*' 'refs/remotes/origin/integration/*'); do
+    # origin/main is listed first by hand: for-each-ref sorts by refname, and
+    # origin/integration/* sorts before it.  A missing origin/main fails the
+    # merge-base below and is skipped.
+    for ref in origin/main $(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/release/*' 'refs/remotes/origin/integration/*'); do
         mb="$(git merge-base HEAD "$ref" 2>/dev/null)" || continue
         ts="$(git log -1 --format=%ct "$mb")"
         # Strict > prefers the earlier-listed origin/main on a timestamp tie.
