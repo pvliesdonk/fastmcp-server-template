@@ -2,8 +2,8 @@
 
 A generated project makes a check that lives outside the template-owned
 `ci.yml` merge-blocking by listing its context in `extra_required_checks`;
-the answer renders into the `required_status_checks` array of both branch
-rulesets, which `bootstrap.yml` then applies verbatim.
+the answer renders into the `required_status_checks` array of the `main` and
+`release/*` rulesets, which `bootstrap.yml` then applies verbatim.
 
 Two properties matter and neither is visible by reading the template:
 
@@ -31,6 +31,8 @@ from jinja2 import Environment
 _REPO = Path(__file__).resolve().parents[2]
 _RULESETS = _REPO / ".github" / "rulesets"
 _BRANCH_RULESETS = ("protect-main.json.jinja", "protect-release-branches.json.jinja")
+# Plain JSON on purpose: integration branches require CI Success alone.
+_INTEGRATION_RULESET = "protect-integration-branches.json"
 
 
 def _render(template: Path, extra_required_checks: list[str]) -> dict:
@@ -78,3 +80,28 @@ def test_check_names_needing_json_escaping_survive(name: str) -> None:
     awkward = ['Domain "SPA" check', "back\\slash", "café ✓"]
     ruleset = _render(_RULESETS / name, awkward)
     assert _contexts(ruleset) == ["CI Success", *awkward]
+
+
+def test_integration_branches_require_ci_success_alone() -> None:
+    # A domain check named in extra_required_checks runs from a workflow the
+    # project owns, typically filtered to `branches: [main, "release/**"]`.
+    # Requiring it on integration/* would leave every child PR of an epic
+    # waiting for a check that never reports.  The final integration -> main
+    # PR still has to pass it, so nothing reaches main unchecked.
+    ruleset = json.loads((_RULESETS / _INTEGRATION_RULESET).read_text("utf-8"))
+    assert _contexts(ruleset) == ["CI Success"]
+
+
+@pytest.mark.parametrize("name", [*_BRANCH_RULESETS, _INTEGRATION_RULESET])
+def test_branches_need_not_be_up_to_date_to_merge(name: str) -> None:
+    # `strict_required_status_checks_policy` is GitHub's "require branches to
+    # be up to date before merging".  Under it every merge to the base turns
+    # each open PR's green check stale, so a PR that merges cleanly still
+    # waits for an update-branch round trip and a full CI re-run — on a busy
+    # trunk, once per sibling merge.  CI on the push to the base is the
+    # backstop for the semantic conflicts the setting guards against.
+    ruleset = _render(_RULESETS / name, [])
+    (rule,) = [r for r in ruleset["rules"] if r["type"] == "required_status_checks"]
+    assert rule["parameters"]["strict_required_status_checks_policy"] is False, (
+        f"{name} must not require PR branches to be up to date with their base"
+    )
