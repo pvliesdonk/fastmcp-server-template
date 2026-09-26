@@ -201,15 +201,20 @@ generated project it is the rendered section from `AGENTS.md.jinja`.
 
 `.github/rulesets/*` ship to generated projects, where the rendered
 `bootstrap.yml` applies them (posture documented in
-`docs/deployment/repository-protection.md.jinja`).  The two branch rulesets
-are `.json.jinja`: they require the generated `ci.yml`'s aggregate
+`docs/deployment/repository-protection.md.jinja`).  The `main` and
+`release/*` rulesets are `.json.jinja`: they require the generated `ci.yml`'s aggregate
 `CI Success` check plus whatever the project listed in the
 `extra_required_checks` answer, the seam that lets a domain check outside
 `ci.yml` be merge-blocking without forking a template-owned file (#454).
 `scripts/tests/test_ruleset_required_checks.py` guards both halves — an
 empty answer must render the single-context form every existing downstream
 already has, and a non-empty one must still render valid JSON.  The tag
-ruleset has no status checks and stays plain JSON.
+ruleset has no status checks and stays plain JSON, and so does
+`protect-integration-branches.json`: it requires `CI Success` alone,
+because a domain check's own workflow may not run on `integration/*` and a
+required check that never reports blocks every child PR (#454's trap).
+All three branch rulesets are non-strict — a PR need not be up to date
+with its base — and the same test file pins that.
 `bootstrap.yml.jinja`'s `security` job also enables private vulnerability
 reporting, Dependabot alerts and push protection; `SECURITY.md.jinja` is the
 policy generated projects get, and the plain `SECURITY.md` beside it is this

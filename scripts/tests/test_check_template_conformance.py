@@ -521,6 +521,30 @@ def test_derive_base_is_the_merge_base_with_origin_main(
     assert c.derive_base() == "some-ref"
 
 
+def test_derive_base_prefers_the_integration_branch_a_child_is_cut_from(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An epic's child PR targets integration/<epic>, not main: measured
+    # against origin/main it would sweep in every sibling already merged
+    # into the integration branch.  The nearest merge-base decides, by
+    # committer time, so the integration commit is dated after main's.
+    clone = _clone_with_origin(tmp_path)
+    (clone / "c.txt").write_text("c\n")
+    _git(clone, "add", "-A")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2090-01-01T00:00:00Z")
+    _git(clone, "commit", "-qm", "sibling")
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    integration_tip = _git(clone, "rev-parse", "HEAD").strip()
+    _git(clone, "update-ref", "refs/remotes/origin/integration/epic", "HEAD")
+    _git(clone, "checkout", "-qb", "child")
+    (clone / "d.txt").write_text("d\n")
+    _git(clone, "add", "-A")
+    _git(clone, "commit", "-qm", "child")
+    monkeypatch.chdir(clone)
+    monkeypatch.delenv("TEMPLATE_CONFORMANCE_BASE", raising=False)
+    assert c.derive_base() == integration_tip
+
+
 def test_derive_base_without_a_remote_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
