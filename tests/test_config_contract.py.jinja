@@ -14,18 +14,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from fastmcp_pvl_core import ConfigurationError
+import pytest
+from fastmcp_pvl_core import ConfigurationError, domain_env_surface
 from typer.testing import CliRunner
 
 from _config_contract_env import preset_contract_env
 from {{ python_module }} import config as config_module
 from {{ python_module }}.cli import app
 from {{ python_module }}.config import ProjectConfig
-
-if TYPE_CHECKING:
-    import pytest
 
 
 def _config_text() -> str:
@@ -108,6 +105,32 @@ def test_post_init_can_reject_a_value(
             raise AssertionError(
                 f"{construct} did not propagate the ConfigurationError"
             )
+
+
+def test_every_required_var_is_supplied_by_config_contract_env(
+    request: pytest.FixtureRequest,
+) -> None:
+    """Each var `from_env` reads with `required=True` has a test value.
+
+    Template-owned tests build the config from the environment through
+    `tests/_config_contract_env.py`; a required var missing from the
+    project's `config_contract_env` would otherwise surface as setup errors
+    scattered across unrelated test files.
+    """
+    required = {
+        f"{config_module._ENV_PREFIX}_{var.suffix}"
+        for var in domain_env_surface(ProjectConfig)
+        if var.required
+    }
+    try:
+        supplied = set(dict(request.getfixturevalue("config_contract_env")))
+    except pytest.FixtureLookupError:
+        supplied = set()
+    missing = sorted(required - supplied)
+    assert not missing, (
+        f"Return {missing} from the `config_contract_env` fixture in "
+        "tests/conftest.py, with values a test can build the server with."
+    )
 
 
 def test_validate_block_raises_configuration_error_not_value_error() -> None:
