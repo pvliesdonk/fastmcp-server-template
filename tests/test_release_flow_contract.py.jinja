@@ -2125,6 +2125,28 @@ def test_missing_manifest_refuses_loudly(stamp_sandbox: Path) -> None:
     assert "server.json" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "version", ["9.9.9.dev1", "v9.9.9", "9.9.9-beta.1", "9.9", "../9.9.9", "9.9.9\n"]
+)
+def test_malformed_version_refuses_before_touching_anything(
+    stamp_sandbox: Path, version: str
+) -> None:
+    """Only the two shapes the release flow emits are stamped (#694).
+
+    knope hands the stamper ``X.Y.Z`` or ``X.Y.Z-rc.N``; anything else is a
+    broken invocation, and it must refuse before any manifest is rewritten
+    rather than write the string into uv.lock and server.json.
+    """
+    files = [stamp_sandbox / "uv.lock", stamp_sandbox / "server.json"]
+    before = [f.read_bytes() for f in files]
+
+    result = _run_stamper(stamp_sandbox, version)
+
+    assert result.returncode != 0
+    assert "version" in result.stderr
+    assert [f.read_bytes() for f in files] == before
+
+
 def test_unstampable_oci_pin_refuses_and_names_the_file(stamp_sandbox: Path) -> None:
     """An OCI identifier without a ``:v<tag>`` suffix refuses, atomically."""
     server_path = stamp_sandbox / "server.json"

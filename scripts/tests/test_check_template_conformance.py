@@ -265,6 +265,45 @@ def test_read_revision_sees_the_commit_not_the_worktree(
     assert read("missing.txt") is None
 
 
+@pytest.mark.parametrize("option", ["--ref", "--rev", "--since"])
+def test_revision_options_refuse_a_value_that_reads_as_an_option(option: str) -> None:
+    """A revision reaches git's command line; `-x` there is an option (#694)."""
+    with pytest.raises(SystemExit):
+        c._parse_args([f"{option}=--output=/tmp/x"])
+
+
+def test_read_revision_refuses_a_revision_that_reads_as_an_option(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", lambda command, **_: started.append(command))
+    with pytest.raises(ValueError, match="revision"):
+        c.read_revision("--output=/tmp/x")
+    assert not started
+
+
+@pytest.mark.parametrize("module", [c, r])
+def test_reexec_ends_uv_options_before_the_script(
+    module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Forwarded arguments must reach the script, never uv's own parser (#694)."""
+    monkeypatch.setitem(sys.modules, "copier", None)  # `import copier` fails
+    for flag in ("_CONFORMANCE_BOOTSTRAPPED", "_SEEDED_REPORT_BOOTSTRAPPED"):
+        monkeypatch.delenv(flag, raising=False)
+    monkeypatch.setattr(sys, "argv", ["script", "--rev=HEAD"])
+    captured: list[list[str]] = []
+
+    def fake_exec(_file: str, argv: list[str], _env: object) -> None:
+        captured.append(argv)
+        raise OSError("not really exec'ing")
+
+    monkeypatch.setattr(module.os, "execvpe", fake_exec)  # type: ignore[attr-defined]
+    module._reexec_with_deps()  # type: ignore[attr-defined]
+    (argv,) = captured
+    assert argv[argv.index("python") - 1] == "--", argv
+    assert argv[-1] == "--rev=HEAD"
+
+
 def test_last_commits_names_the_commit_that_wrote_the_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -23,7 +23,12 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import sys
+
+# SemVer core plus an optional pre-release: the release versions, rc builds
+# and the unstable channel's `0.0.0-dev` all fit; nothing else is stamped.
+VERSION = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?")
 
 
 class VendorError(RuntimeError):
@@ -42,6 +47,18 @@ def servers_of(mcp: dict) -> dict:
     return inner if isinstance(inner, dict) else mcp
 
 
+def inside(root: pathlib.Path, path: pathlib.Path) -> pathlib.Path:
+    """*path* resolved, refusing one that lands outside *root* (#694).
+
+    A symlink or `..` in the staged tree must not make a rewrite, or a check,
+    reach a file the plugin directory does not contain.
+    """
+    resolved = path.resolve()
+    if not resolved.is_relative_to(root.resolve()):
+        raise VendorError(f"{path} resolves outside {root}")
+    return resolved
+
+
 def _write_json(path: pathlib.Path, data: object) -> None:
     path.write_text(
         json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -49,7 +66,7 @@ def _write_json(path: pathlib.Path, data: object) -> None:
 
 
 def stamp_version(root: pathlib.Path, version: str) -> None:
-    path = root / ".claude-plugin" / "plugin.json"
+    path = inside(root, root / ".claude-plugin" / "plugin.json")
     manifest = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict):
         raise VendorError(f"{path}: top level must be a JSON object")
@@ -58,7 +75,7 @@ def stamp_version(root: pathlib.Path, version: str) -> None:
 
 
 def repin(root: pathlib.Path, wheel: str) -> str:
-    path = root / ".mcp.json"
+    path = inside(root, root / ".mcp.json")
     mcp = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(mcp, dict):
         raise VendorError(f"{path}: top level must be a JSON object")
@@ -90,6 +107,8 @@ def main(argv: list[str]) -> int:
         raise VendorError(f"usage: {argv[0]} <staged-plugin-dir> <version>")
     root = pathlib.Path(argv[1])
     version = argv[2]
+    if not VERSION.fullmatch(version):
+        raise VendorError(f"version {version!r} is not X.Y.Z or X.Y.Z-<pre-release>")
 
     wheels = sorted((root / "wheels").glob("*.whl"))
     if len(wheels) != 1:

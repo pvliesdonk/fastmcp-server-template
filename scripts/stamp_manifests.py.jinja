@@ -57,6 +57,28 @@ class StampError(RuntimeError):
     """A required pin was missing or unstampable — the release must refuse."""
 
 
+# The only two shapes the release flow emits: knope's `X.Y.Z`, and
+# `X.Y.Z-rc.N` from `--prerelease-label rc` (release-prepare.yml).
+_RELEASE_VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?")
+
+
+def _release_version(raw: str) -> str:
+    """Return *raw* if it is a release version this flow emits, else refuse.
+
+    The value is written into uv.lock and every published manifest, so a
+    malformed invocation must stop before anything is rewritten (#694).  The
+    result is rebuilt from the matched digits rather than passed through.
+    """
+    match = _RELEASE_VERSION.fullmatch(raw)
+    if match is None:
+        raise StampError(
+            f"version {raw!r} is neither X.Y.Z nor X.Y.Z-rc.N — "
+            "the only shapes the release flow emits"
+        )
+    major, minor, patch, rc = match.groups()
+    return f"{major}.{minor}.{patch}" + (f"-rc.{rc}" if rc is not None else "")
+
+
 def _load(path: Path) -> Any:
     if not path.is_file():
         raise StampError(f"{path}: not found — run from the repository root")
@@ -249,7 +271,7 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
-    version = argv[1]
+    version = _release_version(argv[1])
 
     # uv.lock tracks pyproject.toml, not a published artifact, so its
     # self-version entry moves on EVERY release — before the pre-release

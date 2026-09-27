@@ -249,6 +249,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--pyproject", type=Path, default=Path("pyproject.toml"))
     args = parser.parse_args(argv)
+    if args.pyproject.name != "pyproject.toml":
+        # The one file this checker parses; never read an arbitrary path (#694).
+        parser.error(f"--pyproject must name a pyproject.toml, got {args.pyproject}")
     text = args.pyproject.read_text(encoding="utf-8")
     token = os.environ.get("GITHUB_TOKEN") or None
     state_of = None if args.offline else (lambda url: fetch_issue_state(url, token))

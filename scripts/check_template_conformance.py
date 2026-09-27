@@ -368,10 +368,22 @@ def read_worktree(root: Path) -> ReadProject:
     return read
 
 
+def git_revision(value: str) -> str:
+    """*value* as a git revision, refusing one git would read as an option.
+
+    Revisions reach git's command line; `--output=...` there is an option,
+    not a commit (#694).  Also the argparse ``type=`` of every revision flag.
+    """
+    if not value or value.startswith("-"):
+        raise ValueError(f"git revision {value!r} must not be empty or start with '-'")
+    return value
+
+
 def read_revision(rev: str) -> ReadProject:
     """File bytes, symlink target (str), or None, from a git revision."""
+    rev = git_revision(rev)
     listing = subprocess.run(
-        ["git", "ls-tree", "-r", "-z", "--full-tree", rev],
+        ["git", "ls-tree", "-r", "-z", "--full-tree", "--end-of-options", rev],
         capture_output=True,
         check=True,
     ).stdout.decode("utf-8")
@@ -391,7 +403,9 @@ def read_revision(rev: str) -> ReadProject:
         if rel not in modes:
             return None
         blob = subprocess.run(
-            ["git", "show", f"{rev}:./{rel}"], capture_output=True, check=True
+            ["git", "show", "--end-of-options", f"{rev}:./{rel}"],
+            capture_output=True,
+            check=True,
         ).stdout
         return blob.decode("utf-8") if modes[rel] == "120000" else blob
 
@@ -553,6 +567,9 @@ def _reexec_with_deps() -> bool:
         "--no-project",
         "--with",
         "copier",
+        # Everything after `--` is the command, so no forwarded argument is
+        # ever read as one of uv's own options (#694).
+        "--",
         "python",
         __file__,
         *sys.argv[1:],
@@ -567,13 +584,18 @@ def _reexec_with_deps() -> bool:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument(
-        "--ref", help="template ref to render (default: _commit in the answers file)"
+        "--ref",
+        type=git_revision,
+        help="template ref to render (default: _commit in the answers file)",
     )
     parser.add_argument(
-        "--rev", help="compare this git revision instead of the working tree"
+        "--rev",
+        type=git_revision,
+        help="compare this git revision instead of the working tree",
     )
     parser.add_argument(
         "--since",
+        type=git_revision,
         help="report only drift not already present at this git revision",
     )
     parser.add_argument(

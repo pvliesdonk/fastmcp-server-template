@@ -330,6 +330,9 @@ def _reexec_with_deps() -> bool:
         "--no-project",
         "--with",
         "copier",
+        # Everything after `--` is the command, so no forwarded argument is
+        # ever read as one of uv's own options (#694).
+        "--",
         "python",
         __file__,
         *sys.argv[1:],
