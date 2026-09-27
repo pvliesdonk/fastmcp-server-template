@@ -346,6 +346,7 @@ _exclude:
   - "scripts/tests"                            # aggregator unit tests — template-only
   - "scripts/check_render_hygiene.py"          # template-ci render guard — template-only
   - "scripts/check_update_regression.py"       # template-ci update guard — template-only
+  - "scripts/make_required_var_variant.py"    # template-ci required-var variant — template-only
   - "scripts/promote_upgrading.py"             # UPGRADING.md release promotion — template-only
   - "ruff.toml"                                # this repo's own lint config for scripts/ — template-only; a render carries [tool.ruff] in pyproject.toml
   - "schemas"                                  # vendored server.json schema — template-ci gate only

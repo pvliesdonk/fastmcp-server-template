@@ -310,6 +310,33 @@ jobs:
         working-directory: /tmp/smoke
         run: uv run pytest -x -q
 
+      - name: required-var variant (env(required=True) + config_contract_env)
+        # A copy of the smoke project with config.py's shipped `api_token`
+        # example uncommented (`env(..., required=True)`) and the variable
+        # returned from `config_contract_env` (#690, #621). Its gate proves the
+        # documented example works: every template-owned test builds through
+        # the seam, `serve` refuses in one line, and the generated
+        # configuration reference marks the variable required. Derived from
+        # /tmp/smoke after the hygiene step, so it is not a render the hygiene
+        # guard should see. test_smoke.py and test_cli.py are project-owned and
+        # deselected: wiring them is the project's job.
+        run: |
+          rm -rf /tmp/smoke-required
+          rsync -a --exclude .venv /tmp/smoke/ /tmp/smoke-required/
+          python3 scripts/make_required_var_variant.py /tmp/smoke-required smoke_mcp SMOKE_MCP
+          cd /tmp/smoke-required
+          uv sync --all-extras --all-groups
+          uv run ruff check . && uv run ruff format --check .
+          uv run mypy src/ tests/
+          env -u SMOKE_MCP_API_TOKEN uv run python -m pytest -x -q \
+            --deselect tests/test_smoke.py --deselect tests/test_cli.py
+          out=$(env -u SMOKE_MCP_API_TOKEN uv run --no-sync smoke-mcp serve 2>&1 || true)
+          test "$out" = "ERROR: configuration error: SMOKE_MCP_API_TOKEN is required but not set" \
+            || { echo "::error::serve did not refuse in one line: $out"; exit 1; }
+          uv run python scripts/gen_config_surface.py
+          grep -qE '^\| `SMOKE_MCP_API_TOKEN` \| \(none\) \| \*\*Yes\*\* \|' docs/configuration.md \
+            || { echo "::error::docs/configuration.md does not mark SMOKE_MCP_API_TOKEN required"; exit 1; }
+
       - name: AGENTS.md sentinel structure
         working-directory: /tmp/smoke
         run: |
