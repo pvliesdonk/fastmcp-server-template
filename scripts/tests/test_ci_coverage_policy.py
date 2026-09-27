@@ -36,7 +36,7 @@ def test_one_required_interpreter_collects_and_consumes_coverage(
     test_steps = [
         step
         for step in job["steps"]
-        if step.get("run", "").startswith("uv run --no-sync pytest")
+        if step.get("run", "").startswith("uv run --no-sync --no-build pytest")
     ]
     assert len(test_steps) == 2
     covered = [step for step in test_steps if "--cov" in shlex.split(step["run"])]
@@ -53,6 +53,7 @@ def test_one_required_interpreter_collects_and_consumes_coverage(
         "uv",
         "run",
         "--no-sync",
+        "--no-build",
         "pytest",
         "--durations=20",
     ]

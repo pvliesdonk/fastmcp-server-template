@@ -34,7 +34,7 @@ jobs:
         # carries it. See the `clean-tree opt-out render` step below for why,
         # and why removing it from one step alone breaks the job locally.
         run: |
-          uv run --no-sync \
+          uv run --no-sync --no-build \
             copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             . /tmp/smoke
@@ -50,7 +50,7 @@ jobs:
         # in a tag-bearing clone, and this diff then reports an idempotence
         # failure that does not exist.
         run: |
-          uv run --no-sync \
+          uv run --no-sync --no-build \
             copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             . /tmp/smoke2
@@ -72,7 +72,7 @@ jobs:
         # mccabe/pylint thresholds AND the tests/** S-ignore).
         run: |
           rm -rf /tmp/smoke-gate-off
-          uv run --no-sync \
+          uv run --no-sync --no-build \
             copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             --data enable_structural_gate=false \
@@ -117,7 +117,7 @@ jobs:
         # sees.
         run: |
           rm -rf /tmp/smoke-authz-off
-          uv run --no-sync \
+          uv run --no-sync --no-build \
             copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             --data enable_authorization=false \
@@ -126,7 +126,7 @@ jobs:
       - name: Render automatic-review variant
         run: |
           rm -rf /tmp/smoke-claude-review-on
-          uv run --no-sync copier copy --trust --defaults \
+          uv run --no-sync --no-build copier copy --trust --defaults \
             --vcs-ref=HEAD --data-file tests/fixtures/smoke-answers.yml \
             --data enable_automatic_claude_review=true \
             . /tmp/smoke-claude-review-on
@@ -172,7 +172,7 @@ jobs:
         # below use it directly.
         run: |
           rm -rf /tmp/smoke-cleantree-off
-          uv run --no-sync \
+          uv run --no-sync --no-build \
             copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             --data structural_gate_assert_clean_tree=false \
@@ -189,7 +189,7 @@ jobs:
         # the hygiene step, for the same reason as the variants before it.
         run: |
           rm -rf /tmp/smoke-long-names
-          uv run --no-sync \
+          uv run --no-sync --no-build \
             copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             --data project_name=a-deliberately-long-name-for-mcp \
@@ -276,8 +276,8 @@ jobs:
           # unused import left by the trim and any if/endif whitespace regression).
           for d in /tmp/smoke /tmp/smoke-cleantree-off; do
             ( cd "$d" \
-              && uv run --no-sync --project "$GITHUB_WORKSPACE" ruff check --config pyproject.toml tests/test_structural_gate.py \
-              && uv run --no-sync --project "$GITHUB_WORKSPACE" ruff format --check --config pyproject.toml tests/test_structural_gate.py ) \
+              && uv run --no-sync --no-build --project "$GITHUB_WORKSPACE" ruff check --config pyproject.toml tests/test_structural_gate.py \
+              && uv run --no-sync --no-build --project "$GITHUB_WORKSPACE" ruff format --check --config pyproject.toml tests/test_structural_gate.py ) \
               || { echo "::error::rendered structural test ($d) is not lint/format-clean"; exit 1; }
           done
 
@@ -289,15 +289,15 @@ jobs:
         working-directory: /tmp/smoke
         run: |
           test -f src/smoke_mcp/static/app.html
-          uv run --no-sync python scripts/vendor_spa.py --check
+          uv run --no-sync --no-build python scripts/vendor_spa.py --check
 
       - name: ruff check
         working-directory: /tmp/smoke
-        run: uv run --no-sync ruff check .
+        run: uv run --no-sync --no-build ruff check .
 
       - name: ruff format --check
         working-directory: /tmp/smoke
-        run: uv run --no-sync ruff format --check .
+        run: uv run --no-sync --no-build ruff format --check .
 
       - name: ruff over the long-identifiers render
         # The smoke project's own locked ruff, so this cannot drift from the
@@ -310,11 +310,11 @@ jobs:
 
       - name: mypy
         working-directory: /tmp/smoke
-        run: uv run --no-sync mypy src/ tests/
+        run: uv run --no-sync --no-build mypy src/ tests/
 
       - name: pytest
         working-directory: /tmp/smoke
-        run: uv run --no-sync pytest -x -q
+        run: uv run --no-sync --no-build pytest -x -q
 
       - name: required-var variant (env(required=True) + config_contract_env)
         # A copy of the smoke project with config.py's shipped `api_token`
@@ -503,7 +503,7 @@ jobs:
           # re-generation. Mirrors the `--check` step the rendered project's
           # OWN ci.yml.jinja runs on every downstream commit; nothing in
           # template-ci exercised it before this step.
-          uv run --no-sync python scripts/gen_config_surface.py --check \
+          uv run --no-sync --no-build python scripts/gen_config_surface.py --check \
             || { echo "::error::gen_config_surface.py --check reports the rendered config artifacts are stale — generation is not idempotent"; exit 1; }
 
       - name: server.json generated env-var arrays (packaging, identity)
@@ -580,7 +580,7 @@ jobs:
         working-directory: /tmp/smoke
         run: |
           set -euo pipefail
-          uv run --no-sync python3 - "$GITHUB_WORKSPACE/schemas/server.schema.json" <<'PY' || { echo "::error::server.json does not validate against schemas/server.schema.json"; exit 1; }
+          uv run --no-sync --no-build python3 - "$GITHUB_WORKSPACE/schemas/server.schema.json" <<'PY' || { echo "::error::server.json does not validate against schemas/server.schema.json"; exit 1; }
           import json
           import sys
 
@@ -1609,7 +1609,7 @@ jobs:
           # The detached docs must still build strictly: a dangling nav entry
           # or a link to a removed page is exactly what a fork's docs.yml
           # would fail on next.  The venv from the gate above is reused.
-          uv run --no-sync mkdocs build --strict -q \
+          uv run --no-sync --no-build mkdocs build --strict -q \
             || { echo "::error::mkdocs build --strict fails on the detached tree"; exit 1; }
           # The releasing skill's own TEMPLATE-TRACKING pair (pair 2) has no
           # over-run guard from the AGENTS.md kept-section loop below, since
@@ -1754,7 +1754,7 @@ jobs:
 
       - name: Render smoke project with copier
         run: |
-          uv run --no-sync \
+          uv run --no-sync --no-build \
             copier copy --trust --defaults --vcs-ref=HEAD \
             --data-file tests/fixtures/smoke-answers.yml \
             . /tmp/smoke
@@ -1777,7 +1777,7 @@ jobs:
 
       - name: mkdocs build --strict
         working-directory: /tmp/smoke
-        run: uv run --no-sync mkdocs build --strict
+        run: uv run --no-sync --no-build mkdocs build --strict
 
       - name: nfpm package (deb)
         working-directory: /tmp/smoke
@@ -1966,7 +1966,7 @@ jobs:
         # assert core help text, and an unbounded install picked up 5.0.0 the
         # day it shipped and turned main red (#509).
         # scripts/tests/test_tooling_env.py keeps the two pins equal.
-        run: uv run --no-sync pytest scripts/tests/ -v
+        run: uv run --no-sync --no-build pytest scripts/tests/ -v
 
       - name: UPGRADING.md Unreleased section
         run: |
@@ -1994,19 +1994,19 @@ jobs:
         # when the two drift. Catch regressions here before they surface in
         # downstream CI on the next copier-update.
         run: |
-          uv run --no-sync ruff check \
+          uv run --no-sync --no-build ruff check \
             scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/repo_about.py scripts/tests/
 
       - name: Type-check scripts (mypy)
         # The pre-commit hook's mypy, from the same locked tooling env, so
         # scripts/ is type-checked in CI too and not only on a maintainer's
         # machine (#694).
-        run: uv run --no-sync mypy scripts/
+        run: uv run --no-sync --no-build mypy scripts/
 
       - name: Format check scripts (ruff format matching downstream)
         # Line length and target come from the root ruff.toml (see above).
         run: |
-          uv run --no-sync ruff format --check \
+          uv run --no-sync --no-build ruff format --check \
             scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/repo_about.py scripts/tests/
 
       - name: Structural gate on shipped scripts (matches downstream diff-gate)
@@ -2040,7 +2040,7 @@ jobs:
         # `--select` on the command line replaces ruff.toml's `select`, so
         # the base lint set does not leak into this stricter pass.
         run: |
-          uv run --no-sync ruff check \
+          uv run --no-sync --no-build ruff check \
             --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
             --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310,scripts/report_seeded_changes.py:S603,scripts/report_seeded_changes.py:S606,scripts/report_seeded_changes.py:S607,scripts/check_template_conformance.py:S603,scripts/check_template_conformance.py:S606,scripts/check_template_conformance.py:S607,scripts/package_milestones.py:S603,scripts/package_milestones.py:S607,scripts/migrate_agent_instructions.py:S603,scripts/migrate_agent_instructions.py:S607" \
             --config "lint.mccabe.max-complexity=10" \

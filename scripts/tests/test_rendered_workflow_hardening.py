@@ -82,16 +82,20 @@ def code_lines(render: Path) -> list[tuple[str, str]]:
 
 
 def test_every_uv_run_skips_the_implicit_sync(code_lines) -> None:
-    """`uv run` after the job's locked sync must not re-resolve or build."""
+    """`uv run` after the job's locked sync must not re-resolve or build.
+
+    `--no-build` changes nothing once `--no-sync` holds, but SonarCloud
+    (githubactions:S8541) reads only the flags, so both are spelled out.
+    """
     bad = [
         f"{where}: {line.strip()}"
         for where, line in code_lines
         if re.search(r"\buv run\b", line)
-        and "--no-sync" not in line
+        and not ("--no-sync" in line and "--no-build" in line)
         and "--no-project" not in line
         and "allowedTools" not in line
     ]
-    assert not bad, "uv run without --no-sync:\n" + "\n".join(bad)
+    assert not bad, "uv run without --no-sync --no-build:\n" + "\n".join(bad)
 
 
 def test_every_uv_sync_is_locked(code_lines) -> None:
@@ -142,5 +146,5 @@ def test_no_workflow_grants_write_at_workflow_level(render: Path) -> None:
 def test_the_guards_see_the_render(code_lines) -> None:
     """Non-vacuous: the render has workflows, uv runs and a verified download."""
     text = "\n".join(line for _, line in code_lines)
-    assert "uv run --no-sync" in text
+    assert "uv run --no-sync --no-build" in text
     assert "sha256sum -c" in text

@@ -145,7 +145,7 @@ jobs:
               if git rev-parse -q --verify refs/remotes/origin/gh-pages > /dev/null; then
                 git update-ref refs/heads/gh-pages refs/remotes/origin/gh-pages
               fi
-              if uv run --no-sync mike deploy --push --title "$ver" "$minor"; then
+              if uv run --no-sync --no-build mike deploy --push --title "$ver" "$minor"; then
                 deployed=1
                 break
               fi

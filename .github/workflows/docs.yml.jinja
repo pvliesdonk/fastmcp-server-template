@@ -48,7 +48,7 @@ jobs:
         run: uv sync --no-default-groups --group docs --frozen  # NOSONAR(githubactions:S8541): installs this project, which --no-build refuses (#694)
 
       - name: Build documentation
-        run: uv run --no-sync mkdocs build --strict
+        run: uv run --no-sync --no-build mkdocs build --strict
 
       - name: Install browser test deps
         run: uv sync --no-default-groups --all-extras --group docs --group browser --frozen  # NOSONAR(githubactions:S8541): installs this project, which --no-build refuses (#694)
@@ -69,7 +69,7 @@ jobs:
       # no longer depends on apt being reachable.
       - name: Install Chromium
         timeout-minutes: 8
-        run: uv run --no-sync playwright install chromium
+        run: uv run --no-sync --no-build playwright install chromium
 
       # apt on the hosted runners intermittently stalls (template#430, and
       # upstream actions/runner-images#11347 / microsoft/playwright#34297, both
@@ -83,14 +83,14 @@ jobs:
       - name: Install Chromium system dependencies (fonts)
         timeout-minutes: 5
         continue-on-error: true
-        run: uv run --no-sync playwright install-deps chromium
+        run: uv run --no-sync --no-build playwright install-deps chromium
 
       - name: Run config-wizard browser tests
         # Both the template-owned smoke suite and the project-owned domain suite
         # (test_config_wizard_domain.py). -m browser selects the browser-marked
         # tests in each; the seeded domain placeholder is skipped until a
         # consumer replaces it with real assertions.
-        run: uv run --no-sync pytest tests/test_config_wizard_smoke.py tests/test_config_wizard_domain.py -v -m browser
+        run: uv run --no-sync --no-build pytest tests/test_config_wizard_smoke.py tests/test_config_wizard_domain.py -v -m browser
 
   deploy:
     # Publish versioned docs with mike, serving from the gh-pages branch:
@@ -166,7 +166,7 @@ jobs:
           # read as success.
           deploy_docs() {
             if [ "$EVENT" = "push" ]; then
-              uv run --no-sync mike deploy --push unstable --title "unstable (${GITHUB_SHA:0:7})"
+              uv run --no-sync --no-build mike deploy --push unstable --title "unstable (${GITHUB_SHA:0:7})"
               return
             fi
             version="${TAG#v}"
@@ -178,10 +178,10 @@ jobs:
               | python3 -c 'import json,sys; vs=json.load(sys.stdin); print(next((v["version"] for v in vs if "latest" in (v.get("aliases") or [])), ""))' \
               || true)"
             if [ -z "$current" ] || [ "$(printf '%s\n%s\n' "$current" "$minor" | sort -V | tail -1)" = "$minor" ]; then
-              uv run --no-sync mike deploy --push --update-aliases --title "$version" "$minor" latest \
-                && uv run --no-sync mike set-default --push latest
+              uv run --no-sync --no-build mike deploy --push --update-aliases --title "$version" "$minor" latest \
+                && uv run --no-sync --no-build mike set-default --push latest
             else
-              uv run --no-sync mike deploy --push --title "$version" "$minor"
+              uv run --no-sync --no-build mike deploy --push --title "$version" "$minor"
             fi
           }
           # Deploys from the push and release buckets can race on gh-pages;
