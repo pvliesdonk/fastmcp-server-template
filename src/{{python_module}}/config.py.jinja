@@ -15,6 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from fastmcp_pvl_core import (
+    # Re-exported for CONFIG-VALIDATE, which raises it; unused in the
+    # template's own code, so the directive is deliberate, not redundant.
+    ConfigurationError,  # noqa: F401
     ServerConfig,
     # Used by `_default_server_name` below, and re-exported so CONFIG-FROM-ENV
     # additions don't need a new import.  No `noqa: F401` — that factory makes
@@ -71,6 +74,14 @@ class ProjectConfig:
     #     default=Path("/data/vault"),
     #     metadata={"help": "Filesystem root of the vault.", "tags": ("storage",)},
     # )
+    #
+    # (example: a variable the server cannot run without.  The empty default
+    #  only satisfies dataclass field ordering; `required=True` in from_env
+    #  does the refusing, and the generated docs show no default.)
+    # api_token: str = field(
+    #     default="",
+    #     metadata={"help": "Upstream API token.", "tags": ("upstream",)},
+    # )
     {%- if enable_authorization %}
     #
     # (example: opt-in authorization — see fastmcp-pvl-core's README
@@ -88,10 +99,17 @@ class ProjectConfig:
     def __post_init__(self) -> None:
         """Validate composed domain fields.  Raise ``ConfigurationError`` when invalid.
 
-        ``ConfigurationError`` (from ``fastmcp_pvl_core``) is what ``serve``
-        turns into its one-line ``ERROR: configuration error: ...`` exit.  Any
-        other exception, ``ValueError`` included, escapes as a full traceback,
-        so name the variable and the problem in the message and raise that.
+        ``ConfigurationError`` is what ``serve`` turns into its one-line
+        ``ERROR: configuration error: ...`` exit; any other exception,
+        ``ValueError`` included, escapes as a full traceback.  Name the
+        variable and the problem in the message.
+
+        This hook checks *values* — bounds, formats, cross-field rules.  A
+        variable that must be *set* belongs on ``env(..., required=True)`` in
+        CONFIG-FROM-ENV instead: that refuses at startup and marks the var
+        required in the generated docs.  Never refuse an empty required field
+        here — tests and programmatic callers construct ``ProjectConfig(...)``
+        directly, without the environment.
 
         Runs on EVERY construction path — ``from_env`` and a direct
         ``ProjectConfig(field=...)`` alike.  That is what makes this the right
@@ -107,9 +125,6 @@ class ProjectConfig:
         ``object.__setattr__(self, "name", value)``.
         """
         # CONFIG-VALIDATE-START — validate domain fields below; kept across copier update
-        # (uncommenting the examples below also requires adding
-        #  ``ConfigurationError`` to the ``fastmcp_pvl_core`` import at the top
-        #  of this file.)
         # (example: an exclusive lower bound, which env_float cannot express
         #  and which also holds for ProjectConfig(http_timeout=0))
         # if self.http_timeout <= 0:
@@ -133,6 +148,11 @@ class ProjectConfig:
             # CONFIG-FROM-ENV-START — populate domain fields below; kept across copier update
             # (example)
             # vault_path=Path(env(_ENV_PREFIX, "VAULT_PATH", "/data/vault")),
+            #
+            # (example: must be set.  Unset or blank raises ConfigurationError
+            #  at startup; also return the variable from config_contract_env
+            #  in tests/conftest.py.)
+            # api_token=env(_ENV_PREFIX, "API_TOKEN", required=True),
             {%- if enable_authorization %}
             #
             # (example: load the authz config from ``{{ env_prefix }}_*``;
