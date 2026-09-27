@@ -77,4 +77,4 @@ runs:
         SYNC_ARGS: {% raw %}${{ inputs.sync-args }}{% endraw %}
       # Deliberately unquoted: the flags are one string that must word-split.
       # shellcheck disable=SC2086
-      run: uv sync $SYNC_ARGS
+      run: uv sync $SYNC_ARGS  # NOSONAR(githubactions:S8541,S8544): installs this project, which --no-build refuses; --locked arrives in SYNC_ARGS (#694)

@@ -24,22 +24,22 @@ jobs:
 
 {% if include_mcp_apps_scaffold %}
       - name: Verify vendored SPA is up-to-date
-        run: uv run python scripts/vendor_spa.py --check
+        run: uv run --no-sync python scripts/vendor_spa.py --check
 {% endif %}
       - name: Verify generated config artifacts are up-to-date
-        run: uv run python scripts/gen_config_surface.py --check
+        run: uv run --no-sync python scripts/gen_config_surface.py --check
 
       - name: Verify [tool.uv] pins carry a live exit condition
         # A pin's `# until:` issue being closed fails this step: lift the pin.
         env:
           GITHUB_TOKEN: {% raw %}${{ github.token }}{% endraw %}
-        run: uv run python scripts/check_pins.py
+        run: uv run --no-sync python scripts/check_pins.py
 
       - name: Run ruff check
-        run: uv run ruff check src/ tests/
+        run: uv run --no-sync ruff check src/ tests/
 
       - name: Run ruff format check
-        run: uv run ruff format --check src/ tests/
+        run: uv run --no-sync ruff format --check src/ tests/
 
   typecheck:
     name: Type Check
@@ -52,7 +52,7 @@ jobs:
         uses: ./.github/actions/setup-project-env
 
       - name: Run mypy
-        run: uv run mypy src/ tests/
+        run: uv run --no-sync mypy src/ tests/
 
   test:
     name: Test (Python {% raw %}${{ matrix.python-version }}{% endraw %})
@@ -95,13 +95,13 @@ jobs:
 
       - name: Run tests
         if: matrix.python-version != '3.14'
-        run: uv run pytest --durations=20
+        run: uv run --no-sync pytest --durations=20
 
       - name: Run tests with coverage
         # Only this required interpreter supplies coverage to the steps below.
         # Repeating branch instrumentation on other entries wastes their budget.
         if: matrix.python-version == '3.14'
-        run: uv run pytest --cov --cov-report=xml --durations=20
+        run: uv run --no-sync pytest --cov --cov-report=xml --durations=20
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.14'
@@ -130,7 +130,7 @@ jobs:
             echo "description=Coverage not affected" >> "$GITHUB_OUTPUT"
             echo "No Python source changes — skipping diff-cover"
           else
-            OUTPUT=$(uv run diff-cover coverage.xml --compare-branch="origin/${BASE_REF}" --fail-under=80 2>&1) && RC=0 || RC=$?
+            OUTPUT=$(uv run --no-sync diff-cover coverage.xml --compare-branch="origin/${BASE_REF}" --fail-under=80 2>&1) && RC=0 || RC=$?
             echo "$OUTPUT"
             # `Coverage:`, NOT `Total:` — diff-cover's summary carries both,
             # and `Total:` is the coverable-LINE COUNT, not a percentage:

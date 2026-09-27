@@ -77,9 +77,25 @@ jobs:
       # claude-code#73453) so the fan-out completes in-turn. Remove this step and
       # the path_to_claude_code_executable input once #1499 is fixed upstream.
       - name: Install pinned Claude Code (2.1.197, pre-background-subagents)
+        # The binary is downloaded directly and checked against the checksum
+        # the release manifest publishes for linux-x64, rather than piping
+        # claude.ai/install.sh into bash: an unverified script would run with
+        # this job's token (SonarCloud githubactions:S8482, S6506; #694). To
+        # move the pin, copy `platforms["linux-x64"].checksum` from
+        # https://downloads.claude.ai/claude-code-releases/<version>/manifest.json.
+        # `claude install <version>` is the step install.sh ends with.
+        env:
+          CLAUDE_CODE_VERSION: "2.1.197"
+          CLAUDE_CODE_SHA256: f54e69cbc89b2da61a415700af7ff52a147e862517d4f1b0eecf768448cf7f83
         run: |
           set -euo pipefail
-          curl -fsSL https://claude.ai/install.sh | bash -s -- 2.1.197
+          DL="$RUNNER_TEMP/claude-$CLAUDE_CODE_VERSION"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$DL" \
+            "https://downloads.claude.ai/claude-code-releases/$CLAUDE_CODE_VERSION/linux-x64/claude"
+          echo "$CLAUDE_CODE_SHA256  $DL" | sha256sum -c -
+          chmod +x "$DL"
+          "$DL" install "$CLAUDE_CODE_VERSION"
+          rm -f "$DL"
           BIN="$HOME/.local/bin/claude"
           test -x "$BIN"
           "$BIN" --version

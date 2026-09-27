@@ -115,7 +115,7 @@ jobs:
 
       - name: Install docs dependencies
         if: steps.pages.outputs.found == 'true'
-        run: uv sync --no-default-groups --group docs --frozen
+        run: uv sync --no-default-groups --group docs --frozen  # NOSONAR(githubactions:S8541): installs this project, which --no-build refuses (#694)
 
       - name: Redeploy versioned docs with the merged pages
         if: steps.pages.outputs.found == 'true'

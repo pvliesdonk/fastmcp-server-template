@@ -19,13 +19,17 @@ on:
       - .github/workflows/template-labels.yml
   workflow_dispatch:
 
+# Read-only by default; the job below asks for the write scope it needs
+# (SonarCloud githubactions:S8233, #694).
 permissions:
-  issues: write
+  contents: read
 
 jobs:
   labels:
     name: Ensure repository labels
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Create labels
         env:
