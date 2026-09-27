@@ -15,9 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from fastmcp_pvl_core import (
-    # Re-exported for CONFIG-VALIDATE, which raises it; unused in the
-    # template's own code, so the directive is deliberate, not redundant.
-    ConfigurationError,  # noqa: F401
+    # For CONFIG-VALIDATE, which raises it.  The redundant alias marks an
+    # explicit re-export, so ruff accepts the import whether or not a check
+    # uses it; a `noqa: F401` would become an unused directive (RUF100) the
+    # moment one does, and fixing that means editing outside the sentinels.
+    ConfigurationError as ConfigurationError,
+)
+from fastmcp_pvl_core import (
     ServerConfig,
     # Used by `_default_server_name` below, and re-exported so CONFIG-FROM-ENV
     # additions don't need a new import.  No `noqa: F401` — that factory makes
