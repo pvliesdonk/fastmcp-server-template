@@ -1997,6 +1997,12 @@ jobs:
           uv run --no-sync ruff check \
             scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/repo_about.py scripts/tests/
 
+      - name: Type-check scripts (mypy)
+        # The pre-commit hook's mypy, from the same locked tooling env, so
+        # scripts/ is type-checked in CI too and not only on a maintainer's
+        # machine (#694).
+        run: uv run --no-sync mypy scripts/
+
       - name: Format check scripts (ruff format matching downstream)
         # Line length and target come from the root ruff.toml (see above).
         run: |

@@ -58,7 +58,14 @@ def _code_lines(render: Path) -> list[tuple[str, str]]:
             for line in script.splitlines():
                 if not line.strip() or line.lstrip().startswith("#"):
                     continue
-                source = next((s for s in raw.splitlines() if line.strip() in s), line)
+                source = next(
+                    (
+                        s
+                        for s in raw.splitlines()
+                        if line.strip() in s and not s.lstrip().startswith("#")
+                    ),
+                    line,
+                )
                 lines.append((rel, source))
     return lines
 

@@ -23,25 +23,20 @@ repos:
       # project's src/ is unrendered Jinja here and cannot be mypy'd locally;
       # template-ci.yml renders the template and runs `mypy src/ tests/` on
       # the rendered output — that command never touches scripts/, so this
-      # hook is the ONLY mypy coverage gen_config_surface.py gets, anywhere.
+      # hook and template-ci's "Type-check scripts (mypy)" step are the only
+      # mypy coverage gen_config_surface.py gets.
       #
-      # --ignore-missing-imports: gen_config_surface.py imports PyYAML and
-      # fastmcp-pvl-core, real runtime dependencies of every *generated*
-      # project but not of this template repo's own tooling environment
-      # (which has no pyproject.toml of its own to install them into). A
-      # per-module override (`[mypy-yaml]` / `[mypy-fastmcp_pvl_core]`) would
-      # be narrower, but this hook is invoked with CLI args only — no local
-      # mypy.ini/pyproject.toml backs it — and per-module ignores aren't
-      # expressible as mypy CLI flags, so the blanket flag is kept
-      # deliberately, scoped to just the `scripts/` directory this hook runs
-      # against.
+      # mypy, the PyYAML/jsonschema stubs and fastmcp-pvl-core come from the
+      # repository's locked tooling environment (pyproject.toml + uv.lock at
+      # the root, #694), so every import resolves and no blanket
+      # --ignore-missing-imports is needed.
       - id: mypy
         name: mypy
         language: system
         entry: uv run mypy
         files: ^scripts/
         pass_filenames: false
-        args: [--ignore-missing-imports, scripts/]
+        args: [scripts/]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

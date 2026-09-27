@@ -83,7 +83,9 @@ jobs:
         # this job's token (SonarCloud githubactions:S8482, S6506; #694). To
         # move the pin, copy `platforms["linux-x64"].checksum` from
         # https://downloads.claude.ai/claude-code-releases/<version>/manifest.json.
-        # `claude install <version>` is the step install.sh ends with.
+        # `claude install <version>` is the step install.sh ends with; it fetches
+        # the native build again and checks that copy against the same release
+        # manifest itself, so no unverified code runs at either step.
         env:
           CLAUDE_CODE_VERSION: "2.1.197"
           CLAUDE_CODE_SHA256: f54e69cbc89b2da61a415700af7ff52a147e862517d4f1b0eecf768448cf7f83

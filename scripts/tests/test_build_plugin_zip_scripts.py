@@ -18,10 +18,12 @@ import pytest
 ACTION = (
     Path(__file__).resolve().parents[2] / ".github" / "actions" / "build-plugin-zip"
 )
+# The action ships its scripts beside action.yml, outside any package; mypy
+# only sees them through this path insertion, hence the import ignores.
 sys.path.insert(0, str(ACTION))
 
-import vendor  # noqa: E402
-import verify  # noqa: E402
+import vendor  # type: ignore[import-not-found]  # noqa: E402
+import verify  # type: ignore[import-not-found]  # noqa: E402
 
 WHEEL = "pkg-1.2.3-py3-none-any.whl"
 
