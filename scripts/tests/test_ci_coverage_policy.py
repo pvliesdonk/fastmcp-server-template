@@ -34,7 +34,9 @@ def test_one_required_interpreter_collects_and_consumes_coverage(
     assert job["continue-on-error"] == "${{ matrix.experimental || false }}"
     assert job["timeout-minutes"] == 20
     test_steps = [
-        step for step in job["steps"] if step.get("run", "").startswith("uv run pytest")
+        step
+        for step in job["steps"]
+        if step.get("run", "").startswith("uv run --no-sync pytest")
     ]
     assert len(test_steps) == 2
     covered = [step for step in test_steps if "--cov" in shlex.split(step["run"])]
@@ -47,7 +49,13 @@ def test_one_required_interpreter_collects_and_consumes_coverage(
     assert "--cov-fail-under" not in covered_step["run"]
     bare_step = next(step for step in test_steps if step is not covered_step)
     assert bare_step["if"] == "matrix.python-version != '3.14'"
-    assert shlex.split(bare_step["run"]) == ["uv", "run", "pytest", "--durations=20"]
+    assert shlex.split(bare_step["run"]) == [
+        "uv",
+        "run",
+        "--no-sync",
+        "pytest",
+        "--durations=20",
+    ]
     assert all("--durations=20" in step["run"] for step in test_steps)
     assert all(not step.get("continue-on-error", False) for step in test_steps)
 

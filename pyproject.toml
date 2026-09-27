@@ -1,0 +1,23 @@
+# The template repository's own tooling, locked in uv.lock: template-ci and
+# local maintenance (CLAUDE.md, "Making changes") run copier, ruff and the
+# scripts/ test suite from this environment instead of resolving whatever is
+# newest on each run (#694).  Not a package, and never rendered: copier gives
+# pyproject.toml.jinja precedence, and uv.lock is in copier.yml's _exclude.
+[project]
+name = "fastmcp-server-template-tooling"
+version = "0"
+requires-python = ">=3.11"
+dependencies = [
+    "copier",
+    "ruff",
+    "pytest",
+    "pyyaml",
+    "jsonschema",
+    "jinja2",
+    # Must equal the fastmcp-pvl-core pin in pyproject.toml.jinja;
+    # scripts/tests/test_tooling_env.py holds the two together.
+    "fastmcp-pvl-core>=10.1.0,<11",
+]
+
+[tool.uv]
+package = false

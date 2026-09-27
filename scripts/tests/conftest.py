@@ -20,17 +20,17 @@ REPO = Path(__file__).resolve().parents[2]
 SMOKE_ANSWERS = REPO / "tests" / "fixtures" / "smoke-answers.yml"
 
 
-@pytest.fixture(scope="session")
-def smoke_render(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def _render(tmp_path_factory: pytest.TempPathFactory, name: str, *data: str) -> Path:
     if shutil.which("uv") is None:
         pytest.skip("uv is required to render the template")
-    out = tmp_path_factory.mktemp("smoke-render") / "rendered"
+    out = tmp_path_factory.mktemp(name) / "rendered"
+    extra = [arg for item in data for arg in ("--data", item)]
     cmd = [
         "uv",
         "run",
-        "--no-project",
-        "--with",
-        "copier",
+        "--locked",
+        "--project",
+        str(REPO),
         "copier",
         "copy",
         "--trust",
@@ -38,6 +38,7 @@ def smoke_render(tmp_path_factory: pytest.TempPathFactory) -> Path:
         "--vcs-ref=HEAD",
         "--data-file",
         str(SMOKE_ANSWERS),
+        *extra,
         str(REPO),
         str(out),
     ]
@@ -45,3 +46,16 @@ def smoke_render(tmp_path_factory: pytest.TempPathFactory) -> Path:
     if proc.returncode != 0:
         pytest.fail(f"copier copy failed ({proc.returncode}):\n{proc.stderr[-4000:]}")
     return out
+
+
+@pytest.fixture(scope="session")
+def smoke_render(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return _render(tmp_path_factory, "smoke-render")
+
+
+@pytest.fixture(scope="session")
+def review_on_render(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The smoke answers plus the automatic Claude review workflow."""
+    return _render(
+        tmp_path_factory, "review-on-render", "enable_automatic_claude_review=true"
+    )

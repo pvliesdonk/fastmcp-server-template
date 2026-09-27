@@ -23,8 +23,9 @@ end-to-end with a real ``copier update``:
    sentinel in ``docs/index.md`` and does not name ``config.py``, whose
    only edits sit inside its ``CONFIG-*`` blocks.
 
-Runs copier via ``uv run --no-project --with copier`` (matching how
-template-ci and the local workflow invoke it), so ``uv`` must be on PATH.
+Runs copier from the repository's locked tooling environment
+(``pyproject.toml`` + ``uv.lock`` at the root, as template-ci and the local
+workflow do), so ``uv`` must be on PATH.
 The template repo must have its release tags fetched: copier checks
 ``BASE_REF`` out of a fresh clone of the repo, and describes ``HEAD``
 against tags to order the update.
@@ -60,8 +61,12 @@ def _run(args: list[str], cwd: Path) -> None:
         raise SystemExit(f"ERROR: {' '.join(args)} exited {result.returncode}")
 
 
+_TOOLING = Path(__file__).resolve().parent.parent
+
+
 def _copier(args: list[str], cwd: Path) -> None:
-    _run(["uv", "run", "--no-project", "--with", "copier", "copier", *args], cwd)
+    project = ["--project", str(_TOOLING)]
+    _run(["uv", "run", "--locked", *project, "copier", *args], cwd)
 
 
 def _git(args: list[str], cwd: Path) -> None:

@@ -55,6 +55,13 @@ create new projects.
   report the same drift by reading.
   `scripts/tests/test_check_template_conformance.py` unit-tests it
   and `check_update_regression.py` asserts it end to end.
+- `pyproject.toml` + `uv.lock` — this repo's own tooling environment
+  (copier, ruff, pytest, pvl-core, …), not a package and never rendered
+  (`pyproject.toml.jinja` takes precedence; `uv.lock` is in `_exclude`).
+  `template-ci` runs `uv sync --locked --no-build` once per job and every
+  tool through `uv run --no-sync`; run tools locally with `uv run --locked`.
+  Its pvl-core pin must equal `pyproject.toml.jinja`'s, which
+  `scripts/tests/test_tooling_env.py` enforces — bump both, then `uv lock`.
 - `ruff.toml` — lint configuration for this repo's own Python under
   `scripts/`, read by the pre-commit hooks and `template-ci`'s lint and
   format steps alike; excluded from renders (a generated project carries
@@ -78,7 +85,7 @@ create new projects.
 3. Render locally:
    ```bash
    rm -rf /tmp/smoke
-   uv run --no-project --with copier copier copy --trust --defaults \
+   uv run --locked copier copy --trust --defaults \
      --vcs-ref=HEAD --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
    ```
    `--vcs-ref=HEAD` tells copier to use the latest commit instead of the
