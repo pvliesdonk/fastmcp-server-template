@@ -148,7 +148,10 @@ def test_serve_reports_a_validation_failure_in_one_line(
         def __post_init__(self) -> None:
             raise ConfigurationError("domain invariant violated")
 
-    monkeypatch.setattr("{{ python_module }}.cli.ProjectConfig", _Rejecting)
+    monkeypatch.setattr(
+        "{{ python_module }}.cli.ProjectConfig",
+        _Rejecting,
+    )
 
     result = CliRunner().invoke(app, ["serve"])
 
