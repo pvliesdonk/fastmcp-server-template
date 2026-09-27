@@ -301,8 +301,9 @@ Steps: [upgrading/v10.0.md](upgrading/v10.0.md).
 fastmcp-pvl-core 10.1 adds `required=True` to `env`, `env_int` and
 `env_float`. An unset or blank variable raises `ConfigurationError`, which
 `serve` prints as one `ERROR: configuration error: …` line, and the generated
-configuration reference, `.env.example` and config wizard mark the variable
-required.
+configuration reference (`docs/configuration.md`) marks the variable
+required. `.env.example` and the config wizard do not flag required variables
+yet.
 
 If your server refuses to start without a variable, however it does that
 today (a check in `from_env`, in `__post_init__`, or where a tool registers):
@@ -332,4 +333,7 @@ Rich traceback. The template's advice and examples used to say `ValueError`.
 `test_validate_block_raises_configuration_error_not_value_error` in
 `tests/test_config_contract.py` fails while an uncommented line in your
 `CONFIG-VALIDATE` block starts with `raise ValueError`. Change each such
-`raise ValueError(` to `raise ConfigurationError(`; no import is needed.
+`raise ValueError(` to `raise ConfigurationError(`; no import is needed. If
+you had already added `ConfigurationError` to the `fastmcp_pvl_core` import in
+`config.py`, remove your copy: the template's own import now provides it, and
+keeping both fails ruff (`F811`).
