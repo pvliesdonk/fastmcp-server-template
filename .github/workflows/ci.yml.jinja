@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up project environment
         uses: ./.github/actions/setup-project-env
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up project environment
         uses: ./.github/actions/setup-project-env
@@ -76,7 +76,7 @@ jobs:
           - python-version: "3.14"
             experimental: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # Tags inform the release-contract tests (template#387): without
           # them a checkout of a repo that HAS releases looks like a fresh
@@ -105,7 +105,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.14'
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5  # v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
@@ -177,7 +177,7 @@ jobs:
 
       - name: Upload patch coverage artifact
         if: matrix.python-version == '3.14' && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: patch-coverage
           path: patch-coverage.json
@@ -189,7 +189,7 @@ jobs:
         # the job from failing; coverage-status.yml posts the status via workflow_run instead.
         if: matrix.python-version == '3.14' && github.event_name == 'pull_request' && always()
         continue-on-error: true
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
         env:
           PATCH_STATE: {% raw %}${{ steps.diffcover.outputs.state }}{% endraw %}
           PATCH_DESC: {% raw %}${{ steps.diffcover.outputs.description }}{% endraw %}
@@ -217,7 +217,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up project environment
         # No sync: this job resolves the dependency list with `uv export` and
@@ -250,7 +250,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
 
@@ -271,7 +271,7 @@ jobs:
       # need to add `pull-requests: write` here too.
       checks: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Cache Vale style packages
         # Cache only the downloaded pack directories — NOT .vale/styles/config/.
@@ -297,7 +297,7 @@ jobs:
         # a `sync:` expression that stops matching this step's `id` silently
         # returns the cache to being decorative.
         id: vale-cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         with:
           path: |
             .vale/styles/Google
@@ -379,7 +379,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
 
@@ -418,7 +418,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Check pull-request title
         env:

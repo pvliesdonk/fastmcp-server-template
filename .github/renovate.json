@@ -1,13 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":dependencyDashboard"],
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "helpers:pinGitHubActionDigests"
+  ],
   "labels": ["dependencies"],
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Bump GitHub Action pins inside Jinja-templated workflow files and composite actions (any *.jinja under .github/actions/). Dependabot and Renovate's native github-actions manager cannot read *.jinja, so the template's Action pins — the single source of truth for the whole fleet — are invisible to them. This scans them; downstream inherits bumps via template release + copier update.",
+      "description": "Bump GitHub Action pins inside Jinja-templated workflow files and composite actions (any *.jinja under .github/actions/). Dependabot and Renovate's native github-actions manager cannot read *.jinja, so the template's Action pins — the single source of truth for the whole fleet — are invisible to them. This scans them; downstream inherits bumps via template release + copier update. Pins are commit SHAs with the tag in a trailing `# vX` comment (SonarCloud githubactions:S7637, #694): the first matchString updates digest and comment together; the second still reads a bare `@vX` tag, so an unpinned addition is bumped rather than missed while scripts/tests/test_renovate_custom_manager.py fails it until it is pinned.",
       "managerFilePatterns": ["/^\\.github/(workflows|actions)/.*\\.jinja$/"],
       "matchStrings": [
+        "uses:\\s+(?<depName>[\\w.-]+/[\\w.-]+)(?:/[\\w./-]+)?@(?<currentDigest>[0-9a-f]{40})\\s+#\\s+(?<currentValue>v\\d[^\\s\"']*)",
         "uses:\\s+(?<depName>[\\w.-]+/[\\w.-]+)(?:/[\\w./-]+)?@(?<currentValue>v\\d[^\\s\"']*)"
       ],
       "datasourceTemplate": "github-tags",

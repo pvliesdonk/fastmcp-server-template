@@ -31,7 +31,7 @@ jobs:
         # Never fatal: a failed download must still reach the posting step
         # below, which turns it into an `error` status. See that step.
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           name: patch-coverage
           run-id: {% raw %}${{ github.event.workflow_run.id }}{% endraw %}
@@ -56,7 +56,7 @@ jobs:
         # the test job never got far enough to write one — which is a broken
         # run, not "the diff touched no covered lines".
         if: always()
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
         env:
           DOWNLOAD_OUTCOME: {% raw %}${{ steps.download.outcome }}{% endraw %}
         with:

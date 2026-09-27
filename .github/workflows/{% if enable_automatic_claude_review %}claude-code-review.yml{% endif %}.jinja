@@ -101,7 +101,7 @@ jobs:
       actions: read            # Read CI results instead of re-running them
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # Full history: the code-review plugin computes a three-dot range via
           # `git merge-base`, which does not exist in a depth-1 clone — the
@@ -148,7 +148,7 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@756cc22e19660d20e8cc9496b4f242475a7f7790  # v1
         with:
           claude_code_oauth_token: {% raw %}${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}{% endraw %}
           # Use the pinned 2.1.197 CLI installed above (skips the action's own).
