@@ -322,22 +322,28 @@ jobs:
         # guard should see. test_smoke.py and test_cli.py are project-owned and
         # deselected: wiring them is the project's job.
         run: |
+          repo=$PWD
           rm -rf /tmp/smoke-required
           rsync -a --exclude .venv /tmp/smoke/ /tmp/smoke-required/
-          python3 scripts/make_required_var_variant.py /tmp/smoke-required smoke_mcp SMOKE_MCP
           cd /tmp/smoke-required
+          python3 "$repo/scripts/make_required_var_variant.py"
           # Several downstreams make tests/ a package; the default render does
           # not, so this variant covers that layout too.
           touch tests/__init__.py
-          uv sync --all-extras --all-groups
-          uv run ruff check . && uv run ruff format --check .
-          uv run mypy src/ tests/
-          env -u SMOKE_MCP_API_TOKEN uv run python -m pytest -x -q \
+          # Reuse the smoke project's synced venv: the dependencies are the
+          # same, and PYTHONPATH puts this copy's src/ ahead of that venv's
+          # editable install of /tmp/smoke/src. The assertions below only pass
+          # against this copy's config.py.
+          export PYTHONPATH="$PWD/src"
+          venv=/tmp/smoke/.venv/bin
+          "$venv/ruff" check . && "$venv/ruff" format --check .
+          "$venv/mypy" src/ tests/
+          env -u SMOKE_MCP_API_TOKEN "$venv/python" -m pytest -x -q \
             --deselect tests/test_smoke.py --deselect tests/test_cli.py
-          out=$(env -u SMOKE_MCP_API_TOKEN uv run --no-sync smoke-mcp serve 2>&1 || true)
+          out=$(env -u SMOKE_MCP_API_TOKEN "$venv/smoke-mcp" serve 2>&1 || true)
           test "$out" = "ERROR: configuration error: SMOKE_MCP_API_TOKEN is required but not set" \
             || { echo "::error::serve did not refuse in one line: $out"; exit 1; }
-          uv run python scripts/gen_config_surface.py
+          "$venv/python" scripts/gen_config_surface.py
           grep -qE '^\| `SMOKE_MCP_API_TOKEN` \| \(none\) \| \*\*Yes\*\* \|' docs/configuration.md \
             || { echo "::error::docs/configuration.md does not mark SMOKE_MCP_API_TOKEN required"; exit 1; }
 
