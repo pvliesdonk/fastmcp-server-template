@@ -294,6 +294,26 @@ Steps: [upgrading/v9.3.md](upgrading/v9.3.md).
 
 Steps: [upgrading/v10.0.md](upgrading/v10.0.md).
 
-## Unreleased
+## Unreleased - CONFIG-VALIDATE raises `ConfigurationError`
 
-_Nothing yet._
+### Raise `ConfigurationError`, not `ValueError`, in `CONFIG-VALIDATE`
+
+`serve` prints a one-line `ERROR: configuration error: …` and exits 1 only
+for `fastmcp_pvl_core.ConfigurationError`. The `CONFIG-VALIDATE` seam in
+`config.py` used to say "Raise `ValueError`" and its examples did the same,
+but a `ValueError` from `__post_init__` escapes `serve` as a full Rich
+traceback. `copier update` keeps your block as it is, and the new
+template-owned test
+`test_validate_block_raises_configuration_error_not_value_error` in
+`tests/test_config_contract.py` fails while any uncommented line in the block
+starts with `raise ValueError`.
+
+1. In `src/<module>/config.py`, change every `raise ValueError(` between
+   `CONFIG-VALIDATE-START` and `CONFIG-VALIDATE-END` to
+   `raise ConfigurationError(`.
+2. Add `ConfigurationError` to the `from fastmcp_pvl_core import (...)`
+   block at the top of the file.
+3. Check the result: set one of the variables you validate to a value the
+   block rejects and run `<project> serve`. It should print one `ERROR:` line.
+
+A block with no live `raise ValueError` needs nothing.

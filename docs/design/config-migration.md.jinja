@@ -87,7 +87,9 @@ generated files.
 Also update `from_env` (between `CONFIG-FROM-ENV-START` / `CONFIG-FROM-ENV-END`)
 to read the var if it doesn't already, and `__post_init__` (between
 `CONFIG-VALIDATE-START` / `CONFIG-VALIDATE-END`) for any invariant the old
-prose described.
+prose described. Raise `fastmcp_pvl_core.ConfigurationError` there, not
+`ValueError`: only a `ConfigurationError` gets `serve`'s one-line
+configuration error, and a `ValueError` prints a full traceback.
 
 A **top-level** field carries its metadata whether you read it inline in the
 constructor keyword (`cls(read_only=env(_ENV_PREFIX, "READ_ONLY"), ...)`) or
