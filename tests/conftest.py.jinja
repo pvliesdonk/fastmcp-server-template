@@ -22,13 +22,17 @@ def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def config_contract_env() -> dict[str, str]:
-    """Env vars the template's `test_config_contract.py` presets before it
-    constructs the config via an otherwise env-less ``ProjectConfig.from_env()``.
+    """Env vars every template-owned test presets before building from the env.
 
-    A domain whose ``from_env`` hard-requires a variable (a fail-fast startup
-    contract) should return it here, for example::
+    Return each variable your ``from_env`` reads with
+    ``env(..., required=True)``, with a value a test can build with, e.g.::
 
-        return {"{{ env_prefix }}_SOURCE_DIR": "/tmp/vault"}
+        return {"{{ env_prefix }}_API_TOKEN": "test-token"}
+
+    ``tests/test_config_contract.py`` fails, naming the variable, while one
+    is missing.  Template-owned tests apply these through
+    ``tests/_config_contract_env.py``; ``test_smoke.py`` and ``test_cli.py``
+    are this project's own, so wire them yourself where they need it.
     """
     return {}
 

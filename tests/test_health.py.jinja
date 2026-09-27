@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from _config_contract_env import preset_contract_env
 from {{ python_module }}.server import make_server
 
 if TYPE_CHECKING:
@@ -46,13 +47,17 @@ def _get(server: FastMCP, url: str, *, http_path: str = "/mcp") -> Response:
 
 
 @pytest.fixture(autouse=True)
-def _kv_store_in_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _kv_store_in_tmp(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Pin the readiness probe's backend to a temp directory.
 
     Unset, pvl-core defaults to ``file:///data/state`` where that directory
     is usable and ``memory://`` elsewhere — which would make the readiness
-    verdict depend on the host running the tests.
+    verdict depend on the host running the tests.  The project's
+    ``config_contract_env`` is applied first, so this pin wins.
     """
+    preset_contract_env(request, monkeypatch)
     monkeypatch.setenv(
         "{{ env_prefix }}_KV_STORE_URL",
         f"file://{tmp_path / 'kv'}",

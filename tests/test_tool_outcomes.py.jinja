@@ -26,6 +26,7 @@ import pytest
 from fastmcp.tools import FunctionTool
 from fastmcp_pvl_core import is_tool_boundary
 
+from _config_contract_env import preset_contract_env
 from {{ python_module }}.server import make_server
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ def server(
     for key in list(os.environ):
         if key.startswith(f"{_ENV_PREFIX}_"):
             monkeypatch.delenv(key, raising=False)
+    preset_contract_env(request, monkeypatch)
     if request.param == "http":
         monkeypatch.setenv(f"{_ENV_PREFIX}_BASE_URL", "http://127.0.0.1:8000")
     return make_server(transport=request.param)
