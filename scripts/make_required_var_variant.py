@@ -8,8 +8,9 @@ copy's gate, which proves the documented example works end to end: every
 template-owned test builds through the seam, `serve` refuses in one line, and
 the generated configuration reference marks the variable required.
 
-Takes no arguments: the project is the current directory, and its Python
-module and env prefix come from the render's `.copier-answers.yml`.  Exits
+Takes no arguments: the project is the current directory, its one
+`src/*/config.py` is the config it edits, and the env prefix comes from the
+render's `.copier-answers.yml`.  Exits
 non-zero when an anchor it edits is missing, so a reworded example or a moved
 sentinel fails loudly instead of testing nothing.
 """
@@ -28,15 +29,7 @@ _FIELD = (
 )
 _READ = '            # api_token=env(_ENV_PREFIX, "API_TOKEN", required=True),\n'
 _EMPTY_CONTRACT = '    """\n    return {}\n'
-_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-
-
-def _answer(answers: str, key: str) -> str:
-    """One identifier-valued answer from `.copier-answers.yml`."""
-    match = re.search(rf"^{key}: *(\S+) *$", answers, re.MULTILINE)
-    if match is None or _IDENTIFIER.fullmatch(match[1]) is None:
-        sys.exit(f".copier-answers.yml: no identifier-valued {key!r} answer")
-    return match[1]
+_PREFIX = re.compile(r"^env_prefix: *(\w+) *$", re.MULTILINE)
 
 
 def _uncomment(block: str) -> str:
@@ -54,10 +47,15 @@ def _replace_once(path: Path, old: str, new: str) -> None:
 
 def main() -> None:
     project = Path.cwd()
+    configs = sorted(project.glob("src/*/config.py"))
+    if len(configs) != 1:
+        sys.exit(f"expected exactly one src/*/config.py, found {configs}")
+    config = configs[0]
     answers = (project / ".copier-answers.yml").read_text(encoding="utf-8")
-    module = _answer(answers, "python_module")
-    prefix = _answer(answers, "env_prefix")
-    config = project / "src" / module / "config.py"
+    match = _PREFIX.search(answers)
+    if match is None:
+        sys.exit(".copier-answers.yml: no env_prefix answer")
+    prefix = match[1]
     _replace_once(config, _FIELD, _uncomment(_FIELD))
     _replace_once(config, _READ, _uncomment(_READ))
     _replace_once(

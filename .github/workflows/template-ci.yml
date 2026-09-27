@@ -324,7 +324,7 @@ jobs:
         run: |
           repo=$PWD
           rm -rf /tmp/smoke-required
-          rsync -a --exclude .venv /tmp/smoke/ /tmp/smoke-required/
+          rsync -a --exclude .venv --exclude __pycache__ /tmp/smoke/ /tmp/smoke-required/
           cd /tmp/smoke-required
           python3 "$repo/scripts/make_required_var_variant.py"
           # Several downstreams make tests/ a package; the default render does
@@ -333,9 +333,10 @@ jobs:
           # Reuse the smoke project's synced venv: the dependencies are the
           # same, and PYTHONPATH puts this copy's src/ ahead of that venv's
           # editable install of /tmp/smoke/src. The assertions below only pass
-          # against this copy's config.py.
-          export PYTHONPATH="$PWD/src"
+          # against this copy's config.py. The venv goes on PATH too, since
+          # tests shell out to its tools (diff-quality runs ruff).
           venv=/tmp/smoke/.venv/bin
+          export PYTHONPATH="$PWD/src" PATH="$venv:$PATH"
           "$venv/ruff" check . && "$venv/ruff" format --check .
           "$venv/mypy" src/ tests/
           env -u SMOKE_MCP_API_TOKEN "$venv/python" -m pytest -x -q \
