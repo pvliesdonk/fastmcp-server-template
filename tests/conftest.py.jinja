@@ -30,9 +30,9 @@ def config_contract_env() -> dict[str, str]:
         return {"{{ env_prefix }}_API_TOKEN": "test-token"}
 
     ``tests/test_config_contract.py`` fails, naming the variable, while one
-    is missing.  Template-owned tests apply these through
-    ``tests/_config_contract_env.py``; ``test_smoke.py`` and ``test_cli.py``
-    are this project's own, so wire them yourself where they need it.
+    is missing.  Every template-owned test that builds from the environment
+    applies these; ``test_smoke.py`` and ``test_cli.py`` are this project's
+    own, so wire them yourself where they need it.
     """
     return {}
 

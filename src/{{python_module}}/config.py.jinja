@@ -21,6 +21,11 @@ from fastmcp_pvl_core import (
     # moment one does, and fixing that means editing outside the sentinels.
     ConfigurationError as ConfigurationError,
 )
+
+# isort: split
+# (keeps the import above in its own statement, so adding a name to the one
+#  below never makes ruff re-sort the two — that fix would be outside the
+#  sentinels.)
 from fastmcp_pvl_core import (
     ServerConfig,
     # Used by `_default_server_name` below, and re-exported so CONFIG-FROM-ENV

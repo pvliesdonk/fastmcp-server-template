@@ -317,9 +317,8 @@ today (a check in `from_env`, in `__post_init__`, or where a tool registers):
    `config_contract_env` in `tests/conftest.py`. The new template-owned test
    `test_every_required_var_is_supplied_by_config_contract_env` fails,
    naming the variable, until you do. Every template-owned test that builds
-   the server from the environment now applies that fixture, through the new
-   `tests/_config_contract_env.py`, so an autouse fixture you added only to
-   satisfy those tests can go. `tests/test_smoke.py` and `tests/test_cli.py`
+   the server from the environment now applies that fixture, so an autouse
+   fixture you added only to satisfy those tests can go. `tests/test_smoke.py` and `tests/test_cli.py`
    are yours, so check whether they need the variable too.
 4. Run `python scripts/gen_config_surface.py` and commit the regenerated
    artifacts.

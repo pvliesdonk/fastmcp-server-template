@@ -19,10 +19,29 @@ import pytest
 from fastmcp_pvl_core import ConfigurationError, domain_env_surface
 from typer.testing import CliRunner
 
-from _config_contract_env import preset_contract_env
 from {{ python_module }} import config as config_module
 from {{ python_module }}.cli import app
 from {{ python_module }}.config import ProjectConfig
+
+
+def _preset_contract_env(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Set every variable the project's ``config_contract_env`` returns.
+
+    The fixture in the project's ``tests/conftest.py`` supplies values for
+    the variables its ``from_env`` reads with ``env(..., required=True)``.
+    Resolved via ``getfixturevalue`` so a ``conftest.py`` that predates the
+    fixture keeps passing with nothing preset.  Repeated verbatim in every
+    template-owned test that builds from the environment rather than
+    imported: a sibling import only resolves when ``tests/`` is not a package.
+    """
+    try:
+        env = request.getfixturevalue("config_contract_env")
+    except pytest.FixtureLookupError:
+        return
+    for key, value in dict(env).items():
+        monkeypatch.setenv(key, value)
 
 
 def _config_text() -> str:
@@ -70,7 +89,7 @@ def test_post_init_runs_on_both_construction_paths(
     A subclass standing in for a domain's filled-in CONFIG-VALIDATE block
     proves the dataclass actually dispatches to `__post_init__` on both paths.
     """
-    preset_contract_env(request, monkeypatch)
+    _preset_contract_env(request, monkeypatch)
     calls: list[str] = []
 
     @dataclass(frozen=True)
@@ -89,7 +108,7 @@ def test_post_init_can_reject_a_value(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A raise inside the seam propagates out of both construction paths."""
-    preset_contract_env(request, monkeypatch)
+    _preset_contract_env(request, monkeypatch)
 
     @dataclass(frozen=True)
     class _Rejecting(ProjectConfig):
@@ -112,8 +131,8 @@ def test_every_required_var_is_supplied_by_config_contract_env(
 ) -> None:
     """Each var `from_env` reads with `required=True` has a test value.
 
-    Template-owned tests build the config from the environment through
-    `tests/_config_contract_env.py`; a required var missing from the
+    Template-owned tests build the config from the environment after
+    applying that fixture; a required var missing from the
     project's `config_contract_env` would otherwise surface as setup errors
     scattered across unrelated test files.
     """
@@ -164,7 +183,7 @@ def test_serve_reports_a_validation_failure_in_one_line(
     This is the path the CONFIG-VALIDATE seam documents: one ``ERROR:`` line
     on stderr and exit 1, not Typer's Rich traceback (#616, #692).
     """
-    preset_contract_env(request, monkeypatch)
+    _preset_contract_env(request, monkeypatch)
 
     @dataclass(frozen=True)
     class _Rejecting(ProjectConfig):

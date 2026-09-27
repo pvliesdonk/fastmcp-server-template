@@ -31,7 +31,6 @@ import pytest
 from fastmcp import Client
 from fastmcp_pvl_core import utf16_code_units
 
-from _config_contract_env import preset_contract_env
 from {{ python_module }}.server import make_server
 
 if TYPE_CHECKING:
@@ -54,6 +53,26 @@ _SECTION_RE = re.compile(
 _STRING_SCHEMA_NOTE = 'following JSON schema: {"type":"string"}'
 
 
+def _preset_contract_env(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Set every variable the project's ``config_contract_env`` returns.
+
+    The fixture in the project's ``tests/conftest.py`` supplies values for
+    the variables its ``from_env`` reads with ``env(..., required=True)``.
+    Resolved via ``getfixturevalue`` so a ``conftest.py`` that predates the
+    fixture keeps passing with nothing preset.  Repeated verbatim in every
+    template-owned test that builds from the environment rather than
+    imported: a sibling import only resolves when ``tests/`` is not a package.
+    """
+    try:
+        env = request.getfixturevalue("config_contract_env")
+    except pytest.FixtureLookupError:
+        return
+    for key, value in dict(env).items():
+        monkeypatch.setenv(key, value)
+
+
 @pytest.fixture
 def server(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> FastMCP:
     """A default deployment's server, built before any event loop starts.
@@ -65,7 +84,7 @@ def server(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> F
     for key in list(os.environ):
         if key.startswith("{{ env_prefix }}_"):
             monkeypatch.delenv(key, raising=False)
-    preset_contract_env(request, monkeypatch)
+    _preset_contract_env(request, monkeypatch)
     return make_server()
 
 

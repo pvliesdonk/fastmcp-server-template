@@ -316,7 +316,8 @@ jobs:
         # returned from `config_contract_env` (#690, #621). Its gate proves the
         # documented example works: every template-owned test builds through
         # the seam, `serve` refuses in one line, and the generated
-        # configuration reference marks the variable required. Derived from
+        # configuration reference marks the variable required, with tests/ as
+        # a package (the default render covers the flat layout). Derived from
         # /tmp/smoke after the hygiene step, so it is not a render the hygiene
         # guard should see. test_smoke.py and test_cli.py are project-owned and
         # deselected: wiring them is the project's job.
@@ -325,6 +326,9 @@ jobs:
           rsync -a --exclude .venv /tmp/smoke/ /tmp/smoke-required/
           python3 scripts/make_required_var_variant.py /tmp/smoke-required smoke_mcp SMOKE_MCP
           cd /tmp/smoke-required
+          # Several downstreams make tests/ a package; the default render does
+          # not, so this variant covers that layout too.
+          touch tests/__init__.py
           uv sync --all-extras --all-groups
           uv run ruff check . && uv run ruff format --check .
           uv run mypy src/ tests/

@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from _config_contract_env import preset_contract_env
 from {{ python_module }}.server import make_server
 
 if TYPE_CHECKING:
@@ -46,6 +45,26 @@ def _get(server: FastMCP, url: str, *, http_path: str = "/mcp") -> Response:
     return asyncio.run(_probe())
 
 
+def _preset_contract_env(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Set every variable the project's ``config_contract_env`` returns.
+
+    The fixture in the project's ``tests/conftest.py`` supplies values for
+    the variables its ``from_env`` reads with ``env(..., required=True)``.
+    Resolved via ``getfixturevalue`` so a ``conftest.py`` that predates the
+    fixture keeps passing with nothing preset.  Repeated verbatim in every
+    template-owned test that builds from the environment rather than
+    imported: a sibling import only resolves when ``tests/`` is not a package.
+    """
+    try:
+        env = request.getfixturevalue("config_contract_env")
+    except pytest.FixtureLookupError:
+        return
+    for key, value in dict(env).items():
+        monkeypatch.setenv(key, value)
+
+
 @pytest.fixture(autouse=True)
 def _kv_store_in_tmp(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -57,7 +76,7 @@ def _kv_store_in_tmp(
     verdict depend on the host running the tests.  The project's
     ``config_contract_env`` is applied first, so this pin wins.
     """
-    preset_contract_env(request, monkeypatch)
+    _preset_contract_env(request, monkeypatch)
     monkeypatch.setenv(
         "{{ env_prefix }}_KV_STORE_URL",
         f"file://{tmp_path / 'kv'}",
