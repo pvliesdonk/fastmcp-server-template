@@ -420,7 +420,7 @@ jobs:
           # full record.
           if [ -s .copier-template-drift.md ]; then
             body+=$'\n\n'"### Template-owned files this project had forked"
-            body+=$'\n\n'"\`.copier-template-drift.md\` on this branch lists every template-owned file that differed from the template outside its sentinel blocks before this update, with the commits that last touched those lines. Conform each file or open a Decay issue for it; re-run \`uv run --script scripts/check_template_conformance.py\` once the markers are resolved."
+            body+=$'\n\n'"\`.copier-template-drift.md\` on this branch lists every template-owned file that differed from the template outside its sentinel blocks before this update, with the commits that last touched those lines. Conform each file or open a Decay issue for it; re-run the conformance check the report names once the markers are resolved."
             body+=$'\n\n'"<details><summary>.copier-template-drift.md</summary>"
             body+=$'\n\n'"$(head -c 8000 .copier-template-drift.md)"
             if [ "$(wc -c < .copier-template-drift.md)" -gt 8000 ]; then
