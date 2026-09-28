@@ -102,25 +102,35 @@ def _within_cwd(path: str | os.PathLike[str]) -> str:
     return resolved
 
 
-def _dump(path: Path, data: Any) -> None:
-    """Write JSON atomically, in the byte format the toolchain expects.
+def _replace_atomically(path: Path, text: str) -> Path:
+    """Replace *path*'s content with *text* atomically; return the path.
 
-    ``indent=2, ensure_ascii=False`` plus a trailing newline matches
-    ``scripts/gen_config_surface.py``'s asserted format.  The temp file is
-    created in the target's own directory so the final ``rename`` is atomic
-    on the same filesystem.
+    The temp file is created in the target's own directory so the final
+    ``rename`` is atomic on the same filesystem.  The text is written through
+    an open handle rather than passed to ``Path.write_text``: SonarCloud reads
+    every argument of that call as a path, so the file's own edited content
+    counted as a path injection there, while the path itself stays checked
+    here (#694).
     """
     path = Path(_within_cwd(path))
     tmp = path.parent / f".{path.name}.stamp-tmp"
     try:
-        tmp.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
+        with open(tmp, "w", encoding="utf-8") as fh:  # noqa: PTH123 - see above
+            fh.write(text)
         tmp.replace(path)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
+    return path
+
+
+def _dump(path: Path, data: Any) -> None:
+    """Write JSON atomically, in the byte format the toolchain expects.
+
+    ``indent=2, ensure_ascii=False`` plus a trailing newline matches
+    ``scripts/gen_config_surface.py``'s asserted format.
+    """
+    _replace_atomically(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def _is_prerelease(version: str) -> bool:
@@ -173,14 +183,7 @@ def _stamp_uv_lock(version: str) -> list[Path]:
         raise StampError(
             f"{path}: no 'name = \"{normalized}\"' entry with a version line to stamp"
         )
-    path = Path(_within_cwd(path))
-    tmp = path.parent / f".{path.name}.stamp-tmp"
-    try:
-        tmp.write_text(new_text, encoding="utf-8")
-        tmp.replace(path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
+    path = _replace_atomically(path, new_text)
     print(f"stamp_manifests: uv.lock -> {canonical} (PEP 440 canonical)")
     return [path]
 
