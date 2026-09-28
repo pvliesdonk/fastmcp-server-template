@@ -1,12 +1,13 @@
 """Unit tests for the template-conformance comparison (#653); the end-to-end
 run against a real `copier update` happens in check_update_regression.py.
-Importing the module must be side-effect free: the `uv run` fallback lives
-in main() only."""
+Importing the module must be side-effect free."""
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -307,45 +308,59 @@ def test_git_revision_refuses_anything_else(rev: str) -> None:
         c.git_revision(rev)
 
 
+# PEP 723's reference regex for an inline script-metadata block.
+_SCRIPT_BLOCK = re.compile(
+    r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$"
+)
+
+
 @pytest.mark.parametrize("module", [c, r])
-def test_reexec_refuses_to_forward_an_unexpected_argument(
-    module: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Only argument text a revision, flag or path can contain is forwarded."""
-    monkeypatch.setitem(sys.modules, "copier", None)
-    for flag in ("_CONFORMANCE_BOOTSTRAPPED", "_SEEDED_REPORT_BOOTSTRAPPED"):
-        monkeypatch.delenv(flag, raising=False)
-    monkeypatch.setattr(sys, "argv", ["script", "--rev=HEAD;rm -rf /"])
-    started: list[list[str]] = []
-    monkeypatch.setattr(
-        module.os,  # type: ignore[attr-defined]
-        "execvpe",
-        lambda _f, argv, _e: started.append(argv),
+def test_inline_metadata_supplies_copier(module: object) -> None:
+    """`uv run --script` builds the environment from this block, so copier
+    must be in it; without it neither script can render the template."""
+    source = Path(module.__file__).read_text(encoding="utf-8")  # type: ignore[attr-defined]
+    (block,) = [m for m in _SCRIPT_BLOCK.finditer(source) if m["type"] == "script"]
+    content = "".join(
+        line[2:] if line.startswith("# ") else line[1:]
+        for line in block["content"].splitlines(keepends=True)
     )
-    assert module._reexec_with_deps() is True  # type: ignore[attr-defined]
-    assert not started
+    assert "copier" in tomllib.loads(content)["dependencies"]
 
 
-@pytest.mark.parametrize("module", [c, r])
-def test_reexec_ends_uv_options_before_the_script(
-    module: object, monkeypatch: pytest.MonkeyPatch
+def test_conformance_without_copier_names_the_uv_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Forwarded arguments must reach the script, never uv's own parser (#694)."""
+    """No re-exec: a plain interpreter without copier exits 2 and says how to
+    run the check, so no argument is ever handed to uv (#694)."""
+    repo = _tree(tmp_path, {".copier-answers.yml": "_commit: v1\n_src_path: gh:x/t\n"})
+    monkeypatch.chdir(repo)
     monkeypatch.setitem(sys.modules, "copier", None)  # `import copier` fails
-    for flag in ("_CONFORMANCE_BOOTSTRAPPED", "_SEEDED_REPORT_BOOTSTRAPPED"):
-        monkeypatch.delenv(flag, raising=False)
-    monkeypatch.setattr(sys, "argv", ["script", "--rev=HEAD"])
+    started: list[object] = []
+    monkeypatch.setattr(c.os, "execvpe", lambda *a: started.append(a))
+    assert c.main(["--rev", "HEAD"]) == 2
+    assert not started
+    assert "uv run --script scripts/check_template_conformance.py" in (
+        capsys.readouterr().err
+    )
+
+
+def test_seeded_report_reexec_forwards_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The migration takes no arguments, so the re-exec passes none on,
+    whatever the process was started with (#694)."""
+    monkeypatch.setitem(sys.modules, "copier", None)  # `import copier` fails
+    monkeypatch.delenv("_SEEDED_REPORT_BOOTSTRAPPED", raising=False)
+    monkeypatch.setattr(sys, "argv", ["script", "--rev=HEAD;rm -rf /"])
     captured: list[list[str]] = []
 
     def fake_exec(_file: str, argv: list[str], _env: object) -> None:
         captured.append(argv)
         raise OSError("not really exec'ing")
 
-    monkeypatch.setattr(module.os, "execvpe", fake_exec)  # type: ignore[attr-defined]
-    module._reexec_with_deps()  # type: ignore[attr-defined]
-    (argv,) = captured
-    assert argv[argv.index("python") - 1] == "--", argv
-    assert argv[-1] == "--rev=HEAD"
+    monkeypatch.setattr(r.os, "execvpe", fake_exec)
+    assert r._reexec_under_uv() is True
+    assert captured == [["uv", "run", "--script", r.__file__]]
 
 
 def test_last_commits_names_the_commit_that_wrote_the_drift(
@@ -471,7 +486,7 @@ def test_main_with_an_unknown_revision_exits_2(
     repo = _tree(tmp_path, {".copier-answers.yml": "_commit: v1\n_src_path: gh:x/t\n"})
     _git(repo, "init", "-q")
     monkeypatch.chdir(repo)
-    monkeypatch.setattr(c, "_reexec_with_deps", lambda: False)
+    monkeypatch.setattr(c, "copier_missing", lambda: False)
     assert c.main(["--rev", "no-such-rev"]) == 2
 
 
@@ -660,7 +675,7 @@ def test_hook_mode_fails_on_added_drift_and_says_how_to_skip(
     _git(clone, "commit", "-qm", "answers")
     monkeypatch.chdir(clone)
     monkeypatch.delenv("TEMPLATE_CONFORMANCE_BASE", raising=False)
-    monkeypatch.setattr(c, "_reexec_with_deps", lambda: False)
+    monkeypatch.setattr(c, "copier_missing", lambda: False)
     added = c.Drift(
         "docs/index.md", hunks=["@@ project line 3 @@\n+new"], ranges=[(3, 3)]
     )

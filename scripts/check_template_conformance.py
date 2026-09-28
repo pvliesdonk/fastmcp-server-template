@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["copier"]
+# ///
 """Compare this project's template-owned files with a pristine template render.
 
 Every file ``copier update`` re-renders (anything not under
@@ -13,11 +17,17 @@ the project's content into a sentinel block, or open a Decay issue for it.
 
 Usage::
 
-    python scripts/check_template_conformance.py            # working tree vs _commit
-    python scripts/check_template_conformance.py --ref v9.1.0
-    python scripts/check_template_conformance.py --rev HEAD --output drift.md
-    python scripts/check_template_conformance.py --rev HEAD --since origin/main
-    python scripts/check_template_conformance.py --rev HEAD --since auto --hook
+    uv run --script scripts/check_template_conformance.py      # working tree vs _commit
+    uv run --script scripts/check_template_conformance.py --ref v9.1.0
+    uv run --script scripts/check_template_conformance.py --rev HEAD --output drift.md
+    uv run --script scripts/check_template_conformance.py --rev HEAD --since origin/main
+    uv run --script scripts/check_template_conformance.py --rev HEAD --since auto --hook
+
+``uv run --script`` reads the inline metadata above and runs the script in
+its own environment with copier, whatever the project's own environment
+holds.  Run with a plain ``python`` that cannot import copier, it exits 2
+and names that command.  It never re-executes itself under ``uv``, so its
+own arguments never reach another program's option parser (#694).
 
 ``--since BASE`` reports only the drift the compared tree adds over
 ``BASE`` — what a branch introduced — both judged against the same render.
@@ -29,8 +39,8 @@ then reported whole.
 ``--since auto`` compares against the branch's base: ``$TEMPLATE_CONFORMANCE_BASE``
 when set, else the merge-base with the nearest of ``origin/main``,
 ``origin/release/*`` and ``origin/integration/*`` (the structural gate's
-rule).  ``--hook`` is the pre-push hook's mode: a comparison that cannot be made (offline, no ``uv``)
-warns and passes, and a failure says how to push deliberate drift.
+rule).  ``--hook`` is the pre-push hook's mode: a comparison that cannot be made (offline, copier
+unavailable) warns and passes, and a failure says how to push deliberate drift.
 
 Exit status: 0 when every template-owned file conforms (with ``--since``:
 when nothing new differs), 1 when at least one differs, 2 when the comparison could not be made (no answers file, the
@@ -46,7 +56,7 @@ template's render imports must still be imported.
 
 ``scripts/report_seeded_changes.py`` calls :func:`check` during
 ``copier update`` to write ``.copier-template-drift.md``.  Importing this
-module has no side effects; the ``uv run`` fallback runs from ``main()``.
+module has no side effects.
 """
 
 from __future__ import annotations
@@ -567,41 +577,13 @@ def clean_message(since: str | None) -> str:
     return "Every template-owned file matches the render outside its sentinel blocks."
 
 
-def _reexec_with_deps() -> bool:
-    """Re-exec under `uv run --no-project` when copier is missing; True when
-    the caller should give up instead."""
+def copier_missing() -> bool:
+    """True when copier cannot be imported by this interpreter."""
     try:
         import copier  # noqa: F401
     except ImportError:
-        pass
-    else:
-        return False
-    if os.environ.get("_CONFORMANCE_BOOTSTRAPPED") == "1":
         return True
-    os.environ["_CONFORMANCE_BOOTSTRAPPED"] = "1"
-    forwarded = sys.argv[1:]
-    for arg in forwarded:
-        # Only text a flag, a revision or a path holds is forwarded (#694).
-        if not re.fullmatch(r"[\w ./~^@{}:=+,-]*", arg, re.ASCII):
-            return True
-    argv = [
-        "uv",
-        "run",
-        "--no-project",
-        "--with",
-        "copier",
-        # Everything after `--` is the command, so no forwarded argument is
-        # ever read as one of uv's own options (#694).
-        "--",
-        "python",
-        __file__,
-        *forwarded,
-    ]
-    try:
-        os.execvpe("uv", argv, os.environ)
-    except OSError:
-        return True
-    return True  # pragma: no cover — execvpe does not return on success
+    return False
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -722,9 +704,10 @@ def _run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    if _reexec_with_deps():
+    if copier_missing():
         print(
-            "check_template_conformance: copier is not importable and uv is unavailable",
+            "check_template_conformance: copier is not importable here; run "
+            "`uv run --script scripts/check_template_conformance.py`",
             file=sys.stderr,
         )
         return 2

@@ -54,12 +54,19 @@ def _uncomment(block: str) -> str:
     )
 
 
-def _replace_once(path: Path, old: str, new: str) -> None:
+def _substitute_once(path: Path, old: str, new: str) -> None:
+    """Replace the one occurrence of *old* in *path* with *new*.
+
+    The edited text goes through an open handle rather than into
+    ``Path.write_text``, which SonarCloud reads as a path argument even for
+    the file's own content; the path itself is still checked (#694).
+    """
     path = Path(_within_cwd(path))
     src = path.read_text(encoding="utf-8")
     if src.count(old) != 1:
         sys.exit(f"{path}: expected exactly one occurrence of {old!r}")
-    path.write_text(src.replace(old, new, 1), encoding="utf-8")
+    with open(path, "w", encoding="utf-8") as fh:  # noqa: PTH123 - see above
+        fh.write(src.replace(old, new, 1))
 
 
 def main() -> None:
@@ -73,9 +80,9 @@ def main() -> None:
     if match is None:
         sys.exit(".copier-answers.yml: no env_prefix answer")
     prefix = match[1]
-    _replace_once(config, _FIELD, _uncomment(_FIELD))
-    _replace_once(config, _READ, _uncomment(_READ))
-    _replace_once(
+    _substitute_once(config, _FIELD, _uncomment(_FIELD))
+    _substitute_once(config, _READ, _uncomment(_READ))
+    _substitute_once(
         project / "tests" / "conftest.py",
         _EMPTY_CONTRACT,
         f'    """\n    return {{"{prefix}_API_TOKEN": "test-token"}}\n',
