@@ -20,7 +20,7 @@ reaches it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -137,9 +137,21 @@ def test_make_server_configures_the_task_backend(
     assert task_backend.settings().name == _DERIVED_QUEUE_NAME
 
 
+def _config_with(server: ServerConfig) -> ProjectConfig:
+    """The project's config from the environment, with *server* swapped in.
+
+    From the environment rather than a bare ``ProjectConfig(...)``: the autouse
+    fixture above presets whatever ``config_contract_env`` returns, while a
+    config built by hand holds only the placeholders of the project's required
+    fields, which a domain that refuses an empty one rejects when the server is
+    built (#705).
+    """
+    return replace(ProjectConfig.from_env(), server=server)
+
+
 def test_tasks_url_reaches_the_backend(task_backend: _TaskBackendCapture) -> None:
     """An explicit `{{ env_prefix }}_TASKS_URL` selects the Docket backend."""
-    config = ProjectConfig(server=ServerConfig(tasks_url="redis://tasks.test:6379/1"))
+    config = _config_with(ServerConfig(tasks_url="redis://tasks.test:6379/1"))
     make_server(config=config)
     assert task_backend.settings().url == "redis://tasks.test:6379/1"
 
@@ -153,6 +165,6 @@ def test_redis_kv_store_url_is_reused_for_tasks(
     than a default-constructed one: the derivation can only see `kv_store_url`
     if the config passed through.
     """
-    config = ProjectConfig(server=ServerConfig(kv_store_url="redis://kv.test:6379/0"))
+    config = _config_with(ServerConfig(kv_store_url="redis://kv.test:6379/0"))
     make_server(config=config)
     assert task_backend.settings().url == "redis://kv.test:6379/0"

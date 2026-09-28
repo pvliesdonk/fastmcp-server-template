@@ -3,14 +3,19 @@
 Run from inside the copy.  Uncomments the `api_token` example that
 `config.py` ships in CONFIG-FIELDS and CONFIG-FROM-ENV
 (`env(..., required=True)`) and returns the variable from
-`config_contract_env` in `tests/conftest.py`.  template-ci then runs the
-copy's gate, which proves the documented example works end to end: every
-template-owned test builds through the seam, `serve` refuses in one line, and
-the generated configuration reference marks the variable required.
+`config_contract_env` in `tests/conftest.py`.  It also adds, in `server.py`'s
+DOMAIN-WIRING block, the check a real domain keeps (the v10.3 upgrade notes
+allow it): an empty `api_token` raises `ConfigurationError` when the server is
+built.  A config built by hand carries only the field's placeholder, so any
+template-owned test that passes one to `make_server` fails here (#705).
+template-ci then runs the copy's gate, which proves the documented example
+works end to end: every template-owned test builds through the seam, `serve`
+refuses in one line, and the generated configuration reference marks the
+variable required.
 
 Takes no arguments: the project is the current directory, its one
-`src/*/config.py` is the config it edits, and the env prefix comes from the
-render's `.copier-answers.yml`.  Exits
+`src/*/config.py` is the config it edits, its `server.py` sits beside it, and
+the env prefix comes from the render's `.copier-answers.yml`.  Exits
 non-zero when an anchor it edits is missing, so a reworded example or a moved
 sentinel fails loudly instead of testing nothing.
 """
@@ -30,6 +35,7 @@ _FIELD = (
 )
 _READ = '            # api_token=env(_ENV_PREFIX, "API_TOKEN", required=True),\n'
 _EMPTY_CONTRACT = '    """\n    return {}\n'
+_WIRING_END = "    # DOMAIN-WIRING-END\n"
 _PREFIX = re.compile(r"^env_prefix: *(\w+) *$", re.MULTILINE)
 
 
@@ -82,6 +88,15 @@ def main() -> None:
     prefix = match[1]
     _substitute_once(config, _FIELD, _uncomment(_FIELD))
     _substitute_once(config, _READ, _uncomment(_READ))
+    _substitute_once(
+        config.parent / "server.py",
+        _WIRING_END,
+        "    from fastmcp_pvl_core import ConfigurationError\n"
+        "\n"
+        "    if not config.api_token:\n"
+        f'        raise ConfigurationError("{prefix}_API_TOKEN: required but empty")\n'
+        + _WIRING_END,
+    )
     _substitute_once(
         project / "tests" / "conftest.py",
         _EMPTY_CONTRACT,

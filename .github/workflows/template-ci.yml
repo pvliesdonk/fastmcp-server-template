@@ -184,9 +184,12 @@ jobs:
         # pass every gate here and still exceed ruff's 88 columns for a real
         # project. `ruff format` then rewraps it downstream, and each
         # `copier update` hands back the unwrapped form (#649). This variant
-        # sets all four identifiers to 32 characters; the format check below
-        # runs it through the smoke project's locked ruff. Rendered here, above
-        # the hygiene step, for the same reason as the variants before it.
+        # sets all four identifiers to 32 characters, and domain_description to
+        # the validator's 100-character cap (a longer blurb is refused, and a
+        # line holding it inline was rewrapped downstream, #704); the format
+        # check below runs it through the smoke project's locked ruff. Rendered
+        # here, above the hygiene step, for the same reason as the variants
+        # before it.
         run: |
           rm -rf /tmp/smoke-long-names
           uv run --no-sync --no-build \
@@ -196,6 +199,7 @@ jobs:
             --data pypi_name=a-deliberately-long-name-for-mcp \
             --data python_module=a_deliberately_long_name_for_mcp \
             --data env_prefix=A_DELIBERATELY_LONG_NAME_FOR_MCP \
+            --data "domain_description=A deliberately long blurb, at the hundred character cap that the domain_description validator allows" \
             . /tmp/smoke-long-names
 
       - name: render hygiene (pristine render already satisfies the shipped hooks)

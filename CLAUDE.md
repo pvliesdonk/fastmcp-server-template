@@ -159,13 +159,14 @@ asserted byte-identical to the default render.
 
 The same latent-conflict mechanism applies to `ruff format`, which is
 also a shipped hook.  A Python line that holds `{{ project_name }}`,
-`{{ python_module }}` or `{{ env_prefix }}` inline gets longer with the
-name.  The smoke answers use 9-character names, so such a line can pass
-every gate here and still be rewrapped downstream (#649).  Write any
-call or import whose length depends on an identifier either with the
-identifier hoisted into a variable, or exploded one argument per line
-with a trailing comma, which ruff keeps as it is at any length.  The
-long-identifiers render (all four names at 32 characters, checked with
+`{{ python_module }}`, `{{ env_prefix }}` or `{{ domain_description }}`
+inline gets longer with the answer.  The smoke answers use 9-character
+names and a 49-character blurb, so such a line can pass every gate here
+and still be rewrapped downstream (#649, #704).  Write any call or import
+whose length depends on an answer either with the value hoisted into a
+variable, or exploded one argument per line with a trailing comma, which
+ruff keeps as it is at any length.  The long-identifiers render (all four
+names at 32 characters and the blurb at the validator's 100, checked with
 the smoke project's locked ruff) is the guard.
 
 ### Always-loaded budget

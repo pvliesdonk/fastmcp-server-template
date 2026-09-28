@@ -40,6 +40,11 @@ def test_uncomments_the_example_and_supplies_it_in_the_contract(project: Path) -
     assert "# api_token" not in config
     conftest = (project / "tests/conftest.py").read_text()
     assert 'return {"SMOKE_MCP_API_TOKEN": "test-token"}' in conftest
+    # The check a real domain keeps: a hand-built config's placeholder is
+    # refused when the server is built, as paperless-mcp does (#705).
+    server = (project / "src/smoke_mcp/server.py").read_text()
+    assert "    if not config.api_token:\n" in server
+    assert server.index("if not config.api_token") < server.index("# DOMAIN-WIRING-END")
 
 
 @pytest.mark.usefixtures("project")
