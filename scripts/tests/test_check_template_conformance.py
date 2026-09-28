@@ -282,6 +282,18 @@ def test_read_revision_refuses_a_revision_that_reads_as_an_option(
     assert not started
 
 
+def test_output_is_written_inside_the_working_directory_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--output`` is a write sink, guarded like the other paths (#694)."""
+    here = tmp_path / "repo"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    assert c._parse_args(["--output", "drift.md"]).output == here / "drift.md"
+    with pytest.raises(SystemExit):
+        c._parse_args(["--output", str(tmp_path / "elsewhere.md")])
+
+
 @pytest.mark.parametrize(
     "rev", ["HEAD", "HEAD~1", "origin/main", "v10.3.0", "a1b2c3d", "auto", "HEAD@{1}"]
 )

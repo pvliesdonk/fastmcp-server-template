@@ -381,6 +381,22 @@ def git_revision(value: str) -> str:
     return value
 
 
+def output_path(value: str) -> Path:
+    """``--output`` canonicalised, refusing a path outside the working directory.
+
+    The report is a file in the checkout (`drift.md`, `.copier-template-drift.md`);
+    a path that resolves elsewhere is a broken or hostile invocation (#694).
+    The realpath-then-prefix shape is the one SonarCloud's path rules read.
+    """
+    resolved = os.path.realpath(value)
+    base_dir = os.path.realpath(os.getcwd())  # noqa: PTH109 - the shape Sonar reads
+    if resolved != base_dir and not resolved.startswith(base_dir + os.sep):
+        raise argparse.ArgumentTypeError(
+            f"--output {value!r} is outside the working directory"
+        )
+    return Path(resolved)
+
+
 def read_revision(rev: str) -> ReadProject:
     """File bytes, symlink target (str), or None, from a git revision."""
     rev = git_revision(rev)
@@ -611,7 +627,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="pre-push mode: pass with a warning when the comparison cannot be made",
     )
     parser.add_argument(
-        "--output", type=Path, help="write the markdown report here instead of stdout"
+        "--output",
+        type=output_path,
+        help="write the markdown report here instead of stdout",
     )
     return parser.parse_args(argv)
 

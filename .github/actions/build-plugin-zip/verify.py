@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from vendor import VendorError, _within_cwd, inside, servers_of
+from vendor import VendorError, inside, servers_of, within_cwd
 
 PLUGIN_ROOT_VAR = "${CLAUDE_PLUGIN_ROOT}/wheels/"
 
@@ -50,7 +50,7 @@ def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise VerifyError(f"usage: {argv[0]} <unpacked-dir> <version>")
     try:
-        root = pathlib.Path(_within_cwd(argv[1]))
+        root = pathlib.Path(within_cwd(argv[1]))
     except VendorError as exc:
         raise VerifyError(str(exc)) from exc
     version = argv[2]

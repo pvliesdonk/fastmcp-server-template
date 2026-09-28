@@ -48,7 +48,7 @@ def servers_of(mcp: dict) -> dict:
     return inner if isinstance(inner, dict) else mcp
 
 
-def _within_cwd(path: str | os.PathLike[str]) -> str:
+def within_cwd(path: str | os.PathLike[str]) -> str:
     """*path* canonicalised, refusing one outside the working directory (#694).
 
     Every path this script touches lives in the checkout it runs from, so a
@@ -121,7 +121,7 @@ def repin(root: pathlib.Path, wheel: str) -> str:
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise VendorError(f"usage: {argv[0]} <staged-plugin-dir> <version>")
-    root = pathlib.Path(_within_cwd(argv[1]))
+    root = pathlib.Path(within_cwd(argv[1]))
     version = argv[2]
     if not VERSION.fullmatch(version):
         raise VendorError(f"version {version!r} is not X.Y.Z or X.Y.Z-<pre-release>")
