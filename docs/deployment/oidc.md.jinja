@@ -21,7 +21,7 @@ Set `{{ env_prefix }}_AUTH_MODE` to state the mode, or let the server auto-detec
 | `{{ env_prefix }}_BASE_URL` | Public base URL of the server |
 | `{{ env_prefix }}_OIDC_CONFIG_URL` | OIDC discovery endpoint |
 
-Optional: `OIDC_AUDIENCE`, `OIDC_REQUIRED_SCOPES` (same as OIDCProxy mode).
+Optional: `OIDC_AUDIENCE`, `OIDC_REQUIRED_SCOPES` (same as OIDCProxy mode). Without either, the server accepts any unexpired token the issuer signed, whichever client it was issued to; set `OIDC_AUDIENCE` to the value your provider puts in tokens meant for this server.
 
 No `CLIENT_ID` or `CLIENT_SECRET` needed. Tokens are validated locally via JWKS.
 

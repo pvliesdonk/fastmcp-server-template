@@ -6,7 +6,12 @@ This page states what {{ project_name }} protects and what it leaves to the oper
 
 Over HTTP, authentication is the only access control: a bearer token, a mapped bearer token file, or OIDC. A request without a valid credential is refused before it reaches a tool.{% if enable_authorization %} [Authorization](authorization.md) then narrows which tools an authenticated caller may use.{% endif %} It is the same model as any other MCP server reached over HTTP.
 
-With OIDC, who holds a valid credential is the identity provider's decision: anyone it signs in for this server's client gets through.{% if enable_authorization %} Authorization then decides what each of them may use.{% else %} The server keeps no list of allowed users, so every one of them has the full tool surface. Limit who may sign in to this client at the provider.{% endif %}
+With OIDC, which credentials the server accepts depends on the [mode](../deployment/oidc.md#auth-modes):
+
+- **`oidc-proxy`:** the server is the OAuth client registered with the identity provider and runs the sign-in itself. Anyone the provider lets sign in to that client gets through.
+- **`remote`:** the server is a resource server. MCP clients get tokens from the provider on their own, and the server accepts any unexpired token the provider's issuer signed, unless `{{ env_prefix }}_OIDC_AUDIENCE` or `{{ env_prefix }}_OIDC_REQUIRED_SCOPES` narrows that down.
+
+{% if enable_authorization %}Authorization then decides what each accepted caller may use.{% else %}The server keeps no list of allowed users, so every caller it accepts has the full tool surface. Limit who can get a credential at the provider, and in `remote` mode set the audience.{% endif %}
 
 ## Running without authentication
 
