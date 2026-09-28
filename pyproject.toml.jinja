@@ -301,6 +301,9 @@ ignore = ["E501"]
 # and S603 subprocess exceptions as the stamper, and the same reason — the
 # file is template-owned, so a hit reddens the adopter's diff-gate (#524).
 "scripts/migrate_agent_instructions.py" = ["S603", "S607"]
+# migrate_docs_nav.py reads `git show HEAD:mkdocs.yml` the same way, as a
+# list and never a shell; same exceptions, same reason (#713).
+"scripts/migrate_docs_nav.py" = ["S603", "S607"]
 "scripts/check_pins.py" = ["S310"]  # urlopen on a validated api.github.com URL
 "scripts/report_seeded_changes.py" = ["S603", "S606", "S607"]
 "scripts/check_template_conformance.py" = ["S603", "S607"]

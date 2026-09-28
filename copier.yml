@@ -97,6 +97,12 @@ _migrations:
   # blocks from HEAD:CLAUDE.md into AGENTS.md, rewrites CLAUDE.md as the
   # stub, and reconciles .claude/skills/ symlinks.  Idempotent.
   - "python scripts/migrate_agent_instructions.py"
+  # Nav frame move (#713): the project's whole nav was one PROJECT-NAV block;
+  # the template now owns the frame with a block per section.  Resolves the
+  # conflict copier leaves in `nav:` to the new frame and parks the project's
+  # own entries (read from HEAD:mkdocs.yml) under Unsorted for the maintainer
+  # to sort.  Idempotent; a no-op once HEAD carries the frame.
+  - "python scripts/migrate_docs_nav.py"
   # Seeded-file change report (#519): renders the previous and target refs
   # and diffs every `_skip_if_exists` path into .copier-seeded-changes.md,
   # so an update is never applied blind to what it cannot re-render.  From
