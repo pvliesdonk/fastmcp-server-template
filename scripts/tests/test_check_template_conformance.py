@@ -350,7 +350,9 @@ def test_seeded_report_reexec_forwards_nothing(
     """The migration takes no arguments, so the re-exec passes none on,
     whatever the process was started with (#694)."""
     monkeypatch.setitem(sys.modules, "copier", None)  # `import copier` fails
-    monkeypatch.delenv("_SEEDED_REPORT_BOOTSTRAPPED", raising=False)
+    # setenv first so monkeypatch restores the flag the re-exec sets.
+    monkeypatch.setenv("_SEEDED_REPORT_BOOTSTRAPPED", "0")
+    monkeypatch.delenv("_SEEDED_REPORT_BOOTSTRAPPED")
     monkeypatch.setattr(sys, "argv", ["script", "--rev=HEAD;rm -rf /"])
     captured: list[list[str]] = []
 
