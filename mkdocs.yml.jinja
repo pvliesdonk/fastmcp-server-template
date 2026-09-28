@@ -119,33 +119,45 @@ markdown_extensions:
   - md_in_html
 
 nav:
-  # PROJECT-NAV-START — replace with your real navigation; kept across copier
-  # update. Keep aligned with the `llmstxt` plugin's sentinel-protected
-  # `sections:` block above.
-  - Home: index.md
-  - Getting Started:
+  - Overview: index.md
+  - Security model: guides/security-model.md
+  - Get started:
       - Installation: installation.md
-      - Configuration: configuration.md
-      - Configuration Generator: configuration-generator.md
-  - Guides:
+      - Claude Desktop: deployment/claude-desktop.md
+      # PROJECT-NAV-GET-STARTED-START — this server's first-run pages; kept across copier update
+      # PROJECT-NAV-GET-STARTED-END
+  - Deploy:
+      - Docker: deployment/docker.md
       - Authentication: guides/authentication.md
-      - Security Model: guides/security-model.md
+      - OIDC: deployment/oidc.md
 {% if enable_authorization %}      - Authorization: guides/authorization.md
-{% endif %}  - MCP Interface:
+{% endif %}      # PROJECT-NAV-DEPLOY-START — this server's deployment additions; kept across copier update
+      # PROJECT-NAV-DEPLOY-END
+  - Use:
+      - Overview: use/index.md
+      # PROJECT-NAV-USE-START — this server's how-tos and explanations (docs/use/); kept across copier update
+      # PROJECT-NAV-USE-END
+  - Reference:
+      - Configuration: configuration.md
+      - Configuration generator: configuration-generator.md
       - Tools: tools/index.md
       - Prompts: prompts.md
-  - Deployment:
-      - Docker: deployment/docker.md
-      - OIDC Authentication: deployment/oidc.md
-      - Claude Desktop: deployment/claude-desktop.md
-      - Release Process: deployment/release-process.md
-      - Template Updates: deployment/template-updates.md
-      - Repository Protection: deployment/repository-protection.md
-      - Integration Branches: deployment/integration-branches.md
+      # PROJECT-NAV-REFERENCE-START — resources, CLI, API reference (docs/reference/api/); kept across copier update
+      # PROJECT-NAV-REFERENCE-END
   # Landing page only, deliberately: per-minor pages stay out of nav so a new
   # release never needs a nav edit (mkdocs treats not-in-nav pages as INFO,
   # so `--strict` stays green); the landing page and search link them.
-  - Release Notes: releases/index.md
+  - Upgrade:
+      - Release notes: releases/index.md
+      # PROJECT-NAV-UPGRADE-START — kept across copier update
+      # PROJECT-NAV-UPGRADE-END
   - Contribute:
       - Documentation structure: contribute/docs-structure.md
-  # PROJECT-NAV-END
+      - Release process: deployment/release-process.md
+      - Template updates: deployment/template-updates.md
+      - Repository protection: deployment/repository-protection.md
+      - Integration branches: deployment/integration-branches.md
+      # PROJECT-NAV-CONTRIBUTE-START — kept across copier update
+      # PROJECT-NAV-CONTRIBUTE-END
+  # PROJECT-NAV-UNSORTED-START — entries the nav migration could not place; move each into a section above
+  # PROJECT-NAV-UNSORTED-END
