@@ -6,6 +6,8 @@ This page states what {{ project_name }} protects and what it leaves to the oper
 
 Over HTTP, authentication is the only access control: a bearer token, a mapped bearer token file, or OIDC. A request without a valid credential is refused before it reaches a tool.{% if enable_authorization %} [Authorization](authorization.md) then narrows which tools an authenticated caller may use.{% endif %} It is the same model as any other MCP server reached over HTTP.
 
+With OIDC, who holds a valid credential is the identity provider's decision: anyone it signs in for this server's client gets through.{% if enable_authorization %} Authorization then decides what each of them may use.{% else %} The server keeps no list of allowed users, so every one of them has the full tool surface. Limit who may sign in to this client at the provider.{% endif %}
+
 ## Running without authentication
 
 With no authentication variables set, the server starts in mode `none` and logs `auth_mode_resolved` at warning level with `mode=none`. Every client that can open a connection to the port then has the full tool surface. Turning authentication off is a decision to trust everything that can reach the port.

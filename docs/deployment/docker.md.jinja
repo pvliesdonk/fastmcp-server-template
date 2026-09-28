@@ -88,7 +88,7 @@ docker compose config
 
 Substitute your own hostname for `mcp.example.com`. Set `{{ env_prefix }}_BASE_URL` to the public URL as well: the server needs it to advertise its own address, and it is required once OIDC is enabled. Do not reach for `{{ env_prefix }}_HOST` here. That variable is the interface the server binds to, which is not the name the proxy routes.
 
-The network must already exist and be the one the proxy watches. For the same overlay with OIDC, see [OIDC](oidc.md).
+The network must already exist and be the one the proxy watches. For the OIDC settings that go with it, see [OIDC](oidc.md#docker-compose-with-oidc).
 
 ### Building the image yourself
 
@@ -186,7 +186,7 @@ Running behind a reverse proxy on a path prefix (`https://mcp.example.com/myserv
 
 | Path | Purpose |
 |------|---------|
-| `/data/service` | Your service data (bind-mount or named volume) |
+| `/data/service` | For a server that keeps files of its own (bind-mount or named volume); one that stores nothing here leaves it empty |
 | `/data/state` | State files (FastMCP OIDC state, etc.) |
 
 ## UID/GID

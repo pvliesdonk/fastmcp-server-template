@@ -120,49 +120,9 @@ Client → {{ project_name }} (with OIDCProxy) → OIDC Provider (Authelia/Keycl
 
 ## Docker Compose with OIDC
 
-This is the shipped `compose.yml` with a reverse proxy added. The service joins an external `traefik` network and carries router labels. It publishes no host port, because the proxy reaches it over that network instead. See [Docker](docker.md) for the base file and the same overlay without OIDC.
+OIDC needs no change to `compose.yml`. Put the server behind the reverse proxy with the `compose.override.yml` from [Behind a reverse proxy](docker.md#behind-a-reverse-proxy), unchanged, and add the OIDC settings to `.env`.
 
-```yaml
-services:
-  {{ project_name }}:
-    image: {{ docker_registry }}/{{ project_name }}:latest
-    restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false
-    volumes:
-      - service-data:/data/service
-      - state-data:/data/state
-    environment:
-      FASTMCP_HOME: /data/state/fastmcp
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).close()"
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.{{ project_name }}.rule=Host(`mcp.example.com`)"
-      - "traefik.http.routers.{{ project_name }}.tls.certresolver=letsencrypt"
-      - "traefik.http.services.{{ project_name }}.loadbalancer.server.port=8000"
-    networks:
-      - traefik
-
-volumes:
-  service-data:
-  state-data:
-
-networks:
-  traefik:
-    external: true
-```
-
-With the corresponding `.env`:
+The `.env` additions:
 
 ```bash
 {{ env_prefix }}_BASE_URL=https://mcp.example.com
