@@ -159,6 +159,13 @@ def test_template_repo_scans_itself() -> None:
     tests = ci["jobs"]["scripts-and-invariants"]["steps"]
     run = next(s for s in tests if s.get("name") == "Run script unit tests")["run"]
     assert "--cov" in run and "--cov-report=xml" in run
+    # Shipped scripts whose tests are the verbatim ones under tests/.
+    for shipped_test in (
+        "tests/test_dependency_pins.py",
+        "tests/test_package_milestones.py",
+        "tests/test_promote_release_notes.py",
+    ):
+        assert shipped_test in run
     upload = next(s for s in tests if s.get("name") == "Upload coverage report")
     assert upload["with"] == {
         "name": "coverage-xml",

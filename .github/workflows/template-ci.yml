@@ -1967,8 +1967,16 @@ jobs:
         # day it shipped and turned main red (#509).
         # scripts/tests/test_tooling_env.py keeps the two pins equal.
         # Coverage ([tool.coverage.run] in pyproject.toml) feeds the `sonar`
-        # job below.
-        run: uv run --no-sync --no-build pytest scripts/tests/ -v --cov --cov-report=xml
+        # job below.  The three tests/ files are the verbatim-shipped tests of
+        # shipped scripts (check_pins, package_milestones,
+        # promote_release_notes): they run here too so those scripts'
+        # coverage is measured, not only exercised inside a render.
+        run: |
+          uv run --no-sync --no-build pytest -v --cov --cov-report=xml \
+            scripts/tests/ \
+            tests/test_dependency_pins.py \
+            tests/test_package_milestones.py \
+            tests/test_promote_release_notes.py
 
       - name: Upload coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
