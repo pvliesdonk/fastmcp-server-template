@@ -327,7 +327,7 @@ def _reexec_with_deps() -> bool:
     forwarded = sys.argv[1:]
     for arg in forwarded:
         # Only text a flag, a revision or a path holds is forwarded (#694).
-        if not re.fullmatch(r"[A-Za-z0-9_ ./~^@{}:=+,-]*", arg):
+        if not re.fullmatch(r"[\w ./~^@{}:=+,-]*", arg, re.ASCII):
             return True
     argv = [
         "uv",

@@ -374,7 +374,7 @@ def git_revision(value: str) -> str:
     Revisions reach git's command line; `--output=...` there is an option,
     not a commit (#694).  Also the argparse ``type=`` of every revision flag.
     """
-    if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_./~^@{}+-]*", value):
+    if not re.fullmatch(r"\w[\w./~^@{}+-]*", value, re.ASCII):
         raise ValueError(
             f"git revision {value!r} must be a ref, tag, SHA or ~/^ expression"
         )
@@ -566,7 +566,7 @@ def _reexec_with_deps() -> bool:
     forwarded = sys.argv[1:]
     for arg in forwarded:
         # Only text a flag, a revision or a path holds is forwarded (#694).
-        if not re.fullmatch(r"[A-Za-z0-9_ ./~^@{}:=+,-]*", arg):
+        if not re.fullmatch(r"[\w ./~^@{}:=+,-]*", arg, re.ASCII):
             return True
     argv = [
         "uv",
