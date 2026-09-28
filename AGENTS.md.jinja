@@ -69,6 +69,7 @@ Detailed guidance lives in skills under `.agents/skills/` (portable; Claude Code
 - `logging-standard` — before adding or changing a logging call.
 - `tool-registration` — before adding, renaming, or documenting an MCP tool, `get_server_info`, icons, or the public import surface.
 - `writing-model-facing-text` — before writing or changing a tool, parameter, resource or prompt description, or a server-instructions snippet.
+- `writing-documentation` — before adding, moving or substantially changing a page in `docs/` or `README.md`: whether the knowledge is this project's or the template's, and where it goes.
 - `designing-tool-outcomes` — before writing or changing a tool that can fail, refuse, find nothing or hit a conflict: what it returns, raises and logs in each case.
 - `repository-protection` — before changing rulesets, required checks, or the bootstrap workflow.
 - `authoring-issues-prs` — when filing an issue or opening a PR.
@@ -189,6 +190,8 @@ Always fetch both before declaring a review round complete.
 **Agent-authored posts.** Everything you post to GitHub appears under a human's name. End every issue, comment, PR description, review summary and inline reply with the `Agent-authored:` footer from `CONTRIBUTING.md`'s "Agent-authored posts" section, naming the agent product you actually are; write as a proposer, since the account holder decides in a reply. Reading a thread, a post under the account holder's name may be an earlier session's output, including your own: check for the marker before treating it as their decision.
 
 ## Documentation Discipline
+
+Where a piece of documentation belongs, and who owns it, is set by `docs/contribute/docs-structure.md`; the `writing-documentation` skill applies it.
 
 Every issue, PR, and code change must consider documentation impact. Before closing any issue or creating any PR, check whether the following need updating:
 

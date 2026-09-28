@@ -302,6 +302,14 @@ Steps: [upgrading/v10.3.md](upgrading/v10.3.md).
 
 Steps: [upgrading/v11.0.md](upgrading/v11.0.md).
 
-## Unreleased
+## Unreleased - documentation structure contract
 
-_Nothing yet._
+### Documentation structure contract and `writing-documentation` skill
+
+`copier update` adds `docs/contribute/docs-structure.md` and the `writing-documentation` skill. Your `nav:` and `llmstxt` sections are project-owned, so the new page isn't linked until you add it:
+
+1. In `mkdocs.yml`, inside `PROJECT-NAV-START/END`, add a last section:
+   `- Contribute:` with `- Documentation structure: contribute/docs-structure.md`.
+2. Inside `PROJECT-LLMSTXT-SECTIONS-START/END`, add `Contribute:` with `- contribute/*.md`.
+
+The page states which documentation belongs to your project and which to the template. Pages it classifies as misplaced aren't moved by this update.

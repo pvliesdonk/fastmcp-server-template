@@ -84,6 +84,8 @@ plugins:
         # auto-indexing each canonical minor page.
         Release Notes:
           - releases/[0-9]*.[0-9]*.md
+        Contribute:
+          - contribute/*.md
         # PROJECT-LLMSTXT-SECTIONS-END
   - mkdocstrings:
       handlers:
@@ -144,4 +146,6 @@ nav:
   # release never needs a nav edit (mkdocs treats not-in-nav pages as INFO,
   # so `--strict` stays green); the landing page and search link them.
   - Release Notes: releases/index.md
+  - Contribute:
+      - Documentation structure: contribute/docs-structure.md
   # PROJECT-NAV-END

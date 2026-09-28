@@ -28,6 +28,7 @@ TEMPLATE_SKILLS = (
     "roadmapping",
     "self-reviewing",
     "tool-registration",
+    "writing-documentation",
     "writing-model-facing-text",
     "writing-release-notes",
 )
