@@ -101,7 +101,10 @@ runs:
         ZIP: {% raw %}${{ steps.pack.outputs.zip }}{% endraw %}
       run: |
         test -f "$ZIP" || { echo "::error::zip missing: $ZIP"; exit 1; }
-        work=$(mktemp -d)
+        # Unpacked inside the checkout: verify.py only reads paths under its
+        # working directory (#694).
+        mkdir -p build
+        work=$(mktemp -d build/verify.XXXXXX)
         trap 'rm -rf "$work"' EXIT
         unzip -q "$ZIP" -d "$work"
         python3 .github/actions/build-plugin-zip/verify.py "$work" "$VERSION"

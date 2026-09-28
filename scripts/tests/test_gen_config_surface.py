@@ -902,9 +902,10 @@ class TestRenderEnvFile:
         assert text.endswith("\n") and not text.endswith("\n\n")
 
     def test_output_is_stable_across_calls(self, fake_project, template_root):
-        assert self._env_text(fake_project, template_root) == self._env_text(
-            fake_project, template_root
-        )
+        # Two separate renders compared, not one expression with itself.
+        first = self._env_text(fake_project, template_root)
+        second = self._env_text(fake_project, template_root)
+        assert first == second
 
 
 class TestDiscoverDomainVars:

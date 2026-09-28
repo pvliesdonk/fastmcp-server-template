@@ -45,6 +45,7 @@ inside those markers survives an update.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -86,6 +87,21 @@ def _load(path: Path) -> Any:
         return json.load(fh)
 
 
+def _within_cwd(path: str | os.PathLike[str]) -> str:
+    """*path* canonicalised, refusing one outside the working directory (#694).
+
+    Every path this script touches lives in the checkout it runs from, so a
+    path that resolves elsewhere (``..``, an absolute path, a symlink) is a
+    broken or hostile invocation.  The realpath-then-prefix shape is the one
+    SonarCloud's path-injection rules recognise.
+    """
+    resolved = os.path.realpath(path)
+    base_dir = os.path.realpath(os.getcwd())  # noqa: PTH109 - the shape Sonar reads
+    if resolved != base_dir and not resolved.startswith(base_dir + os.sep):
+        raise StampError(f"path {path!r} is outside the working directory")
+    return resolved
+
+
 def _dump(path: Path, data: Any) -> None:
     """Write JSON atomically, in the byte format the toolchain expects.
 
@@ -94,6 +110,7 @@ def _dump(path: Path, data: Any) -> None:
     created in the target's own directory so the final ``rename`` is atomic
     on the same filesystem.
     """
+    path = Path(_within_cwd(path))
     tmp = path.parent / f".{path.name}.stamp-tmp"
     try:
         tmp.write_text(
@@ -156,6 +173,7 @@ def _stamp_uv_lock(version: str) -> list[Path]:
         raise StampError(
             f"{path}: no 'name = \"{normalized}\"' entry with a version line to stamp"
         )
+    path = Path(_within_cwd(path))
     tmp = path.parent / f".{path.name}.stamp-tmp"
     try:
         tmp.write_text(new_text, encoding="utf-8")

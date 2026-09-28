@@ -132,7 +132,22 @@ def test_pyproject_option_reads_only_a_pyproject(tmp_path: Path) -> None:
         main(["--offline", "--pyproject", str(secret)])
 
 
-def test_pyproject_option_accepts_a_pyproject_anywhere(tmp_path: Path) -> None:
+def test_pyproject_option_accepts_a_pyproject_in_the_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text("[project]\nname = 'x'\n", encoding="utf-8")
     assert main(["--offline", "--pyproject", str(pyproject)]) == 0
+
+
+def test_pyproject_option_refuses_a_path_outside_the_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outside = tmp_path / "pyproject.toml"
+    outside.write_text("[project]\nname = 'x'\n", encoding="utf-8")
+    here = tmp_path / "repo"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    with pytest.raises(SystemExit):
+        main(["--offline", "--pyproject", str(outside)])

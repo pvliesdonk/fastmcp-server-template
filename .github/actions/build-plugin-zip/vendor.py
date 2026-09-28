@@ -22,6 +22,7 @@ URL from a Windows plugin root is a trap this side-steps entirely.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import sys
@@ -45,6 +46,21 @@ def servers_of(mcp: dict) -> dict:
     """
     inner = mcp.get("mcpServers")
     return inner if isinstance(inner, dict) else mcp
+
+
+def _within_cwd(path: str | os.PathLike[str]) -> str:
+    """*path* canonicalised, refusing one outside the working directory (#694).
+
+    Every path this script touches lives in the checkout it runs from, so a
+    path that resolves elsewhere (``..``, an absolute path, a symlink) is a
+    broken or hostile invocation.  The realpath-then-prefix shape is the one
+    SonarCloud's path-injection rules recognise.
+    """
+    resolved = os.path.realpath(path)
+    base_dir = os.path.realpath(os.getcwd())  # noqa: PTH109 - the shape Sonar reads
+    if resolved != base_dir and not resolved.startswith(base_dir + os.sep):
+        raise VendorError(f"path {path!r} is outside the working directory")
+    return resolved
 
 
 def inside(root: pathlib.Path, path: pathlib.Path) -> pathlib.Path:
@@ -105,7 +121,7 @@ def repin(root: pathlib.Path, wheel: str) -> str:
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise VendorError(f"usage: {argv[0]} <staged-plugin-dir> <version>")
-    root = pathlib.Path(argv[1])
+    root = pathlib.Path(_within_cwd(argv[1]))
     version = argv[2]
     if not VERSION.fullmatch(version):
         raise VendorError(f"version {version!r} is not X.Y.Z or X.Y.Z-<pre-release>")

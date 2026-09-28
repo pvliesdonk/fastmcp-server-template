@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from vendor import VendorError, inside, servers_of
+from vendor import VendorError, _within_cwd, inside, servers_of
 
 PLUGIN_ROOT_VAR = "${CLAUDE_PLUGIN_ROOT}/wheels/"
 
@@ -49,7 +49,10 @@ def launch_spec(mcp: dict) -> str:
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise VerifyError(f"usage: {argv[0]} <unpacked-dir> <version>")
-    root = pathlib.Path(argv[1])
+    try:
+        root = pathlib.Path(_within_cwd(argv[1]))
+    except VendorError as exc:
+        raise VerifyError(str(exc)) from exc
     version = argv[2]
 
     # `.claude-plugin/plugin.json` at the archive root is what makes the zip

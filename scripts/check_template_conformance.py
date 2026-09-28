@@ -374,8 +374,10 @@ def git_revision(value: str) -> str:
     Revisions reach git's command line; `--output=...` there is an option,
     not a commit (#694).  Also the argparse ``type=`` of every revision flag.
     """
-    if not value or value.startswith("-"):
-        raise ValueError(f"git revision {value!r} must not be empty or start with '-'")
+    if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_./~^@{}+-]*", value):
+        raise ValueError(
+            f"git revision {value!r} must be a ref, tag, SHA or ~/^ expression"
+        )
     return value
 
 
@@ -561,6 +563,11 @@ def _reexec_with_deps() -> bool:
     if os.environ.get("_CONFORMANCE_BOOTSTRAPPED") == "1":
         return True
     os.environ["_CONFORMANCE_BOOTSTRAPPED"] = "1"
+    forwarded = sys.argv[1:]
+    for arg in forwarded:
+        # Only text a flag, a revision or a path holds is forwarded (#694).
+        if not re.fullmatch(r"[A-Za-z0-9_ ./~^@{}:=+,-]*", arg):
+            return True
     argv = [
         "uv",
         "run",
@@ -572,7 +579,7 @@ def _reexec_with_deps() -> bool:
         "--",
         "python",
         __file__,
-        *sys.argv[1:],
+        *forwarded,
     ]
     try:
         os.execvpe("uv", argv, os.environ)
