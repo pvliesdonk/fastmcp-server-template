@@ -15,6 +15,9 @@ Steps (each printed when taken):
    page the resolved nav does not already list, with its section titles.
 3. Write those entries into the `PROJECT-NAV-UNSORTED` block at the end of
    `nav:` for the maintainer to sort into the section blocks.
+4. Resolve the conflict copier leaves where the old hand-kept
+   `PROJECT-LLMSTXT-SECTIONS` list used to be (#714) to the template side:
+   llms.txt is now built from the nav, and the old list is dropped.
 
 Nothing outside `nav:` is changed.  Idempotent; a no-op on `copier copy` (no
 HEAD:mkdocs.yml) and on a project whose HEAD already has the frame.
@@ -34,6 +37,7 @@ OLD_END = "# PROJECT-NAV-END"
 NEW_MARKER = "PROJECT-NAV-USE-START"
 UNSORTED_START = "PROJECT-NAV-UNSORTED-START"
 UNSORTED_END = "PROJECT-NAV-UNSORTED-END"
+OLD_LLMSTXT = "PROJECT-LLMSTXT-SECTIONS-START"
 
 
 def _nav_bounds(lines: list[str]) -> tuple[int, int]:
@@ -170,6 +174,40 @@ def park(updated_text: str, head_text: str) -> tuple[str, list[str]]:
     return "\n".join(new_lines), parked
 
 
+def _clear_llmstxt_conflicts(lines: list[str]) -> list[str]:
+    """Resolve to the template side each conflict whose old side held the llms list.
+
+    Any other conflict is kept exactly as copier wrote it.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        if not lines[i].startswith("<<<<<<< "):
+            out.append(lines[i])
+            i += 1
+            continue
+        end = next(
+            (j for j in range(i, len(lines)) if lines[j].startswith(">>>>>>> ")), None
+        )
+        if end is None:
+            return out + lines[i:]
+        hunk = lines[i : end + 1]
+        sep = next(k for k, line in enumerate(hunk) if line.startswith("======="))
+        old_sides = hunk[1:sep]
+        if any(OLD_LLMSTXT in line for line in old_sides):
+            out.extend(hunk[sep + 1 : -1])
+        else:
+            out.extend(hunk)
+        i = end + 1
+    return out
+
+
+def migrate(updated_text: str, head_text: str) -> tuple[str, list[str]]:
+    """Clear the removed llms.txt list's conflict, then move the nav (see `park`)."""
+    cleared = "\n".join(_clear_llmstxt_conflicts(updated_text.split("\n")))
+    return park(cleared, head_text)
+
+
 def _head_mkdocs(root: Path) -> str | None:
     try:
         return subprocess.run(
@@ -190,7 +228,7 @@ def main() -> int:
     if head is None or not path.exists() or NEW_MARKER in head:
         return 0
     before = path.read_text(encoding="utf-8")
-    after, parked = park(before, head)
+    after, parked = migrate(before, head)
     if after == before and "<<<<<<< " in before:
         print(
             "migrate_docs_nav: left mkdocs.yml as copier wrote it; resolve nav: by "
