@@ -1,0 +1,292 @@
+"""Check the documentation against docs/contribute/docs-structure.md (#715).
+
+Two levels.  Errors are things that are broken for a reader today and fail
+from the first run; warnings are debt a project pays down and fail only in
+strict mode (`--strict`, or `strict = true` under `[tool.docs-structure]` in
+pyproject.toml).
+
+Errors
+  E1  a relative link on a published page leaves the site: it points at a page
+      `exclude_docs` drops, outside `docs/`, or at nothing.
+  E2  a published page is neither in `nav:` nor in a directory that holds a
+      nav page, so neither the nav nor llms.txt reaches it.
+  E3  a template section-entry page has lost its link to the security model.
+Warnings
+  W1  a page the template does not render sits outside the designated
+      directories (`use/`, `reference/api/`, `releases/`).
+  W2  a page lacks `description:` or `kind:` front matter, or `kind` is not
+      tutorial, how-to, reference or explanation.
+  W3  entries remain under Unsorted at the end of `nav:`.
+
+`exclude_docs` is matched for the pattern forms the template uses, `dir/**`
+and plain globs; full gitignore syntax is not interpreted.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import posixpath
+import re
+import sys
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+TEMPLATE_PAGES = frozenset(
+    {
+        "index.md",
+        "installation.md",
+        "configuration.md",
+        "configuration-generator.md",
+        "prompts.md",
+        "tools/index.md",
+        "guides/authentication.md",
+        "guides/security-model.md",
+        "guides/authorization.md",
+        "deployment/claude-desktop.md",
+        "deployment/docker.md",
+        "deployment/oidc.md",
+        "deployment/release-process.md",
+        "deployment/repository-protection.md",
+        "deployment/template-updates.md",
+        "deployment/integration-branches.md",
+        "use/index.md",
+        "contribute/docs-structure.md",
+        "releases/index.md",
+    }
+)
+DESIGNATED = ("use/", "reference/api/", "releases/")
+ENTRY_PAGES = (
+    "index.md",
+    "installation.md",
+    "deployment/claude-desktop.md",
+    "deployment/docker.md",
+    "use/index.md",
+    "contribute/docs-structure.md",
+)
+KINDS = frozenset({"tutorial", "how-to", "reference", "explanation"})
+
+_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
+_INLINE_CODE = re.compile(r"`[^`]*`")
+_FRONT_MATTER = re.compile(
+    r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL
+)
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One check result."""
+
+    level: str
+    code: str
+    path: str
+    line: int | None
+    message: str
+
+    def render(self) -> str:
+        where = self.path if self.line is None else f"{self.path}:{self.line}"
+        return f"{self.level} {self.code} {where}: {self.message}"
+
+
+class _Site:
+    """What the checks need from mkdocs.yml and docs/."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.docs = root / "docs"
+        self.mkdocs_text = (root / "mkdocs.yml").read_text(encoding="utf-8")
+        config = yaml.safe_load(self.mkdocs_text) or {}
+        self.patterns = [p for p in str(config.get("exclude_docs") or "").split() if p]
+        self.nav_pages = set(_leaves(config.get("nav") or []))
+        self.pages = sorted(
+            rel
+            for rel in (
+                p.relative_to(self.docs).as_posix() for p in self.docs.rglob("*.md")
+            )
+            if not self.excluded(rel) and not rel.split("/")[-1].startswith(".")
+        )
+
+    def excluded(self, rel: str) -> bool:
+        for pattern in self.patterns:
+            if pattern.endswith("/**") and rel.startswith(pattern[:-2]):
+                return True
+            if fnmatch.fnmatch(rel, pattern):
+                return True
+        return False
+
+    def text(self, rel: str) -> str:
+        return (self.docs / rel).read_text(encoding="utf-8")
+
+
+def _leaves(node: Any) -> list[str]:
+    if isinstance(node, str):
+        return [] if "://" in node else [node]
+    if isinstance(node, list):
+        return [leaf for item in node for leaf in _leaves(item)]
+    if isinstance(node, dict):
+        return [leaf for value in node.values() for leaf in _leaves(value)]
+    return []
+
+
+def _link_lines(text: str) -> list[tuple[int, str]]:
+    """Return ``(line number, target)`` for links outside code."""
+    found: list[tuple[int, str]] = []
+    fenced = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        for target in _LINK.findall(_INLINE_CODE.sub("", line)):
+            found.append((number, target))
+    return found
+
+
+def _is_external(target: str) -> bool:
+    return (
+        target.startswith(("#", "//", "mailto:"))
+        or re.match(r"^[a-z][a-z0-9+.-]*:", target) is not None
+    )
+
+
+def _check_links(site: _Site, rel: str) -> list[Finding]:
+    findings = []
+    for number, target in _link_lines(site.text(rel)):
+        if _is_external(target):
+            continue
+        path = target.split("#", 1)[0].split("?", 1)[0]
+        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))
+        leaves_docs = resolved == ".." or resolved.startswith("../")
+        if (
+            leaves_docs
+            or site.excluded(resolved)
+            or not (site.docs / resolved).exists()
+        ):
+            findings.append(
+                Finding(
+                    "error",
+                    "E1",
+                    f"docs/{rel}",
+                    number,
+                    f"{target} is not served by the site",
+                )
+            )
+    return findings
+
+
+def _front_matter(text: str) -> dict[str, Any]:
+    match = _FRONT_MATTER.match(text)
+    if match is None:
+        return {}
+    try:
+        front = yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        return {}
+    return front if isinstance(front, dict) else {}
+
+
+def _check_page(site: _Site, rel: str, nav_dirs: set[str]) -> list[Finding]:
+    findings = _check_links(site, rel)
+    where = f"docs/{rel}"
+    if rel not in site.nav_pages and posixpath.dirname(rel) not in nav_dirs:
+        findings.append(
+            Finding(
+                "error",
+                "E2",
+                where,
+                None,
+                "not in nav: and no nav page shares its directory",
+            )
+        )
+    if rel not in TEMPLATE_PAGES and not rel.startswith(DESIGNATED):
+        findings.append(
+            Finding(
+                "warning",
+                "W1",
+                where,
+                None,
+                "outside the places docs-structure.md designates",
+            )
+        )
+    front = _front_matter(site.text(rel))
+    if not front.get("description") or front.get("kind") not in KINDS:
+        findings.append(
+            Finding(
+                "warning",
+                "W2",
+                where,
+                None,
+                "needs description: and a valid kind: front matter",
+            )
+        )
+    return findings
+
+
+def collect(root: Path) -> list[Finding]:
+    """Run every check over the repository at *root*."""
+    site = _Site(root)
+    nav_dirs = {posixpath.dirname(page) for page in site.nav_pages}
+    findings: list[Finding] = []
+    for rel in site.pages:
+        findings.extend(_check_page(site, rel, nav_dirs))
+    for rel in ENTRY_PAGES:
+        if (site.docs / rel).exists() and "security-model.md" not in site.text(rel):
+            findings.append(
+                Finding(
+                    "error",
+                    "E3",
+                    f"docs/{rel}",
+                    None,
+                    "lost its link to the security model",
+                )
+            )
+    unsorted = site.mkdocs_text.split("PROJECT-NAV-UNSORTED-START", 1)[-1].split(
+        "PROJECT-NAV-UNSORTED-END", 1
+    )[0]
+    if "PROJECT-NAV-UNSORTED-START" in site.mkdocs_text and any(
+        line.strip().startswith("- ") for line in unsorted.splitlines()
+    ):
+        findings.append(
+            Finding(
+                "warning",
+                "W3",
+                "mkdocs.yml",
+                None,
+                "entries remain under Unsorted in nav:",
+            )
+        )
+    return findings
+
+
+def _strict_setting(root: Path) -> bool:
+    try:
+        data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    return bool(data.get("tool", {}).get("docs-structure", {}).get("strict", False))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Check the documentation structure.")
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--strict", action="store_true", help="fail on warnings too")
+    args = parser.parse_args(argv)
+    findings = collect(args.root)
+    for finding in findings:
+        print(finding.render())
+    errors = sum(1 for f in findings if f.level == "error")
+    warnings = len(findings) - errors
+    strict = args.strict or _strict_setting(args.root)
+    print(
+        f"docs-structure: {errors} error(s), {warnings} warning(s){' (strict)' if strict else ''}"
+    )
+    return 1 if errors or (strict and warnings) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

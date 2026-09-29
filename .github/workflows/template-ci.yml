@@ -295,6 +295,16 @@ jobs:
           test -f src/smoke_mcp/static/app.html
           uv run --no-sync --no-build python scripts/vendor_spa.py --check
 
+      - name: docs structure (a pristine render is clean even in strict mode)
+        # scripts/check_docs_structure.py (#715): a fresh render has no
+        # project pages, so neither errors nor warnings may appear. Both the
+        # default and the authorization-off render, with the smoke venv's
+        # interpreter (PyYAML is all the script needs).
+        working-directory: /tmp/smoke
+        run: |
+          uv run --no-sync --no-build python scripts/check_docs_structure.py --strict
+          .venv/bin/python scripts/check_docs_structure.py --strict --root /tmp/smoke-authz-off
+
       - name: ruff check
         working-directory: /tmp/smoke
         run: uv run --no-sync --no-build ruff check .
@@ -2073,7 +2083,7 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             --target-version py311 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/migrate_docs_nav.py scripts/llmstxt_sections_hook.py scripts/check_pr_title.py scripts/repo_about.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/migrate_docs_nav.py scripts/llmstxt_sections_hook.py scripts/check_docs_structure.py scripts/check_pr_title.py scripts/repo_about.py
 
   sonar:
     # CI-based SonarQube Cloud analysis of this repository, with the coverage

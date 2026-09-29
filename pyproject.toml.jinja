@@ -404,3 +404,10 @@ pythonVersion = "3.11"
 # src-layout editable installs use a .pth shim that Pyright does not execute;
 # point Pyright at src/ directly so IDE import resolution matches runtime.
 extraPaths = ["src"]
+
+# PROJECT-DOCS-CHECKS-START — kept across copier update. Set strict = true once
+# `python scripts/check_docs_structure.py` reports no warnings, so that new
+# documentation debt fails CI (docs/contribute/docs-structure.md, Checks).
+[tool.docs-structure]
+strict = false
+# PROJECT-DOCS-CHECKS-END
