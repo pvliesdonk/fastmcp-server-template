@@ -38,6 +38,8 @@ NEW_MARKER = "PROJECT-NAV-USE-START"
 UNSORTED_START = "PROJECT-NAV-UNSORTED-START"
 UNSORTED_END = "PROJECT-NAV-UNSORTED-END"
 OLD_LLMSTXT = "PROJECT-LLMSTXT-SECTIONS-START"
+OLD_LLMSTXT_END = "PROJECT-LLMSTXT-SECTIONS-END"
+_MARKERS = ("<<<<<<< ", "||||||| ", "=======", ">>>>>>> ")
 
 
 def _nav_bounds(lines: list[str]) -> tuple[int, int]:
@@ -46,7 +48,7 @@ def _nav_bounds(lines: list[str]) -> tuple[int, int]:
     stop = first + 1
     while stop < len(lines):
         line = lines[stop]
-        top_level = line and not line.startswith((" ", "#", "<", "|", "=", ">"))
+        top_level = line and not line.startswith((" ", "#", *_MARKERS))
         if top_level:
             break
         stop += 1
@@ -130,6 +132,22 @@ class _IndentedDumper(yaml.SafeDumper):
         super().increase_indent(flow, False)
 
 
+def _nav_skip_reason(lines: list[str], head_text: str) -> str | None:
+    """Say why the old nav cannot be moved, or ``None`` when it can (or needn't be)."""
+    try:
+        old_nav = _old_project_nav(head_text)
+    except ValueError as exc:
+        return f"nav: left as copier wrote it ({exc})"
+    if old_nav is None:
+        return None
+    if "nav:" not in lines:
+        return "nav: left as copier wrote it (no top-level nav: key in mkdocs.yml)"
+    first, stop = _nav_bounds(lines)
+    if not any(UNSORTED_END in line for line in _resolve(lines[first + 1 : stop])):
+        return "nav: left as copier wrote it (the new frame has no Unsorted block)"
+    return None
+
+
 def _insert_unsorted(region: list[str], missing: Any) -> list[str]:
     """Return *region* with *missing* written into the Unsorted block."""
     dumped = yaml.dump(
@@ -153,18 +171,13 @@ def park(updated_text: str, head_text: str) -> tuple[str, list[str]]:
     loses nothing, where a guess could lose the project's entries.
     """
     lines = updated_text.split("\n")
-    if "nav:" not in lines:
+    if _nav_skip_reason(lines, head_text) is not None:
         return updated_text, []
-    try:
-        old_nav = _old_project_nav(head_text)
-    except ValueError:
-        return updated_text, []
+    old_nav = _old_project_nav(head_text)
     if old_nav is None:
         return updated_text, []
     first, stop = _nav_bounds(lines)
     region = _resolve(lines[first + 1 : stop])
-    if not any(UNSORTED_END in line for line in region):
-        return updated_text, []
     present = set(_leaves(yaml.safe_load("nav:\n" + "\n".join(region))["nav"]))
     missing = _keep_missing(old_nav, present)
     parked = _leaves(missing) if missing else []
@@ -174,38 +187,79 @@ def park(updated_text: str, head_text: str) -> tuple[str, list[str]]:
     return "\n".join(new_lines), parked
 
 
-def _clear_llmstxt_conflicts(lines: list[str]) -> list[str]:
-    """Resolve to the template side each conflict whose old side held the llms list.
+def _only_the_list(old_sides: list[str]) -> bool:
+    """True when the hunk's old side holds nothing but the removed llms list."""
+    inside = False
+    for line in old_sides:
+        stripped = line.strip()
+        if OLD_LLMSTXT in stripped:
+            inside = True
+        if inside:
+            if OLD_LLMSTXT_END in stripped:
+                inside = False
+            continue
+        if (
+            stripped
+            and not stripped.startswith(("#", "||||||| "))
+            and stripped != "sections:"
+        ):
+            return False
+    return True
 
-    Any other conflict is kept exactly as copier wrote it.
+
+def _clear_llmstxt_conflicts(lines: list[str]) -> tuple[list[str], list[str]]:
+    """Resolve to the template side each conflict that only held the llms list.
+
+    Returns the lines and a reason for every such conflict kept as copier
+    wrote it (one that also holds other project lines, or a malformed one).
     """
     out: list[str] = []
+    kept: list[str] = []
     i = 0
     while i < len(lines):
-        if not lines[i].startswith("<<<<<<< "):
+        end = _hunk_end(lines, i)
+        if end is None:
             out.append(lines[i])
             i += 1
             continue
-        end = next(
-            (j for j in range(i, len(lines)) if lines[j].startswith(">>>>>>> ")), None
-        )
-        if end is None:
-            return out + lines[i:]
         hunk = lines[i : end + 1]
-        sep = next(k for k, line in enumerate(hunk) if line.startswith("======="))
-        old_sides = hunk[1:sep]
-        if any(OLD_LLMSTXT in line for line in old_sides):
+        sep = next(
+            (k for k, line in enumerate(hunk) if line.startswith("=======")), None
+        )
+        if sep is None or not any(OLD_LLMSTXT in line for line in hunk[1:sep]):
+            out.extend(hunk)
+        elif _only_the_list(hunk[1:sep]):
             out.extend(hunk[sep + 1 : -1])
         else:
             out.extend(hunk)
+            kept.append(
+                "llms.txt: the conflict where the section list was also holds other "
+                "lines of yours; left for you to resolve (keep the template side, "
+                "plus your own lines)"
+            )
         i = end + 1
-    return out
+    return out, kept
+
+
+def _hunk_end(lines: list[str], i: int) -> int | None:
+    if not lines[i].startswith("<<<<<<< "):
+        return None
+    return next(
+        (j for j in range(i, len(lines)) if lines[j].startswith(">>>>>>> ")), None
+    )
 
 
 def migrate(updated_text: str, head_text: str) -> tuple[str, list[str]]:
     """Clear the removed llms.txt list's conflict, then move the nav (see `park`)."""
-    cleared = "\n".join(_clear_llmstxt_conflicts(updated_text.split("\n")))
-    return park(cleared, head_text)
+    cleared, _ = _clear_llmstxt_conflicts(updated_text.split("\n"))
+    return park("\n".join(cleared), head_text)
+
+
+def reasons(updated_text: str, head_text: str) -> list[str]:
+    """Say what the migration left for a human, and why."""
+    cleared, kept = _clear_llmstxt_conflicts(updated_text.split("\n"))
+    nav = _nav_skip_reason(cleared, head_text)
+    return kept + ([nav] if nav else [])
 
 
 def _head_mkdocs(root: Path) -> str | None:
@@ -229,10 +283,9 @@ def main() -> int:
         return 0
     before = path.read_text(encoding="utf-8")
     after, parked = migrate(before, head)
-    if after == before and "<<<<<<< " in before:
+    for reason in reasons(before, head):
         print(
-            "migrate_docs_nav: left mkdocs.yml as copier wrote it; resolve nav: by "
-            "hand (your old nav is at `git show HEAD:mkdocs.yml`)"
+            f"migrate_docs_nav: {reason}; your old file is at `git show HEAD:mkdocs.yml`"
         )
     if after != before:
         path.write_text(after, encoding="utf-8")

@@ -318,17 +318,19 @@ The page states which documentation belongs to your project and which to the tem
 
 The template now owns the frame of `nav:` in `mkdocs.yml`: eight sections by what the reader is trying to do (Overview, Security model, Get started, Deploy, Use, Reference, Upgrade, Contribute), with a slot in each for your own pages. Template pages keep their file paths, so no URL changes.
 
-`copier update` rebuilds `nav:` on the new frame. Every entry you had added to your old navigation is moved under **Unsorted** at the end of `nav:`, keeping its section title; entries for template pages are dropped, because the frame lists them. Then:
+`copier update` rebuilds `nav:` on the new frame. Every entry you had added to your old navigation is moved under **Unsorted** at the end of `nav:`, keeping its section title; entries for template pages are dropped, because the frame lists them, and so is any title you had given a template page (the frame titles its own pages). When the migration can't do this safely, it leaves copier's conflict in place and prints why. Then:
 
 1. Move each entry under Unsorted into the `PROJECT-NAV-<SECTION>-START/END` block of the section whose reader it serves. `docs/contribute/docs-structure.md` lists the sections and what goes where; your own how-to and feature pages belong in Use (`docs/use/`).
 2. Delete the emptied `Guides:`-style headings left under Unsorted, and run `uv run mkdocs build --strict`.
 3. `git add mkdocs.yml`: the update leaves it marked as conflicted even though its content is resolved.
 
-If you move one of your own pages while sorting, add an `old.md: new.md` entry to the new `redirects` block in `mkdocs.yml` (`mkdocs-redirects` is now in the docs dependency group) so its published URL keeps working.
+`mkdocs-redirects` joins the docs dependency group. Run `uv lock` and commit `uv.lock`: the docs workflow installs from the lock (`uv sync --frozen`), so the docs build fails until the lock has it. If you move one of your own pages while sorting, add an `old.md: new.md` entry to the new `redirects` block in `mkdocs.yml` so its published URL keeps working.
 
 ### llms.txt built from the navigation
 
 `llms.txt` is now generated from `nav:` when the site builds, by `scripts/llmstxt_sections_hook.py`. The `PROJECT-LLMSTXT-SECTIONS` block in `mkdocs.yml` is gone: `copier update` resolves the conflict it leaves to the template side, and the entries and descriptions you kept there are dropped.
+
+The hook is registered under a new top-level `hooks:` key in `mkdocs.yml`. If you already have a `hooks:` list, copier leaves a conflict there: keep your entries and add `scripts/llmstxt_sections_hook.py` to them.
 
 Each page's line in `llms.txt` now comes from its own front matter. Add to every page you own:
 

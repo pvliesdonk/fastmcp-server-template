@@ -48,3 +48,35 @@ def test_second_run_changes_nothing() -> None:
     twice, parked = migrate(once, HEAD)
     assert twice == once
     assert parked == []
+
+
+def test_hunk_with_other_project_lines_is_left_for_a_human() -> None:
+    widened = UPDATED.replace(
+        "<<<<<<< before updating\n      sections:\n",
+        "<<<<<<< before updating\n      markdown_description: Project text\n      sections:\n",
+        1,
+    )
+    assert widened != UPDATED
+    text, _ = migrate(widened, HEAD)
+    plugins_region = text.split("\nnav:\n", 1)[0]
+    assert "markdown_description: Project text" in plugins_region
+    assert "<<<<<<< before updating" in plugins_region
+
+
+def test_malformed_hunk_is_left_as_copier_wrote_it() -> None:
+    broken = "a: 1\n<<<<<<< before updating\n      sections:\n        # PROJECT-LLMSTXT-SECTIONS-START\n>>>>>>> after updating\n"
+    text, parked = migrate(broken, HEAD)
+    assert text == broken
+    assert parked == []
+
+
+def test_reasons_explain_a_kept_conflict() -> None:
+    from migrate_docs_nav import reasons
+
+    widened = UPDATED.replace(
+        "<<<<<<< before updating\n      sections:\n",
+        "<<<<<<< before updating\n      markdown_description: Project text\n      sections:\n",
+        1,
+    )
+    assert any("llms.txt" in r for r in reasons(widened, HEAD))
+    assert reasons(UPDATED, HEAD) == []

@@ -9,14 +9,21 @@ and never kept as a second list.
   nav order, nesting flattened; a titled single page is a one-page section.
 - A published page that is not in the nav joins the section of a nav page
   in the same directory (per-minor release notes join the landing page's
-  section), so every page a reader can reach from the site is indexed.
-- Each page's description is its `description:` front matter, or empty.
+  section). When several sections list pages in that directory, the first
+  one in nav order takes it.
+- Each page's description is its `description:` front matter, or empty; a
+  front-matter block that is not valid YAML is logged as a warning, which
+  `mkdocs build --strict` turns into a failure.
 
-External links and pages matched by `exclude_docs` never appear.
+External links are skipped, and so are pages outside the nav that
+`exclude_docs` matches (a nav entry for an excluded page is an error mkdocs
+reports itself).
 """
 
 from __future__ import annotations
 
+import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +33,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 Sections = dict[str, list[dict[str, str]]]
+
+logger = logging.getLogger("mkdocs.hooks.llmstxt_sections")
+_FRONT_MATTER = re.compile(
+    r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL
+)
+_HEADING = re.compile(r"^#[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 
 
 def _pages(node: Any) -> list[str]:
@@ -39,17 +52,22 @@ def _pages(node: Any) -> list[str]:
     return []
 
 
-def _description(docs_dir: Path, rel: str) -> str:
-    """Return the page's `description:` front matter, or an empty string."""
+def _read(docs_dir: Path, rel: str) -> str:
     try:
-        text = (docs_dir / rel).read_text(encoding="utf-8")
+        return (docs_dir / rel).read_text(encoding="utf-8")
     except OSError:
         return ""
-    if not text.startswith("---\n"):
+
+
+def _description(docs_dir: Path, rel: str) -> str:
+    """Return the page's `description:` front matter, or an empty string."""
+    match = _FRONT_MATTER.match(_read(docs_dir, rel))
+    if match is None:
         return ""
     try:
-        front = yaml.safe_load(text.split("---\n", 2)[1])
+        front = yaml.safe_load(match.group(1))
     except yaml.YAMLError:
+        logger.warning("llmstxt_front_matter_unparseable path=%s", rel)
         return ""
     if not isinstance(front, dict):
         return ""
@@ -57,13 +75,19 @@ def _description(docs_dir: Path, rel: str) -> str:
     return value if isinstance(value, str) else ""
 
 
-def _nav_sections(nav: list[Any]) -> dict[str, list[str]]:
+def _title(docs_dir: Path, rel: str) -> str:
+    """Return a bare nav entry's title: its first `# ` heading, else its path."""
+    heading = _HEADING.search(_read(docs_dir, rel))
+    return heading.group(1) if heading else rel
+
+
+def _nav_sections(nav: list[Any], docs_dir: Path) -> dict[str, list[str]]:
     sections: dict[str, list[str]] = {}
     for entry in nav:
         if isinstance(entry, dict):
             title, value = next(iter(entry.items()))
         else:
-            title, value = entry, entry
+            title, value = _title(docs_dir, str(entry)), entry
         pages = _pages(value)
         if pages:
             sections.setdefault(str(title), []).extend(pages)
@@ -74,7 +98,7 @@ def sections_from_nav(
     nav: list[Any], docs_dir: Path, excluded: Callable[[str], bool]
 ) -> Sections:
     """Return llms.txt sections derived from *nav* and the files in *docs_dir*."""
-    by_section = _nav_sections(nav)
+    by_section = _nav_sections(nav, docs_dir)
     listed = {page for pages in by_section.values() for page in pages}
     home: dict[str, str] = {}
     for title, pages in by_section.items():

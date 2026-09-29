@@ -71,3 +71,48 @@ def test_descriptions_come_from_front_matter(tmp_path: Path) -> None:
     nav = [{"S": ["a.md", "b.md", "c.md", "https://example.com/ext"]}]
     sections = sections_from_nav(nav, tmp_path, _never)
     assert sections["S"] == [{"a.md": "What a is for."}, {"b.md": ""}, {"c.md": ""}]
+
+
+def test_first_section_in_nav_order_claims_a_directory(tmp_path: Path) -> None:
+    for rel in (
+        "deployment/a.md",
+        "deployment/b.md",
+        "deployment/c.md",
+        "deployment/x.md",
+    ):
+        _page(tmp_path, rel)
+    nav = [
+        {"Get started": ["deployment/a.md"]},
+        {"Deploy": ["deployment/b.md", "deployment/c.md"]},
+    ]
+    sections = sections_from_nav(nav, tmp_path, _never)
+    assert {"deployment/x.md": ""} in sections["Get started"]
+
+
+def test_crlf_and_eof_front_matter(tmp_path: Path) -> None:
+    (tmp_path / "crlf.md").write_bytes(
+        b"---\r\ndescription: CRLF page.\r\n---\r\n# Crlf\r\n"
+    )
+    (tmp_path / "eof.md").write_text(
+        "---\ndescription: Only front matter.\n---", encoding="utf-8"
+    )
+    sections = sections_from_nav([{"S": ["crlf.md", "eof.md"]}], tmp_path, _never)
+    assert sections["S"] == [
+        {"crlf.md": "CRLF page."},
+        {"eof.md": "Only front matter."},
+    ]
+
+
+def test_unparseable_front_matter_is_logged(tmp_path: Path, caplog: object) -> None:
+    import logging
+
+    _page(tmp_path, "bad.md", "description: [unclosed")
+    with caplog.at_level(logging.WARNING):  # type: ignore[attr-defined]
+        sections_from_nav([{"S": ["bad.md"]}], tmp_path, _never)
+    assert "llmstxt_front_matter_unparseable" in caplog.text  # type: ignore[attr-defined]
+
+
+def test_bare_page_entry_is_titled_from_its_heading(tmp_path: Path) -> None:
+    (tmp_path / "extra.md").write_text("# Extra material\n\nBody.\n", encoding="utf-8")
+    sections = sections_from_nav(["extra.md"], tmp_path, _never)
+    assert list(sections) == ["Extra material"]
