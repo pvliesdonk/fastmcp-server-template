@@ -1446,6 +1446,7 @@ jobs:
                 .github/workflows/claude-code-review.yml
           rm -f scripts/copier_update_notes.py
           rm -f scripts/migrate_agent_instructions.py
+          rm -f scripts/migrate_docs_nav.py
           rm -f scripts/report_seeded_changes.py .copier-seeded-changes.md
           rm -f scripts/check_template_conformance.py .copier-template-drift.md
           sed -i.bak '/# >>> template-tracking: conformance hook/,/# <<< template-tracking: conformance hook/d' .pre-commit-config.yaml && rm -f .pre-commit-config.yaml.bak
@@ -1453,7 +1454,7 @@ jobs:
             || { echo "::error::detach left the template-conformance hook in .pre-commit-config.yaml"; exit 1; }
           rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
           rm -f docs/deployment/template-updates.md
-          sed -i.bak '/Template Updates: deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
+          sed -i.bak '/deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
           # --- Step 3 PREFLIGHT: every scrub anchor must exist, at the exact
           #     count the scrub expects (issue #199).
           #

@@ -31,13 +31,14 @@ rm -f .github/workflows/copier-update.yml \
       .github/workflows/claude-code-review.yml
 rm -f scripts/copier_update_notes.py
 rm -f scripts/migrate_agent_instructions.py
+rm -f scripts/migrate_docs_nav.py
 rm -f scripts/report_seeded_changes.py .copier-seeded-changes.md
 rm -f scripts/check_template_conformance.py .copier-template-drift.md
 sed -i.bak '/# >>> template-tracking: conformance hook/,/# <<< template-tracking: conformance hook/d' .pre-commit-config.yaml && rm -f .pre-commit-config.yaml.bak
 rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
 rm -f docs/deployment/template-updates.md
-# The page above is in the MkDocs nav; a dangling entry fails `mkdocs build --strict`.
-sed -i.bak '/Template Updates: deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
+# The page above is named in mkdocs.yml (nav and llmstxt sections); a dangling entry fails `mkdocs build --strict`.
+sed -i.bak '/deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
 ```
 
 What this removes and why:
@@ -51,6 +52,8 @@ What this removes and why:
 - `scripts/migrate_agent_instructions.py` — the CLAUDE.md → AGENTS.md
   migration that only `copier update`'s `_migrations` stage invoked; dead
   weight once you no longer run `copier update`.
+- `scripts/migrate_docs_nav.py` — the docs-navigation migration, also run only
+  by `copier update`'s `_migrations` stage.
 - `scripts/report_seeded_changes.py` and its output `.copier-seeded-changes.md`
   — the seeded-file report a `copier update` writes; nothing writes it after
   detaching.
