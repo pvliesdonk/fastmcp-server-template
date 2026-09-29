@@ -46,7 +46,7 @@ kind: how-to
 ---
 ```
 
-`kind` is `tutorial`, `how-to`, `reference` or `explanation`, following the Sections table. The site's `llms.txt`, the index language-model clients read, is built from `nav:` when the site builds, with one section per top-level nav entry and each page's `description` beside it. A published page outside the nav appears in the section of a nav page in the same directory. There is no second list to keep in step: a page reaches `llms.txt` by being in the nav or next to a page that is, and its line there is only as good as its `description`.
+`kind` is `tutorial`, `how-to`, `reference` or `explanation`, following the Sections table. The site's `llms.txt`, the index language-model clients read, is built from `nav:` when the site builds, with one section per top-level nav entry and each page's `description` beside it. A published page outside the nav appears in the section of a nav page in the same directory. No second list needs keeping in step: a page reaches `llms.txt` by being in the nav or next to a page that is, and its line there is only as good as its `description`.
 
 ## Where documentation goes
 
