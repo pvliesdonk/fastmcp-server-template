@@ -28,7 +28,7 @@ The site is organised by what its reader is trying to do. The template owns this
 | Upgrade | an operator moving to a new release | how-to |
 | Contribute | someone changing the project | how-to or explanation |
 
-Moving a template page between sections is a template change. Pages keep their file paths when the frame changes, so their URLs stay the same.
+Moving a template page between sections is a template change, and the page keeps its file path and URL when it moves.
 
 ## Where documentation goes
 
