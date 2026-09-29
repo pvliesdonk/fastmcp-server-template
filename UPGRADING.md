@@ -313,3 +313,16 @@ Steps: [upgrading/v11.0.md](upgrading/v11.0.md).
 2. Inside `PROJECT-LLMSTXT-SECTIONS-START/END`, add `Contribute:` with `- contribute/*.md`.
 
 The page states which documentation belongs to your project and which to the template. Pages it classifies as misplaced aren't moved by this update.
+
+### Sections in the docs navigation
+
+The template now owns the frame of `nav:` in `mkdocs.yml`: eight sections by what the reader is trying to do (Overview, Security model, Get started, Deploy, Use, Reference, Upgrade, Contribute), with a slot in each for your own pages. Template pages keep their file paths, so no URL changes.
+
+`copier update` rebuilds `nav:` on the new frame. Every entry you had added to your old navigation is moved under **Unsorted** at the end of `nav:`, keeping its section title; entries for template pages are dropped, because the frame lists them. Then:
+
+1. Move each entry under Unsorted into the `PROJECT-NAV-<SECTION>-START/END` block of the section whose reader it serves. `docs/contribute/docs-structure.md` lists the sections and what goes where; your own how-to and feature pages belong in Use (`docs/use/`).
+2. Delete the emptied `Guides:`-style headings left under Unsorted, and run `uv run mkdocs build --strict`.
+3. `git add mkdocs.yml`: the update leaves it marked as conflicted even though its content is resolved.
+4. Update your `PROJECT-LLMSTXT-SECTIONS` block to the same sections.
+
+If you move one of your own pages while sorting, add an `old.md: new.md` entry to the new `redirects` block in `mkdocs.yml` (`mkdocs-redirects` is now in the docs dependency group) so its published URL keeps working.

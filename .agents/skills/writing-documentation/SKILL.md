@@ -26,8 +26,12 @@ For domain knowledge, use the table in the contract page:
 
 - adding to a non-domain topic (a mount, an environment file, a client config for this server): the `DOMAIN-*` block on the template page for that topic;
 - a fact the code already holds (a config field, a default): its source, so the generator carries it. Never hand-edit a `GENERATED-*` region;
+- a how-to or explanation of this server's own features: a page in `docs/use/`;
+- API reference for a library the project ships: `docs/reference/api/`;
 - release narrative: `docs/releases/`;
 - internal design: `docs/design/`.
+
+A new page also needs a nav entry: in the `PROJECT-NAV-<SECTION>` block of the section whose reader it serves (the contract page's Sections table), never outside those blocks. Moving one of this project's pages means a redirects entry from the old path to the new one.
 
 If none fits, stop and file a template issue for the missing place (step 1's route). Don't create a page the template doesn't designate.
 
@@ -45,4 +49,5 @@ If none fits, stop and file a template issue for the missing place (step 1's rou
 ## 6. Before you finish
 
 - Build the site with `uv run mkdocs build --strict` and run Vale on the changed pages.
+- An entry still under Unsorted at the end of `nav:` is unfinished: sort it into its section.
 - Name the reader the change serves, and what they can now do, in the pull request description.

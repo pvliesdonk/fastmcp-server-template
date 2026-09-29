@@ -230,6 +230,11 @@ A list of tools shipped is the failure mode, not the deliverable.
 
 ### Upgrade / breaking-changes section
 
+Every Upgrading section carries a **security-posture line**: what changed in
+what the server exposes, accepts or trusts (an auth default, a new
+unauthenticated route, a write tool on by default), or "none". Readers look
+for it there, and "none" is an answer they need too.
+
 Do **not** trust `!` markers or `BREAKING CHANGE:` footers — trials found
 them wrong in both directions. Derive the section from the actual surfaces
 between `PREV` and `RANGE_END`, read through the API — you have no local

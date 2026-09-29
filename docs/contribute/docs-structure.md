@@ -13,6 +13,23 @@ The project is generated from a template, and the template's owner ruled:
 
 **Domain knowledge** belongs to this server alone. It covers the tools, resources and prompts the server offers and how they behave. Its configuration fields and any bundled library count as well. **Non-domain knowledge** is what would be true of any server generated from the template: installing and running it, Docker, systemd, reverse proxies, authentication and identity providers, the security model's frame, configuration mechanics, setting up MCP clients in general, logging, releases, repository protection, template updates and how to contribute.
 
+## Sections
+
+The site is organised by what its reader is trying to do. The template owns this frame, including the order of the sections and the template pages in each; every section except the first two has a slot where this project lists its own pages.
+
+| Section | Reader | Kind of page |
+|---|---|---|
+| Overview | someone deciding whether this server fits | explanation |
+| Security model | anyone asking what the server can reach, change or let in | explanation |
+| Get started | a newcomer after a first success | tutorial |
+| Deploy | an operator running it for real | how-to |
+| Use | someone who runs it and wants more out of it | how-to or explanation |
+| Reference | anyone looking a fact up | reference |
+| Upgrade | an operator moving to a new release | how-to |
+| Contribute | someone changing the project | how-to or explanation |
+
+Moving a template page between sections is a template change. Pages keep their file paths when the frame changes, so their URLs stay the same.
+
 ## Where documentation goes
 
 | Place | Owner | Holds |
@@ -20,8 +37,13 @@ The project is generated from a template, and the template's owner ruled:
 | A template page, outside its sentinel blocks | template | non-domain knowledge only |
 | A `DOMAIN-<TOPIC>-<KIND>` block inside a template page (such as the Docker page's extra-notes block) | this project | only what this server adds to that non-domain topic |
 | A generated region (`GENERATED-*` markers, such as the configuration tables) | the generator | facts drawn from the code; change the source, never the page |
+| `docs/use/` | this project; the template renders only its `index.md` | this server's how-tos and explanations |
+| `docs/reference/api/` | this project | API reference, when the project ships a library |
+| A section's slot in `nav:` (its `PROJECT-NAV-<SECTION>` block) | this project | entries for this project's pages in that section |
 | `docs/releases/` | this project | the per-release notes |
 | `docs/design/`, apart from the pages the template renders there | this project | internal design notes, unpublished |
+
+When this project moves one of its own pages, it adds the old and new paths to the redirects map in `mkdocs.yml`, so the published URL keeps working. An entry left under Unsorted at the end of `nav:` hasn't found its section yet.
 
 A sentinel designates a place, not the knowledge in it. Non-domain text inside a `DOMAIN-*` block still belongs to the template.
 
