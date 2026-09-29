@@ -342,3 +342,7 @@ kind: how-to
 ```
 
 `kind` is `tutorial`, `how-to`, `reference` or `explanation`; `docs/contribute/docs-structure.md` says which fits each section. A page without `description:` is listed without one.
+
+### Documentation structure check
+
+`scripts/check_docs_structure.py` now runs in pre-commit and in the docs workflow. Errors fail from the first run: links to pages the site doesn't serve (`exclude_docs` drops them, or they sit outside `docs/`), published pages neither the nav nor `llms.txt` reaches, and a template entry page without its security-model link. Fix those before merging the update. Warnings (pages outside the designated places, missing `description:`/`kind:` front matter, entries under Unsorted) print without failing. Once they're gone, set `strict = true` under `[tool.docs-structure]` in `pyproject.toml` so new debt fails too.

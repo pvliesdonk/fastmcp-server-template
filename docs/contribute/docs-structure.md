@@ -75,6 +75,21 @@ Each topic has one page that answers it. Other pages link to that page and never
 
 Each page is also one kind of text. A tutorial teaches a first success, and a how-to walks through one task. Reference is consulted rather than read; an explanation says why. A page that mixes kinds serves none of its readers well.
 
+## Checks
+
+`scripts/check_docs_structure.py` checks this page's rules that a machine can decide. It runs as a pre-commit hook and in the docs workflow, before the site is built. Run it yourself with `uv run python scripts/check_docs_structure.py`.
+
+| Code | Level | What it finds |
+|---|---|---|
+| E1 | error | a link on a published page that the site doesn't serve: a page `exclude_docs` drops, a path outside `docs/`, or nothing at all |
+| E2 | error | a published page that neither the nav nor `llms.txt` reaches: not in `nav:`, and no nav page in its directory |
+| E3 | error | a template section-entry page that has lost its link to the security model |
+| W1 | warning | a page outside the places the table above designates |
+| W2 | warning | a page without `description:` and a valid `kind:` front matter |
+| W3 | warning | entries still under Unsorted in `nav:` |
+
+Errors are broken for a reader now, so they fail from the first run. Warnings are documentation debt: they print without failing until this project sets `strict = true` under `[tool.docs-structure]` in `pyproject.toml`, after which new debt fails too. Whether a page's knowledge is domain or non-domain, and whether it reads well, stays a human judgement.
+
 ## The security model
 
 The [security model](../guides/security-model.md) is the one page that says what the server can reach, what it changes and who gets in. When a page documents a feature that widens that surface, it links there rather than describing the boundary again.

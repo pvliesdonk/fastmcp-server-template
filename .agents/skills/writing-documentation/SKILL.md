@@ -50,6 +50,7 @@ If none fits, stop and file a template issue for the missing place (step 1's rou
 
 ## 6. Before you finish
 
+- Run `uv run python scripts/check_docs_structure.py`: an error is a broken page to fix now; a warning is debt, and your change shouldn't add any.
 - Build the site with `uv run mkdocs build --strict` and run Vale on the changed pages.
 - An entry still under Unsorted at the end of `nav:` is unfinished: sort it into its section.
 - Name the reader the change serves, and what they can now do, in the pull request description.
