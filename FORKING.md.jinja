@@ -37,7 +37,7 @@ rm -f scripts/check_template_conformance.py .copier-template-drift.md
 sed -i.bak '/# >>> template-tracking: conformance hook/,/# <<< template-tracking: conformance hook/d' .pre-commit-config.yaml && rm -f .pre-commit-config.yaml.bak
 rm -rf .agents/skills/applying-template-updates .claude/skills/applying-template-updates
 rm -f docs/deployment/template-updates.md
-# The page above is named in mkdocs.yml (nav and llmstxt sections); a dangling entry fails `mkdocs build --strict`.
+# The page above is in the MkDocs nav; a dangling entry fails `mkdocs build --strict`.
 sed -i.bak '/deployment\/template-updates.md/d' mkdocs.yml && rm -f mkdocs.yml.bak
 ```
 

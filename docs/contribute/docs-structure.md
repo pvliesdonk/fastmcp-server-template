@@ -1,3 +1,8 @@
+---
+description: "Where each piece of documentation belongs, and who owns it."
+kind: explanation
+---
+
 # Documentation structure
 
 This page states where each piece of this project's documentation belongs and who owns it. It applies to every page in `docs/` and to `README.md`. Read it before adding or moving a page; agents run the `writing-documentation` skill, which applies it step by step.

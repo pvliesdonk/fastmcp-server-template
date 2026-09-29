@@ -1,3 +1,8 @@
+---
+description: "Release notes for each minor series, with the steps to upgrade."
+kind: how-to
+---
+
 # Release Notes
 
 Each minor release series gets one page here telling its story: what
