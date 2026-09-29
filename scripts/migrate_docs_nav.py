@@ -78,13 +78,20 @@ def _leaves(node: Any) -> list[str]:
 
 
 def _old_project_nav(head_text: str) -> list[Any] | None:
+    """Return the old ``PROJECT-NAV`` entries, or ``None`` when there is no old nav.
+
+    Raises:
+        ValueError: The old block has no closing marker, so it cannot be read.
+    """
     if NEW_MARKER in head_text or OLD_START not in head_text:
         return None
     lines = head_text.splitlines()
-    start = next(
-        i for i, line in enumerate(lines) if line.strip().startswith(OLD_START)
-    )
-    end = next(i for i, line in enumerate(lines) if line.strip().startswith(OLD_END))
+    starts = [i for i, line in enumerate(lines) if line.strip().startswith(OLD_START)]
+    ends = [i for i, line in enumerate(lines) if line.strip().startswith(OLD_END)]
+    if not ends:
+        msg = "HEAD:mkdocs.yml has PROJECT-NAV-START but no PROJECT-NAV-END"
+        raise ValueError(msg)
+    start, end = starts[0], ends[0]
     body = [
         line for line in lines[start + 1 : end] if not line.lstrip().startswith("#")
     ]
@@ -119,28 +126,46 @@ class _IndentedDumper(yaml.SafeDumper):
         super().increase_indent(flow, False)
 
 
+def _insert_unsorted(region: list[str], missing: Any) -> list[str]:
+    """Return *region* with *missing* written into the Unsorted block."""
+    dumped = yaml.dump(
+        missing,
+        Dumper=_IndentedDumper,
+        sort_keys=False,
+        default_flow_style=False,
+        allow_unicode=True,
+    )
+    block = ["  " + line for line in dumped.rstrip("\n").split("\n")]
+    end = next(i for i, line in enumerate(region) if UNSORTED_END in line)
+    return region[:end] + block + region[end:]
+
+
 def park(updated_text: str, head_text: str) -> tuple[str, list[str]]:
-    """Return the migrated ``mkdocs.yml`` text and the parked page paths."""
+    """Return the migrated ``mkdocs.yml`` text and the parked page paths.
+
+    Any shape this migration was not written for (no ``nav:``, an unreadable
+    old block, a frame without the Unsorted block) returns *updated_text*
+    unchanged: copier's own conflict markers then stay for a human, which
+    loses nothing, where a guess could lose the project's entries.
+    """
     lines = updated_text.split("\n")
+    if "nav:" not in lines:
+        return updated_text, []
+    try:
+        old_nav = _old_project_nav(head_text)
+    except ValueError:
+        return updated_text, []
+    if old_nav is None:
+        return updated_text, []
     first, stop = _nav_bounds(lines)
     region = _resolve(lines[first + 1 : stop])
-    old_nav = _old_project_nav(head_text)
-    parked: list[str] = []
-    if old_nav:
-        present = set(_leaves(yaml.safe_load("nav:\n" + "\n".join(region))["nav"]))
-        missing = _keep_missing(old_nav, present)
-        if missing:
-            parked = _leaves(missing)
-            dumped = yaml.dump(
-                missing,
-                Dumper=_IndentedDumper,
-                sort_keys=False,
-                default_flow_style=False,
-                allow_unicode=True,
-            )
-            block = ["  " + line for line in dumped.rstrip("\n").split("\n")]
-            end = next(i for i, line in enumerate(region) if UNSORTED_END in line)
-            region = region[:end] + block + region[end:]
+    if not any(UNSORTED_END in line for line in region):
+        return updated_text, []
+    present = set(_leaves(yaml.safe_load("nav:\n" + "\n".join(region))["nav"]))
+    missing = _keep_missing(old_nav, present)
+    parked = _leaves(missing) if missing else []
+    if missing:
+        region = _insert_unsorted(region, missing)
     new_lines = lines[: first + 1] + region + lines[stop:]
     return "\n".join(new_lines), parked
 
@@ -166,6 +191,11 @@ def main() -> int:
         return 0
     before = path.read_text(encoding="utf-8")
     after, parked = park(before, head)
+    if after == before and "<<<<<<< " in before:
+        print(
+            "migrate_docs_nav: left mkdocs.yml as copier wrote it; resolve nav: by "
+            "hand (your old nav is at `git show HEAD:mkdocs.yml`)"
+        )
     if after != before:
         path.write_text(after, encoding="utf-8")
         print("migrate_docs_nav: rebuilt nav: on the section frame")

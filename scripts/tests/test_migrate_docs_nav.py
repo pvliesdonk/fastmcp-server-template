@@ -110,3 +110,20 @@ def test_already_migrated_head_is_a_no_op() -> None:
     again, parked = park(once, once)
     assert again == once
     assert parked == []
+
+
+def test_file_without_nav_is_left_alone() -> None:
+    text = "site_name: x\nplugins:\n  - search\n"
+    assert park(text, HEAD) == (text, [])
+
+
+def test_head_without_closing_marker_is_left_alone() -> None:
+    broken_head = HEAD.replace("# PROJECT-NAV-END", "# (marker removed)")
+    assert park(UPDATED, broken_head) == (UPDATED, [])
+
+
+def test_frame_without_unsorted_block_is_left_alone() -> None:
+    customised = UPDATED.replace("PROJECT-NAV-UNSORTED-START", "X").replace(
+        "PROJECT-NAV-UNSORTED-END", "Y"
+    )
+    assert park(customised, HEAD) == (customised, [])
