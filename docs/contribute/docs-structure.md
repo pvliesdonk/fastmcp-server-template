@@ -35,6 +35,19 @@ The site is organised by what its reader is trying to do. The template owns this
 
 Moving a template page between sections is a template change, and the page keeps its file path and URL when it moves.
 
+## Front matter and llms.txt
+
+Every page opens with front matter naming its kind and saying what it's for:
+
+```yaml
+---
+description: "One sentence on what the page is for."
+kind: how-to
+---
+```
+
+`kind` is `tutorial`, `how-to`, `reference` or `explanation`, following the Sections table. The site's `llms.txt`, the index language-model clients read, is built from `nav:` when the site builds, with one section per top-level nav entry and each page's `description` beside it. A published page outside the nav appears in the section of a nav page in the same directory. There is no second list to keep in step: a page reaches `llms.txt` by being in the nav or next to a page that is, and its line there is only as good as its `description`.
+
 ## Where documentation goes
 
 | Place | Owner | Holds |

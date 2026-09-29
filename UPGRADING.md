@@ -323,6 +323,20 @@ The template now owns the frame of `nav:` in `mkdocs.yml`: eight sections by wha
 1. Move each entry under Unsorted into the `PROJECT-NAV-<SECTION>-START/END` block of the section whose reader it serves. `docs/contribute/docs-structure.md` lists the sections and what goes where; your own how-to and feature pages belong in Use (`docs/use/`).
 2. Delete the emptied `Guides:`-style headings left under Unsorted, and run `uv run mkdocs build --strict`.
 3. `git add mkdocs.yml`: the update leaves it marked as conflicted even though its content is resolved.
-4. Update your `PROJECT-LLMSTXT-SECTIONS` block to the same sections.
 
 If you move one of your own pages while sorting, add an `old.md: new.md` entry to the new `redirects` block in `mkdocs.yml` (`mkdocs-redirects` is now in the docs dependency group) so its published URL keeps working.
+
+### llms.txt built from the navigation
+
+`llms.txt` is now generated from `nav:` when the site builds, by `scripts/llmstxt_sections_hook.py`. The `PROJECT-LLMSTXT-SECTIONS` block in `mkdocs.yml` is gone: `copier update` resolves the conflict it leaves to the template side, and the entries and descriptions you kept there are dropped.
+
+Each page's line in `llms.txt` now comes from its own front matter. Add to every page you own:
+
+```yaml
+---
+description: "One sentence on what the page is for."
+kind: how-to
+---
+```
+
+`kind` is `tutorial`, `how-to`, `reference` or `explanation`; `docs/contribute/docs-structure.md` says which fits each section. A page without `description:` is listed without one.

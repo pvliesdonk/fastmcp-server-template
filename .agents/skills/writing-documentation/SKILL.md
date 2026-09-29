@@ -35,7 +35,9 @@ A new page also needs a nav entry: in the `PROJECT-NAV-<SECTION>` block of the s
 
 If none fits, stop and file a template issue for the missing place (step 1's route). Don't create a page the template doesn't designate.
 
-## 4. Links the change owes
+## 4. Front matter and links the change owes
+
+- Every page carries `description:` (one sentence on what it's for; it's the page's line in `llms.txt`) and `kind:` (`tutorial`, `how-to`, `reference` or `explanation`, per the contract page's Sections table).
 
 - A feature that widens what the server can reach or change links to `guides/security-model.md`, and the security model's domain block says what the feature adds.
 - A page that needs another topic links to that topic's page instead of summarising it.
