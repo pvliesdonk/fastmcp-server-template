@@ -38,3 +38,5 @@ Each page is also one kind of text. A tutorial teaches a first success, and a ho
 ## The security model
 
 The [security model](../guides/security-model.md) is the one page that says what the server can reach, what it changes and who gets in. When a page documents a feature that widens that surface, it links there rather than describing the boundary again.
+
+Report a vulnerability as `SECURITY.md` describes, never in a public issue.

@@ -9,6 +9,8 @@ docker compose up -d
 
 The server listens on port 8000 with HTTP transport, published on the host as `127.0.0.1:8000:8000`, so only the host itself can connect. No reverse proxy, TLS terminator, or external network is assumed. Authentication is off, since every auth variable in `.env.example` is commented out; [Ports](#ports) covers serving other machines.
 
+The [security model](../guides/security-model.md) says what a deployed server exposes and what stays your responsibility.
+
 Copying `.env.example` first is the step to keep. Every variable in it arrives commented out, so the server starts on its defaults and the copy changes no behaviour by itself. It is the file you edit next, and `compose.yml` names it.
 
 Apply a later edit with `docker compose up -d`, which recreates the container with the new values. `docker compose restart` does not pick them up: an env file is read when a container is created, so a restarted container keeps the values it was created with and the edit is ignored without any message.

@@ -58,6 +58,12 @@ extra_css:
 
 plugins:
   - search
+  # Keeps a moved page's old URL working. The template's own pages never
+  # move; a project that moves one of its pages maps old to new here.
+  - redirects:
+      # PROJECT-REDIRECTS-START — `old-page.md: new-page.md` entries in place of `{}`; kept across copier update
+      redirect_maps: {}
+      # PROJECT-REDIRECTS-END
   # Generates llms.txt + llms-full.txt for the README badge.
   # Sections mirror `nav:` below — keep them aligned when customising
   # (both blocks are sentinel-protected so customise both as a unit).
@@ -68,24 +74,35 @@ plugins:
       sections:
         # PROJECT-LLMSTXT-SECTIONS-START — keep aligned with `nav:` below;
         # kept across copier update.
-        Getting Started:
+        Overview:
           - index.md
+          - guides/security-model.md
+        Get started:
           - installation.md
+          - deployment/claude-desktop.md
+        Deploy:
+          - deployment/docker.md
+          - guides/authentication.md
+          - deployment/oidc.md
+{% if enable_authorization %}          - guides/authorization.md
+{% endif %}        Use:
+          - use/*.md
+        Reference:
           - configuration.md
           - configuration-generator.md
-        Guides:
-          - guides/*.md
-        MCP Interface:
           - tools/index.md
           - prompts.md
-        Deployment:
-          - deployment/*.md
         # Character-class prefix excludes the unversioned staging page while
         # auto-indexing each canonical minor page.
-        Release Notes:
+        Upgrade:
+          - releases/index.md
           - releases/[0-9]*.[0-9]*.md
         Contribute:
           - contribute/*.md
+          - deployment/release-process.md
+          - deployment/template-updates.md
+          - deployment/repository-protection.md
+          - deployment/integration-branches.md
         # PROJECT-LLMSTXT-SECTIONS-END
   - mkdocstrings:
       handlers:
