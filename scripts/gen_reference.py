@@ -24,6 +24,8 @@ Usage::
 
     python scripts/gen_reference.py            # write docs/reference/ and the nav region
     python scripts/gen_reference.py --check    # exit 1 when a page or the nav is stale
+
+Run from the project root; it reads and writes the current directory.
 """
 
 from __future__ import annotations
@@ -278,38 +280,33 @@ def _tool_entry(tool: Any) -> ToolEntry:
     )
 
 
+def _cli_command(name: str, cmd: Any) -> CliCommand:
+    """One click command as arguments and visible options."""
+    arguments, options = [], []
+    for param in cmd.params:
+        help_text = getattr(param, "help", "") or ""
+        if param.param_type_name == "argument":
+            arguments.append(CliArgument(str(param.name).upper(), help_text))
+        elif param.param_type_name == "option" and not getattr(param, "hidden", False):
+            default = "" if param.default is None else str(param.default)
+            envvar = param.envvar if isinstance(param.envvar, str) else ""
+            options.append(CliOption(param.opts[0], envvar, default, help_text))
+    return CliCommand(name, cmd.help or "", arguments, options)
+
+
 def _cli(app: typer.Typer, name: str) -> Cli:
     import typer.main
 
     # typer vendors its own click, so duck-type the objects instead of
     # isinstance checks against the click package.
     root = typer.main.get_command(app)
-    commands: list[CliCommand] = []
     members = getattr(root, "commands", None)
-    for cmd_name, cmd in (
-        members.items() if members is not None else [(root.name, root)]
-    ):
-        if getattr(cmd, "hidden", False):
-            continue
-        arguments, options = [], []
-        for param in cmd.params:
-            if param.param_type_name == "argument":
-                arguments.append(
-                    CliArgument(
-                        str(param.name).upper(), getattr(param, "help", "") or ""
-                    )
-                )
-            elif param.param_type_name == "option" and not getattr(
-                param, "hidden", False
-            ):
-                default = "" if param.default is None else str(param.default)
-                envvar = param.envvar if isinstance(param.envvar, str) else ""
-                options.append(
-                    CliOption(
-                        param.opts[0], envvar, default, getattr(param, "help", "") or ""
-                    )
-                )
-        commands.append(CliCommand(str(cmd_name), cmd.help or "", arguments, options))
+    pairs = members.items() if members is not None else [(root.name, root)]
+    commands = [
+        _cli_command(str(cmd_name), cmd)
+        for cmd_name, cmd in pairs
+        if not getattr(cmd, "hidden", False)
+    ]
     return Cli(name, root.help or "", commands)
 
 
@@ -403,19 +400,26 @@ def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
-_IDENTIFIER = re.compile(
-    r"(`[^`]*`|\[[^\]]*\]\([^)]*\))|\b([A-Za-z0-9]+(?:_[A-Za-z0-9]+)+)\b"
-)
+# Stretches _prose never touches: code spans and Markdown links.
+_LITERAL = re.compile(r"`[^`]*`|\[[^\]]*\]\([^)]*\)")
+_IDENTIFIER = re.compile(r"\b[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+\b")
 
 
 def _prose(text: str) -> str:
     """Format snake_case identifiers in docstring prose as code.
 
     The words stay the wire's words; only the formatting changes, so Vale
-    spell-checks prose and leaves identifiers alone. Existing code spans are
-    left as they are.
+    spell-checks prose and leaves identifiers alone. Existing code spans and
+    links are left as they are.
     """
-    return _IDENTIFIER.sub(lambda m: m.group(1) or f"`{m.group(2)}`", text)
+    parts = _LITERAL.split(text)
+    literals = _LITERAL.findall(text)
+    out = []
+    for index, part in enumerate(parts):
+        out.append(_IDENTIFIER.sub(lambda m: f"`{m.group(0)}`", part))
+        if index < len(literals):
+            out.append(literals[index])
+    return "".join(out)
 
 
 def _tool_section(tool: ToolEntry, slots: dict[str, str], used: set[str]) -> str:
@@ -581,40 +585,32 @@ def _prompts_page(ref: Reference, path: Path) -> str:
     )
 
 
+def _command_section(cli_name: str, c: CliCommand) -> str:
+    out = [f"## `{cli_name} {c.name}`\n\n"]
+    if c.help:
+        out.append(_prose(c.help) + "\n\n")
+    if c.arguments:
+        argument_rows = ((f"`{a.name}`", _prose(a.help)) for a in c.arguments)
+        out.append(_table(("Argument", "Description"), argument_rows) + "\n")
+    if c.options:
+        rows = (
+            (
+                f"`{o.name}`",
+                f"`{o.envvar}`" if o.envvar else "",
+                o.default,
+                _prose(o.help),
+            )
+            for o in c.options
+        )
+        out.append(_table(("Option", "Env var", "Default", "Description"), rows) + "\n")
+    return "".join(out)
+
+
 def _cli_page(ref: Reference, path: Path) -> str:
     def body(_slots: dict[str, str], _used: set[str]) -> str:
-        out = []
-        if ref.cli.help:
-            out.append(_prose(ref.cli.help) + "\n\n")
-        for c in ref.cli.commands:
-            out.append(f"## `{ref.cli.name} {c.name}`\n\n")
-            if c.help:
-                out.append(_prose(c.help) + "\n\n")
-            if c.arguments:
-                out.append(
-                    _table(
-                        ("Argument", "Description"),
-                        ((f"`{a.name}`", _prose(a.help)) for a in c.arguments),
-                    )
-                    + "\n"
-                )
-            if c.options:
-                out.append(
-                    _table(
-                        ("Option", "Env var", "Default", "Description"),
-                        (
-                            (
-                                f"`{o.name}`",
-                                f"`{o.envvar}`" if o.envvar else "",
-                                o.default,
-                                _prose(o.help),
-                            )
-                            for o in c.options
-                        ),
-                    )
-                    + "\n"
-                )
-        return "".join(out).rstrip("\n") + "\n"
+        intro = _prose(ref.cli.help) + "\n\n" if ref.cli.help else ""
+        sections = "".join(_command_section(ref.cli.name, c) for c in ref.cli.commands)
+        return (intro + sections).rstrip("\n") + "\n"
 
     return _page(
         path,
@@ -761,14 +757,13 @@ def _build(root: Path) -> Reference:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Generate docs/reference/ from the server."
+        description="Generate docs/reference/ from the server; run at the project root."
     )
-    parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument(
         "--check", action="store_true", help="report drift; write nothing"
     )
     args = parser.parse_args(argv)
-    root: Path = args.root
+    root = Path.cwd()
     docs = root / "docs"
     mkdocs = root / "mkdocs.yml"
     try:

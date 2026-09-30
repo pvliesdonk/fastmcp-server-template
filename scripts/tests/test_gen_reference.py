@@ -138,8 +138,9 @@ def test_two_group_tags_is_an_error() -> None:
         """Two homes."""
         return ""
 
+    app = _app()
     with pytest.raises(GenerationError, match="t"):
-        collect(mcp, _app(), "demo")
+        collect(mcp, app, "demo")
 
 
 def test_tool_entry_carries_wire_description_and_docstring_sections(reference) -> None:

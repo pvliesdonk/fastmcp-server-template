@@ -312,7 +312,7 @@ jobs:
         working-directory: /tmp/smoke
         run: |
           uv run --no-sync --no-build python scripts/gen_reference.py --check
-          .venv/bin/python scripts/gen_reference.py --check --root /tmp/smoke-authz-off
+          (cd /tmp/smoke-authz-off && /tmp/smoke/.venv/bin/python scripts/gen_reference.py --check)
 
       - name: ruff check
         working-directory: /tmp/smoke
