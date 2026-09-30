@@ -83,12 +83,12 @@ Each page is also one kind of text. A tutorial teaches a first success, and a ho
 |---|---|---|
 | E1 | error | a link on a published page to something the site doesn't serve, such as a page `exclude_docs` drops or a path outside `docs/` |
 | E2 | error | a published page that neither the nav nor `llms.txt` reaches: not in `nav:`, and no nav page in its directory |
-| E3 | error | a template section-entry page that has lost its link to the security model |
+| E3 | error | a template section-entry page that has lost its link to the security model; a page that no longer exists is skipped |
 | W1 | warning | a page outside the places the table above designates |
 | W2 | warning | a page without `description:` and a valid `kind:` front matter |
 | W3 | warning | entries still under Unsorted in `nav:` |
 
-Errors are broken for a reader now, so they fail from the first run. Warnings are documentation debt: they print without failing until this project sets `strict = true` under `[tool.docs-structure]` in `pyproject.toml`, after which new debt fails too. Whether a page's knowledge is domain or non-domain, and whether it reads well, stays a human judgement.
+The check reads `exclude_docs` in the forms this file uses: `dir/**`, a plain glob, or a bare name that matches any path component. Errors are broken for a reader now, so they fail from the first run. Warnings are documentation debt: they print without failing until this project sets `strict = true` under `[tool.docs-structure]` in `pyproject.toml`, after which new debt fails too. Whether a page's knowledge is domain or non-domain, and whether it reads well, stays a human judgement.
 
 ## The security model
 

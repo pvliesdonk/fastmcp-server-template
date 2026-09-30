@@ -18,8 +18,10 @@ Warnings
       tutorial, how-to, reference or explanation.
   W3  entries remain under Unsorted at the end of `nav:`.
 
-`exclude_docs` is matched for the pattern forms the template uses, `dir/**`
-and plain globs; full gitignore syntax is not interpreted.
+`exclude_docs` is matched for the pattern forms the template uses (`dir/**`
+and plain globs) plus a bare name, which matches any path component as it
+does in gitignore; the rest of gitignore syntax is not interpreted.  Pages are
+read as mkdocs reads them (`utf-8-sig`, link targets percent-decoded).
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 import yaml
 
@@ -60,6 +63,7 @@ TEMPLATE_PAGES = frozenset(
     }
 )
 DESIGNATED = ("use/", "reference/api/", "releases/")
+SECURITY_MODEL = "guides/security-model.md"
 ENTRY_PAGES = (
     "index.md",
     "installation.md",
@@ -116,10 +120,14 @@ class _Site:
                 return True
             if fnmatch.fnmatch(rel, pattern):
                 return True
+            if "/" not in pattern and any(
+                fnmatch.fnmatch(part, pattern) for part in rel.split("/")
+            ):
+                return True
         return False
 
     def text(self, rel: str) -> str:
-        return (self.docs / rel).read_text(encoding="utf-8")
+        return (self.docs / rel).read_text(encoding="utf-8-sig")
 
 
 def _leaves(node: Any) -> list[str]:
@@ -154,28 +162,34 @@ def _is_external(target: str) -> bool:
     )
 
 
+def _resolve(rel: str, target: str) -> str | None:
+    """Return *target* as a docs-relative path, or None when it leaves the site."""
+    path = unquote(target.split("#", 1)[0].split("?", 1)[0])
+    if path.startswith("/"):
+        return None
+    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))
+    if resolved == ".." or resolved.startswith("../"):
+        return None
+    return resolved
+
+
 def _check_links(site: _Site, rel: str) -> list[Finding]:
     findings = []
     for number, target in _link_lines(site.text(rel)):
         if _is_external(target):
             continue
-        path = target.split("#", 1)[0].split("?", 1)[0]
-        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))
-        leaves_docs = resolved == ".." or resolved.startswith("../")
-        if (
-            leaves_docs
+        resolved = _resolve(rel, target)
+        if target.startswith("/"):
+            message = f"{target} is root-relative; mkdocs resolves links from the page"
+        elif (
+            resolved is None
             or site.excluded(resolved)
             or not (site.docs / resolved).exists()
         ):
-            findings.append(
-                Finding(
-                    "error",
-                    "E1",
-                    f"docs/{rel}",
-                    number,
-                    f"{target} is not served by the site",
-                )
-            )
+            message = f"{target} is not served by the site"
+        else:
+            continue
+        findings.append(Finding("error", "E1", f"docs/{rel}", number, message))
     return findings
 
 
@@ -235,7 +249,7 @@ def collect(root: Path) -> list[Finding]:
     for rel in site.pages:
         findings.extend(_check_page(site, rel, nav_dirs))
     for rel in ENTRY_PAGES:
-        if (site.docs / rel).exists() and "security-model.md" not in site.text(rel):
+        if (site.docs / rel).exists() and not _links_to(site, rel, SECURITY_MODEL):
             findings.append(
                 Finding(
                     "error",
@@ -261,6 +275,12 @@ def collect(root: Path) -> list[Finding]:
             )
         )
     return findings
+
+
+def _links_to(site: _Site, rel: str, page: str) -> bool:
+    return any(
+        _resolve(rel, target) == page for _, target in _link_lines(site.text(rel))
+    )
 
 
 def _strict_setting(root: Path) -> bool:

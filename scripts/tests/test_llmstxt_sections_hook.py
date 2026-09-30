@@ -116,3 +116,11 @@ def test_bare_page_entry_is_titled_from_its_heading(tmp_path: Path) -> None:
     (tmp_path / "extra.md").write_text("# Extra material\n\nBody.\n", encoding="utf-8")
     sections = sections_from_nav(["extra.md"], tmp_path, _never)
     assert list(sections) == ["Extra material"]
+
+
+def test_front_matter_behind_a_bom_is_read(tmp_path: Path) -> None:
+    (tmp_path / "bom.md").write_bytes(
+        b"\xef\xbb\xbf---\ndescription: Behind a BOM.\n---\n# BOM\n"
+    )
+    sections = sections_from_nav([{"Home": "bom.md"}], tmp_path, _never)
+    assert sections["Home"] == [{"bom.md": "Behind a BOM."}]

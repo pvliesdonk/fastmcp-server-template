@@ -15,6 +15,7 @@ MKDOCS = """site_name: t
 exclude_docs: |
   design/**
   releases/next.md
+  drafts
 
 nav:
   - Overview: index.md
@@ -65,21 +66,26 @@ def test_e1_links_that_leave_the_site(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     _page(root, "design/d.md", "# internal\n")
     (root / "docs" / "img.png").write_bytes(b"x")
+    _page(root, "use/my page.md", GOOD_FRONT + "# Spaced\n")
     _page(
         root,
         "use/p.md",
         GOOD_FRONT
-        + "# P\n[design](../design/d.md) [ex](../../examples/okf/) [gone](missing.md)\n"
-        + "[ok](../index.md#home) [img](../img.png) [web](https://x.org) [top](#p)\n"
+        + "# P\n[design](../design/d.md) [ex](../../examples/okf/) [gone](missing.md)"
+        + " [abs](/index.md)\n"
+        + "[ok](../index.md#home) [img](../img.png) [web](https://x.org) [top](#p)"
+        + " [sp](my%20page.md)\n"
         + "```\n[in code](../design/d.md)\n```\n",
     )
     e1 = [f for f in collect(root) if f.code == "E1"]
     assert sorted(f.message.split(" ")[0] for f in e1) == [
         "../../examples/okf/",
         "../design/d.md",
+        "/index.md",
         "missing.md",
     ]
     assert all(f.line == 7 for f in e1)
+    assert any("root-relative" in f.message for f in e1)
 
 
 def test_e2_page_unreachable_from_nav(tmp_path: Path) -> None:
@@ -98,6 +104,26 @@ def test_e3_template_entry_page_without_security_link(tmp_path: Path) -> None:
     assert ("E3", "docs/index.md") in _codes(root)
 
 
+def test_e3_counts_only_a_real_link(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    _page(root, "index.md", GOOD_FRONT + "# Home\n```\nsecurity-model.md\n```\n")
+    _page(
+        root,
+        "deployment/docker.md",
+        GOOD_FRONT + "# Docker\n" + SEC.replace("guides/", "../guides/"),
+    )
+    codes = _codes(root)
+    assert ("E3", "docs/index.md") in codes
+    assert ("E3", "docs/deployment/docker.md") not in codes
+
+
+def test_exclude_docs_bare_name_matches_any_component(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    _page(root, "drafts/x.md", "# draft\n")
+    _page(root, "use/drafts/y.md", "# draft\n")
+    assert all("drafts" not in path for _, path in _codes(root))
+
+
 def test_w1_page_outside_designated_places(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     _page(root, "guides/para.md", GOOD_FRONT + "# PARA\n")
@@ -114,6 +140,14 @@ def test_w2_front_matter(tmp_path: Path) -> None:
     codes = _codes(root)
     assert ("W2", "docs/use/a.md") in codes
     assert ("W2", "docs/use/b.md") in codes
+
+
+def test_front_matter_behind_a_bom_is_read(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    (root / "docs" / "use" / "bom.md").write_bytes(
+        b"\xef\xbb\xbf" + (GOOD_FRONT + "# BOM\n").encode("utf-8")
+    )
+    assert ("W2", "docs/use/bom.md") not in _codes(root)
 
 
 def test_w3_unsorted_entries(tmp_path: Path) -> None:

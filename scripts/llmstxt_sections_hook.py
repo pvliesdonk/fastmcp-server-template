@@ -54,7 +54,7 @@ def _pages(node: Any) -> list[str]:
 
 def _read(docs_dir: Path, rel: str) -> str:
     try:
-        return (docs_dir / rel).read_text(encoding="utf-8")
+        return (docs_dir / rel).read_text(encoding="utf-8-sig")
     except OSError:
         return ""
 
