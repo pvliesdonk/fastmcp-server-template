@@ -78,7 +78,7 @@ dependencies = [
     # #343).  The cap matters as much as the floor here: the config-surface
     # generator resolves this whole constraint, and only 9.0.0's
     # SHUTDOWN_GRACE_S help text keeps the generated table in
-    # docs/configuration.md clear of ai-tells' MicDrop rule (#639).
+    # docs/reference/configuration.md clear of ai-tells' MicDrop rule (#639).
     #
     # 8.0.0 was the previous floor, for the logging topology and the HTTP
     # seam: pvl-core owns the root logger, configure_logging_from_env takes
@@ -305,6 +305,7 @@ ignore = ["E501"]
 # migrate_docs_nav.py reads `git show HEAD:mkdocs.yml` the same way, as a
 # list and never a shell; same exceptions, same reason (#713).
 "scripts/migrate_docs_nav.py" = ["S603", "S607"]
+"scripts/migrate_docs_reference.py" = ["S603", "S607"]
 "scripts/check_pins.py" = ["S310"]  # urlopen on a validated api.github.com URL
 "scripts/report_seeded_changes.py" = ["S603", "S606", "S607"]
 "scripts/check_template_conformance.py" = ["S603", "S607"]
@@ -405,9 +406,14 @@ pythonVersion = "3.11"
 # point Pyright at src/ directly so IDE import resolution matches runtime.
 extraPaths = ["src"]
 
-# PROJECT-DOCS-CHECKS-START — kept across copier update. Set strict = true once
+# Documentation tooling settings, project-owned. Set strict = true once
 # `python scripts/check_docs_structure.py` reports no warnings, so that new
 # documentation debt fails CI (docs/contribute/docs-structure.md, Checks).
+# Variables scripts/gen_reference.py sets before building the server, for a
+# `from_env` that requires them (the scaffold requires none), go in a
+# `[tool.docs-reference]` table inside the block:
+#   env = { {{ env_prefix }}_UPSTREAM_URL = "https://example.invalid" }
+# PROJECT-DOCS-CHECKS-START — kept across copier update
 [tool.docs-structure]
 strict = false
 # PROJECT-DOCS-CHECKS-END

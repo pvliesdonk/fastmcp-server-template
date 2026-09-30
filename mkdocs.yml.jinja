@@ -58,12 +58,17 @@ extra_css:
 
 plugins:
   - search
-  # Keeps a moved page's old URL working. The template's own pages never
-  # move; a project that moves one of its pages maps old to new here.
+  # Keeps a moved page's old URL working. The entries above the project
+  # block are the template's own moves; a project that moves one of its
+  # pages adds `old-page.md: new-page.md` inside the block.
   - redirects:
-      # PROJECT-REDIRECTS-START — `old-page.md: new-page.md` entries in place of `{}`; kept across copier update
-      redirect_maps: {}
-      # PROJECT-REDIRECTS-END
+      redirect_maps:
+        configuration.md: reference/configuration.md
+        configuration-generator.md: reference/configuration-generator.md
+        tools/index.md: reference/tools/index.md
+        prompts.md: reference/prompts.md
+        # PROJECT-REDIRECTS-START — this project's moved pages; kept across copier update
+        # PROJECT-REDIRECTS-END
   # Generates llms.txt + llms-full.txt for the README badge.
   # The sections are filled from `nav:` at build time by
   # scripts/llmstxt_sections_hook.py (registered under `hooks:`): one section
@@ -126,11 +131,21 @@ nav:
       - Overview: use/index.md
       # PROJECT-NAV-USE-START — this server's how-tos and explanations (docs/use/); kept across copier update
       # PROJECT-NAV-USE-END
+  # Reference is generated from the code by scripts/gen_reference.py; a fact
+  # on these pages changes at its source (docstring, annotation, CLI help).
   - Reference:
-      - Configuration: configuration.md
-      - Configuration generator: configuration-generator.md
-      - Tools: tools/index.md
-      - Prompts: prompts.md
+      - Configuration: reference/configuration.md
+      - Configuration generator: reference/configuration-generator.md
+      - Tools:
+          - Overview: reference/tools/index.md
+          # GENERATED-NAV-TOOLS-START — one entry per tool group; written by scripts/gen_reference.py
+          - Tools: reference/tools/tools.md
+{% if include_mcp_apps_scaffold %}          - Server apps: reference/tools/server_apps.md
+{% endif %}          - Server info: reference/tools/server_info.md
+          # GENERATED-NAV-TOOLS-END
+      - Resources: reference/resources.md
+      - Prompts: reference/prompts.md
+      - Command line: reference/cli.md
       # PROJECT-NAV-REFERENCE-START — resources, CLI, API reference (docs/reference/api/); kept across copier update
       # PROJECT-NAV-REFERENCE-END
   # Landing page only, deliberately: per-minor pages stay out of nav so a new

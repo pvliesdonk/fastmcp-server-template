@@ -30,7 +30,7 @@ Over stdio there is no network listener and no authentication. The MCP client st
 
 ## What an authenticated caller can reach
 
-An authenticated caller has every tool the instance exposes. Each tool runs with the server's own privileges: its filesystem and network access, and any credential in its configuration. `{{ env_prefix }}_TOOLS_ALLOW` and `{{ env_prefix }}_TOOLS_DENY` trim that set for an instance; see [Configuration](../configuration.md).
+An authenticated caller has every tool the instance exposes. Each tool runs with the server's own privileges: its filesystem and network access, and any credential in its configuration. `{{ env_prefix }}_TOOLS_ALLOW` and `{{ env_prefix }}_TOOLS_DENY` trim that set for an instance; see [Configuration](../reference/configuration.md).
 
 <!-- DOMAIN-SECURITY-MODEL-SURFACE-START — what THIS server's tools reach; kept across copier update -->
 <!-- Replace with what this server's tools can do with the server's privileges:

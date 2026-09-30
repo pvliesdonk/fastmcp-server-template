@@ -305,6 +305,15 @@ jobs:
           uv run --no-sync --no-build python scripts/check_docs_structure.py --strict
           .venv/bin/python scripts/check_docs_structure.py --strict --root /tmp/smoke-authz-off
 
+      - name: generated reference (the shipped pages equal a fresh generation)
+        # scripts/gen_reference.py (#716) needs the installed project, so it
+        # cannot run in copier's _tasks; the template ships the scaffold's
+        # pages and this step proves they are what the generator writes.
+        working-directory: /tmp/smoke
+        run: |
+          uv run --no-sync --no-build python scripts/gen_reference.py --check
+          .venv/bin/python scripts/gen_reference.py --check --root /tmp/smoke-authz-off
+
       - name: ruff check
         working-directory: /tmp/smoke
         run: uv run --no-sync --no-build ruff check .
@@ -365,8 +374,8 @@ jobs:
           test "$out" = "ERROR: configuration error: SMOKE_MCP_API_TOKEN is required but not set" \
             || { echo "::error::serve did not refuse in one line: $out"; exit 1; }
           "$venv/python" scripts/gen_config_surface.py
-          grep -qE '^\| `SMOKE_MCP_API_TOKEN` \| \(none\) \| \*\*Yes\*\* \|' docs/configuration.md \
-            || { echo "::error::docs/configuration.md does not mark SMOKE_MCP_API_TOKEN required"; exit 1; }
+          grep -qE '^\| `SMOKE_MCP_API_TOKEN` \| \(none\) \| \*\*Yes\*\* \|' docs/reference/configuration.md \
+            || { echo "::error::docs/reference/configuration.md does not mark SMOKE_MCP_API_TOKEN required"; exit 1; }
 
       - name: AGENTS.md sentinel structure
         working-directory: /tmp/smoke
@@ -679,7 +688,7 @@ jobs:
             echo "::error::$README DOMAIN region renders a table in a render with no readme-tagged domain fields — expected the empty note only"; exit 1
           fi
 
-          # --- docs/configuration.md: the complete generated reference.
+          # --- docs/reference/configuration.md: the complete generated reference.
           # Marker presence for every gate-on region (REF-AUTHZ included:
           # smoke-answers sets enable_authorization: true), then two content
           # probes. Idempotence and full coverage are the generator's own
@@ -689,7 +698,7 @@ jobs:
           # and that the claim-once rule keeps a multi-tag var (TASKS_URL
           # is tagged both persistence and tasks) in its first-declared
           # section, exactly once.
-          REFDOC=docs/configuration.md
+          REFDOC=docs/reference/configuration.md
           refregion() {  # refregion <region-id>
             sed -n "/GENERATED-ENV-TABLE-$1-START/,/GENERATED-ENV-TABLE-$1-END/p" "$REFDOC"
           }
@@ -1456,7 +1465,7 @@ jobs:
                 .github/workflows/claude-code-review.yml
           rm -f scripts/copier_update_notes.py
           rm -f scripts/migrate_agent_instructions.py
-          rm -f scripts/migrate_docs_nav.py
+          rm -f scripts/migrate_docs_nav.py scripts/migrate_docs_reference.py
           rm -f scripts/report_seeded_changes.py .copier-seeded-changes.md
           rm -f scripts/check_template_conformance.py .copier-template-drift.md
           sed -i.bak '/# >>> template-tracking: conformance hook/,/# <<< template-tracking: conformance hook/d' .pre-commit-config.yaml && rm -f .pre-commit-config.yaml.bak
@@ -1626,6 +1635,11 @@ jobs:
           # would fail on next.  The venv from the gate above is reused.
           uv run --no-sync --no-build mkdocs build --strict -q \
             || { echo "::error::mkdocs build --strict fails on the detached tree"; exit 1; }
+          # The reference generator stays after detach and must still find the
+          # project without .copier-answers.yml (it falls back to
+          # [project.scripts] in pyproject.toml).
+          uv run --no-sync --no-build python scripts/gen_reference.py --check \
+            || { echo "::error::gen_reference.py --check fails on the detached tree"; exit 1; }
           # The releasing skill's own TEMPLATE-TRACKING pair (pair 2) has no
           # over-run guard from the AGENTS.md kept-section loop below, since
           # that loop only ever checks AGENTS.md. Guard it here instead: the
@@ -2075,7 +2089,7 @@ jobs:
         run: |
           uv run --no-sync --no-build ruff check \
             --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
-            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310,scripts/report_seeded_changes.py:S603,scripts/report_seeded_changes.py:S606,scripts/report_seeded_changes.py:S607,scripts/check_template_conformance.py:S603,scripts/check_template_conformance.py:S607,scripts/package_milestones.py:S603,scripts/package_milestones.py:S607,scripts/migrate_agent_instructions.py:S603,scripts/migrate_agent_instructions.py:S607,scripts/migrate_docs_nav.py:S603,scripts/migrate_docs_nav.py:S607" \
+            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310,scripts/report_seeded_changes.py:S603,scripts/report_seeded_changes.py:S606,scripts/report_seeded_changes.py:S607,scripts/check_template_conformance.py:S603,scripts/check_template_conformance.py:S607,scripts/package_milestones.py:S603,scripts/package_milestones.py:S607,scripts/migrate_agent_instructions.py:S603,scripts/migrate_agent_instructions.py:S607,scripts/migrate_docs_nav.py:S603,scripts/migrate_docs_nav.py:S607,scripts/migrate_docs_reference.py:S603,scripts/migrate_docs_reference.py:S607" \
             --config "lint.mccabe.max-complexity=10" \
             --config "lint.pylint.max-args=5" \
             --config "lint.pylint.max-branches=12" \
@@ -2083,7 +2097,7 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             --target-version py311 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/migrate_docs_nav.py scripts/llmstxt_sections_hook.py scripts/check_docs_structure.py scripts/check_pr_title.py scripts/repo_about.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/migrate_docs_nav.py scripts/llmstxt_sections_hook.py scripts/check_docs_structure.py scripts/gen_reference.py scripts/migrate_docs_reference.py scripts/check_pr_title.py scripts/repo_about.py
 
   sonar:
     # CI-based SonarQube Cloud analysis of this repository, with the coverage

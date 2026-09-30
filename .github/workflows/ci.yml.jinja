@@ -29,6 +29,12 @@ jobs:
       - name: Verify generated config artifacts are up-to-date
         run: uv run --no-sync --no-build python scripts/gen_config_surface.py --check
 
+      - name: Verify generated reference is up-to-date
+        # docs/reference/ is written from the registered server by
+        # scripts/gen_reference.py (#716); regenerate after changing a tool,
+        # resource, prompt or CLI option.
+        run: uv run --no-sync --no-build python scripts/gen_reference.py --check
+
       - name: Verify [tool.uv] pins carry a live exit condition
         # A pin's `# until:` issue being closed fails this step: lift the pin.
         env:

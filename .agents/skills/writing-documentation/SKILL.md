@@ -25,7 +25,8 @@ Search `docs/` and `README.md` for the topic before writing. If a page answers t
 For domain knowledge, use the table in the contract page:
 
 - adding to a non-domain topic (a mount, an environment file, a client config for this server): the `DOMAIN-*` block on the template page for that topic;
-- a fact the code already holds (a config field, a default): its source, so the generator carries it. Never hand-edit a `GENERATED-*` region;
+- a fact the code already holds (a config field, a default, a tool's parameters or what it returns): its source, so the generator carries it. Never hand-edit a `GENERATED-*` region or a generated page under `docs/reference/`; after changing a tool, resource, prompt or CLI option, run `uv run python scripts/gen_reference.py`;
+- a worked example for one tool or prompt: its `DOMAIN-EXAMPLE-<name>` slot on the generated page;
 - a how-to or explanation of this server's own features: a page in `docs/use/`;
 - API reference for a library the project ships: `docs/reference/api/`;
 - release narrative: `docs/releases/`;

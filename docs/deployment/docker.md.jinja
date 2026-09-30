@@ -28,7 +28,7 @@ Apply a later edit with `docker compose up -d`, which recreates the container wi
 
 The split matters, because two files can set the same variable:
 
-- **`.env` holds the server's configuration.** `compose.yml` reads it with `env_file:`. `.env.example` is generated from the server's own config surface and lists every variable with its default and a one-line description, so it is both the checklist and the place to edit. [Configuration](../configuration.md) carries the full reference.
+- **`.env` holds the server's configuration.** `compose.yml` reads it with `env_file:`. `.env.example` is generated from the server's own config surface and lists every variable with its default and a one-line description, so it is both the checklist and the place to edit. [Configuration](../reference/configuration.md) carries the full reference.
 - **`compose.yml`'s `environment:` block holds only what the file itself determines.** Currently that is `FASTMCP_HOME`, which points at the state volume the file mounts. Values here override `.env`, so a knob set in both places takes the value from `compose.yml`, which is rarely what an operator editing `.env` expects.
 
 The `env_file:` entry is marked `required: false`, so a checkout with no `.env` still starts on defaults. That form needs Compose 2.24.0 or newer; on an older engine, either upgrade or replace the entry with plain `env_file: .env` and make sure the file exists.
@@ -151,7 +151,7 @@ Records then render one `event key=value` line each. The packaged Debian and
 RPM installs behave the same way under `journalctl`: the systemd unit sets
 nothing, and `/etc/{{ project_name }}/env` carries the choice.
 
-`{{ env_prefix }}_LOG_LEVEL` sets how much is logged; see [Configuration](../configuration.md#logging).
+`{{ env_prefix }}_LOG_LEVEL` sets how much is logged; see [Configuration](../reference/configuration.md#logging).
 
 ## Image tags
 

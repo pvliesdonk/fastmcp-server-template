@@ -3299,7 +3299,7 @@ def write_artifacts(
     # env-destination guard: a var that would land in no env artifact is a
     # config-presentation bug, and this guard's message (which names the
     # known section tags) is the actionable one — it must fire before any
-    # renderer runs, or docs/configuration.md's own `complete: true` guard
+    # renderer runs, or docs/reference/configuration.md's own `complete: true` guard
     # reports the same root cause with a less specific message. Both run
     # before anything is written to disk, so partial output never masks
     # either.

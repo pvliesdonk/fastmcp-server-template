@@ -346,3 +346,13 @@ kind: how-to
 ### Documentation structure check
 
 `scripts/check_docs_structure.py` now runs in pre-commit and in the docs workflow. Errors fail from the first run: links to pages the site doesn't serve (`exclude_docs` drops them, or they sit outside `docs/`), published pages neither the nav nor `llms.txt` reaches, and a template entry page without its security-model link. Fix those before merging the update. Warnings (pages outside the designated places, missing `description:`/`kind:` front matter, entries under Unsorted) print without failing. Once they're gone, set `strict = true` under `[tool.docs-structure]` in `pyproject.toml` so new debt fails too.
+
+### Reference generated from the code
+
+The Reference section moved under `docs/reference/`, and its tool, resource, prompt and command-line pages are now written by `scripts/gen_reference.py` from what the server registers; the template's redirects keep the old URLs working. The update deletes `docs/configuration.md`, `docs/configuration-generator.md`, `docs/tools/index.md` and `docs/prompts.md`; `scripts/migrate_docs_reference.py` carries the `DOMAIN-CONFIG-VARS` block of the old configuration page into `docs/reference/configuration.md`, and restores a tools or prompts page that held this project's own text as a parked page. The update is finished only when these steps are done:
+
+1. Run `uv run python scripts/gen_reference.py`. It writes `docs/reference/` from the code and fills the `GENERATED-NAV-TOOLS` region of `nav:`. Pre-commit and CI fail while a page is stale.
+2. Tools group by the module that registers them. Where that is not the right page, add a `group:<slug>` tag (`tags={"group:reading"}`) to the tool and regenerate.
+3. Move every example from the parked `docs/tools/index.md` and `docs/prompts.md` into the `DOMAIN-EXAMPLE-<name>` slot of its tool or prompt, and every piece of task guidance into a page under `docs/use/`; then delete the parked page. `scripts/check_docs_structure.py` reports E2 on a parked page until it is gone, and its old URL shows the parked page instead of the redirect.
+4. `Returns:` and `Raises:` sections of tool docstrings are published now, so Vale lints them; fix the docstring, never the page. Identifiers in docstring prose render as code.
+5. A project whose `from_env` requires variables the scaffold does not sets them under `[tool.docs-reference] env` in `pyproject.toml` (the `PROJECT-DOCS-CHECKS` block), so the generator can build the server.

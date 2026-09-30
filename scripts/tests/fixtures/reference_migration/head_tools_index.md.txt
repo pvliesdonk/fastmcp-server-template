@@ -1,0 +1,18 @@
+---
+description: "The tools this server registers, with their parameters and results."
+kind: reference
+---
+
+# Tools
+
+The tools registered in this server are listed below.
+
+<!-- DOMAIN-TOOLS-LIST-START -->
+## search
+
+Find notes.
+
+```python
+search('x')
+```
+<!-- DOMAIN-TOOLS-LIST-END -->

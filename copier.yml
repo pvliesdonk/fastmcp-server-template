@@ -100,9 +100,17 @@ _migrations:
   # Nav frame move (#713): the project's whole nav was one PROJECT-NAV block;
   # the template now owns the frame with a block per section.  Resolves the
   # conflict copier leaves in `nav:` to the new frame and parks the project's
-  # own entries (read from HEAD:mkdocs.yml) under Unsorted for the maintainer
-  # to sort.  Idempotent; a no-op once HEAD carries the frame.
+  # own entries (read from HEAD:mkdocs.yml) under Unsorted for the agent
+  # applying the update to sort.  Idempotent; a no-op once HEAD carries the frame.
   - "python scripts/migrate_docs_nav.py"
+  # Reference move (#716): the template stopped rendering docs/configuration.md,
+  # docs/configuration-generator.md, docs/tools/index.md and docs/prompts.md,
+  # so the update deletes them.  Carries the DOMAIN blocks of the old
+  # configuration page (from HEAD) into docs/reference/configuration.md and
+  # restores a tools or prompts page that held project content as a parked
+  # page for the agent applying the update to sort into the generated pages'
+  # slots.  Idempotent.
+  - "python scripts/migrate_docs_reference.py"
   # Seeded-file change report (#519): renders the previous and target refs
   # and diffs every `_skip_if_exists` path into .copier-seeded-changes.md,
   # so an update is never applied blind to what it cannot re-render.  From
@@ -130,6 +138,15 @@ _migrations:
 # one-time creation on first weekly cron; `_skip_if_exists` preserves
 # thereafter.
 _skip_if_exists:
+  # Generated reference pages (#716): rendered once so a fresh project's
+  # docs build, then written by scripts/gen_reference.py from the project's
+  # own server; a later render of the scaffold's pages must never land on
+  # them. The configuration pages are not listed: gen_config_surface.py
+  # splices regions into template-owned pages.
+  - "docs/reference/tools/*.md"
+  - "docs/reference/resources.md"
+  - "docs/reference/prompts.md"
+  - "docs/reference/cli.md"
   # Project-owned planning argument and reference-bundle navigation.
   - "docs/design/roadmap.md"
   - "docs/design/reference/index.md"

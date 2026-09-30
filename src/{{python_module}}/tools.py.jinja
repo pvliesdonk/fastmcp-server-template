@@ -51,7 +51,7 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool(annotations={"title": "Ping", "read_only_hint": True})
     @tool_boundary
     async def ping(service: Service = Depends(get_service)) -> str:
-        """Check that the service is alive; returns "pong"."""
+        """Check that the service is alive; returns `pong`."""
         return await service.ping()
 
     # Optional: attach Lucide-compatible SVG/PNG/ICO/JPEG icons to tools.

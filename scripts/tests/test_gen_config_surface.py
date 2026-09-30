@@ -33,7 +33,7 @@ def _marker_pair(region_id: str) -> str:
     )
 
 
-# Every region docs/configuration.md declares for a render with
+# Every region docs/reference/configuration.md declares for a render with
 # enable_authorization off — REF-AUTHZ is deliberately absent, exactly as it
 # is in that render (the marker pair lives inside the same Jinja conditional
 # as the section heading), which also exercises the region-level
@@ -52,7 +52,7 @@ _REFERENCE_REGION_IDS = (
 
 
 def _reference_markers() -> str:
-    """Stand-in docs/configuration.md: every gate-on region's marker pair."""
+    """Stand-in docs/reference/configuration.md: every gate-on region's marker pair."""
     return "".join(_marker_pair(region_id) for region_id in _REFERENCE_REGION_IDS)
 
 
@@ -98,7 +98,8 @@ def fake_project(tmp_path):
         _marker_pair("CORE") + _marker_pair("DOMAIN"),
         encoding="utf-8",
     )
-    (tmp_path / "docs" / "configuration.md").write_text(
+    (tmp_path / "docs" / "reference").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "reference" / "configuration.md").write_text(
         _reference_markers(), encoding="utf-8"
     )
     _seed_server_json(tmp_path)
@@ -2838,11 +2839,13 @@ def _core_table(project_root: Path) -> str:
 def _domain_table(project_root: Path) -> str:
     """Write every artifact for *project_root*, return the configuration
     reference's spliced REF-DOMAIN region body (between its
-    GENERATED-ENV-TABLE-REF-DOMAIN markers in docs/configuration.md) — the
+    GENERATED-ENV-TABLE-REF-DOMAIN markers in docs/reference/configuration.md) — the
     region that renders every domain var. README.md's DOMAIN region is a
     curated `readme`-tagged subset and would be empty for these fixtures."""
     g.write_artifacts(project_root, check=False)
-    text = (project_root / "docs" / "configuration.md").read_text(encoding="utf-8")
+    text = (project_root / "docs" / "reference" / "configuration.md").read_text(
+        encoding="utf-8"
+    )
     return text.split("GENERATED-ENV-TABLE-REF-DOMAIN-START")[1].split(
         "GENERATED-ENV-TABLE-REF-DOMAIN-END"
     )[0]
@@ -2872,7 +2875,7 @@ class TestReadmeRegions:
     project's own curated subset — tag `readme`, provenance `domain`).
     Unlike the OIDC docs, both are hand-picked few-var selections, not
     section-wide selectors — these tests pin that shape down; the full
-    domain surface renders in docs/configuration.md's REF-DOMAIN region."""
+    domain surface renders in docs/reference/configuration.md's REF-DOMAIN region."""
 
     def test_core_table_is_the_readme_tagged_subset(self, fake_project):
         answers = g.load_answers(fake_project)
@@ -3381,7 +3384,9 @@ class TestConfigurationReference:
         Persistence section (declared first), appearing exactly once in the
         whole reference."""
         g.write_artifacts(fake_project, check=False)
-        text = (fake_project / "docs" / "configuration.md").read_text(encoding="utf-8")
+        text = (fake_project / "docs" / "reference" / "configuration.md").read_text(
+            encoding="utf-8"
+        )
         persistence = text.split("REF-PERSISTENCE-START")[1].split(
             "REF-PERSISTENCE-END"
         )[0]
@@ -3396,7 +3401,9 @@ class TestConfigurationReference:
         answers = g.load_answers(fake_project)
         vars_ = g.collect_vars(fake_project, answers)
         g.write_artifacts(fake_project, check=False, vars_=vars_)
-        text = (fake_project / "docs" / "configuration.md").read_text(encoding="utf-8")
+        text = (fake_project / "docs" / "reference" / "configuration.md").read_text(
+            encoding="utf-8"
+        )
         missing = [v.name for v in vars_ if f"`{v.name}`" not in text]
         assert missing == []
 

@@ -14,7 +14,7 @@ Steps (each printed when taken):
 2. Read HEAD:mkdocs.yml's old `PROJECT-NAV` block and keep each entry whose
    page the resolved nav does not already list, with its section titles.
 3. Write those entries into the `PROJECT-NAV-UNSORTED` block at the end of
-   `nav:` for the maintainer to sort into the section blocks.
+   `nav:` for the agent applying the update to sort into the section blocks.
 4. Resolve the conflict copier leaves where the old hand-kept
    `PROJECT-LLMSTXT-SECTIONS` list used to be (#714) to the template side:
    llms.txt is now built from the nav, and the old list is dropped.
@@ -167,7 +167,7 @@ def park(updated_text: str, head_text: str) -> tuple[str, list[str]]:
 
     Any shape this migration was not written for (no ``nav:``, an unreadable
     old block, a frame without the Unsorted block) returns *updated_text*
-    unchanged: copier's own conflict markers then stay for a human, which
+    unchanged: copier's own conflict markers then stay for the agent applying the update, which
     loses nothing, where a guess could lose the project's entries.
     """
     lines = updated_text.split("\n")
@@ -256,7 +256,7 @@ def migrate(updated_text: str, head_text: str) -> tuple[str, list[str]]:
 
 
 def reasons(updated_text: str, head_text: str) -> list[str]:
-    """Say what the migration left for a human, and why."""
+    """Say what the migration left for the agent applying the update, and why."""
     cleared, kept = _clear_llmstxt_conflicts(updated_text.split("\n"))
     nav = _nav_skip_reason(cleared, head_text)
     return kept + ([nav] if nav else [])
