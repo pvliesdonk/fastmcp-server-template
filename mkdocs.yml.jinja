@@ -142,6 +142,8 @@ nav:
       - OIDC: deploy/oidc.md
       - OIDC providers: deploy/oidc-providers.md
       - Reverse proxy: deploy/reverse-proxy.md
+{% if include_mcp_apps_scaffold %}      - MCP Apps: deploy/mcp-apps.md
+{% endif %}      - Transfer links: deploy/transfer-links.md
 {% if enable_authorization %}      - Authorization: deploy/authorization.md
 {% endif %}      # PROJECT-NAV-DEPLOY-START — this server's deployment additions; kept across copier update
       # PROJECT-NAV-DEPLOY-END

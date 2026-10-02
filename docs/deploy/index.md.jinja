@@ -13,6 +13,8 @@ These pages are for an operator running the server for others over HTTP, as a co
 - [OIDC](oidc.md): which of the two OIDC modes to run, and how to configure it.
 - [OIDC providers](oidc-providers.md): Authelia, Keycloak, Google, and GitHub through a broker.
 - [Reverse proxy](reverse-proxy.md): TLS, its own hostname or a path prefix, and the routing OAuth discovery needs.
+{% if include_mcp_apps_scaffold %}- [MCP Apps](mcp-apps.md): which clients render the server's interface, and the one setting it may need.
+{% endif %}- [Transfer links](transfer-links.md): one-time download and upload URLs, for the person holding one and for the operator.
 {% if enable_authorization %}- [Authorization](authorization.md): gating individual tools by scope, once callers are authenticated.
 {% endif %}
 Before exposing the server, read the [security model](../security-model.md): an authenticated caller has every tool the instance exposes, and under OIDC the identity provider alone decides who gets in.
