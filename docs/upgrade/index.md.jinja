@@ -1,11 +1,25 @@
 ---
-description: "Release channels, what a new release changes for your clients, and the state that survives an upgrade."
+description: "The step for your channel, what a new release changes for your clients and your state, and where a release page answers those questions."
 kind: how-to
 ---
 
 # Upgrade
 
-An upgrade is a new version of the same server. This page says which channel to follow, what changes for the clients that use it, and which state carries over. The [release notes](../releases/index.md) tell each release's own story, opening with the steps that release needs.
+An upgrade is a new version of the same server. Three questions come with every one: the step to run; what a connected client has to do; what happens to the state. This page answers them for any release and says where a release page answers them for that release: its Upgrading section. The [release notes](../releases/index.md) tell each release's own story.
+
+## The step for your channel
+
+One step per channel; the linked page owns the detail.
+
+| You run | The step |
+|---|---|
+| The command, installed with uv | `uv tool upgrade {{ pypi_name }}`; pin one release with `uv tool install "{{ pypi_name }}==X.Y.Z"` ([Installation](../get-started/installation.md#as-a-command-on-your-machine)) |
+| The command, installed with pip | `pip install --upgrade "{{ pypi_name }}"` |
+| Claude Desktop | upgrade the command as above, then quit and reopen Claude Desktop; with the bundle, install the new release's `.mcpb` the same way as the first |
+| Docker Compose | `docker compose pull` then `docker compose up -d`; `restart` keeps the old image ([Upgrading the image](../deploy/docker.md#upgrading-the-image)) |
+| The Linux package | install the new `.deb` or `.rpm` the same way as the first; `postinstall` installs the new version into the virtual environment and restarts a running service ([systemd](../deploy/systemd.md#upgrade)) |
+{% if include_claude_plugin %}| The Claude Code plugin | `/plugin`, the plugin under **Installed**, **Update now**; from a shell, `claude plugin update {{ project_name }}@{{ github_org }}` ([Claude Code](../get-started/claude-code.md)) |
+{% endif %}
 
 ## Release channels
 
@@ -25,11 +39,21 @@ An MCP client discovers the server's tools, resources and prompts when it connec
 
 ## Security posture
 
-A release that changes what the server can reach, what it changes or who gets in says so in its release notes under a fixed heading (Security posture changes), even when the answer is none. The [security model](../security-model.md) is the page those changes are measured against.
+A release that changes what the server can reach, what it changes or who gets in says so on its **Security posture** line, even when the answer is none. The [security model](../security-model.md) is the page those changes are measured against.
 
 ## State that survives
 
-A container or a package install keeps its state across upgrades in the paths the deployment pages name: the Docker [volumes](../deploy/docker.md#volumes), or `/var/lib/{{ project_name }}` and `/etc/{{ project_name }}/env` for a package install. A release that changes a state format says so in its release notes, with the step to take.
+A container or a package install keeps its state across upgrades in the paths the deployment pages name: the Docker [volumes](../deploy/docker.md#volumes), or `/var/lib/{{ project_name }}` and `/etc/{{ project_name }}/env` for a package install. A release that changes a state format says so on its **State** line, with the step to take.
+
+## What a release page tells you
+
+A release page's Upgrading section answers the three questions on three fixed lines (a page written before this format answers them in its Upgrading text instead):
+
+- **Clients:** what a client has to do, or that nothing is needed beyond reconnecting.
+- **State:** what is kept and what is rebuilt or moved, with the step when there is one.
+- **Security posture:** any change in what the server exposes or trusts, or none.
+
+The steps a release needs sit above those lines, each conditional on what you run, so a step that does not apply to your deployment is skipped by its first words. A patch release adds its own section to the series page.
 
 <!-- DOMAIN-UPGRADE-INTRO-START -->
 <!-- What an upgrade of this server touches beyond the generic picture (indexes to rebuild, data formats); kept across copier update. -->
