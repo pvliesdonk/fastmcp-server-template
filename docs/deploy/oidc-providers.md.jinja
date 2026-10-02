@@ -93,7 +93,7 @@ https://auth.example.com/realms/<realm>/.well-known/openid-configuration
 ### Remote mode
 
 1. Create a realm, or pick one, and switch to it.
-2. Allow MCP clients to register: Keycloak 26.6.0 or newer (earlier versions had an incompatibility with MCP clients), with the realm's **Client Registration Policies** allowing anonymous registration from your clients' hosts (the Trusted Hosts and Max Clients policies), or an initial access token for a client you register in advance.
+2. Allow MCP clients to register: Keycloak 26.6.0 or newer (earlier versions ignored a registering client's `token_endpoint_auth_method` when it was `client_secret_post`, which MCP clients ask for; keycloak/keycloak#45309), with the realm's **Client Registration Policies** allowing anonymous registration from your clients' hosts (the Trusted Hosts and Max Clients policies), or an initial access token for a client you register in advance.
 3. Give the realm an audience mapper that puts a value naming this server into its tokens, and set `{{ env_prefix }}_OIDC_AUDIENCE` to it. Without it the server accepts any unexpired token the realm signed, whichever client it was issued to.
 
 ```bash
@@ -135,7 +135,7 @@ Google has no Dynamic Client Registration and its access tokens are opaque, so t
 {{ env_prefix }}_OIDC_REQUIRED_SCOPES=openid email
 ```
 
-Google's ID token carries `email` when the `email` scope is requested, which is what the server needs to tell callers apart.
+The server works with `openid` alone; it identifies a caller by the token's `sub` claim. `email` is added here because Google's ID token carries the address only when that scope is requested, and an address is what a reader of the logs recognises.
 
 ## GitHub
 
