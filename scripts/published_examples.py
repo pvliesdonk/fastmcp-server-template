@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _FENCE = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}+|~{3,}+)(?P<info>[^`]*)$")
-_HEADING = re.compile(r"^(#{1,6})[ \t]+(.+)$")  # callers strip the title
+_HEADING = re.compile(r"^(#{1,6})[ \t]+(\S.*)$")  # callers strip the title
 _ATTRS = re.compile(r"\{(?P<body>[^}]*)\}")
 _ATTR = re.compile(
     r"""(?P<key>[\w-]+)=(?:"(?P<dq>[^"]*)"|'(?P<sq>[^']*)'|(?P<bare>\S+))"""

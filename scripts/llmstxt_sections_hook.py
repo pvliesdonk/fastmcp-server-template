@@ -38,7 +38,7 @@ logger = logging.getLogger("mkdocs.hooks.llmstxt_sections")
 _FRONT_MATTER = re.compile(
     r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL
 )
-_HEADING = re.compile(r"^#[ \t]+(.+)$", re.MULTILINE)  # the caller strips the title
+_HEADING = re.compile(r"^#[ \t]+(\S.*)$", re.MULTILINE)  # the caller strips the title
 
 
 def _pages(node: Any) -> list[str]:
