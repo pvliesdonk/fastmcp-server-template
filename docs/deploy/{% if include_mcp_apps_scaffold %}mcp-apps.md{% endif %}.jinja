@@ -15,11 +15,11 @@ A client without the extension still works with the server. It gets each tool's 
 
 ## The operator setting
 
-The interface is loaded from the server's own resource, `ui://{{ python_module }}/app.html`, and rendered in a frame the client sandboxes. `{{ env_prefix }}_APP_DOMAIN` names the domain the client uses for that sandbox. Leave it unset and the server derives the host from `{{ env_prefix }}_BASE_URL`; set it when the host a client sees differs from `BASE_URL`, such as behind a proxy that changes the apparent hostname. The [configuration reference](../reference/configuration.md#mcp-apps) lists the variable with the rest.
+The interface is loaded from the server's own resource, `ui://{{ python_module }}/app.html`, and rendered in a frame the client sandboxes. `{{ env_prefix }}_APP_DOMAIN` is the setting through which an operator names the domain the client uses for that sandbox. Leave it unset and the host of `{{ env_prefix }}_BASE_URL` serves; set it when the host a client sees differs from `BASE_URL`, such as behind a proxy that changes the apparent hostname. The setting is read by this server's own code when it configures the resource, in the block named below. The [configuration reference](../reference/configuration.md#mcp-apps) lists the variable with the rest.
 
 ## Where the interface comes from
 
-The app shell is `src/{{ python_module }}/static/app.html`, built from `app.src.html` by `scripts/vendor_spa.py`, which embeds the JavaScript libraries the interface needs so the client loads nothing from a content network at run time. The sandbox domain and the content-security policy a client enforces are set in the `DOMAIN-APP-RESOURCE` block of `src/{{ python_module }}/_server_apps.py`. Both are a contributor's concern; [Contribute](../contribute/index.md) has the development setup. The shell is rebuilt whenever `app.src.html` changes, and after a template update.
+The app shell is `src/{{ python_module }}/static/app.html`, built from `app.src.html` by `scripts/vendor_spa.py`, which embeds the JavaScript libraries the interface needs so the client loads nothing from a content network at run time. The `DOMAIN-APP-RESOURCE` block of `src/{{ python_module }}/_server_apps.py` is where the project configures the resource: the content-security policy a client enforces, and the sandbox domain it resolves from `APP_DOMAIN` or `BASE_URL`. Both are a contributor's concern; [Contribute](../contribute/index.md) has the development setup. The shell is rebuilt whenever `app.src.html` changes, and after a template update.
 
 <!-- DOMAIN-MCP-APPS-EXTRA-START -->
 <!-- What this server's app shows and which tool opens it; a view that needs a particular client; kept across copier update. -->

@@ -392,8 +392,8 @@ Two template pages join `docs/deploy/`: `transfer-links.md` (one-time download a
 After the update:
 
 1. Fill the blocks. The transfer page and its nav entry are template-owned and always rendered; the page opens by saying this server has transfer links when the two tools appear in the tools reference, which covers a reader of a server without them. A project that wants the page gone files a template issue for a gate.
-3. `docs/reference/prompts.md` and `docs/reference/resources.md` gain a template-owned section each, "Running a prompt" and "Reading a resource", written by `scripts/gen_reference.py` between the `DOMAIN-INTRO` slot and the entries. Run `uv run python scripts/gen_reference.py` after the update; pre-commit and CI fail while the pages are stale. A project whose own pages explain how a client invokes a prompt replaces that text with a link to the prompts reference.
 2. A project with its own MCP Apps or transfer-links guide moves the domain parts into the blocks and the rest nowhere (the template pages cover it), then deletes the guide and adds a `redirects` entry. A derivation of the apps domain by hashing is that project's code, not the template's: the template page says only that `APP_DOMAIN` overrides the host derived from `BASE_URL`.
+3. `docs/reference/prompts.md` and `docs/reference/resources.md` gain a template-owned section each, "Running a prompt" and "Reading a resource", written by `scripts/gen_reference.py` between the `DOMAIN-INTRO` slot and the entries. Run `uv run python scripts/gen_reference.py` after the update; pre-commit and CI fail while the pages are stale. A project whose own pages explain how a client invokes a prompt replaces that text with a link to the prompts reference.
 
 ### Published examples are tested
 

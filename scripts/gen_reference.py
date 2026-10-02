@@ -511,6 +511,8 @@ def _page(
 
     *preface* is template-owned prose that every regeneration rewrites (unlike
     the slots), used for the client guidance on the prompts and resources pages.
+    The shipped seed pages under ``docs/reference/`` carry the same text, so a
+    fresh render passes ``--check``; change the constant and the seed together.
     """
     slots = _existing_slots(path)
     used = {"DOMAIN-INTRO"}
