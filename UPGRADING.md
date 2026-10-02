@@ -385,6 +385,15 @@ After the update:
 2. A project whose `DOMAIN-AUTH-EXTRA` or `DOMAIN-OIDC-EXTRA` block carries its own mode recommendation checks it against the rule on `oidc.md` and reduces it to what is specific to this server, or to a pointer.
 3. A project with its own systemd, Docker, or OIDC-provider guide moves the domain parts into the blocks and the rest nowhere (the template pages cover it), then deletes the guide and adds a `redirects` entry for its URL. A statement that `remote` mode "trusts the proxy's authentication" (a forward-auth proxy) is wrong in any guide that carries it: `remote` mode validates a signed token the client presents, and a forward-auth proxy gives the client no token.
 
+### Client guidance pages
+
+Two template pages join `docs/deploy/`: `transfer-links.md` (one-time download and upload URLs, for the person holding one and for the operator: the route outside authentication, the public URL, the store, the five `TRANSFER_*` variables) and, when `include_mcp_apps_scaffold` is on, `mcp-apps.md` (which clients render the interface, what a client without the extension gets, `APP_DOMAIN`). Their blocks: `DOMAIN-TRANSFER-EXTRA` (what a `ref` is for this server, which destinations an upload may name) and `DOMAIN-MCP-APPS-EXTRA` (what the app shows and which tool opens it).
+
+After the update:
+
+1. Fill the blocks. The transfer page states that this server has transfer links when the two tools appear in the tools reference; a project that never wires transfer may remove the page's nav entry inside its `PROJECT-NAV-DEPLOY` block only by filing a template issue first, since the entry is template-owned.
+2. A project with its own MCP Apps or transfer-links guide moves the domain parts into the blocks and the rest nowhere (the template pages cover it), then deletes the guide and adds a `redirects` entry. A derivation of the apps domain by hashing is that project's code, not the template's: the template page says only that `APP_DOMAIN` overrides the host derived from `BASE_URL`.
+
 ### Published examples are tested
 
 `tests/test_published_examples.py` (template-owned) checks the fenced blocks on every published page and `README.md`. From the first run it fails a shell block with an unquoted package extra (`pip install pkg[extra]`): quote it, `"pkg[extra]"`. Then tag the examples that make a claim: ```` ```python { .run data-expect="results" } ```` for a block a reader runs (add a `docs_example_substitutions` fixture to `tests/conftest.py` that maps placeholder paths to fixtures), ```` ```json { .config data-expect="read_only=True" } ```` for a configuration that claims something (a dotenv-shaped shell block takes the same tag), ```` ```python { .fragment } ```` for a snippet. A Python block with neither tag is W4 in the structure check: debt, failing only in strict mode. The tags render as CSS classes and attributes, invisible to readers.
