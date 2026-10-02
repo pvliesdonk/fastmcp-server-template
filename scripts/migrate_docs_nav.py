@@ -26,7 +26,6 @@ HEAD:mkdocs.yml) and on a project whose HEAD already has the frame.
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +38,11 @@ UNSORTED_START = "PROJECT-NAV-UNSORTED-START"
 UNSORTED_END = "PROJECT-NAV-UNSORTED-END"
 OLD_LLMSTXT = "PROJECT-LLMSTXT-SECTIONS-START"
 OLD_LLMSTXT_END = "PROJECT-LLMSTXT-SECTIONS-END"
-_MARKERS = ("<<<<<<< ", "||||||| ", "=======", ">>>>>>> ")
+_OURS = "<<<<<<< "
+_BASE = "||||||| "
+_SEP = "======="
+_THEIRS = ">>>>>>> "
+_MARKERS = (_OURS, _BASE, _SEP, _THEIRS)
 
 
 def _nav_bounds(lines: list[str]) -> tuple[int, int]:
@@ -60,13 +63,13 @@ def _resolve(region: list[str]) -> list[str]:
     out: list[str] = []
     side = None
     for line in region:
-        if line.startswith("<<<<<<< "):
+        if line.startswith(_OURS):
             side = "before"
-        elif line.startswith("||||||| "):
+        elif line.startswith(_BASE):
             side = "base"
-        elif line.startswith("=======") and side is not None:
+        elif line.startswith(_SEP) and side is not None:
             side = "after"
-        elif line.startswith(">>>>>>> "):
+        elif line.startswith(_THEIRS):
             side = None
         elif side in (None, "after"):
             out.append(line)
@@ -200,7 +203,7 @@ def _only_the_list(old_sides: list[str]) -> bool:
             continue
         if (
             stripped
-            and not stripped.startswith(("#", "||||||| "))
+            and not stripped.startswith(("#", _BASE))
             and stripped != "sections:"
         ):
             return False
@@ -223,9 +226,7 @@ def _clear_llmstxt_conflicts(lines: list[str]) -> tuple[list[str], list[str]]:
             i += 1
             continue
         hunk = lines[i : end + 1]
-        sep = next(
-            (k for k, line in enumerate(hunk) if line.startswith("=======")), None
-        )
+        sep = next((k for k, line in enumerate(hunk) if line.startswith(_SEP)), None)
         if sep is None or not any(OLD_LLMSTXT in line for line in hunk[1:sep]):
             out.extend(hunk)
         elif _only_the_list(hunk[1:sep]):
@@ -242,11 +243,9 @@ def _clear_llmstxt_conflicts(lines: list[str]) -> tuple[list[str], list[str]]:
 
 
 def _hunk_end(lines: list[str], i: int) -> int | None:
-    if not lines[i].startswith("<<<<<<< "):
+    if not lines[i].startswith(_OURS):
         return None
-    return next(
-        (j for j in range(i, len(lines)) if lines[j].startswith(">>>>>>> ")), None
-    )
+    return next((j for j in range(i, len(lines)) if lines[j].startswith(_THEIRS)), None)
 
 
 def migrate(updated_text: str, head_text: str) -> tuple[str, list[str]]:
@@ -275,12 +274,12 @@ def _head_mkdocs(root: Path) -> str | None:
         return None
 
 
-def main() -> int:
+def main() -> None:
     root = Path.cwd()
     path = root / "mkdocs.yml"
     head = _head_mkdocs(root)
     if head is None or not path.exists() or NEW_MARKER in head:
-        return 0
+        return
     before = path.read_text(encoding="utf-8")
     after, parked = migrate(before, head)
     for reason in reasons(before, head):
@@ -296,8 +295,7 @@ def main() -> int:
             "Unsorted at the end of nav: in mkdocs.yml; move each into the "
             "section it belongs to, then `git add mkdocs.yml`"
         )
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

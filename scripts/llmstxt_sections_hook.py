@@ -38,7 +38,7 @@ logger = logging.getLogger("mkdocs.hooks.llmstxt_sections")
 _FRONT_MATTER = re.compile(
     r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL
 )
-_HEADING = re.compile(r"^#[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+_HEADING = re.compile(r"^#[ \t]+(\S.*)$", re.MULTILINE)  # the caller strips the title
 
 
 def _pages(node: Any) -> list[str]:
@@ -78,7 +78,7 @@ def _description(docs_dir: Path, rel: str) -> str:
 def _title(docs_dir: Path, rel: str) -> str:
     """Return a bare nav entry's title: its first `# ` heading, else its path."""
     heading = _HEADING.search(_read(docs_dir, rel))
-    return heading.group(1) if heading else rel
+    return heading.group(1).rstrip() if heading else rel
 
 
 def _nav_sections(nav: list[Any], docs_dir: Path) -> dict[str, list[str]]:

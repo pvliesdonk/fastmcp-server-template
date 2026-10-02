@@ -121,10 +121,12 @@ def test_env_from_config_json_servers_and_dotenv() -> None:
         '```bash { .config }\nexport A=1\nB="two words"\n# comment\n\nC=3 # trailing\n```\n'
     )[0]
     assert env_from_config(dotenv) == [("env", {"A": "1", "B": "two words", "C": "3"})]
+    no_servers = blocks('```json { .config }\n{"other": 1}\n```\n')[0]
     with pytest.raises(ValueError, match="mcpServers"):
-        env_from_config(blocks('```json { .config }\n{"other": 1}\n```\n')[0])
+        env_from_config(no_servers)
+    yaml_block = blocks("```yaml { .config }\na: 1\n```\n")[0]
     with pytest.raises(ValueError, match="json"):
-        env_from_config(blocks("```yaml { .config }\na: 1\n```\n")[0])
+        env_from_config(yaml_block)
 
 
 def test_unquoted_extras_flags_only_the_unsafe_token() -> None:
