@@ -14,13 +14,12 @@ One step per channel; the linked page owns the detail.
 | You run | The step |
 |---|---|
 | The command, installed with uv | `uv tool upgrade {{ pypi_name }}`; pin one release with `uv tool install "{{ pypi_name }}==X.Y.Z"` ([Installation](../get-started/installation.md#as-a-command-on-your-machine)) |
-| The command, installed with pip | `pip install --upgrade "{{ pypi_name }}"` |
-| Claude Desktop | upgrade the command as above, then quit and reopen Claude Desktop; with the bundle, install the new release's `.mcpb` the same way as the first |
+| The command, installed with pip | `pip install --upgrade "{{ pypi_name }}"` ([Installation](../get-started/installation.md#as-a-command-on-your-machine)) |
+| Claude Desktop | with the bundle: install the new release's `.mcpb` the same way as the first; with the command: upgrade it as above, then quit and reopen Claude Desktop ([Claude Desktop](../get-started/claude-desktop.md)) |
 | Docker Compose | `docker compose pull` then `docker compose up -d`; `restart` keeps the old image ([Upgrading the image](../deploy/docker.md#upgrading-the-image)) |
 | The Linux package | install the new `.deb` or `.rpm` the same way as the first; `postinstall` installs the new version into the virtual environment and restarts a running service ([systemd](../deploy/systemd.md#upgrade)) |
 {% if include_claude_plugin %}| The Claude Code plugin | `/plugin`, the plugin under **Installed**, **Update now**; from a shell, `claude plugin update {{ project_name }}@{{ github_org }}` ([Claude Code](../get-started/claude-code.md)) |
 {% endif %}
-
 ## Release channels
 
 Artifacts ship on three channels. Each row lists what that channel publishes.
