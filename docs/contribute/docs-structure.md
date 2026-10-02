@@ -26,7 +26,7 @@ The site is organised by what its reader is trying to do. The template owns this
 |---|---|---|
 | Overview | someone deciding whether this server fits | explanation |
 | Security model | anyone asking what the server can reach, change or let in | explanation |
-| Get started | a newcomer after a first success | tutorial |
+| Get started | a newcomer after a first success | tutorial; the Installation page is a how-to |
 | Deploy | an operator running it for real | how-to |
 | Use | someone who runs it and wants more out of it | how-to or explanation |
 | Reference | anyone looking a fact up | reference |
