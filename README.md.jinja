@@ -57,7 +57,7 @@ uv tool install "{{ pypi_name }}"
 **A server for remote clients** (streamable HTTP). [A remote server](docs/get-started/http-client.md) connects the clients.
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env ghcr.io/{{ github_org }}/{{ project_name }}:latest
+docker run --rm -p 8000:8000 --env-file .env {{ docker_registry }}/{{ project_name }}:latest
 ```
 
 A `compose.yml` ships at the repository root and runs as-is: copy `.env.example` to `.env`, then `docker compose up -d`. [Deploy](docs/deploy/index.md) covers authentication, OIDC, a reverse proxy and system packages (`.deb`/`.rpm` on the releases page). The server answers `/health` and `/health/ready` outside the MCP mount, and its `get_server_info` tool reports the running version.
