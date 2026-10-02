@@ -20,6 +20,7 @@ from migrate_docs_pages import (
     rebase_links,
     resolve_nav_region,
     rewrite_links,
+    rewrite_nav_paths,
     transplant,
     transplant_readme,
 )
@@ -89,6 +90,13 @@ def _repo(tmp_path: Path, prompts: str | None = None, readme: str = OLD_README) 
         (FIX / "updated_reference_configuration.md.txt").read_text(), encoding="utf-8"
     )
     (root / "docs" / "deploy").mkdir()
+    # The new frame's pages the moves point at, as the update renders them.
+    (root / "docs" / "security-model.md").write_text(
+        "# Security model\n", encoding="utf-8"
+    )
+    (root / "docs" / "deploy" / "authentication.md").write_text(
+        "# Authentication\n", encoding="utf-8"
+    )
     (root / "docs" / "deploy" / "docker.md").write_text(
         "# Docker\n<!-- DOMAIN-DOCKER-EXTRA-START -->\n<!-- hint -->\n"
         "<!-- DOMAIN-DOCKER-EXTRA-END -->\n",
@@ -398,3 +406,84 @@ def test_switched_off_page_is_reported_not_swallowed(tmp_path: Path) -> None:
     assert any(
         "switched-off page" in n and "guides/authorization.md" in n for n in notes
     )
+
+
+def test_blockless_old_page_is_noted_not_parked(tmp_path: Path) -> None:
+    """A page without blocks may be a wholesale rewrite or an older template frame."""
+    root = _repo(tmp_path)
+    old = root / "docs" / "deployment" / "oidc.md"
+    old.write_text(
+        "# OIDC\n\nAn older template frame, or our own rewrite.\n", encoding="utf-8"
+    )
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "blockless")
+    old.unlink()
+    (root / "docs" / "deploy" / "oidc.md").write_text(
+        "# OIDC\n<!-- DOMAIN-OIDC-EXTRA-START -->\n<!-- hint -->\n<!-- DOMAIN-OIDC-EXTRA-END -->\n",
+        encoding="utf-8",
+    )
+    notes = migrate(root)
+    assert not old.exists(), "a pristine older frame must not be parked"
+    assert any(
+        "had no DOMAIN blocks" in n and "docs/deployment/oidc.md" in n for n in notes
+    )
+    new_page = root / "docs" / "deploy" / "oidc.md"
+    new_text = new_page.read_text(encoding="utf-8")
+    again = migrate(root)
+    assert new_page.read_text(encoding="utf-8") == new_text
+    assert again == [n for n in notes if "had no DOMAIN blocks" in n], (
+        "a finding with no action to take recurs on every run; nothing else does"
+    )
+
+
+def test_links_to_a_switched_off_page_are_not_retargeted(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    page = root / "docs" / "deployment" / "systemd.md"
+    page.write_text(
+        "# S\n\n[authz](../guides/authorization.md) and [docker](../deployment/docker.md)\n",
+        encoding="utf-8",
+    )
+    migrate(root)  # no docs/deploy/authorization.md exists under root
+    out = page.read_text(encoding="utf-8")
+    assert "[authz](../guides/authorization.md)" in out
+    assert "[docker](../deploy/docker.md)" in out
+
+
+def test_nav_entries_at_old_paths_are_retargeted() -> None:
+    nav = (
+        "site_name: x\n"
+        "nav:\n"
+        "  - Overview: index.md\n"
+        "  - Deploy:\n"
+        "      # PROJECT-NAV-DEPLOY-START\n"
+        "      - Systemd: deployment/systemd.md\n"
+        "      - Docker again: deployment/docker.md\n"
+        "      - Model: guides/security-model.md\n"
+        "      # PROJECT-NAV-DEPLOY-END\n"
+        "plugins:\n"
+        "  - search: deployment/docker.md\n"
+    )
+    out = rewrite_nav_paths(nav)
+    assert "      - Docker again: deploy/docker.md\n" in out
+    assert "      - Model: security-model.md\n" in out
+    assert "      - Systemd: deployment/systemd.md\n" in out
+    assert "  - search: deployment/docker.md\n" in out, "outside nav: untouched"
+    assert rewrite_nav_paths(out) == out
+
+
+def test_link_forms_with_title_angle_brackets_and_reference_definitions() -> None:
+    text = (
+        '[a](<../guides/security-model.md>) [b](../guides/security-model.md "The model")\n'
+        "[c]: ../guides/security-model.md\n"
+    )
+    out = rewrite_links(text, "deployment/x.md")
+    assert "[a](<../security-model.md>)" in out
+    assert '[b](../security-model.md "The model")' in out
+    assert "[c]: ../security-model.md" in out
+
+
+def test_blocks_close_on_crlf_and_trailing_spaces() -> None:
+    from migrate_docs_pages import blocks
+
+    text = "<!-- DOMAIN-X-START -->\r\nbody\r\n<!-- DOMAIN-X-END -->  \r\n"
+    assert blocks(text) == {"DOMAIN-X": "body\r\n"}

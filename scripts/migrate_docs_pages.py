@@ -25,15 +25,20 @@ Template script parks, implementation agent sorts:
   into a Use page, then deletes the parked page; the structure check
   reports E2 on it until then.  The update is not finished while a parked
   page exists.
-- Links on the project's own pages that point at a moved page are rewritten
-  to the new path, anchor kept, so the structure check does not report them;
-  release notes, decision records and fenced code keep their old links, which
-  the redirects serve.
+- Links on the project's own pages and its ``nav:`` entries that point at a
+  moved page are rewritten to the new path, anchor kept, so the structure
+  check does not report them; release notes, decision records and fenced
+  code keep their old links, which the redirects serve. A move whose new
+  page is not rendered for this project (a switched-off page) is not followed.
+- A page without ``DOMAIN-*`` blocks (rewritten by the project, or from a
+  template version that predates the block) carries nothing; the note says
+  where its text is, since the two cases cannot be told apart here.
 - The ``GENERATED-NAV-TOOLS`` region of ``mkdocs.yml``: a conflict inside it
   is resolved to the template's side, since ``gen_reference.py`` rewrites it.
 
 Idempotent: a block already carried, a page already restored, is left alone;
-a project whose HEAD has no old page is a no-op.
+a project whose HEAD has no old page is a no-op.  A finding that comes with
+no action (a blockless old page) is reported on every run.
 """
 
 from __future__ import annotations
@@ -49,6 +54,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+DOCS = "docs/"  # every path in MOVES is repository-relative, under this
 # (old path, new path): the template renders the page at the new path now.
 MOVES = (
     ("docs/configuration.md", "docs/reference/configuration.md"),
@@ -89,7 +95,9 @@ _CONFLICT = re.compile(
 )
 _BARE_BLOCK = re.compile(r"<!-- DOMAIN-START -->\n(.*?)<!-- DOMAIN-END -->", re.DOTALL)
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
-_LINK = re.compile(r"\]\(([^)\s]+)\)")
+_LINK = re.compile(r"\]\((\s*<?)([^)\s>]+)([^)]*)\)")
+_REF_DEF = re.compile(r"^(\[[^\]]+\]:[ \t]+)(\S+)")
+_NAV_ENTRY = re.compile(r"^([ \t]*-[ \t]+[^:\n]+:[ \t]+)(\S+)[ \t]*$")
 # What the deleted pages' blocks held on a fresh render, comments stripped:
 # a block still saying this carries nothing the project wrote.
 _PLACEHOLDERS = frozenset(
@@ -141,7 +149,7 @@ def blocks(text: str) -> dict[str, str]:
             continue  # a bare positional block; see positional_blocks
         end = f"<!-- {name}-END -->"
         body: list[str] = []
-        while i < len(lines) and lines[i].rstrip("\n") != end:
+        while i < len(lines) and lines[i].rstrip() != end:
             body.append(lines[i])
             i += 1
         if i < len(lines):
@@ -183,7 +191,11 @@ def _replace_block(text: str, name: str, body: str) -> str:
 
 
 def transplant(
-    old: str, new: str, old_rel: str | None = None, new_rel: str | None = None
+    old: str,
+    new: str,
+    old_rel: str | None = None,
+    new_rel: str | None = None,
+    moved: dict[str, str] | None = None,
 ) -> tuple[str, list[str]]:
     """Copy each written ``DOMAIN-*`` block body of *old* into *new*.
 
@@ -201,7 +213,7 @@ def transplant(
             missing.append(name)
             continue
         if old_rel and new_rel:
-            body = rebase_links(body, old_rel, new_rel)
+            body = rebase_links(body, old_rel, new_rel, moved)
         new = _replace_block(new, name, body)
     return new, missing
 
@@ -252,7 +264,9 @@ def resolve_nav_region(text: str) -> str:
     return _CONFLICT.sub(choose, text)
 
 
-def _carry(root: Path, old_rel: str, new_rel: str, notes: list[str]) -> None:
+def _carry(
+    root: Path, old_rel: str, new_rel: str, notes: list[str], moved: dict[str, str]
+) -> None:
     old = _head(root, old_rel)
     if old is None or (root / old_rel).exists():
         return
@@ -265,8 +279,17 @@ def _carry(root: Path, old_rel: str, new_rel: str, notes: list[str]) -> None:
                 f"HEAD:{old_rel}`"
             )
         return
+    if not blocks(old):
+        # Either the project rewrote the page without the template's blocks,
+        # or its template version predates the block: the two cannot be told
+        # apart here, so nothing is parked and the note says where the text is.
+        notes.append(
+            f"{old_rel} had no DOMAIN blocks, so nothing was carried into {new_rel}; "
+            f"if the page held your text, it is in `git show HEAD:{old_rel}`"
+        )
+        return
     current = new_path.read_text(encoding="utf-8")
-    updated, missing = transplant(old, current, old_rel, new_rel)
+    updated, missing = transplant(old, current, old_rel, new_rel, moved)
     if updated != current:
         new_path.write_text(updated, encoding="utf-8")
         notes.append(f"carried the DOMAIN blocks of {old_rel} into {new_rel}")
@@ -334,11 +357,21 @@ _HISTORY = ("releases/", "decisions/", "design/", "superpowers/")
 _FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})", re.MULTILINE)
 
 
-def _moved() -> dict[str, str]:
-    return {old.removeprefix("docs/"): new.removeprefix("docs/") for old, new in MOVES}
+def _moved(root: Path | None = None) -> dict[str, str]:
+    """Docs-relative old -> new for every move whose new page exists under *root*.
+
+    Without *root*, every move counts (unit tests); with it, a move whose new
+    page is not rendered for this project (a switched-off page) is left out,
+    so a link to it is not pointed at a page that does not exist.
+    """
+    return {
+        old.removeprefix(DOCS): new.removeprefix(DOCS)
+        for old, new in MOVES
+        if root is None or (root / new).exists()
+    }
 
 
-def _retarget(target: str, from_dir: str, to_dir: str) -> str:
+def _retarget(target: str, from_dir: str, to_dir: str, moved: dict[str, str]) -> str:
     """Resolve a relative ``.md`` link from *from_dir*, follow a move, and express it from *to_dir*."""
     path, sep, rest = target.partition("#")
     if not sep:
@@ -346,7 +379,7 @@ def _retarget(target: str, from_dir: str, to_dir: str) -> str:
     if not path.endswith(".md") or "://" in path or path.startswith("/"):
         return target
     resolved = posixpath.normpath(posixpath.join(from_dir, path))
-    resolved = _moved().get(resolved, resolved)
+    resolved = moved.get(resolved, resolved)
     new_path = posixpath.relpath(resolved, to_dir or ".")
     return f"{new_path}{sep}{rest}"
 
@@ -373,37 +406,68 @@ def _outside_fences(text: str, transform: Callable[[str], str]) -> str:
     return "".join(out)
 
 
-def rewrite_links(text: str, page_rel: str) -> str:
-    """Point links on *page_rel* (docs-relative) at the new path of a moved page.
-
-    Fenced code is left as it is.
-    """
-    here = posixpath.dirname(page_rel)
-    return _outside_fences(
-        text,
-        lambda line: _LINK.sub(
-            lambda m: f"]({_retarget(m.group(1), here, here)})", line
+def _rewrite_line(line: str, from_dir: str, to_dir: str, moved: dict[str, str]) -> str:
+    line = _LINK.sub(
+        lambda m: (
+            f"]({m.group(1)}{_retarget(m.group(2), from_dir, to_dir, moved)}{m.group(3)})"
         ),
+        line,
+    )
+    return _REF_DEF.sub(
+        lambda m: f"{m.group(1)}{_retarget(m.group(2), from_dir, to_dir, moved)}", line
     )
 
 
-def rebase_links(body: str, old_rel: str, new_rel: str) -> str:
+def rewrite_links(text: str, page_rel: str, moved: dict[str, str] | None = None) -> str:
+    """Point links on *page_rel* (docs-relative) at the new path of a moved page.
+
+    Inline links (with ``<...>`` or a title), and reference definitions, are
+    covered; fenced code is left as it is.
+    """
+    here = posixpath.dirname(page_rel)
+    table = _moved() if moved is None else moved
+    return _outside_fences(text, lambda line: _rewrite_line(line, here, here, table))
+
+
+def rebase_links(
+    body: str, old_rel: str, new_rel: str, moved: dict[str, str] | None = None
+) -> str:
     """Re-express a carried block's relative links from the old page's directory to the new one's.
 
     Both paths are repository-relative (``docs/...``). A link to a moved page
     follows the move as well.
     """
-    from_dir = posixpath.dirname(old_rel.removeprefix("docs/"))
-    to_dir = posixpath.dirname(new_rel.removeprefix("docs/"))
+    from_dir = posixpath.dirname(old_rel.removeprefix(DOCS))
+    to_dir = posixpath.dirname(new_rel.removeprefix(DOCS))
+    table = _moved() if moved is None else moved
     return _outside_fences(
-        body,
-        lambda line: _LINK.sub(
-            lambda m: f"]({_retarget(m.group(1), from_dir, to_dir)})", line
-        ),
+        body, lambda line: _rewrite_line(line, from_dir, to_dir, table)
     )
 
 
-def _rewrite_project_links(root: Path, notes: list[str]) -> None:
+def rewrite_nav_paths(mkdocs_text: str, moved: dict[str, str] | None = None) -> str:
+    """Point ``nav:`` entries at the new path of a moved page.
+
+    Entries of the form ``- Title: path.md`` are covered; a quoted path or a
+    title containing a colon is left for the agent applying the update.
+    """
+    table = _moved() if moved is None else moved
+    out: list[str] = []
+    in_nav = False
+    for line in mkdocs_text.splitlines(keepends=True):
+        if line.startswith("nav:"):
+            in_nav = True
+        elif in_nav and line.strip() and not line.startswith((" ", "\t", "#", "{%")):
+            in_nav = False
+        if in_nav:
+            match = _NAV_ENTRY.match(line.rstrip("\n"))
+            if match and match.group(2) in table:
+                line = f"{match.group(1)}{table[match.group(2)]}\n"
+        out.append(line)
+    return "".join(out)
+
+
+def _rewrite_project_links(root: Path, notes: list[str], moved: dict[str, str]) -> None:
     docs = (root / "docs").resolve()
     if not docs.is_dir():
         return
@@ -416,11 +480,11 @@ def _rewrite_project_links(root: Path, notes: list[str]) -> None:
             continue  # a symlink pointing outside docs/ is not ours to rewrite
         with page.open(encoding="utf-8") as handle:
             text = handle.read()
-        updated = rewrite_links(text, rel)
+        updated = rewrite_links(text, rel, moved)
         if updated != text:
             with page.open("w", encoding="utf-8") as handle:
                 handle.write(updated)
-            changed.append(f"docs/{rel}")
+            changed.append(f"{DOCS}{rel}")
     if changed:
         notes.append(f"pointed links at moved pages on: {', '.join(changed)}")
 
@@ -428,22 +492,27 @@ def _rewrite_project_links(root: Path, notes: list[str]) -> None:
 def migrate(root: Path) -> list[str]:
     """Apply the migration under *root*; return the lines to print."""
     notes: list[str] = []
+    moved = _moved(root)
     for old_rel, new_rel in MOVES:
-        _carry(root, old_rel, new_rel, notes)
+        _carry(root, old_rel, new_rel, notes, moved)
     _carry_readme(root, notes)
     mkdocs = root / "mkdocs.yml"
     if mkdocs.exists():
         before = mkdocs.read_text(encoding="utf-8")
         after = resolve_nav_region(before)
         if after != before:
-            mkdocs.write_text(after, encoding="utf-8")
             notes.append(
                 "resolved the conflict in mkdocs.yml's GENERATED-NAV-TOOLS region to "
                 "the template's side; gen_reference.py rewrites it"
             )
+        renavved = rewrite_nav_paths(after, moved)
+        if renavved != after:
+            notes.append("pointed this project's nav entries at the moved pages")
+        if renavved != before:
+            mkdocs.write_text(renavved, encoding="utf-8")
     for rel in PARKED:
         _park(root, rel, notes)
-    _rewrite_project_links(root, notes)
+    _rewrite_project_links(root, notes, moved)
     return notes
 
 
