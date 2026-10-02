@@ -28,8 +28,8 @@ import yaml
 if TYPE_CHECKING:
     from pathlib import Path
 
-_FENCE = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}|~{3,})(?P<info>[^`]*)$")
-_HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*$")
+_FENCE = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}+|~{3,}+)(?P<info>[^`]*)$")
+_HEADING = re.compile(r"^(#{1,6})[ \t]+(.+)$")  # callers strip the title
 _ATTRS = re.compile(r"\{(?P<body>[^}]*)\}")
 _ATTR = re.compile(
     r"""(?P<key>[\w-]+)=(?:"(?P<dq>[^"]*)"|'(?P<sq>[^']*)'|(?P<bare>\S+))"""
@@ -43,7 +43,7 @@ _HEREDOC = re.compile(r"<<-?\s*['\"]?(?P<tag>\w+)['\"]?")
 PYTHON_LANGS = frozenset({"python", "py", "python3"})
 CONFIG_LANGS = frozenset({"json", "ini", "text", "env", "dotenv"})
 _DOTENV = re.compile(
-    r"^\s*(?:export\s+)?(?P<key>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$"
+    r"^\s*(?:export\s+)?(?P<key>[A-Za-z_]\w*)=(?P<value>.*)$", re.ASCII
 )
 SHELL_LANGS = frozenset({"bash", "sh", "shell", "zsh", "console"})
 
@@ -58,6 +58,15 @@ class Block:
     code: str
     line: int
     heading_trail: list[str] = field(default_factory=list)
+
+
+def _attr_value(match: re.Match[str]) -> str:
+    """The value of a ``key="v"`` / ``key='v'`` / ``key=v`` attribute match."""
+    return next(
+        v
+        for v in (match.group("dq"), match.group("sq"), match.group("bare"))
+        if v is not None
+    )
 
 
 def parse_info(info: str) -> tuple[str, list[str], dict[str, str]]:
@@ -75,22 +84,10 @@ def parse_info(info: str) -> tuple[str, list[str], dict[str, str]]:
             else:
                 match = _ATTR.fullmatch(token)
                 if match:
-                    attrs[match.group("key")] = next(
-                        v
-                        for v in (
-                            match.group("dq"),
-                            match.group("sq"),
-                            match.group("bare"),
-                        )
-                        if v is not None
-                    )
+                    attrs[match.group("key")] = _attr_value(match)
         info = (info[: braces.start()] + info[braces.end() :]).strip()
     for match in _ATTR.finditer(info):
-        attrs[match.group("key")] = next(
-            v
-            for v in (match.group("dq"), match.group("sq"), match.group("bare"))
-            if v is not None
-        )
+        attrs[match.group("key")] = _attr_value(match)
     lang = info.split(None, 1)[0] if info else ""
     return (
         (lang if not lang.startswith(("{", '"')) and "=" not in lang else ""),
@@ -110,7 +107,7 @@ def blocks(text: str) -> list[Block]:
         if heading:
             level = len(heading.group(1))
             trail = [(lv, t) for lv, t in trail if lv < level]
-            trail.append((level, heading.group(2)))
+            trail.append((level, heading.group(2).rstrip()))
             i += 1
             continue
         fence = _FENCE.match(lines[i])

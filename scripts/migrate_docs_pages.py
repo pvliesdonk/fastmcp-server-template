@@ -95,9 +95,11 @@ _CONFLICT = re.compile(
 )
 _BARE_BLOCK = re.compile(r"<!-- DOMAIN-START -->\n(.*?)<!-- DOMAIN-END -->", re.DOTALL)
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
-_LINK = re.compile(r"\]\((\s*<?)([^)\s>]+)([^)]*)\)")
+# Group 3 starts with whitespace or ``>`` (or is empty), so it never overlaps
+# with the target in group 2; the match is linear in the line length.
+_LINK = re.compile(r"\]\((\s*<?)([^)\s>]+)((?:[\s>][^)]*)?)\)")
 _REF_DEF = re.compile(r"^(\[[^\]]+\]:[ \t]+)(\S+)")
-_NAV_ENTRY = re.compile(r"^([ \t]*-[ \t]+[^:\n]+:[ \t]+)(\S+)[ \t]*$")
+_NAV_ENTRY = re.compile(r"^([ \t]*-[ \t]+[^\s:][^:\n]*:[ \t]+)(\S+)[ \t]*$")
 # What the deleted pages' blocks held on a fresh render, comments stripped:
 # a block still saying this carries nothing the project wrote.
 _PLACEHOLDERS = frozenset(
