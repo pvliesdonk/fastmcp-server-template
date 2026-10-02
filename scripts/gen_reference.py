@@ -66,6 +66,7 @@ _SECTION = re.compile(
     r"^[ \t]*(Args|Arguments|Parameters|Returns|Yields|Raises|Examples?):[ \t]*$",
     re.MULTILINE,
 )
+_COMMENT_ONLY = re.compile(r"<!--.*?-->", re.DOTALL)
 _SLOT = re.compile(
     r"<!-- (DOMAIN-[A-Za-z0-9_.-]+?)-START -->\n(.*?)<!-- \1-END -->", re.DOTALL
 )
@@ -175,6 +176,19 @@ def _sections(doc: str) -> dict[str, str]:
     return found
 
 
+def _entries(section: str) -> list[str]:
+    """Split a Google-style section into entries; indented lines continue one."""
+    entries: list[str] = []
+    for line in section.splitlines():
+        if not line.strip():
+            continue
+        if entries and line[:1].isspace():
+            entries[-1] = f"{entries[-1]} {line.strip()}"
+        else:
+            entries.append(line.strip())
+    return entries
+
+
 def _group_of(tool: Any) -> str:
     groups = sorted(
         t[len(GROUP_TAG) :] for t in tool.tags or () if t.startswith(GROUP_TAG)
@@ -183,26 +197,40 @@ def _group_of(tool: Any) -> str:
         raise GenerationError(
             f"tool {tool.name} carries two group tags: {', '.join(groups)}"
         )
-    if groups:
-        return groups[0]
-    return tool.fn.__module__.rsplit(".", 1)[-1].lstrip("_")
+    group = groups[0] if groups else tool.fn.__module__.rsplit(".", 1)[-1].lstrip("_")
+    if group == "index":
+        raise GenerationError(
+            f"tool {tool.name}: group 'index' would overwrite the tools jump table; "
+            "pick another group: tag"
+        )
+    return group
 
 
 def _security(annotations: Any) -> list[str]:
+    """The security line, read the way a client reads the annotations.
+
+    The MCP spec's defaults apply where a hint is unset: not read-only, and
+    destructive. An unstated hint is therefore rendered as what a client
+    assumes, never as something milder.
+    """
     if annotations is None:
-        return ["Annotations: none."]
+        return [
+            "No annotations: clients assume it changes state and may be destructive."
+        ]
     lines = []
     if annotations.read_only_hint:
         lines.append("Read-only.")
     elif annotations.destructive_hint:
         lines.append("Destructive.")
-    elif annotations.read_only_hint is False:
-        lines.append("Changes state.")
+    elif annotations.destructive_hint is False:
+        lines.append("Changes state, not destructive.")
+    else:
+        lines.append("Changes state; may be destructive (no destructive hint given).")
     if annotations.idempotent_hint:
         lines.append("Idempotent.")
     if annotations.open_world_hint:
         lines.append("Reaches outside the server.")
-    return lines or ["Annotations: none."]
+    return lines
 
 
 def _visibility(meta: Any) -> list[str]:
@@ -260,9 +288,7 @@ def _output_type(schema: dict[str, Any] | None) -> str:
 
 def _tool_entry(tool: Any) -> ToolEntry:
     sections = _sections(inspect.getdoc(tool.fn) or "")
-    raises = [
-        line.strip() for line in sections.get("Raises", "").splitlines() if line.strip()
-    ]
+    raises = _entries(sections.get("Raises", ""))
     tags = sorted(t for t in tool.tags or () if not t.startswith(GROUP_TAG))
     return ToolEntry(
         name=tool.name,
@@ -364,9 +390,8 @@ def collect(server: FastMCP, app: typer.Typer, command_name: str) -> Reference:
 
 
 def _first_sentence(text: str) -> str:
-    return re.split(
-        r"(?<!\be\.g\.)(?<!\bi\.e\.)(?<=[.!?])\s", text.strip(), maxsplit=1
-    )[0]
+    guard = r"(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\betc\.)(?<!\bvs\.)(?<!\bapprox\.)"
+    return re.split(guard + r"(?<=[.!?])\s", text.strip(), maxsplit=1)[0]
 
 
 def _title(slug: str) -> str:
@@ -422,6 +447,10 @@ def _prose(text: str) -> str:
     return "".join(out)
 
 
+def _default_cell(default: str) -> str:
+    return default if default in ("required", "optional") else f"`{default}`"
+
+
 def _tool_section(tool: ToolEntry, slots: dict[str, str], used: set[str]) -> str:
     out = [f"## `{tool.name}`\n\n"]
     if tool.title != tool.name:
@@ -438,7 +467,12 @@ def _tool_section(tool: ToolEntry, slots: dict[str, str], used: set[str]) -> str
             _table(
                 ("Name", "Type", "Default", "Description"),
                 (
-                    (f"`{p.name}`", p.type, p.default, _prose(p.description))
+                    (
+                        f"`{p.name}`",
+                        f"`{p.type}`",
+                        _default_cell(p.default),
+                        _prose(p.description),
+                    )
                     for p in tool.params
                 ),
             )
@@ -626,6 +660,7 @@ def render(ref: Reference, docs: Path) -> dict[str, str]:
     for group, tools in ref.groups.items():
         rel = f"reference/tools/{group}.md"
         pages[rel] = _group_page(group, tools, docs / rel)
+    _guard_stale(docs, pages)
     for rel, fn in (
         ("reference/tools/index.md", _index_page),
         ("reference/resources.md", _resources_page),
@@ -647,6 +682,22 @@ def _stale(docs: Path, pages: dict[str, str]) -> list[Path]:
         if f"reference/tools/{p.name}" not in pages
         and MARKER in p.read_text(encoding="utf-8-sig")
     )
+
+
+def _guard_stale(docs: Path, pages: dict[str, str]) -> None:
+    """Refuse to continue while a vanished group's page still holds prose."""
+    for stale in _stale(docs, pages):
+        written = [
+            name
+            for name, body in _existing_slots(stale).items()
+            if _COMMENT_ONLY.sub("", body).strip()
+        ]
+        if written:
+            raise GenerationError(
+                f"{stale}: no tool group writes this page any more, but its slot(s) "
+                f"{', '.join(written)} hold content; move it to the new group page, "
+                "then delete the file"
+            )
 
 
 def check(docs: Path, pages: dict[str, str]) -> list[str]:
@@ -676,7 +727,7 @@ def write(docs: Path, pages: dict[str, str]) -> None:
     for rel, text in pages.items():
         path = docs / rel
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text, encoding="utf-8", newline="\n")
 
 
 def update_nav(mkdocs_text: str, ref: Reference) -> str:
@@ -752,7 +803,10 @@ def _build(root: Path) -> Reference:
             f"make_server() failed: {exc}. A required variable goes under "
             "[tool.docs-reference] env in pyproject.toml."
         ) from exc
-    return collect(server, cli_mod.app, project_name)
+    try:
+        return collect(server, cli_mod.app, project_name)
+    except AttributeError as exc:  # a tool without .fn (proxied or transformed)
+        raise BuildError(f"cannot read a registered component: {exc}") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -770,6 +824,9 @@ def main(argv: list[str] | None = None) -> int:
         ref = _build(root)
         pages = render(ref, docs)
         nav = update_nav(mkdocs.read_text(encoding="utf-8"), ref)
+    except OSError as exc:
+        print(f"gen_reference: {exc}", file=sys.stderr)
+        return 2
     except BuildError as exc:
         print(f"gen_reference: {exc}", file=sys.stderr)
         return 2
@@ -785,7 +842,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"gen_reference: {'stale' if drift else 'up to date'}")
         return 1 if drift else 0
     write(docs, pages)
-    mkdocs.write_text(nav, encoding="utf-8")
+    mkdocs.write_text(nav, encoding="utf-8", newline="\n")
     print(f"gen_reference: wrote {len(pages)} page(s)")
     return 0
 

@@ -49,7 +49,9 @@ def _server() -> FastMCP:
             The note's text and its etag.
 
         Raises:
-            ToolError: the path names no note.
+            ToolError: the path names no note, or names one outside
+                the vault.
+            ToolError: the etag is stale.
         """
         return f"{path}{mode}{limit}"
 
@@ -151,7 +153,10 @@ def test_tool_entry_carries_wire_description_and_docstring_sections(reference) -
     )
     assert "Returns:" not in read.description
     assert read.returns == "The note's text and its etag."
-    assert read.raises == ["ToolError: the path names no note."]
+    assert read.raises == [
+        "ToolError: the path names no note, or names one outside the vault.",
+        "ToolError: the etag is stale.",
+    ]
     assert read.security == ["Read-only."]
     assert read.tags == ["vault"]
     assert [(p.name, p.type, p.default) for p in read.params] == [
@@ -165,6 +170,33 @@ def test_tool_entry_carries_wire_description_and_docstring_sections(reference) -
 def test_security_line_and_output_type(reference) -> None:
     save, ping = reference.groups["test_gen_reference"]
     assert save.security == ["Destructive.", "Idempotent."]
+    mcp = FastMCP("hints")
+
+    @mcp.tool(annotations={"read_only_hint": False})
+    def unstated() -> str:
+        """Changes something."""
+        return ""
+
+    @mcp.tool(annotations={"read_only_hint": False, "destructive_hint": False})
+    def additive() -> str:
+        """Adds something."""
+        return ""
+
+    @mcp.tool
+    def bare() -> str:
+        """Says nothing."""
+        return ""
+
+    tools = {
+        t.name: t for t in collect(mcp, _app(), "demo").groups["test_gen_reference"]
+    }
+    assert tools["unstated"].security == [
+        "Changes state; may be destructive (no destructive hint given)."
+    ]
+    assert tools["additive"].security == ["Changes state, not destructive."]
+    assert tools["bare"].security == [
+        "No annotations: clients assume it changes state and may be destructive."
+    ]
     assert save.returns == ""
     assert save.output_type == "object"
     assert ping.params == []
@@ -224,7 +256,7 @@ def test_render_produces_the_page_set_with_slots(reference, tmp_path: Path) -> N
             "Read-only.",
             "Use search for notes",
             "**Parameters**",
-            "| `path` | string | required |",
+            "| `path` | `string` | required |",
             "**Returns**",
             "**Outcomes and errors**",
             "<!-- DOMAIN-EXAMPLE-read-START -->",
@@ -244,6 +276,7 @@ def test_render_produces_the_page_set_with_slots(reference, tmp_path: Path) -> N
     assert "`note://{path}`" in pages["reference/resources.md"]
     assert "<!-- DOMAIN-EXAMPLE-summarise-START -->" in pages["reference/prompts.md"]
     saving = pages["reference/tools/test_gen_reference.md"]
+    assert '| `mode` | `fast \\| slow` | `"fast"` |' in reading
     assert "returns its `path_etag` pair, see `etag`" in saving
 
 
@@ -339,3 +372,38 @@ def test_prose_formatting_leaves_links_and_abbreviations_alone() -> None:
     assert _first_sentence("Reads notes, e.g. daily ones. Then more.") == (
         "Reads notes, e.g. daily ones."
     )
+
+
+def test_vanished_group_with_written_slots_is_an_error(
+    reference, tmp_path: Path
+) -> None:
+    docs = tmp_path / "docs"
+    pages = render(reference, docs)
+    write(docs, pages)
+    gone = docs / "reference" / "tools" / "legacy.md"
+    gone.write_text(
+        pages["reference/tools/reading.md"].replace(
+            "<!-- DOMAIN-EXAMPLE-read-START -->",
+            "<!-- DOMAIN-EXAMPLE-read-START -->\nkeep me",
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(GenerationError, match=r"legacy\.md"):
+        render(reference, docs)
+    assert gone.exists()
+    gone.write_text(pages["reference/tools/reading.md"], encoding="utf-8")
+    write(docs, render(reference, docs))
+    assert not gone.exists(), "a stale page holding only placeholders is removed"
+
+
+def test_group_named_index_is_rejected() -> None:
+    mcp = FastMCP("clash")
+
+    @mcp.tool(tags={"group:index"})
+    def t() -> str:
+        """Would overwrite the jump table."""
+        return ""
+
+    app = _app()
+    with pytest.raises(GenerationError, match="index"):
+        collect(mcp, app, "demo")
