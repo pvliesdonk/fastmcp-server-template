@@ -34,9 +34,14 @@ _ATTRS = re.compile(r"\{(?P<body>[^}]*)\}")
 _ATTR = re.compile(
     r"""(?P<key>[\w-]+)=(?:"(?P<dq>[^"]*)"|'(?P<sq>[^']*)'|(?P<bare>\S+))"""
 )
+# ``pkg[extra]``, ``.[dev]``, ``./pkg[dev]``: a path-like token ending in
+# brackets, not preceded by a word, quote, ``$`` or ``{`` (``${arr[0]}``).
 _EXTRA = re.compile(
-    r"(?<![\w\"'${/-])(?P<token>[A-Za-z0-9][\w.-]*\[[\w,.-]+\])(?![\w\"'])"
+    r"(?<![\w\"'${-])(?P<token>(?:\.{0,2}/)?[\w./-]*[\w.]\[[\w,.-]+\])(?![\w\"'])"
 )
+_HEREDOC = re.compile(r"<<-?\s*['\"]?(?P<tag>\w+)['\"]?")
+PYTHON_LANGS = frozenset({"python", "py", "python3"})
+CONFIG_LANGS = frozenset({"json", "ini", "text", "env", "dotenv"})
 _DOTENV = re.compile(
     r"^\s*(?:export\s+)?(?P<key>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$"
 )
@@ -141,15 +146,43 @@ def _closes(line: str, marker: str) -> bool:
 def expectations(spec: str) -> dict[str, object]:
     """Parse ``field=literal, field=literal`` into a mapping; literals are Python."""
     out: dict[str, object] = {}
-    for part in filter(None, (p.strip() for p in spec.split(","))):
+    for part in filter(None, (p.strip() for p in _split_top_level(spec))):
         if "=" not in part:
             raise ValueError(f"expectation {part!r} is not field=literal")
         key, _, value = part.partition("=")
         try:
             out[key.strip()] = ast.literal_eval(value.strip())
-        except (ValueError, SyntaxError):
-            out[key.strip()] = value.strip()
+        except (ValueError, SyntaxError) as exc:
+            raise ValueError(
+                f"expectation {part!r}: {value.strip()!r} is not a Python literal "
+                "(write True, 8000 or 'text')"
+            ) from exc
     return out
+
+
+def _split_top_level(spec: str) -> list[str]:
+    """Split on commas outside brackets and quotes."""
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    quote: str | None = None
+    for char in spec:
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in "\"'":
+            quote = char
+        elif char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+            continue
+        current.append(char)
+    parts.append("".join(current))
+    return parts
 
 
 def env_from_config(block: Block) -> list[tuple[str, dict[str, str]]]:
@@ -158,7 +191,7 @@ def env_from_config(block: Block) -> list[tuple[str, dict[str, str]]]:
     A JSON block is an MCP client configuration: one entry per ``mcpServers``
     server, with its ``env``.  Any other block is dotenv-shaped, one entry.
     """
-    if block.lang in ("json", "jsonc"):
+    if block.lang == "json":
         data = json.loads(block.code)
         servers = data.get("mcpServers") if isinstance(data, dict) else None
         if not isinstance(servers, dict):
@@ -167,6 +200,10 @@ def env_from_config(block: Block) -> list[tuple[str, dict[str, str]]]:
             (name, {str(k): str(v) for k, v in (server.get("env") or {}).items()})
             for name, server in servers.items()
         ]
+    if block.lang not in CONFIG_LANGS | SHELL_LANGS:
+        raise ValueError(
+            f"a .config block is json or dotenv-shaped (a shell block), not {block.lang!r}"
+        )
     env: dict[str, str] = {}
     for raw in block.code.splitlines():
         match = _DOTENV.match(raw)
@@ -188,17 +225,28 @@ def unquoted_extras(code: str) -> list[tuple[int, str, str]]:
     the quoted form works in every shell.
     """
     found = []
+    quote: str | None = None
+    heredoc: str | None = None
     for number, line in enumerate(code.splitlines(), start=1):
-        bare = _strip_quotes_and_comments(line)
+        if heredoc is not None:
+            if line.strip() == heredoc:
+                heredoc = None
+            continue
+        was_quoted = quote is not None
+        bare, quote = _strip_quotes_and_comments(line, quote)
+        if not was_quoted:
+            opened = _HEREDOC.search(line)  # the raw line: the tag may be quoted
+            if opened:
+                heredoc = opened.group("tag")
         for match in _EXTRA.finditer(bare):
             token = match.group("token")
             found.append((number, token, f'"{token}"'))
     return found
 
 
-def _strip_quotes_and_comments(line: str) -> str:
+def _strip_quotes_and_comments(line: str, quote: str | None) -> tuple[str, str | None]:
+    """Blank quoted stretches and drop a comment; quote state carries across lines."""
     out: list[str] = []
-    quote: str | None = None
     for char in line:
         if quote:
             if char == quote:
@@ -212,29 +260,38 @@ def _strip_quotes_and_comments(line: str) -> str:
         if char == "#":
             break
         out.append(char)
-    return "".join(out)
+    return "".join(out), quote
 
 
 def published_pages(root: Path) -> list[Path]:
     """``README.md`` and every page under ``docs/`` that ``exclude_docs`` keeps."""
-    patterns: list[str] = []
-    mkdocs = root / "mkdocs.yml"
-    if mkdocs.exists():
-        config = yaml.safe_load(mkdocs.read_text(encoding="utf-8")) or {}
-        patterns = [p for p in str(config.get("exclude_docs") or "").split() if p]
+    patterns = exclude_patterns(root)
     docs = root / "docs"
     pages = [root / "README.md"] if (root / "README.md").exists() else []
     if docs.is_dir():
         pages.extend(
             p
             for p in sorted(docs.rglob("*.md"))
-            if not _excluded(p.relative_to(docs).as_posix(), patterns)
-            and not p.name.startswith(".")
+            if not excluded(p.relative_to(docs).as_posix(), patterns)
+            and not any(part.startswith(".") for part in p.relative_to(docs).parts)
         )
     return pages
 
 
-def _excluded(rel: str, patterns: list[str]) -> bool:
+def exclude_patterns(root: Path) -> list[str]:
+    """The ``exclude_docs`` patterns of the ``mkdocs.yml`` under *root*."""
+    mkdocs = root / "mkdocs.yml"
+    if not mkdocs.exists():
+        return []
+    config = yaml.safe_load(mkdocs.read_text(encoding="utf-8")) or {}
+    return [p for p in str(config.get("exclude_docs") or "").split() if p]
+
+
+def excluded(rel: str, patterns: list[str]) -> bool:
+    """Whether ``exclude_docs`` drops *rel*: ``dir/**``, a plain glob, or a bare name.
+
+    The rest of gitignore syntax (anchors, negation) is not interpreted.
+    """
     for pattern in patterns:
         if pattern.endswith("/**") and rel.startswith(pattern[:-2]):
             return True

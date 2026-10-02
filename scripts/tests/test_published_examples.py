@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from published_examples import (
     blocks,
     env_from_config,
+    excluded,
     expectations,
     parse_info,
     published_pages,
@@ -100,8 +101,14 @@ def test_expectations_parse_python_literals() -> None:
         "name": "a b",
     }
     assert expectations("") == {}
-    with pytest.raises(ValueError, match="x"):
+    assert expectations('tags=["a", "b"], name="x,y"') == {
+        "tags": ["a", "b"],
+        "name": "x,y",
+    }
+    with pytest.raises(ValueError, match="field=literal"):
         expectations("x")
+    with pytest.raises(ValueError, match="Python literal"):
+        expectations("read_only=true")
 
 
 def test_env_from_config_json_servers_and_dotenv() -> None:
@@ -116,6 +123,8 @@ def test_env_from_config_json_servers_and_dotenv() -> None:
     assert env_from_config(dotenv) == [("env", {"A": "1", "B": "two words", "C": "3"})]
     with pytest.raises(ValueError, match="mcpServers"):
         env_from_config(blocks('```json { .config }\n{"other": 1}\n```\n')[0])
+    with pytest.raises(ValueError, match="json"):
+        env_from_config(blocks("```yaml { .config }\na: 1\n```\n")[0])
 
 
 def test_unquoted_extras_flags_only_the_unsafe_token() -> None:
@@ -124,6 +133,31 @@ def test_unquoted_extras_flags_only_the_unsafe_token() -> None:
     assert unquoted_extras("pip install 'a[b]'\nuvx --from a[b,c] a\n") == [
         (2, "a[b,c]", '"a[b,c]"')
     ]
+    assert [
+        t
+        for _, t, _ in unquoted_extras(
+            "pip install -e .[dev]\npip install ./pkg[dev]\n"
+        )
+    ] == [
+        ".[dev]",
+        "./pkg[dev]",
+    ]
+
+
+def test_unquoted_extras_skips_heredocs_and_multi_line_quotes() -> None:
+    code = (
+        "cat <<EOF > x.py\n"
+        "items = tools[0]\n"
+        "EOF\n"
+        "cat <<-'END'\n"
+        "\tmore = a[b]\n"
+        "\tEND\n"
+        'python -c "\n'
+        "x = y[z]\n"
+        '"\n'
+        "pip install real[extra]\n"
+    )
+    assert unquoted_extras(code) == [(10, "real[extra]", '"real[extra]"')]
 
 
 def test_published_pages_honour_exclude_docs_and_readme(tmp_path: Path) -> None:
@@ -140,9 +174,14 @@ def test_published_pages_honour_exclude_docs_and_readme(tmp_path: Path) -> None:
         path = tmp_path / "docs" / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("# x\n", encoding="utf-8")
+    hidden = tmp_path / "docs" / ".cache" / "h.md"
+    hidden.parent.mkdir()
+    hidden.write_text("# h\n", encoding="utf-8")
     (tmp_path / "README.md").write_text("# r\n", encoding="utf-8")
     assert [p.relative_to(tmp_path).as_posix() for p in published_pages(tmp_path)] == [
         "README.md",
         "docs/index.md",
         "docs/use/a.md",
     ]
+    assert excluded("design/x.md", ["design/**"])
+    assert not excluded("use/x.md", ["design/**"])

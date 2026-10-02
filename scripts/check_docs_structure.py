@@ -18,8 +18,10 @@ Warnings
   W2  a page lacks `description:` or `kind:` front matter, or `kind` is not
       tutorial, how-to, reference or explanation.
   W3  entries remain under Unsorted at the end of `nav:`.
-  W4  a Python block on a published page carries neither `.run` (the
-      examples test runs it) nor `.fragment` (a snippet, by decision).
+  W4  a Python block (`python`, `py`, `python3`) on a published page or in
+      README.md carries neither `.run` (the examples test runs it) nor
+      `.fragment` (a snippet, by decision); `pycon` transcripts are not
+      counted.
 
 `exclude_docs` is matched for the pattern forms the template uses (`dir/**`
 and plain globs) plus a bare name, which matches any path component as it
@@ -30,7 +32,6 @@ read as mkdocs reads them (`utf-8-sig`, link targets percent-decoded).
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import posixpath
 import re
 import sys
@@ -43,7 +44,7 @@ from urllib.parse import unquote
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from published_examples import blocks
+from published_examples import PYTHON_LANGS, blocks, exclude_patterns, excluded
 
 TEMPLATE_PAGES = frozenset(
     {
@@ -113,7 +114,7 @@ class _Site:
         self.docs = root / "docs"
         self.mkdocs_text = (root / "mkdocs.yml").read_text(encoding="utf-8")
         config = yaml.safe_load(self.mkdocs_text) or {}
-        self.patterns = [p for p in str(config.get("exclude_docs") or "").split() if p]
+        self.patterns = exclude_patterns(root)
         self.nav_pages = set(_leaves(config.get("nav") or []))
         self.pages = sorted(
             rel
@@ -124,16 +125,7 @@ class _Site:
         )
 
     def excluded(self, rel: str) -> bool:
-        for pattern in self.patterns:
-            if pattern.endswith("/**") and rel.startswith(pattern[:-2]):
-                return True
-            if fnmatch.fnmatch(rel, pattern):
-                return True
-            if "/" not in pattern and any(
-                fnmatch.fnmatch(part, pattern) for part in rel.split("/")
-            ):
-                return True
-        return False
+        return excluded(rel, self.patterns)
 
     def text(self, rel: str) -> str:
         return (self.docs / rel).read_text(encoding="utf-8-sig")
@@ -241,17 +233,7 @@ def _check_page(site: _Site, rel: str, nav_dirs: set[str]) -> list[Finding]:
                 "outside the places docs-structure.md designates",
             )
         )
-    for block in blocks(text):
-        if block.lang == "python" and not {"run", "fragment"} & set(block.classes):
-            findings.append(
-                Finding(
-                    "warning",
-                    "W4",
-                    where,
-                    block.line,
-                    "python block has neither .run nor .fragment",
-                )
-            )
+    findings.extend(_untagged_python(where, text))
     front = _front_matter(text)
     if not front.get("description") or front.get("kind") not in KINDS:
         findings.append(
@@ -266,6 +248,20 @@ def _check_page(site: _Site, rel: str, nav_dirs: set[str]) -> list[Finding]:
     return findings
 
 
+def _untagged_python(where: str, text: str) -> list[Finding]:
+    return [
+        Finding(
+            "warning",
+            "W4",
+            where,
+            b.line,
+            "python block has neither .run nor .fragment",
+        )
+        for b in blocks(text)
+        if b.lang in PYTHON_LANGS and not {"run", "fragment"} & set(b.classes)
+    ]
+
+
 def collect(root: Path) -> list[Finding]:
     """Run every check over the repository at *root*."""
     site = _Site(root)
@@ -273,6 +269,11 @@ def collect(root: Path) -> list[Finding]:
     findings: list[Finding] = []
     for rel in site.pages:
         findings.extend(_check_page(site, rel, nav_dirs))
+    readme = root / "README.md"
+    if readme.exists():
+        findings.extend(
+            _untagged_python("README.md", readme.read_text(encoding="utf-8-sig"))
+        )
     for rel in ENTRY_PAGES:
         if (site.docs / rel).exists() and not _links_to(site, rel, SECURITY_MODEL):
             findings.append(

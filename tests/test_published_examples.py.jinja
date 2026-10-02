@@ -16,7 +16,8 @@ against its claim (``docs/contribute/docs-structure.md``, Examples):
 
 An untagged Python block is neither run nor failed; ``scripts/
 check_docs_structure.py`` reports it as W4 until it carries ``.run`` or
-``.fragment``.  The parsing lives in ``scripts/published_examples.py``.
+``.fragment``.  A shell block tagged ``.fragment`` (shown output, say) is
+not checked.  The parsing lives in ``scripts/published_examples.py``.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from {{ python_module }}.config import ProjectConfig
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "scripts"))
 from published_examples import (  # type: ignore[import-not-found]  # noqa: E402
+    PYTHON_LANGS,
     SHELL_LANGS,
     Block,
     blocks,
@@ -70,7 +72,7 @@ def _shell_cases() -> list[Any]:
     return [
         pytest.param(where, block, id=where)
         for where, block in _tagged()
-        if block.lang in SHELL_LANGS
+        if block.lang in SHELL_LANGS and "fragment" not in block.classes
     ]
 
 
@@ -85,11 +87,16 @@ def _optional_fixture(request: pytest.FixtureRequest, name: str) -> Any:
 def test_run_blocks_run_as_written(
     where: str, block: Block, request: pytest.FixtureRequest
 ) -> None:
+    assert block.lang in PYTHON_LANGS, (
+        f"{where}: .run is for Python blocks, not {block.lang!r}"
+    )
     code = block.code
     substitutions = _optional_fixture(request, "docs_example_substitutions") or {}
     for old, new in substitutions.items():
         code = code.replace(old, str(new))
-    namespace: dict[str, object] = {"__name__": "__main__"}
+    # Not "__main__": a Quick Start's `if __name__ == "__main__": mcp.run()`
+    # guard must stay closed, or the block would start a server under pytest.
+    namespace: dict[str, object] = {"__name__": "published_example"}
     exec(compile(code, where, "exec"), namespace)  # the published example is the test
     expect = block.attrs.get("data-expect")
     if expect:

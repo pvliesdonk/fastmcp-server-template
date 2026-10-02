@@ -186,5 +186,11 @@ def test_w4_python_block_without_a_tag(tmp_path: Path) -> None:
         GOOD_FRONT
         + "# X\n```python\nx = 1\n```\n```python { .run }\ny = 2\n```\n```python {.fragment}\nz\n```\n```bash\nls\n```\n",
     )
+    _page(root, "use/y.md", GOOD_FRONT + "# Y\n```py\na\n```\n```pycon\n>>> 1\n```\n")
+    (root / "README.md").write_text("# R\n```python\nr = 1\n```\n", encoding="utf-8")
     w4 = [f for f in collect(root) if f.code == "W4"]
-    assert [(f.path, f.line) for f in w4] == [("docs/use/x.md", 7)]
+    assert sorted((f.path, f.line) for f in w4) == [
+        ("README.md", 2),
+        ("docs/use/x.md", 7),
+        ("docs/use/y.md", 7),
+    ]
