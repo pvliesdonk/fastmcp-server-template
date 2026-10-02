@@ -1,25 +1,80 @@
 ---
-description: "Install the server from PyPI, as a Docker image, or from source."
-kind: tutorial
+description: "Every way to install {{ human_name }}, by where it runs, with a check of what you installed."
+kind: how-to
 ---
 
 # Installation
 
+The client tutorials each install the server one way. This page lists every way, so you can pick by where the server runs, and ends with how to check what you installed. Which channel each release reaches is on the [Upgrade](../upgrade/index.md#release-channels) page.
+
 Before you expose the server beyond your own machine, read the [security model](../security-model.md).
 
-## From PyPI
+## As a command on your machine
+
+For a client that starts the server itself (Claude Desktop, or Claude Code over stdio), install it as a command with [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
-pip install {{ pypi_name }}
+uv tool install "{{ pypi_name }}"
 ```
 
-## From Docker
+uv gives the server its own environment and finds a Python for it, downloading one when your machine has none. The `{{ project_name }}` command lands in uv's executable directory, `~/.local/bin` unless you configured another (`uv tool dir --bin` prints it). `uv tool upgrade {{ pypi_name }}` moves to the newest release; `uv tool install "{{ pypi_name }}==X.Y.Z"` pins one, a release candidate included (`X.Y.ZrcN`).
+
+In an environment you manage yourself, `pip install "{{ pypi_name }}"` installs the same package. To run a release without installing anything:
+
+```bash
+uvx --from "{{ pypi_name }}" {{ project_name }} serve
+```
+
+Quote the package name whenever it carries an extra, `"{{ pypi_name }}[extra]"`: without the quotes, zsh, the default shell on macOS, reads the brackets as a pattern and the command fails. The extras this server defines are under [Notes for this server](#notes-for-this-server).
+
+## Claude Desktop
+
+Each release ships a `.mcpb` bundle on the [releases page](https://github.com/{{ github_org }}/{{ project_name }}/releases). Open it with Claude Desktop, or choose **Settings** › **Extensions** › **Advanced settings** › **Install Extension…**; Claude Desktop asks for the settings this server declares and configures itself. The bundle carries no code: it pins the released package at its own version and fetches it from PyPI with `uvx` on first launch, so the machine needs network access then. A release candidate's bundle installs the same way. The [Claude Desktop](claude-desktop.md) tutorial takes it from there.
+
+{% if include_claude_plugin %}## Claude Code
+
+Two commands inside Claude Code install the plugin, which runs the released package:
+
+```text
+/plugin marketplace add {{ github_org }}/claude-plugins
+/plugin install {{ project_name }}@{{ github_org }}
+```
+
+The marketplace entry follows stable releases only. The [Claude Code](claude-code.md) tutorial covers the scope question, settings and the command-line route.
+
+{% endif %}## Docker
 
 ```bash
 docker pull {{ docker_registry }}/{{ project_name }}:latest
 ```
 
-The `latest` tag is the newest stable release. The rolling `edge` tag tracks every merge to `main` and carries no version identity; see [Image tags](../deploy/docker.md#image-tags) for the full list.
+`latest` is the newest stable release. The image's other tags (exact versions, `rc`, `edge`) are on the [Docker](../deploy/docker.md#image-tags) page, which is where a deployment continues.
+
+## Linux packages
+
+Each release ships a `.deb` and an `.rpm`. The names below carry no version and fetch the newest stable release:
+
+```bash
+curl -LO https://github.com/{{ github_org }}/{{ project_name }}/releases/latest/download/{{ project_name }}_latest.deb
+sudo apt install ./{{ project_name }}_latest.deb
+```
+
+```bash
+curl -LO https://github.com/{{ github_org }}/{{ project_name }}/releases/latest/download/{{ project_name }}_latest.rpm
+sudo dnf install ./{{ project_name }}_latest.rpm
+```
+
+The package needs `python3` 3.11 or newer with `venv`. It creates a virtual environment under `/opt/{{ project_name }}/venv` and installs `{{ pypi_name }}` at the package's own version from PyPI, so the machine needs network access during the install; a release candidate's package installs the wheel attached to its own GitHub release instead. The package also installs:
+
+- `/etc/{{ project_name }}/env`, copied from `env.example` on first install, readable by root only and never overwritten by an upgrade: the server's configuration, read by the service.
+- `/var/lib/{{ project_name }}`, the state directory, owned by the `{{ project_name }}` system user the package creates.
+- The systemd unit `{{ project_name }}.service`, which runs `{{ project_name }} serve --transport http` as that user. It is installed but not enabled; to start it now and on every boot:
+
+```bash
+sudo systemctl enable --now {{ project_name }}
+```
+
+An upgrade restarts a running service. [Deploy](../deploy/index.md) covers the environment file and the service from here.
 
 ## From source
 
@@ -27,7 +82,17 @@ The `latest` tag is the newest stable release. The rolling `edge` tag tracks eve
 git clone https://github.com/{{ github_org }}/{{ project_name }}
 cd {{ project_name }}
 uv sync --all-extras --all-groups
+uv run {{ project_name }} serve
 ```
+
+This is the setup for changing the project; [Contribute](../contribute/index.md) continues from here.
+
+## Check what you installed
+
+- The command: `{{ project_name }} --help` lists its commands and options; the [command line](../reference/cli.md) reference describes them.
+- A connected client, local or remote: ask Claude which version is running. The `get_server_info` tool reports `server_version`.
+
+## Notes for this server
 
 <!-- DOMAIN-INSTALL-EXTRA-START -->
 <!-- Project-specific notes for installation go here; kept across copier

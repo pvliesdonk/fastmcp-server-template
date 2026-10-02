@@ -38,26 +38,26 @@ What the server can reach, what it changes and who gets in is set out in the [se
 
 Pick the client you use. Each line installs the released version; the [Get started](docs/get-started/index.md) tutorials carry on from there.
 
-**Claude Desktop.** Download the `.mcpb` bundle from the [releases page](https://github.com/{{ github_org }}/{{ project_name }}/releases) and open it, or install it with the `mcpb` command-line tool from Anthropic: `mcpb install {{ project_name }}-<version>.mcpb`. Claude Desktop asks for the required settings itself. [Tutorial](docs/get-started/claude-desktop.md).
+**Claude Desktop.** Download the `.mcpb` bundle from the [releases page](https://github.com/{{ github_org }}/{{ project_name }}/releases) and open it with Claude Desktop (or **Settings** › **Extensions** › **Advanced settings** › **Install Extension…**). Claude Desktop asks for the required settings itself. [Tutorial](docs/get-started/claude-desktop.md).
 
-{% if include_claude_plugin %}**Claude Code.** Two commands inside Claude Code:
+{% if include_claude_plugin %}**Claude Code.** Two commands inside Claude Code; the second asks for a scope. [Tutorial](docs/get-started/claude-code.md).
 
 ```text
 /plugin marketplace add {{ github_org }}/claude-plugins
 /plugin install {{ project_name }}@{{ github_org }}
 ```
 
-{% endif %}**A client that runs a command** (stdio):
+{% endif %}**A client that runs a command** (stdio). To register it in Claude Code, see the [Claude Code](docs/get-started/claude-code.md) tutorial.
 
 ```bash
-uv tool install {{ pypi_name }}
+uv tool install "{{ pypi_name }}"
 {{ project_name }} serve
 ```
 
-**A server for remote clients** (streamable HTTP):
+**A server for remote clients** (streamable HTTP). [A remote server](docs/get-started/http-client.md) connects the clients.
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env ghcr.io/{{ github_org }}/{{ project_name }}:latest
+docker run --rm -p 8000:8000 --env-file .env {{ docker_registry }}/{{ project_name }}:latest
 ```
 
 A `compose.yml` ships at the repository root and runs as-is: copy `.env.example` to `.env`, then `docker compose up -d`. [Deploy](docs/deploy/index.md) covers authentication, OIDC, a reverse proxy and system packages (`.deb`/`.rpm` on the releases page). The server answers `/health` and `/health/ready` outside the MCP mount, and its `get_server_info` tool reports the running version.

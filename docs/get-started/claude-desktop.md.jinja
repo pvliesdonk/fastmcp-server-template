@@ -1,51 +1,53 @@
 ---
-description: "Connect Claude Desktop to the server over stdio."
+description: "Connect Claude Desktop to {{ human_name }} on your machine and make a first, read-only call."
 kind: tutorial
 ---
 
 # Claude Desktop
 
-{{ human_name }} integrates with [Claude Desktop](https://claude.ai/download) via the stdio transport. Over stdio the server trusts the client that starts it; the [security model](../security-model.md) says what that client can reach.
+Claude Desktop starts the server on your machine when it opens and talks to it directly; nothing listens on the network. The server runs with your user account's access and trusts the app that started it; the [security model](../security-model.md) says what that reaches. Claude Desktop is available for macOS and Windows.
 
-## Setup
+The steps below end with one question to Claude.
 
-### 1. Install
+## 1. Install the command
 
-From PyPI:
-
-```bash
-pip install {{ pypi_name }}
-```
-
-Or with uv (installs `{{ project_name }}` as a global command on your PATH):
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then install the server as a command:
 
 ```bash
-uv tool install {{ pypi_name }}
+uv tool install "{{ pypi_name }}"
 ```
 
-Or download the `.mcpb` bundle from the [GitHub Releases](https://github.com/{{ github_org }}/{{ project_name }}/releases) page and double-click to install; Claude Desktop prompts for required env vars via a GUI wizard, no manual JSON editing needed.
+uv keeps the server in its own environment and fetches a Python when your machine has none. Check the result:
 
-The bundle does not carry the code. It pins `{{ pypi_name }}[all]` at its own
-version and `uvx` fetches that from PyPI on first launch, so the machine
-needs network access the first time it starts. Release candidates publish to
-PyPI for exactly this reason, which makes a `vX.Y.Z-rc.N` bundle installable
-the same way a stable one is.
+```bash
+{{ project_name }} --help
+```
 
-### 2. Configure Claude Desktop
+Claude Desktop needs the command's full path, because it does not read your shell's `PATH`. Print it now and keep it for step 2:
 
-If you installed via `.mcpb`, skip this step. Claude Desktop was configured automatically by the wizard.
+```bash
+which {{ project_name }}        # macOS
+where.exe {{ project_name }}    # Windows
+```
 
-Otherwise, add the server to your Claude Desktop configuration file. The path varies by operating system:
+The path is inside uv's executable directory, `~/.local/bin` unless you configured another (`uv tool dir --bin` prints it).
 
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+**Without a terminal.** Each release ships a `.mcpb` bundle on the [releases page](https://github.com/{{ github_org }}/{{ project_name }}/releases). Download it and open it with Claude Desktop, or choose **Settings** › **Extensions** › **Advanced settings** › **Install Extension…** and pick the file. Claude Desktop asks for the settings this server declares and writes its own configuration. The bundle carries no code: on first launch it fetches the released package from PyPI, so the machine needs network access then. Skip to [step 4](#4-ask-claude-one-question).
 
-```json
+## 2. Tell Claude Desktop about it
+
+In Claude Desktop, open the Claude menu, choose **Settings…**, then **Developer**, then **Edit Config**. That opens the configuration file, creating it when it does not exist:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the server, with the path from step 1 as `command`. With this entry the server appears in Claude under the name `{{ project_name }}`:
+
+```json { .config data-expect="server_name='{{ project_name }}'" }
 {
   "mcpServers": {
     "{{ project_name }}": {
-      "command": "{{ project_name }}",
+      "command": "/Users/me/.local/bin/{{ project_name }}",
       "args": ["serve"],
       "env": {}
     }
@@ -53,54 +55,37 @@ Otherwise, add the server to your Claude Desktop configuration file. The path va
 }
 ```
 
-### 3. Restart Claude Desktop
+On Windows the path ends in `.exe` and each backslash is doubled: `"C:\\Users\\me\\.local\\bin\\{{ project_name }}.exe"`.
 
-Restart the application to pick up the new configuration. If the server connects successfully, `{{ human_name }}` tools appear in Claude's tool list. If not, see [Troubleshooting](#troubleshooting) below.
+Claude Desktop passes every value as written, so paths are absolute (`~` is not expanded). Keep the JSON valid: no trailing commas. Settings for the server go in `env`, one environment variable per key; the [configuration reference](../reference/configuration.md) lists them all.
 
-## Configuration examples
+### What this server needs
 
 <!-- DOMAIN-CLAUDE-DESKTOP-START -->
 <!-- Add domain-specific Claude Desktop configuration examples here.
      Kept across copier update. -->
 <!-- DOMAIN-CLAUDE-DESKTOP-END -->
 
-## Troubleshooting
+## 3. Restart Claude Desktop
 
-### Server not appearing in Claude Desktop
+Quit it completely and open it again; the configuration is read at start. Then click the **+** button at the bottom left of the message box, open **Connectors**, then **Manage connectors**: `{{ project_name }}` is listed with its tools. If it is not, see [step 5](#5-if-it-does-not-appear).
 
-1. Check the config file path is correct for your OS
-2. Ensure the JSON is valid (no trailing commas)
-3. Restart Claude Desktop completely (quit and reopen)
-4. Check Claude Desktop logs for error messages
+## 4. Ask Claude one question
 
-### "Command not found"
+Ask Claude:
 
-Ensure `{{ project_name }}` is on your PATH. If installed in a virtualenv, use the full path to the binary. Replace only the `"command"` value in your existing config and keep `"args"` and `"env"` as-is.
+> Which version of {{ human_name }} is running?
 
-macOS/Linux:
+Claude calls the server's `get_server_info` tool and answers with the server's version, the version of the shared library it is built on and the protocol revision in use. The call reads those fields and changes nothing, so it is a safe first check of the connection; the [tools reference](../reference/tools/index.md) says what else the server offers. Then try the first task named under [What this server needs](#what-this-server-needs).
 
-```json
-{
-  "mcpServers": {
-    "{{ project_name }}": {
-      "command": "/Users/me/.venvs/mcp/bin/{{ project_name }}",
-      "args": ["serve"],
-      "env": {}
-    }
-  }
-}
-```
+## 5. If it does not appear
 
-Windows (`Scripts\` not `bin\`, `.exe` suffix):
+- The JSON is valid (a trailing comma is the usual culprit) and `command` is an absolute path.
+- Run the command yourself in a terminal: `{{ project_name }} serve` starts the server and waits for a client; press Ctrl+C to stop it. An error here is the server's, not Claude Desktop's.
+- Read the logs: `~/Library/Logs/Claude/mcp*.log` on macOS, `%APPDATA%\Claude\logs` on Windows. `mcp-server-{{ project_name }}.log` holds what the server wrote to its standard error.
 
-```json
-{
-  "mcpServers": {
-    "{{ project_name }}": {
-      "command": "C:\\Users\\me\\.venvs\\mcp\\Scripts\\{{ project_name }}.exe",
-      "args": ["serve"],
-      "env": {}
-    }
-  }
-}
-```
+## Next
+
+- [Claude Code](claude-code.md): the same server inside Claude Code.
+- [Installation](installation.md): the other ways to install it.
+- [Use](../use/index.md): what the server does for real tasks.

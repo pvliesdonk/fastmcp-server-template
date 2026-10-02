@@ -1,5 +1,5 @@
 ---
-description: "Pick your client and reach a first success with {{ human_name }}."
+description: "Pick your client and reach a first working call with {{ human_name }}."
 kind: tutorial
 ---
 
@@ -7,8 +7,10 @@ kind: tutorial
 
 Each page here takes you from nothing to a first working call with one client. Pick the one you use:
 
-- [Claude Desktop](claude-desktop.md): a local server the app starts for you.
-- [Installation](installation.md): every way to install the server itself, whichever client will run it.
+- [Claude Desktop](claude-desktop.md): the app starts the server on your machine.
+- [Claude Code](claude-code.md): {% if include_claude_plugin %}the plugin, or {% endif %}a command Claude Code starts for you. The same page connects it to a server that already runs.
+- [A remote server](http-client.md): someone gave you a URL, and you want claude.ai or another client to use it.
+- [Installation](installation.md): every way to install the server, and how to check what you installed.
 
 A first setup is the moment to decide what the server may touch. What it can reach, what it changes and who gets in is set out in the [security model](../security-model.md); each tutorial says which of that its setup allows.
 
