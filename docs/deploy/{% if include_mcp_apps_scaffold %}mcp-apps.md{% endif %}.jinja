@@ -19,7 +19,7 @@ The interface is loaded from the server's own resource, `ui://{{ python_module }
 
 ## Where the interface comes from
 
-The app shell is `src/{{ python_module }}/static/app.html`, built from `app.src.html` by `scripts/vendor_spa.py`, which embeds the JavaScript libraries the interface needs so the client loads nothing from a content network at run time. The sandbox domain and the content-security policy a client enforces are set in the `DOMAIN-APP-RESOURCE` block of `src/{{ python_module }}/_server_apps.py`. Both are a contributor's concern; [Contribute](../contribute/index.md) has the development setup, and the `template-updates` page says when the shell is rebuilt.
+The app shell is `src/{{ python_module }}/static/app.html`, built from `app.src.html` by `scripts/vendor_spa.py`, which embeds the JavaScript libraries the interface needs so the client loads nothing from a content network at run time. The sandbox domain and the content-security policy a client enforces are set in the `DOMAIN-APP-RESOURCE` block of `src/{{ python_module }}/_server_apps.py`. Both are a contributor's concern; [Contribute](../contribute/index.md) has the development setup, and [Template updates](../contribute/template-updates.md) says when the shell is rebuilt.
 
 <!-- DOMAIN-MCP-APPS-EXTRA-START -->
 <!-- What this server's app shows and which tool opens it; a view that needs a particular client; kept across copier update. -->

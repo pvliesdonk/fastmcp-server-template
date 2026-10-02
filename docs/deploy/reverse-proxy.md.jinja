@@ -100,7 +100,7 @@ A server holding no client ID and secret verifies tokens the provider issued dir
 
 The reverse proxy needs two routers pointing at the same service, because a prefix rule cannot express both halves:
 
-1. **Operational routes** match the prefix and strip it: `/myservice/mcp` and, in proxy mode, the OAuth endpoints.
+1. **Operational routes** match the prefix and strip it: `/myservice/mcp`, in proxy mode the OAuth endpoints, and `/myservice/transfer/` when the server mints [transfer links](transfer-links.md).
 2. **Discovery routes** match their own well-known paths and pass through untouched. Their URLs do not begin with `/myservice`, so a `PathPrefix(/myservice)` rule never sees them.
 
 ```yaml

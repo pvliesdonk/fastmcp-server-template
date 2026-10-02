@@ -504,7 +504,14 @@ def _tool_section(tool: ToolEntry, slots: dict[str, str], used: set[str]) -> str
     return "".join(out)
 
 
-def _page(path: Path, description: str, heading: str, body_fn: Any) -> str:
+def _page(
+    path: Path, description: str, heading: str, body_fn: Any, preface: str = ""
+) -> str:
+    """Assemble a page: front matter, heading, the intro slot, *preface*, body.
+
+    *preface* is template-owned prose that every regeneration rewrites (unlike
+    the slots), used for the client guidance on the prompts and resources pages.
+    """
     slots = _existing_slots(path)
     used = {"DOMAIN-INTRO"}
     body = body_fn(slots, used)
@@ -519,7 +526,7 @@ def _page(path: Path, description: str, heading: str, body_fn: Any) -> str:
         slots.get("DOMAIN-INTRO", ""),
         "<!-- A short orientation for this page; task guidance belongs under Use. Kept across regeneration. -->",
     )
-    return _front(description) + f"# {heading}\n\n" + intro + "\n" + body
+    return _front(description) + f"# {heading}\n\n" + intro + "\n" + preface + body
 
 
 def _group_page(group: str, tools: list[ToolEntry], path: Path) -> str:
@@ -552,6 +559,22 @@ def _index_page(ref: Reference, path: Path) -> str:
     return _page(path, "Every tool this server registers, by group.", "Tools", body)
 
 
+_PROMPTS_PREFACE = """## Running a prompt
+
+A prompt is a template this server fills from the arguments listed with it and hands to your client as a message, so a task starts with the server's own instructions. It runs the same tools with the same access as anything you type. How to start one depends on the client:
+
+- **Claude Code** lists each prompt in the `/` menu as `/<server>:<prompt> (MCP)`, where `<server>` is the name you gave this server when you added it. Typing `/mcp__<server>__<prompt>` runs it too; arguments follow it separated by spaces, each a single token.
+- **claude.ai and Claude Desktop** offer a connector's prompts from the compose area's **+** menu once the connector is added.
+
+"""
+
+_RESOURCES_PREFACE = """## Reading a resource
+
+A resource is data this server serves at a URI, for a client to attach to the conversation rather than for the model to call. In Claude Code, mention one as `@<server>:<uri>`, where `<server>` is the name you gave this server when you added it; a resource template takes its parameters in the URI.
+
+"""
+
+
 def _resources_page(ref: Reference, path: Path) -> str:
     def body(_slots: dict[str, str], _used: set[str]) -> str:
         if not ref.resources:
@@ -575,6 +598,7 @@ def _resources_page(ref: Reference, path: Path) -> str:
         "The resources and resource templates this server serves.",
         "Resources",
         body,
+        preface=_RESOURCES_PREFACE,
     )
 
 
@@ -615,7 +639,11 @@ def _prompts_page(ref: Reference, path: Path) -> str:
         return "".join(out).rstrip("\n") + "\n"
 
     return _page(
-        path, "The prompt templates this server offers to MCP clients.", "Prompts", body
+        path,
+        "The prompt templates this server offers to MCP clients.",
+        "Prompts",
+        body,
+        preface=_PROMPTS_PREFACE,
     )
 
 
