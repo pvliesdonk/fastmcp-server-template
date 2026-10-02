@@ -76,24 +76,25 @@ def parse_info(info: str) -> tuple[str, list[str], dict[str, str]]:
     attrs: dict[str, str] = {}
     braces = _ATTRS.search(info)
     if braces:
-        for token in braces.group("body").split():
-            if token.startswith("."):
-                classes.append(token[1:])
-            elif token.startswith("#"):
-                attrs["id"] = token[1:]
-            else:
-                match = _ATTR.fullmatch(token)
-                if match:
-                    attrs[match.group("key")] = _attr_value(match)
+        _parse_attr_tokens(braces.group("body"), classes, attrs)
         info = (info[: braces.start()] + info[braces.end() :]).strip()
     for match in _ATTR.finditer(info):
         attrs[match.group("key")] = _attr_value(match)
     lang = info.split(None, 1)[0] if info else ""
-    return (
-        (lang if not lang.startswith(("{", '"')) and "=" not in lang else ""),
-        classes,
-        attrs,
-    )
+    if lang.startswith(("{", '"')) or "=" in lang:
+        lang = ""
+    return lang, classes, attrs
+
+
+def _parse_attr_tokens(body: str, classes: list[str], attrs: dict[str, str]) -> None:
+    """Fill *classes* and *attrs* from the tokens inside a ``{ ... }`` group."""
+    for token in body.split():
+        if token.startswith("."):
+            classes.append(token[1:])
+        elif token.startswith("#"):
+            attrs["id"] = token[1:]
+        elif match := _ATTR.fullmatch(token):
+            attrs[match.group("key")] = _attr_value(match)
 
 
 def blocks(text: str) -> list[Block]:
