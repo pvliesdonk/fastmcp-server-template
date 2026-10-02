@@ -63,39 +63,7 @@ A named volume needs an entry in two of those: the mount in `DOMAIN-COMPOSE-VOLU
 
 ### Behind a reverse proxy
 
-Proxy configuration is deployment-specific, so `compose.yml` ships none. Add it in a second file rather than by editing `compose.yml`, which is template-owned and re-rendered: save this as `compose.override.yml`, which Compose loads automatically alongside `compose.yml`.
-
-```yaml
-services:
-  {{ project_name }}:
-    # `!reset` drops the published port: the proxy reaches the container over
-    # the shared network, so nothing needs to be on the host. Plain merging
-    # appends to sequences, so without this the port stays published.
-    ports: !reset []
-    networks:
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.{{ project_name }}.rule=Host(`mcp.example.com`)"
-      - "traefik.http.routers.{{ project_name }}.tls.certresolver=letsencrypt"
-      - "traefik.http.services.{{ project_name }}.loadbalancer.server.port=8000"
-
-networks:
-  traefik:
-    external: true
-```
-
-`!reset` needs Compose 2.24.4 or newer. On an older engine, drop that line and remove the port mapping from `compose.yml` directly, accepting that the edit conflicts on the next template update.
-
-Check the result before starting anything, since a merge that silently kept the port mapping looks identical until the port clashes:
-
-```bash
-docker compose config
-```
-
-Substitute your own hostname for `mcp.example.com`. Set `{{ env_prefix }}_BASE_URL` to the public URL as well: the server needs it to advertise its own address, and it is required once OIDC is enabled. Do not reach for `{{ env_prefix }}_HOST` here. That variable is the interface the server binds to, which is not the name the proxy routes.
-
-The network must already exist and be the one the proxy watches. For the OIDC settings that go with it, see [OIDC](oidc.md#docker-compose-with-oidc).
+A `compose.override.yml` that puts the container on the proxy's network, and the routing a path prefix needs, are on [Reverse proxy](reverse-proxy.md). Set `{{ env_prefix }}_BASE_URL` to the public URL there; `{{ env_prefix }}_HOST` is the interface the server binds to, not the name the proxy routes.
 
 ### Building the image yourself
 
@@ -187,7 +155,7 @@ docker inspect --format {% raw %}'{{ index .Config.Labels "org.opencontainers.im
 
 For OIDC auth variables, see [Authentication](authentication.md).
 
-Running behind a reverse proxy on a path prefix (`https://mcp.example.com/myservice/mcp`) rather than its own hostname needs two routing rules, one of which sits outside the prefix: see [Subpath Deployments](oidc.md#subpath-deployments).
+Running behind a reverse proxy on a path prefix (`https://mcp.example.com/myservice/mcp`) rather than its own hostname needs two routing rules, one of which sits outside the prefix: see [A path prefix](reverse-proxy.md#a-path-prefix).
 
 ## Volumes
 

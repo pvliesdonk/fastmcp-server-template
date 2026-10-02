@@ -1,0 +1,116 @@
+---
+description: "Run {{ human_name }} as a systemd service from the .deb or .rpm package, from the environment file to upgrades."
+kind: how-to
+---
+
+# systemd and the Linux packages
+
+The `.deb` and `.rpm` on the [releases page](https://github.com/{{ github_org }}/{{ project_name }}/releases) install the server as a systemd service. [Installation](../get-started/installation.md#linux-packages) has the install commands; this page is what comes after. The unit confines the process, which is defence in depth: authentication stays the boundary, and the [security model](../security-model.md) says what an authenticated caller then reaches.
+
+## What the package installed
+
+| Path | What it is | Owner |
+|---|---|---|
+| `/opt/{{ project_name }}/venv` | The server, installed from PyPI at the package's own version (a release candidate installs the wheel attached to its GitHub release) | root |
+| `/usr/lib/systemd/system/{{ project_name }}.service` | The unit | root |
+| `/etc/{{ project_name }}/env.example` | Every variable, commented out, generated from the server's configuration surface; replaced by an upgrade | root |
+| `/etc/{{ project_name }}/env` | Your configuration, copied from `env.example` on first install, readable by root only (`600`), never touched by an upgrade | root |
+| `/var/lib/{{ project_name }}` | The state directory, the one path the service may write | `{{ project_name }}:{{ project_name }}` |
+
+The package also creates the `{{ project_name }}` system user and group the service runs as, with `/var/lib/{{ project_name }}` as home and no login shell.
+
+## Configure
+
+Edit `/etc/{{ project_name }}/env`. It holds deviations from the defaults only: every line arrives commented out, and the server starts on its defaults when nothing is set. Remove the `#` from the lines you change. The unit reads the file at start (`EnvironmentFile=`), so an edit needs a restart to take effect. Secrets belong here and nowhere else; the file is already mode `600`.
+
+```ini { .config data-expect="server_name='notes'" }
+# /etc/{{ project_name }}/env
+{{ env_prefix }}_SERVER_NAME=notes
+{{ env_prefix }}_LOG_LEVEL=INFO
+```
+
+The unit starts `{{ project_name }} serve --transport http`, so the server listens on `{{ env_prefix }}_HOST` and `{{ env_prefix }}_PORT`, `127.0.0.1:8000` unless set. To serve other machines, configure [authentication](authentication.md) first and put a [reverse proxy](reverse-proxy.md) in front; the [configuration reference](../reference/configuration.md) lists every variable.
+
+## Start and watch
+
+The package installs the unit but does not enable it; starting on boot is your decision:
+
+```bash
+sudo systemctl enable --now {{ project_name }}
+systemctl status {{ project_name }}
+journalctl -u {{ project_name }} -f
+sudo systemctl restart {{ project_name }}    # after editing the env file
+```
+
+Under journald each record is one JSON object: the unit sets no log format, so the server picks its JSON renderer because journald is not a terminal. `{{ env_prefix }}_LOG_FORMAT=rich` in the env file switches to the coloured renderer. `Restart=on-failure` brings a crashed server back after five seconds.
+
+## What the unit allows
+
+The unit runs the server as the `{{ project_name }}` user with these directives, among others:
+
+| Directive | Effect |
+|---|---|
+| `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes` | The filesystem is read-only except the paths listed below; `/home`, `/root` and `/run/user` are not visible; a private `/tmp` |
+| `StateDirectory={{ project_name }}`, `ReadWritePaths=/var/lib/{{ project_name }}` | The one writable path, created and owned for the service |
+| `NoNewPrivileges=yes`, an empty `CapabilityBoundingSet=` | No privilege escalation and no capabilities |
+| `PrivateDevices=yes`, `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6` | No devices; only Unix, IPv4 and IPv6 sockets, so outbound connections to other services work |
+| `SystemCallFilter=@system-service` | Only the system calls an ordinary service needs |
+| `MemoryDenyWriteExecute=no` | Left open because Python needs writable, executable memory |
+| `UMask=0027` | New files are group-readable, so an administrator in the `{{ project_name }}` group can inspect the state directory |
+
+To let the server read or write a path outside `/var/lib/{{ project_name }}`, add a drop-in rather than editing the unit, which the next package upgrade replaces:
+
+```bash
+sudo systemctl edit {{ project_name }}
+```
+
+```ini
+[Service]
+ReadWritePaths=/srv/{{ project_name }}
+```
+
+`systemctl edit` reloads the unit definitions; restart the service afterwards. The other directives stay as they are. On a host with SELinux enforcing, the directory also needs a label the service may use (`semanage fcontext`, then `restorecon`).
+
+## Upgrade
+
+Install the new package the same way as the first one. Its `postinstall` installs the new version into the existing virtual environment and restarts the service when it is running. `/etc/{{ project_name }}/env` is left alone; `env.example` is replaced, so compare the two for variables the release added:
+
+```bash
+diff /etc/{{ project_name }}/env.example /etc/{{ project_name }}/env
+```
+
+What a release changes for your clients and your data is on the [Upgrade](../upgrade/index.md) page.
+
+## Without a package
+
+On a distribution the packages do not cover, mirror what the package does. The unit and the environment template live in the repository's `packaging/` directory at every release tag:
+
+```bash
+sudo groupadd --system {{ project_name }}
+sudo useradd --system --gid {{ project_name }} --no-create-home \
+  --home-dir /var/lib/{{ project_name }} --shell /usr/sbin/nologin {{ project_name }}
+sudo mkdir -p /opt/{{ project_name }} /etc/{{ project_name }} /var/lib/{{ project_name }}
+sudo python3 -m venv /opt/{{ project_name }}/venv
+sudo /opt/{{ project_name }}/venv/bin/pip install "{{ pypi_name }}==X.Y.Z"
+sudo curl -fsSL -o /usr/lib/systemd/system/{{ project_name }}.service \
+  https://raw.githubusercontent.com/{{ github_org }}/{{ project_name }}/vX.Y.Z/packaging/{{ project_name }}.service
+sudo curl -fsSL -o /etc/{{ project_name }}/env.example \
+  https://raw.githubusercontent.com/{{ github_org }}/{{ project_name }}/vX.Y.Z/packaging/env.example
+sudo cp /etc/{{ project_name }}/env.example /etc/{{ project_name }}/env
+sudo chmod 600 /etc/{{ project_name }}/env
+sudo chown {{ project_name }}:{{ project_name }} /var/lib/{{ project_name }}
+sudo systemctl daemon-reload
+```
+
+Then configure and start as above. Python 3.11 or newer with the `venv` module is the one system requirement.
+
+## If it does not start
+
+- `journalctl -u {{ project_name }} -n 50 --no-pager` shows the last records; a configuration error names the variable.
+- Run the command as the service user to see the error directly: `sudo -u {{ project_name }} /opt/{{ project_name }}/venv/bin/{{ project_name }} serve --transport http`.
+- A permission error on a path outside `/var/lib/{{ project_name }}` is the confinement above: add the drop-in, or move the data.
+- `systemd-analyze verify /usr/lib/systemd/system/{{ project_name }}.service` checks the unit after an edit.
+
+<!-- DOMAIN-SYSTEMD-EXTRA-START -->
+<!-- What this server needs on a package install: data paths to open with ReadWritePaths, the variables that must be set before the first start, services it reaches; kept across copier update. -->
+<!-- DOMAIN-SYSTEMD-EXTRA-END -->
