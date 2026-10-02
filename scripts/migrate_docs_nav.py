@@ -69,7 +69,7 @@ def _resolve(region: list[str]) -> list[str]:
             side = "base"
         elif line.startswith(_SEP) and side is not None:
             side = "after"
-        elif line.startswith(">>>>>>> "):
+        elif line.startswith(_THEIRS):
             side = None
         elif side in (None, "after"):
             out.append(line)
@@ -245,9 +245,7 @@ def _clear_llmstxt_conflicts(lines: list[str]) -> tuple[list[str], list[str]]:
 def _hunk_end(lines: list[str], i: int) -> int | None:
     if not lines[i].startswith(_OURS):
         return None
-    return next(
-        (j for j in range(i, len(lines)) if lines[j].startswith(">>>>>>> ")), None
-    )
+    return next((j for j in range(i, len(lines)) if lines[j].startswith(_THEIRS)), None)
 
 
 def migrate(updated_text: str, head_text: str) -> tuple[str, list[str]]:
