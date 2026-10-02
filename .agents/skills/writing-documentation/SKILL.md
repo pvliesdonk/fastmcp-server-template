@@ -45,9 +45,9 @@ If none fits, stop and file a template issue for the missing place (step 1's rou
 
 ## 5. Examples a reader will paste
 
-- Commands run as shown on macOS's default shell: quote package extras (`"pkg[extra]"`).
-- A configuration example says what it configures, and does it: a block labelled read-only sets read-only.
-- Code examples run as written against a fresh setup, including any build or init step they depend on.
+- Commands run as shown on macOS's default shell: quote package extras (`"pkg[extra]"`). `tests/test_published_examples.py` fails an unquoted one.
+- A configuration example says what it configures, and does it. Tag it ```` ```json { .config data-expect="read_only=True" } ```` (a dotenv-shaped shell block takes the same tag) and the test loads it and checks the claim.
+- Code examples run as written against a fresh setup, including any build or init step they depend on. Tag a runnable Python block ```` ```python { .run data-expect="results" } ````; placeholder paths are swapped by the `docs_example_substitutions` fixture in `tests/conftest.py`. A block that is only a snippet gets ```` ```python { .fragment } ````; one with neither tag is W4 debt in the structure check.
 
 ## 6. Before you finish
 

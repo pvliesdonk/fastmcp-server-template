@@ -18,6 +18,8 @@ Warnings
   W2  a page lacks `description:` or `kind:` front matter, or `kind` is not
       tutorial, how-to, reference or explanation.
   W3  entries remain under Unsorted at the end of `nav:`.
+  W4  a Python block on a published page carries neither `.run` (the
+      examples test runs it) nor `.fragment` (a snippet, by decision).
 
 `exclude_docs` is matched for the pattern forms the template uses (`dir/**`
 and plain globs) plus a bare name, which matches any path component as it
@@ -39,6 +41,9 @@ from typing import Any
 from urllib.parse import unquote
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from published_examples import blocks
 
 TEMPLATE_PAGES = frozenset(
     {
@@ -236,6 +241,17 @@ def _check_page(site: _Site, rel: str, nav_dirs: set[str]) -> list[Finding]:
                 "outside the places docs-structure.md designates",
             )
         )
+    for block in blocks(text):
+        if block.lang == "python" and not {"run", "fragment"} & set(block.classes):
+            findings.append(
+                Finding(
+                    "warning",
+                    "W4",
+                    where,
+                    block.line,
+                    "python block has neither .run nor .fragment",
+                )
+            )
     front = _front_matter(text)
     if not front.get("description") or front.get("kind") not in KINDS:
         findings.append(

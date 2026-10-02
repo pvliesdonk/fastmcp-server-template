@@ -2097,7 +2097,7 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             --target-version py311 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/migrate_docs_nav.py scripts/llmstxt_sections_hook.py scripts/check_docs_structure.py scripts/gen_reference.py scripts/migrate_docs_reference.py scripts/check_pr_title.py scripts/repo_about.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/migrate_docs_nav.py scripts/llmstxt_sections_hook.py scripts/check_docs_structure.py scripts/gen_reference.py scripts/migrate_docs_reference.py scripts/published_examples.py scripts/check_pr_title.py scripts/repo_about.py
 
   sonar:
     # CI-based SonarQube Cloud analysis of this repository, with the coverage

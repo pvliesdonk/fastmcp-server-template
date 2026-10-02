@@ -326,6 +326,8 @@ ignore = ["E501"]
 "src/{{ python_module }}/tools.py" = ["B008", "TC001", "TC002", "PLR0913"]
 "src/{{ python_module }}/resources.py" = ["B008", "TC001", "TC002", "PLR0913"]
 "src/{{ python_module }}/prompts.py" = ["B008", "TC002", "PLR0913"]
+# The published-examples test runs the documented Python blocks: exec is the point.
+"tests/test_published_examples.py" = ["S102"]
 "tests/conftest.py" = ["TC002", "TC003"]
 "tests/test_smoke.py" = ["TC002", "TC003"]
 "tests/test_tools.py" = ["TC002"]

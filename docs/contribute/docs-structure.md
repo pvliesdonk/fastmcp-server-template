@@ -76,6 +76,19 @@ The Reference section is written from the code. `scripts/gen_reference.py` build
 
 A fact on these pages changes at its source. The description a page shows is the description the server sends to clients, so the two cannot disagree; the `Returns:` and `Raises:` sections of a tool's docstring are published too, so they are held to site quality (Vale lints them). A tool's group is its `group:<slug>` tag when it has one, else the module that registers it. Each page has a `DOMAIN-INTRO` slot, and each tool and prompt a `DOMAIN-EXAMPLE-<name>` slot; those survive regeneration, and a slot whose tool no longer exists fails the run. Run `uv run python scripts/gen_reference.py` after changing a tool, resource, prompt or CLI option; pre-commit and CI fail while a page is stale.
 
+## Examples
+
+A reader copies a fenced block as written, so `tests/test_published_examples.py` checks each one against its claim. Tags use the `{ .class key="value" }` form after the language, the one form the Markdown renderer keeps as a fence:
+
+| Block | Tag | What the test does |
+|---|---|---|
+| Python a reader runs | ```` ```python { .run data-expect="results" } ```` | runs it as written, after the substitutions `docs_example_substitutions` in `tests/conftest.py` supplies (a placeholder path for a fixture, say); `results` must be truthy afterwards |
+| Python that is only a snippet | ```` ```python { .fragment } ```` | nothing; the tag records the decision |
+| A configuration that claims something | ```` ```json { .config data-expect="read_only=True" } ```` on an MCP client configuration, or on a dotenv-shaped shell block | loads the project's configuration from the block's variables and checks each `field=literal` |
+| Any shell block | none | an unquoted `pkg[extra]` fails; zsh expands it as a glob, so write `"pkg[extra]"` |
+
+A Python block with neither tag is debt: the structure check reports it as W4 until it carries one.
+
 ## Each topic has one page
 
 Each topic has one page that answers it. Other pages link to that page and never restate it. A short "you need X; see Y" line is a link, not a copy. When two pages answer the same question, readers get two answers, and one of them goes stale.
@@ -94,6 +107,7 @@ Each page is also one kind of text. A tutorial teaches a first success, and a ho
 | W1 | warning | a page outside the places the table above designates |
 | W2 | warning | a page without `description:` and a valid `kind:` front matter |
 | W3 | warning | entries still under Unsorted in `nav:` |
+| W4 | warning | a Python block that carries neither `.run` nor `.fragment` |
 
 The check reads `exclude_docs` in the forms this file uses: `dir/**`, a plain glob, or a bare name that matches any path component. Errors are broken for a reader now, so they fail from the first run. Warnings are documentation debt: they print without failing until this project sets `strict = true` under `[tool.docs-structure]` in `pyproject.toml`, after which new debt fails too. Whether a page's knowledge is domain or non-domain, and whether it reads well, is for review to judge, not the check.
 
