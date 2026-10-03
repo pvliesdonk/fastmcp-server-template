@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import subprocess
 import sys
 from pathlib import Path
@@ -328,15 +329,16 @@ kind: how-to
 
 def test_new_minor_page_satisfies_the_docs_structure_check(tmp_path: Path) -> None:
     # The structure check's W2 asks every published page for front matter,
-    # and a release page is published (#759).
-    from scripts.check_docs_structure import KINDS, _front_matter
+    # and a release page is published (#759). Imported at run time so the
+    # type check does not follow it into the script's own sys.path imports.
+    structure = importlib.import_module("scripts.check_docs_structure")
 
     write(tmp_path / "docs/releases/next.md", NEXT)
     write(tmp_path / "docs/releases/index.md", INDEX)
     page = plan_promotion(tmp_path, "2.4.0").writes[tmp_path / "docs/releases/2.4.md"]
-    front = _front_matter(page)
+    front = structure._front_matter(page)
     assert front.get("description")
-    assert front.get("kind") in KINDS
+    assert front.get("kind") in structure.KINDS
 
 
 def test_patch_promotion_keeps_the_page_front_matter(tmp_path: Path) -> None:
