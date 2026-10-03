@@ -4,6 +4,7 @@ No ``from __future__ import annotations`` here: FastMCP appends a JSON-schema
 sentence to every prompt argument under postponed annotations.
 """
 
+import logging
 import sys
 from enum import StrEnum
 from pathlib import Path
@@ -374,6 +375,37 @@ def test_prose_formatting_leaves_links_and_abbreviations_alone() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # The two strings from #747: RST-style double-backtick spans.
+        (
+            'The string ``pong_reply`` and the ``"status": "ok"`` pair.',
+            'The string ``pong_reply`` and the ``"status": "ok"`` pair.',
+        ),
+        ("``_meta.index_stale`` field", "``_meta.index_stale`` field"),
+        # A span holding a shorter backtick run is still one span.
+        ("``a`b_c`` d_e", "``a`b_c`` `d_e`"),
+        ("```x_y``` z_w", "```x_y``` `z_w`"),
+        # Adjacent spans, and a span across a line break.
+        ("`a_b``c_d` e_f", "`a_b``c_d` `e_f`"),
+        ("``a_b\nc_d`` e_f", "``a_b\nc_d`` `e_f`"),
+        # Runs of different lengths do not close each other.
+        ("``x_y` z_w", "``x_y` `z_w`"),
+        # Whichever of a link and a span starts first wins.
+        ("[`a_b`](vault_guide.md) c_d", "[`a_b`](vault_guide.md) `c_d`"),
+        ("`[x](y_z)` w_v", "`[x](y_z)` `w_v`"),
+        ("[x](a`b) `c_d` e_f", "[x](a`b) `c_d` `e_f`"),
+    ],
+)
+def test_prose_formatting_leaves_every_code_span_alone(
+    text: str, expected: str
+) -> None:
+    from gen_reference import _prose
+
+    assert _prose(text) == expected
+
+
 def test_vanished_group_with_written_slots_is_an_error(
     reference, tmp_path: Path
 ) -> None:
@@ -407,3 +439,44 @@ def test_group_named_index_is_rejected() -> None:
     app = _app()
     with pytest.raises(GenerationError, match="index"):
         collect(mcp, app, "demo")
+
+
+def test_build_documents_tools_registered_for_http_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The transfer-link tools register under `if transport != "stdio":`, so a
+    # stdio build left them out of the reference (#749).
+    from gen_reference import _build
+
+    package = tmp_path / "src" / "httponly_demo"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "server.py").write_text(
+        "from fastmcp import FastMCP\n\n\n"
+        'def make_server(*, transport: str = "stdio") -> FastMCP:\n'
+        '    mcp = FastMCP("demo")\n'
+        '    if transport != "stdio":\n\n'
+        "        @mcp.tool\n"
+        "        def create_download_link(path: str) -> str:\n"
+        '            """Mint a one-time download link."""\n'
+        "            return path\n\n"
+        "    return mcp\n",
+        encoding="utf-8",
+    )
+    (package / "cli.py").write_text(
+        'import typer\n\napp = typer.Typer(help="Demo.")\n\n\n'
+        "@app.command()\ndef serve() -> None:\n"
+        '    """Run."""\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".copier-answers.yml").write_text(
+        "python_module: httponly_demo\nproject_name: httponly-demo\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "path", [*sys.path])  # _build prepends src/
+    try:
+        ref = _build(tmp_path)
+    finally:
+        logging.disable(logging.NOTSET)  # _build silences the server's logs
+    tools = [tool.name for group in ref.groups.values() for tool in group]
+    assert tools == ["create_download_link"]
