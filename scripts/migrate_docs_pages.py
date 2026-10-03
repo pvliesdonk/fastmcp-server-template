@@ -28,11 +28,12 @@ Template script parks, implementation agent sorts:
 - Links on the project's own pages and its ``nav:`` entries that point at a
   page the template's redirects serve (``REDIRECTS``) are rewritten to the
   new path, anchor kept, so neither the structure check nor
-  ``mkdocs build --strict`` reports them.  A parked page still exists at its
-  old path, so links and nav entries pointing at it are left on it (#757).  Release notes are published and
+  ``mkdocs build --strict`` reports them.  Release notes are published and
   rewritten too; the unpublished history (decision records, designs) and
   fenced code keep their old links. A move whose new page is not rendered
-  for this project (a switched-off page) is not followed.
+  for this project (a switched-off page) is not followed, and neither is
+  one whose old page still exists, as a parked page does (#757): its links
+  name its own anchors.
 - A page without ``DOMAIN-*`` blocks (rewritten by the project, or from a
   template version that predates the block) carries nothing; the note says
   where its text is, since the two cases cannot be told apart here.
@@ -71,7 +72,8 @@ MOVES = (
 )
 # Every page the template's ``redirects`` map in mkdocs.yml serves at a new
 # path: links and nav entries follow these (#745, #746). The pages beyond
-# MOVES carried no DOMAIN blocks, or are the PARKED pages, so only links move.
+# MOVES carried no DOMAIN blocks, or are the PARKED pages, so only links move;
+# a page parked at its old path keeps its links (#757).
 REDIRECTS = (
     *MOVES,
     ("docs/configuration-generator.md", "docs/reference/configuration-generator.md"),

@@ -11,10 +11,9 @@ regeneration.
 A tool's group is its ``group:<slug>`` tag, else the last segment of the
 registering module (``pkg._tools.reader`` -> ``reader``), or the package
 above it when that segment is ``register`` (``pkg._jobs.register`` ->
-``jobs``).  The description a
-page shows is the wire description FastMCP sends, so the two cannot
-disagree; ``Returns:`` and ``Raises:`` come from the raw docstring, which
-the wire drops.
+``jobs``).  The description a page shows is the wire description FastMCP
+sends, so the two cannot disagree; ``Returns:`` and ``Raises:`` come from
+the raw docstring, which the wire drops.
 
 The script is template-owned and byte-identical in every project: it reads
 ``python_module`` and ``project_name`` from ``.copier-answers.yml`` and
