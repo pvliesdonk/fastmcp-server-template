@@ -392,6 +392,10 @@ def test_prose_formatting_leaves_links_and_abbreviations_alone() -> None:
         ("``a_b\nc_d`` e_f", "``a_b\nc_d`` `e_f`"),
         # Runs of different lengths do not close each other.
         ("``x_y` z_w", "``x_y` `z_w`"),
+        # Whichever of a link and a span starts first wins.
+        ("[`a_b`](vault_guide.md) c_d", "[`a_b`](vault_guide.md) `c_d`"),
+        ("`[x](y_z)` w_v", "`[x](y_z)` `w_v`"),
+        ("[x](a`b) `c_d` e_f", "[x](a`b) `c_d` `e_f`"),
     ],
 )
 def test_prose_formatting_leaves_every_code_span_alone(
@@ -437,7 +441,9 @@ def test_group_named_index_is_rejected() -> None:
         collect(mcp, app, "demo")
 
 
-def test_build_documents_tools_registered_for_http_only(tmp_path: Path) -> None:
+def test_build_documents_tools_registered_for_http_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # The transfer-link tools register under `if transport != "stdio":`, so a
     # stdio build left them out of the reference (#749).
     from gen_reference import _build
@@ -467,12 +473,10 @@ def test_build_documents_tools_registered_for_http_only(tmp_path: Path) -> None:
         "python_module: httponly_demo\nproject_name: httponly-demo\n",
         encoding="utf-8",
     )
+    monkeypatch.setattr(sys, "path", [*sys.path])  # _build prepends src/
     try:
         ref = _build(tmp_path)
     finally:
         logging.disable(logging.NOTSET)  # _build silences the server's logs
-        sys.path.remove(str(tmp_path / "src"))
-        for name in [m for m in sys.modules if m.startswith("httponly_demo")]:
-            del sys.modules[name]
     tools = [tool.name for group in ref.groups.values() for tool in group]
     assert tools == ["create_download_link"]

@@ -51,7 +51,7 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
     import typer
     from fastmcp import FastMCP
@@ -432,10 +432,44 @@ def _cell(text: str) -> str:
 # Stretches _prose never touches: code spans and Markdown links.  A code span
 # is CommonMark's: a run of backticks closed by the next run of the same
 # length, so an RST-style ``double`` span is one span, not two empty ones (#747).
-_LITERAL = re.compile(r"(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)|\[[^\]]*\]\([^)]*\)", re.DOTALL)
+_OPENER = re.compile(r"[`\[]")
+_RUN = re.compile(r"`+")
+# Link text holds no bracket and the target no parenthesis, so a failed match
+# stops at the next opener and the scan stays linear.
+_LINK = re.compile(r"\[[^\[\]]*\]\([^()]*\)")
 # Not next to a backtick: an unclosed run is literal text, and wrapping the
 # word beside it would lengthen the run into a different one.
 _IDENTIFIER = re.compile(r"(?<!`)\b[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+\b(?!`)")
+
+
+def _literals(text: str) -> Iterator[tuple[int, int]]:
+    """Yield ``(start, end)`` of each code span and link, left to right.
+
+    Whichever starts first wins, as in CommonMark.  A backtick run with no
+    closing run of its length is literal text.  Linear in ``len(text)``:
+    every run's closer is looked up, not searched for.
+    """
+    runs = [(m.start(), m.end()) for m in _RUN.finditer(text)]
+    closer: dict[int, int] = {}  # run start -> end of the next run as long
+    later: dict[int, int] = {}  # run length -> end of the nearest later run
+    for start, end in reversed(runs):
+        if end - start in later:
+            closer[start] = later[end - start]
+        later[end - start] = end
+    run_end = dict(runs)
+    position = 0
+    while opener := _OPENER.search(text, position):
+        start = opener.start()
+        if text[start] == "[":
+            link = _LINK.match(text, start)
+            position = link.end() if link else start + 1
+            if link:
+                yield start, link.end()
+        elif start in closer:
+            position = closer[start]
+            yield start, position
+        else:
+            position = run_end.get(start, start + 1)
 
 
 def _prose(text: str) -> str:
@@ -446,12 +480,12 @@ def _prose(text: str) -> str:
     links are left as they are.
     """
     out = []
-    start = 0
-    for literal in _LITERAL.finditer(text):
-        out.append(_code_identifiers(text[start : literal.start()]))
-        out.append(literal.group(0))
-        start = literal.end()
-    out.append(_code_identifiers(text[start:]))
+    position = 0
+    for start, end in _literals(text):
+        out.append(_code_identifiers(text[position:start]))
+        out.append(text[start:end])
+        position = end
+    out.append(_code_identifiers(text[position:]))
     return "".join(out)
 
 
