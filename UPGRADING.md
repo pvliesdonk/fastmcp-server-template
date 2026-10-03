@@ -306,7 +306,7 @@ Steps: [upgrading/v11.0.md](upgrading/v11.0.md).
 
 Steps: [upgrading/v11.1.md](upgrading/v11.1.md).
 
-## Unreleased - links to moved pages; reference generator fixes
+## Unreleased - links to moved pages; reference generator and docs fixes
 
 ### Links and nav entries at moved template pages
 
@@ -327,3 +327,8 @@ Run `uv run python scripts/gen_reference.py` and commit `docs/reference/`. Two t
   ```
 
   with your own prefix in place of `MY_SERVER`.
+
+### Text your DOMAIN blocks no longer need
+
+- `docs/security-model.md` now lists `/transfer/{token}` among the routes that answer without a credential. If your `DOMAIN-SECURITY-MODEL-EXTRA` block described that route, delete it there.
+- The manual install on `docs/deploy/systemd.md` now sets `EXTRAS` the way `packaging/scripts/postinstall.sh` does. If your `DOMAIN-SYSTEMD-EXTRA` block explained the missing extras, delete that.
