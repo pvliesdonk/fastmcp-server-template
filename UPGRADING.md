@@ -306,6 +306,10 @@ Steps: [upgrading/v11.0.md](upgrading/v11.0.md).
 
 Steps: [upgrading/v11.1.md](upgrading/v11.1.md).
 
-## Unreleased
+## Unreleased - links to moved documentation pages
 
-_Nothing yet._
+### Links and nav entries at moved template pages
+
+The page migration now follows every page the template's `redirects` map moved, and rewrites links on release notes under `docs/releases/` too, so `uv run mkdocs build --strict` passes without hand-editing links to template pages. It runs on every update, so a project already on v11.1.0 gets the fix on this update with nothing to do.
+
+The nav migration now drops your old entries for template pages instead of parking them under **Unsorted**. On a project that already went through v11.1.0, those entries are still under Unsorted, and this update points each one at its page's new path, which the frame already lists. Delete every Unsorted entry for a template page: `configuration.md`, `configuration-generator.md`, `installation.md`, `tools/index.md`, `prompts.md`, and the `guides/` and `deployment/` pages, at their old or new paths.

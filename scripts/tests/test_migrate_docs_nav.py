@@ -8,6 +8,7 @@ markers included (hence ``.txt``: the file is deliberately not valid YAML).
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from migrate_docs_nav import park
+from migrate_docs_pages import DOCS, REDIRECTS
 
 FIX = Path(__file__).parent / "fixtures" / "nav_migration"
 HEAD = (FIX / "head_mkdocs.yml.txt").read_text(encoding="utf-8")
@@ -90,6 +92,23 @@ def test_template_pages_stay_in_the_frame_and_are_not_parked() -> None:
         *PROJECT_PAGES,
     ):
         assert path in leaves
+
+
+def test_template_pages_listed_at_their_new_paths_are_not_parked() -> None:
+    # The fixture's frame predates the page moves; list every redirected page
+    # at its new path, as the released frame does (#745).
+    table = {old.removeprefix(DOCS): new.removeprefix(DOCS) for old, new in REDIRECTS}
+    frame = re.sub(
+        r"(?m)^(\s+- [^:\n]+: )(\S+)$",
+        lambda m: m.group(1) + table.get(m.group(2), m.group(2)),
+        UPDATED,
+    )
+    assert frame != UPDATED
+    text, parked = park(frame, HEAD)
+    assert sorted(parked) == PROJECT_PAGES
+    unsorted = _unsorted(text)
+    for old in table:
+        assert f": {old}" not in unsorted
 
 
 def test_everything_outside_nav_is_untouched() -> None:
