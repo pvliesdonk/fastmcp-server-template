@@ -16,8 +16,12 @@ the wire drops.
 
 The script is template-owned and byte-identical in every project: it reads
 ``python_module`` and ``project_name`` from ``.copier-answers.yml`` and
-imports ``<module>.server.make_server`` and ``<module>.cli.app``.  Variables
-a project's ``from_env`` requires come from ``[tool.docs-reference] env`` in
+imports ``<module>.server.make_server`` and ``<module>.cli.app``.  The server
+is built for the ``http`` transport, the widest surface: a component a
+project registers for HTTP alone, such as the transfer-link tools, is
+documented too (#749).  Variables a project's ``from_env`` requires, and
+what its HTTP-only wiring needs at build time (a transfer project's
+``<PREFIX>_BASE_URL``), come from ``[tool.docs-reference] env`` in
 ``pyproject.toml``.
 
 Usage::
@@ -425,9 +429,13 @@ def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
-# Stretches _prose never touches: code spans and Markdown links.
-_LITERAL = re.compile(r"`[^`]*`|\[[^\]]*\]\([^)]*\)")
-_IDENTIFIER = re.compile(r"\b[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+\b")
+# Stretches _prose never touches: code spans and Markdown links.  A code span
+# is CommonMark's: a run of backticks closed by the next run of the same
+# length, so an RST-style ``double`` span is one span, not two empty ones (#747).
+_LITERAL = re.compile(r"(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)|\[[^\]]*\]\([^)]*\)", re.DOTALL)
+# Not next to a backtick: an unclosed run is literal text, and wrapping the
+# word beside it would lengthen the run into a different one.
+_IDENTIFIER = re.compile(r"(?<!`)\b[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+\b(?!`)")
 
 
 def _prose(text: str) -> str:
@@ -437,14 +445,18 @@ def _prose(text: str) -> str:
     spell-checks prose and leaves identifiers alone. Existing code spans and
     links are left as they are.
     """
-    parts = _LITERAL.split(text)
-    literals = _LITERAL.findall(text)
     out = []
-    for index, part in enumerate(parts):
-        out.append(_IDENTIFIER.sub(lambda m: f"`{m.group(0)}`", part))
-        if index < len(literals):
-            out.append(literals[index])
+    start = 0
+    for literal in _LITERAL.finditer(text):
+        out.append(_code_identifiers(text[start : literal.start()]))
+        out.append(literal.group(0))
+        start = literal.end()
+    out.append(_code_identifiers(text[start:]))
     return "".join(out)
+
+
+def _code_identifiers(prose: str) -> str:
+    return _IDENTIFIER.sub(lambda m: f"`{m.group(0)}`", prose)
 
 
 def _default_cell(default: str) -> str:
@@ -827,11 +839,11 @@ def _build(root: Path) -> Reference:
     # The server's own startup and request logs are noise here; errors still show.
     logging.disable(logging.WARNING)
     try:
-        server = server_mod.make_server()
+        server = server_mod.make_server(transport="http")
     except Exception as exc:
         raise BuildError(
-            f"make_server() failed: {exc}. A required variable goes under "
-            "[tool.docs-reference] env in pyproject.toml."
+            f'make_server(transport="http") failed: {exc}. A required variable '
+            "goes under [tool.docs-reference] env in pyproject.toml."
         ) from exc
     try:
         return collect(server, cli_mod.app, project_name)
