@@ -496,7 +496,7 @@ enable_automatic_claude_review:
 enable_authorization:
   type: bool
   default: false
-  help: "Scaffold the opt-in per-subject authorization surface: the commented ACL middleware stubs in config.py/server.py, the brief README 'Authorization' pointer, the docs/guides/authorization.md guide and its nav entry, the *_ACL_PATH line in .env.example, and the cross-link in the authentication guide. Leave off unless this server needs per-caller scope gating (runtime enablement is still via the *_ACL_PATH env var)."
+  help: "Scaffold the opt-in per-subject authorization surface: the commented ACL middleware stubs in config.py/server.py, the brief README 'Authorization' pointer, the docs/deploy/authorization.md guide and its nav entry, the *_ACL_PATH line in .env.example, and the cross-link in the authentication guide. Leave off unless this server needs per-caller scope gating (runtime enablement is still via the *_ACL_PATH env var)."
 
 enable_structural_gate:
   type: bool
