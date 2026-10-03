@@ -406,6 +406,26 @@ def test_prose_formatting_leaves_every_code_span_alone(
     assert _prose(text) == expected
 
 
+def test_jump_table_intro_survives_regeneration(reference, tmp_path: Path) -> None:
+    # The jump table is not a group page, so the vanished-group guard must
+    # not count it (#761).
+    docs = tmp_path / "docs"
+    write(docs, render(reference, docs))
+    index = docs / "reference" / "tools" / "index.md"
+    marker = "<!-- DOMAIN-INTRO-START -->"
+    assert marker in index.read_text(encoding="utf-8")
+    index.write_text(
+        index.read_text(encoding="utf-8").replace(
+            marker, marker + "\n- Start with read."
+        ),
+        encoding="utf-8",
+    )
+    pages = render(reference, docs)
+    assert "- Start with read." in pages["reference/tools/index.md"]
+    write(docs, pages)
+    assert check(docs, render(reference, docs)) == []
+
+
 def test_vanished_group_with_written_slots_is_an_error(
     reference, tmp_path: Path
 ) -> None:

@@ -750,7 +750,6 @@ def render(ref: Reference, docs: Path) -> dict[str, str]:
     for group, tools in ref.groups.items():
         rel = f"reference/tools/{group}.md"
         pages[rel] = _group_page(group, tools, docs / rel)
-    _guard_stale(docs, pages)
     for rel, fn in (
         ("reference/tools/index.md", _index_page),
         ("reference/resources.md", _resources_page),
@@ -758,6 +757,9 @@ def render(ref: Reference, docs: Path) -> dict[str, str]:
         ("reference/cli.md", _cli_page),
     ):
         pages[rel] = fn(ref, docs / rel)
+    # After every page is in: the jump table sits beside the group pages and
+    # would otherwise count as a vanished group (#761).
+    _guard_stale(docs, pages)
     return pages
 
 
