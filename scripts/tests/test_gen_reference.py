@@ -428,6 +428,30 @@ def test_vanished_group_with_written_slots_is_an_error(
     assert not gone.exists(), "a stale page holding only placeholders is removed"
 
 
+@pytest.mark.parametrize(
+    ("module", "group"),
+    [
+        ("fastmcp_pvl_core._jobs.register", "jobs"),
+        ("fastmcp_pvl_core._transfer.register", "transfer"),
+        ("fastmcp_pvl_core._server_info", "server_info"),
+        ("demo._tools.reader", "reader"),
+        ("register", "register"),
+    ],
+)
+def test_a_register_module_groups_by_its_package(module: str, group: str) -> None:
+    # pvl-core registers its jobs and transfer-link tools from modules both
+    # named `register`; a project cannot tag a library's tool (#760).
+    mcp = FastMCP("lib")
+
+    def t() -> str:
+        """A library tool."""
+        return ""
+
+    t.__module__ = module
+    mcp.tool(t)
+    assert list(collect(mcp, _app(), "demo").groups) == [group]
+
+
 def test_group_named_index_is_rejected() -> None:
     mcp = FastMCP("clash")
 

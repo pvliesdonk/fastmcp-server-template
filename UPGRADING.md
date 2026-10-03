@@ -306,6 +306,25 @@ Steps: [upgrading/v11.0.md](upgrading/v11.0.md).
 
 Steps: [upgrading/v11.1.md](upgrading/v11.1.md).
 
-## Unreleased
+## Unreleased - parked pages, release-page front matter, library tool groups
 
-_Nothing yet._
+### Links and nav entries at parked pages
+
+The page migration no longer points links and nav entries away from a parked `docs/tools/index.md` or `docs/prompts.md`. It now leaves alone any page the template moved that still exists at its old path. If your update to v11.1.1 rewrote them, point them back: in `docs/` and `mkdocs.yml`, every `reference/tools/index.md#<anchor>` or `reference/prompts.md#<anchor>` whose anchor names a section of your parked page goes back to `tools/index.md` or `prompts.md`, and so does the parked page's nav entry. `git show` on the commit that applied v11.1.1 lists them. A project that never had a parked page, or skipped v11.1.1, has nothing to do.
+
+### Front matter on release pages
+
+A release page under `docs/releases/` can now carry `description:` and `kind:` front matter without breaking the next patch release, and promotion writes it on every new minor page. To clear the structure check's W2 on the pages you already have, add this to the top of each, with its own series number:
+
+```yaml
+---
+description: "Release notes for the 1.2 series, with the steps to upgrade to it."
+kind: how-to
+---
+```
+
+Leave `docs/releases/next.md` without front matter; promotion requires its first line to be `# Next release`.
+
+### Library tools leave the "Register" page
+
+The tools fastmcp-pvl-core registers now group by feature: `get_job_result` on `docs/reference/tools/jobs.md`, `create_download_link` and `create_upload_link` on `docs/reference/tools/transfer.md`. Before you regenerate, move any text in `docs/reference/tools/register.md`'s `DOMAIN-INTRO` and `DOMAIN-EXAMPLE-<name>` slots out of the page and delete it: `gen_reference.py` refuses to run while a page it no longer writes holds slot text. Then run `uv run python scripts/gen_reference.py`, put the text back into the same slots on the new pages, and commit `docs/reference/` and `mkdocs.yml`. Links to `tools/register.md` from your own pages need the new page's name.

@@ -9,7 +9,9 @@ prompts and the command line.  A fact on these pages changes at its source
 regeneration.
 
 A tool's group is its ``group:<slug>`` tag, else the last segment of the
-registering module (``pkg._tools.reader`` -> ``reader``).  The description a
+registering module (``pkg._tools.reader`` -> ``reader``), or the package
+above it when that segment is ``register`` (``pkg._jobs.register`` ->
+``jobs``).  The description a
 page shows is the wire description FastMCP sends, so the two cannot
 disagree; ``Returns:`` and ``Raises:`` come from the raw docstring, which
 the wire drops.
@@ -193,6 +195,19 @@ def _entries(section: str) -> list[str]:
     return entries
 
 
+def _module_group(module: str) -> str:
+    """The group a module names: its last segment, or the package above a ``register`` module.
+
+    A module called ``register`` names the act, not the feature: pvl-core
+    registers its jobs and transfer-link tools from ``_jobs.register`` and
+    ``_transfer.register``, and a project cannot tag a library's tool (#760).
+    """
+    parts = [part.lstrip("_") for part in module.split(".")]
+    if len(parts) > 1 and parts[-1] == "register":
+        parts.pop()
+    return parts[-1]
+
+
 def _group_of(tool: Any) -> str:
     groups = sorted(
         t[len(GROUP_TAG) :] for t in tool.tags or () if t.startswith(GROUP_TAG)
@@ -201,7 +216,7 @@ def _group_of(tool: Any) -> str:
         raise GenerationError(
             f"tool {tool.name} carries two group tags: {', '.join(groups)}"
         )
-    group = groups[0] if groups else tool.fn.__module__.rsplit(".", 1)[-1].lstrip("_")
+    group = groups[0] if groups else _module_group(tool.fn.__module__)
     if group == "index":
         raise GenerationError(
             f"tool {tool.name}: group 'index' would overwrite the tools jump table; "
