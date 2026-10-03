@@ -1,5 +1,14 @@
 # Changelog
 
+## v11.1.1 (2026-10-03)
+
+- #756 fix(docs): transfer route, manual-install extras, OIDC mode scoping
+- #755 fix(gen_reference): keep code spans intact; document HTTP-only tools
+- #754 fix(migrations): follow every redirected page in links and nav
+- #744 chore(deps): update dependency anchore/sbom-action to v0.24.3
+- #743 chore(deps): update anthropics/claude-code-action digest to ed670b4
+
+
 ## v11.1.0 (2026-10-02)
 
 - #733 chore(deps): update anthropics/claude-code-action digest to 97c5347
