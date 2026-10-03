@@ -190,7 +190,12 @@ def test_new_minor_page_promotion(tmp_path: Path) -> None:
 
     assert (
         plan.writes[tmp_path / "docs/releases/2.4.md"]
-        == """# 2.4
+        == """---
+description: "Release notes for the 2.4 series, with the steps to upgrade to it."
+kind: how-to
+---
+
+# 2.4
 
 <!-- notes-range-end: 0123456789abcdef0123456789abcdef01234567 -->
 
@@ -311,6 +316,48 @@ def test_patch_section_is_inserted_before_patch_end(tmp_path: Path) -> None:
     assert page.index("## v2.4.1") < page.index("<!-- PATCH-RELEASES-END -->")
     assert "notes-range-end: 0123456789abcdef0123456789abcdef01234567" in page
     assert "notes-range-end: 1111111111111111111111111111111111111111" not in page
+
+
+FRONT_MATTER = """---
+description: "Release notes for the 2.4 series."
+kind: how-to
+---
+
+"""
+
+
+def test_new_minor_page_satisfies_the_docs_structure_check(tmp_path: Path) -> None:
+    # The structure check's W2 asks every published page for front matter,
+    # and a release page is published (#759).
+    from scripts.check_docs_structure import KINDS, _front_matter
+
+    write(tmp_path / "docs/releases/next.md", NEXT)
+    write(tmp_path / "docs/releases/index.md", INDEX)
+    page = plan_promotion(tmp_path, "2.4.0").writes[tmp_path / "docs/releases/2.4.md"]
+    front = _front_matter(page)
+    assert front.get("description")
+    assert front.get("kind") in KINDS
+
+
+def test_patch_promotion_keeps_the_page_front_matter(tmp_path: Path) -> None:
+    write(tmp_path / "docs/releases/2.4.md", FRONT_MATTER + with_patch("v2.4.1"))
+    write(tmp_path / "docs/releases/next.md", NEXT)
+
+    page = plan_promotion(tmp_path, "2.4.2").writes[tmp_path / "docs/releases/2.4.md"]
+
+    assert page.startswith(FRONT_MATTER + "# 2.4\n")
+    assert page.index("## v2.4.1") < page.index("## v2.4.2")
+
+
+def test_front_matter_does_not_excuse_a_missing_title(tmp_path: Path) -> None:
+    write(
+        tmp_path / "docs/releases/2.4.md",
+        FRONT_MATTER + "Intro.\n\n" + canonical(),
+    )
+    write(tmp_path / "docs/releases/next.md", NEXT)
+
+    with pytest.raises(PromotionError, match="title"):
+        plan_promotion(tmp_path, "2.4.1")
 
 
 def test_next_watermark_must_be_standalone_metadata(tmp_path: Path) -> None:
