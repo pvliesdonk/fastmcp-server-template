@@ -1,5 +1,10 @@
 # Changelog
 
+## v11.1.2 (2026-10-03)
+
+- #762 fix: v11.1.1 follow-ups — parked-page links, stale page paths, release front matter, library tool groups
+
+
 ## v11.1.1 (2026-10-03)
 
 - #756 fix(docs): transfer route, manual-install extras, OIDC mode scoping
