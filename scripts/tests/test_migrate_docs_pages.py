@@ -379,8 +379,10 @@ def test_links_at_every_redirected_page_are_rewritten(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     migrate(root)
+    # The fixture's tools page holds project text, so it is parked and its
+    # link stays on it (#757); the placeholder prompts page is not.
     assert index.read_text(encoding="utf-8") == (
-        "[gen](reference/configuration-generator.md) [tools](reference/tools/index.md)\n"
+        "[gen](reference/configuration-generator.md) [tools](tools/index.md)\n"
     )
     assert release.read_text(encoding="utf-8") == (
         "[c](../reference/configuration.md#logging) [d](../deploy/docker.md) "
@@ -552,3 +554,51 @@ def test_blocks_close_on_crlf_and_trailing_spaces() -> None:
 
     text = "<!-- DOMAIN-X-START -->\r\nbody\r\n<!-- DOMAIN-X-END -->  \r\n"
     assert blocks(text) == {"DOMAIN-X": "body\r\n"}
+
+
+def test_links_and_nav_at_a_parked_page_are_kept(tmp_path: Path) -> None:
+    # A parked page still exists and holds the anchors its links name; the
+    # generated page the redirect points at has none of them (#757).
+    root = _repo(tmp_path)
+    for new in ("reference/tools/index.md", "reference/prompts.md"):
+        (root / "docs" / new).parent.mkdir(parents=True, exist_ok=True)
+        (root / "docs" / new).write_text("# x\n", encoding="utf-8")
+    (root / "docs" / "guides").mkdir()
+    page = root / "docs" / "guides" / "search.md"
+    page.write_text(
+        "[s](../tools/index.md#search) [p](../prompts.md#summarise)\n",
+        encoding="utf-8",
+    )
+    mkdocs = root / "mkdocs.yml"
+    mkdocs.write_text(
+        "nav:\n  - Tools guide: tools/index.md\n  - Prompts: prompts.md\n",
+        encoding="utf-8",
+    )
+    migrate(root)
+    assert (root / "docs" / "tools" / "index.md").exists(), "parked"
+    assert page.read_text(encoding="utf-8") == (
+        "[s](../tools/index.md#search) [p](../reference/prompts.md#summarise)\n"
+    ), "the parked page keeps its links; the placeholder page's links move"
+    assert mkdocs.read_text(encoding="utf-8") == (
+        "nav:\n  - Tools guide: tools/index.md\n  - Prompts: reference/prompts.md\n"
+    )
+    # The update after this one finds the parked page committed and present.
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "parked")
+    assert migrate(root) == []
+    assert "../tools/index.md#search" in page.read_text(encoding="utf-8")
+
+
+def test_links_at_a_page_parked_for_a_homeless_block_are_kept(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    # The new Docker page has no slot for the old page's block, so it parks.
+    (root / "docs" / "deploy" / "docker.md").write_text("# Docker\n", encoding="utf-8")
+    page = root / "docs" / "index.md"
+    page.write_text("[d](deployment/docker.md#volumes)\n", encoding="utf-8")
+    notes = migrate(root)
+    assert any("parked docs/deployment/docker.md" in n for n in notes)
+    assert page.read_text(encoding="utf-8") == "[d](deployment/docker.md#volumes)\n"
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "parked")
+    migrate(root)
+    assert page.read_text(encoding="utf-8") == "[d](deployment/docker.md#volumes)\n"
