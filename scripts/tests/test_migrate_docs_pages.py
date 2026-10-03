@@ -7,13 +7,16 @@ section in docs/tools/index.md, then `copier update` onto the #716 branch.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from migrate_docs_pages import (
+    DOCS,
     README_BLOCKS,
+    REDIRECTS,
     has_project_content,
     migrate,
     positional_blocks,
@@ -25,6 +28,7 @@ from migrate_docs_pages import (
     transplant_readme,
 )
 
+ROOT = Path(__file__).resolve().parents[2]
 FIX = Path(__file__).parent / "fixtures" / "reference_migration"
 DOMAIN_LINE = "SMOKE_MCP_VAULT and SMOKE_MCP_READ_ONLY interact"
 
@@ -325,22 +329,83 @@ def test_migrate_rewrites_links_on_project_pages(tmp_path: Path) -> None:
     assert migrate(root) == []
 
 
-def test_links_in_history_pages_and_fenced_code_are_left_alone(tmp_path: Path) -> None:
+def test_release_notes_are_rewritten_but_unpublished_history_and_fences_are_not(
+    tmp_path: Path,
+) -> None:
+    # Release notes are published, so mkdocs build --strict checks their
+    # links (#746); decision records are excluded from the build.
     root = _repo(tmp_path)
     (root / "docs" / "releases").mkdir()
-    history = root / "docs" / "releases" / "1.0.md"
-    history.write_text("# 1.0\n\n[m](../guides/security-model.md)\n", encoding="utf-8")
+    release = root / "docs" / "releases" / "1.0.md"
+    release.write_text("# 1.0\n\n[m](../guides/security-model.md)\n", encoding="utf-8")
+    (root / "docs" / "decisions").mkdir()
+    decision = root / "docs" / "decisions" / "0001.md"
+    decision.write_text("# 1\n\n[m](../guides/security-model.md)\n", encoding="utf-8")
     fenced = "# S\n\n```markdown\n[m](../guides/security-model.md)\n```\n\n[n](../guides/security-model.md)\n"
     page = root / "docs" / "deployment" / "systemd.md"
     page.write_text(fenced, encoding="utf-8")
     migrate(root)
+    assert release.read_text(encoding="utf-8") == "# 1.0\n\n[m](../security-model.md)\n"
     assert (
-        history.read_text(encoding="utf-8")
-        == "# 1.0\n\n[m](../guides/security-model.md)\n"
+        decision.read_text(encoding="utf-8")
+        == "# 1\n\n[m](../guides/security-model.md)\n"
     )
     out = page.read_text(encoding="utf-8")
     assert "```markdown\n[m](../guides/security-model.md)\n```" in out
     assert "[n](../security-model.md)" in out
+
+
+def test_links_at_every_redirected_page_are_rewritten(tmp_path: Path) -> None:
+    # The seven links #746 found after a real v11.0.2 -> v11.1.0 update, plus
+    # the pages that moved to contribute/ and the generated reference pages.
+    root = _repo(tmp_path)
+    for new in (
+        "reference/configuration-generator.md",
+        "reference/tools/index.md",
+        "reference/prompts.md",
+        "contribute/release-process.md",
+    ):
+        (root / "docs" / new).parent.mkdir(parents=True, exist_ok=True)
+        (root / "docs" / new).write_text("# x\n", encoding="utf-8")
+    index = root / "docs" / "index.md"
+    index.write_text(
+        "[gen](configuration-generator.md) [tools](tools/index.md)\n", encoding="utf-8"
+    )
+    (root / "docs" / "releases").mkdir()
+    release = root / "docs" / "releases" / "5.0.md"
+    release.write_text(
+        "[c](../configuration.md#logging) [d](../deployment/docker.md) "
+        "[p](../prompts.md) [r](../deployment/release-process.md)\n",
+        encoding="utf-8",
+    )
+    migrate(root)
+    assert index.read_text(encoding="utf-8") == (
+        "[gen](reference/configuration-generator.md) [tools](reference/tools/index.md)\n"
+    )
+    assert release.read_text(encoding="utf-8") == (
+        "[c](../reference/configuration.md#logging) [d](../deploy/docker.md) "
+        "[p](../reference/prompts.md) [r](../contribute/release-process.md)\n"
+    )
+
+
+def _template_redirects() -> dict[str, str]:
+    """The template's own entries in mkdocs.yml.jinja's redirect_maps."""
+    text = (ROOT / "mkdocs.yml.jinja").read_text(encoding="utf-8")
+    region = text.split("redirect_maps:\n", 1)[1].split("PROJECT-REDIRECTS-START", 1)[0]
+    found = {}
+    for line in region.splitlines():
+        line = re.sub(r"\{%.*?%\}", "", line).strip()
+        if line and not line.startswith("#"):
+            old, new = (part.strip() for part in line.split(":", 1))
+            found[old] = new
+    return found
+
+
+def test_every_template_redirect_is_followed() -> None:
+    # A page the template moves and redirects, but the migration does not
+    # follow, leaves links that fail mkdocs build --strict (#746).
+    table = {old.removeprefix(DOCS): new.removeprefix(DOCS) for old, new in REDIRECTS}
+    assert table == _template_redirects()
 
 
 def test_carried_links_are_rebased_across_a_depth_change() -> None:
