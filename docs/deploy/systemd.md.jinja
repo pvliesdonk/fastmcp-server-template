@@ -91,7 +91,8 @@ sudo useradd --system --gid {{ project_name }} --no-create-home \
   --home-dir /var/lib/{{ project_name }} --shell /usr/sbin/nologin {{ project_name }}
 sudo mkdir -p /opt/{{ project_name }} /etc/{{ project_name }} /var/lib/{{ project_name }}
 sudo python3 -m venv /opt/{{ project_name }}/venv
-sudo /opt/{{ project_name }}/venv/bin/pip install "{{ pypi_name }}==X.Y.Z"
+EXTRAS=""  # the value packaging/scripts/postinstall.sh sets, such as "[all]"
+sudo /opt/{{ project_name }}/venv/bin/pip install "{{ pypi_name }}${EXTRAS}==X.Y.Z"
 sudo curl -fsSL -o /usr/lib/systemd/system/{{ project_name }}.service \
   https://raw.githubusercontent.com/{{ github_org }}/{{ project_name }}/vX.Y.Z/packaging/{{ project_name }}.service
 sudo curl -fsSL -o /etc/{{ project_name }}/env.example \
@@ -102,7 +103,7 @@ sudo chown {{ project_name }}:{{ project_name }} /var/lib/{{ project_name }}
 sudo systemctl daemon-reload
 ```
 
-Then configure and start as above. Python 3.11 or newer with the `venv` module is the one system requirement.
+Copy the value of `EXTRAS` from `packaging/scripts/postinstall.sh` at the same tag: the package installs those extras, and a manual install without them lacks the features they bring. Then configure and start as above. Python 3.11 or newer with the `venv` module is the one system requirement.
 
 ## If it does not start
 

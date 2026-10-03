@@ -44,6 +44,7 @@ Some routes answer anyone who can reach the port, with authentication on or off:
 
 - `/health` and `/health/ready`. `{{ env_prefix }}_HEALTH_DETAIL` decides how much they say; see [Health](deploy/docker.md#health).
 - In the OIDC modes, the OAuth metadata and sign-in routes a client uses before it holds a token.
+- On a server with transfer links, `/transfer/{token}`. The token in the URL is the credential, good for one transfer of one file before it expires; [Transfer links](deploy/transfer-links.md) says what the server accepts on it.
 
 ## What the operator is responsible for
 

@@ -306,6 +306,29 @@ Steps: [upgrading/v11.0.md](upgrading/v11.0.md).
 
 Steps: [upgrading/v11.1.md](upgrading/v11.1.md).
 
-## Unreleased
+## Unreleased - fixes to the v11.1 documentation moves
 
-_Nothing yet._
+### Links and nav entries at moved template pages
+
+The page migration now follows every page the template's `redirects` map moved, and rewrites links on release notes under `docs/releases/` too, so `uv run mkdocs build --strict` passes without hand-editing links to template pages. It runs on every update, so a project already on v11.1.0 gets the fix on this update with nothing to do.
+
+The nav migration now drops your old entries for template pages instead of parking them under **Unsorted**. On a project that already went through v11.1.0, those entries are still under Unsorted, and this update points each one at its page's new path, which the frame already lists. Delete every Unsorted entry for a template page: `configuration.md`, `configuration-generator.md`, `installation.md`, `tools/index.md`, `prompts.md`, and the `guides/` and `deployment/` pages, at their old or new paths.
+
+### Regenerate the reference pages
+
+Run `uv run python scripts/gen_reference.py` and commit `docs/reference/`. Two things change what it writes, and `gen_reference.py --check` reports the pages stale until you do:
+
+- A double-backtick code span in a docstring (` ``name`` `) is now kept as written. It used to come out as broken triple-backtick text.
+- The server is built for the HTTP transport, so a tool you register only over HTTP is now listed. The transfer-link tools are the common case. The build then runs your HTTP-only wiring, and the transfer routes need a base URL at build time. If yours do, add it to the `[tool.docs-reference]` table in `pyproject.toml`'s `PROJECT-DOCS-CHECKS` block, or the generator fails and names the table:
+
+  ```toml
+  [tool.docs-reference]
+  env = { MY_SERVER_BASE_URL = "https://example.invalid" }
+  ```
+
+  with your own prefix in place of `MY_SERVER`.
+
+### Text your DOMAIN blocks no longer need
+
+- `docs/security-model.md` now lists `/transfer/{token}` among the routes that answer without a credential. If your `DOMAIN-SECURITY-MODEL-EXTRA` block described that route, delete it there.
+- The manual install on `docs/deploy/systemd.md` now sets `EXTRAS` the way `packaging/scripts/postinstall.sh` does. If your `DOMAIN-SYSTEMD-EXTRA` block explained the missing extras, delete that.
