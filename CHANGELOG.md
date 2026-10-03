@@ -1,5 +1,10 @@
 # Changelog
 
+## v11.1.3 (2026-10-03)
+
+- #763 fix(gen_reference): keep the tools jump table's intro slot
+
+
 ## v11.1.2 (2026-10-03)
 
 - #762 fix: v11.1.1 follow-ups — parked-page links, stale page paths, release front matter, library tool groups
