@@ -1,5 +1,12 @@
 # Changelog
 
+## v11.1.4 (2026-10-04)
+
+- #777 docs: fix round-2 persona review findings on deploy and contribute pages
+- #776 docs(agents): rewrite AGENTS.md.jinja as directives, scope limits and pointers
+- #764 chore(deps): update anthropics/claude-code-action digest to cab360f
+
+
 ## v11.1.3 (2026-10-03)
 
 - #763 fix(gen_reference): keep the tools jump table's intro slot
