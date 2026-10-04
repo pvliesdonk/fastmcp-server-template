@@ -232,7 +232,7 @@ means the release comes from before it started, or waits.
   `pyproject.toml`. That line is template-owned (it sits above the
   `PROJECT-DEPS` block), so a hand edit there is drift: the conformance
   report flags it, and the next template change to the line conflicts with
-  it. The step therefore depends on the release:
+  it. The step depends on the release:
 
   - a release the constraint already admits: run
     `uv lock --upgrade-package fastmcp-pvl-core` and commit `uv.lock`, which
