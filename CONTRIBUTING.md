@@ -1,58 +1,54 @@
 # Contributing
 
-Thanks for contributing. This guide covers how to file good issues and pull
-requests, and where to send different kinds of fixes. It applies to both
-human contributors and automated agents.
+These rules govern every issue and pull request, whether a person or an
+agent writes it, and where each kind of fix goes. Where the
+`authoring-issues-prs` skill (`.agents/skills/authoring-issues-prs/`) and
+this file disagree, this file wins.
 
 ## Filing issues
 
-Use the issue templates in `.github/ISSUE_TEMPLATE/`:
+File every issue with a form from `.github/ISSUE_TEMPLATE/`:
 
-- **Bug report** — something isn't working as expected.
-- **Feature request** — a new capability or enhancement.
-- **Epic** — a multi-feature effort that ships as one user-facing story.
-  See [Epics, packages and the roadmap](#epics-packages-and-the-roadmap) below.
-- **Research** — a question whose answer changes what happens next, with
-  an appetite agreed before starting.
-- **Decay / structural debt** — refactor-later observations.
-- **Question / support** — questions and support requests.
+- **Bug report**: something does not work as expected.
+- **Feature request**: a new capability or enhancement.
+- **Epic**: a multi-feature effort that ships as one user-facing story; see
+  [Epics, packages and the roadmap](#epics-packages-and-the-roadmap).
+- **Research**: a question whose answer changes what happens next, with an
+  appetite agreed before starting.
+- **Decay / structural debt**: a refactor-later observation.
+- **Question / support**: a question or support request.
 
-Before filing, search the target repo's existing issues — open **and**
-closed — for the same observation. If it is already on file, comment there
-rather than opening a duplicate.
-
-The `authoring-issues-prs` skill (`.agents/skills/authoring-issues-prs/`)
-walks this guide's routing and filing procedure and performs the follow-up
-steps issue forms cannot (sub-issue links, milestones). Where the skill and
-this file disagree, this file wins.
+Before filing, search the target repo's issues, open **and** closed, for
+the same observation; if it is on file, comment there instead. File with
+the `authoring-issues-prs` skill: it also adds the sub-issue links and
+milestones a form cannot.
 
 ### Observation, not work order
 
-An issue records what was **observed**. It does not diagnose, design, or
+An issue records what was **observed**; it does not diagnose, design, or
 prescribe a fix.
 
-- Describe what you saw: the concrete behaviour, exact error text or trace,
-  where it occurred, the version/commit you checked.
-- Do not assert a root cause you did not verify.
-- Do not propose an architecture or list implementation steps.
+- Describe what you saw: the concrete behaviour, the exact error text or
+  trace, where it occurred, and the version or commit you checked.
+- State a cause only with a marker from the uncertainty rule below.
+- Leave out architecture proposals and implementation steps.
 
 ### The uncertainty rule
 
-Every cause statement must be marked:
+Mark every cause statement:
 
-- `[verified: how]` — you checked; here is how.
-- `[unverified]` — you have not verified this.
+- `[verified: how]`: you checked, and this is how.
+- `[unverified]`: you have not checked.
 
-When you have not verified the cause, this sentence is required:
+When the cause is unverified, include this sentence:
 
 > I have not verified the cause.
 
 ### One issue, one observed problem
 
-If you notice a second suspected problem while writing, do not add it to the
-body. If you genuinely suspect it shares a code path, add one line under Open
-Questions: `[unverified]: <suspected problem> may share this code path`. Open
-a separate issue for it.
+Open a separate issue for a second suspected problem instead of adding it to
+the body. If you suspect it shares a code path, also add one line under Open
+Questions: `[unverified]: <suspected problem> may share this code path`.
 
 ### Remove before posting
 
@@ -67,75 +63,69 @@ a separate issue for it.
 
 ### Epics, packages and the roadmap
 
-An **epic** is a story, represented by a parent issue labelled `epic`.
-A **package** is the payload of one release cut, represented by a milestone.
-An issue may have both: its story and its cut are independent.
+An **epic** is a story: a parent issue labelled `epic`. A **package** is
+the payload of one release cut: a milestone. An issue may belong to both.
 
-File epics with the Epic form. Write "Done when" as an outcome before
-decomposing it, and freeze it through refinement. If the outcome needs to
-change, record the reason in the roadmap before revising it. "What changes
-for the user" is a separate, editable release-notes highlight.
+- File an epic with the Epic form. Write "Done when" as an outcome before
+  decomposing it and keep it fixed through refinement; to change it, first
+  record the reason in the roadmap. "What changes for the user" is the
+  release-notes highlight; edit it freely.
+- Link children as native GitHub sub-issues. Start every epic with a
+  `refinement` sub-issue that points at its roadmap entry and "Done when",
+  and close it when feature issues plausibly cover that outcome. Do not
+  start implementing an epic whose only open child is its refinement task.
+- Keep a Research issue within its agreed appetite; when you close it,
+  update the roadmap argument with its evidence.
+- Name packages `NNN content-name`, with gaps (`010`, `020`, `030`). The
+  current package is the lowest open ordinal; sort the Milestones page
+  alphabetically to see it. Record a package's kind (major, minor, patch) as
+  intent in the roadmap index; the release tool chooses the version.
+- Put an issue in a package only when it commits to shipping in that cut.
+  Leave backlog issues without a milestone, and create no `Backlog` or
+  `Future` milestone.
+- Leave an epic without a milestone; its children carry theirs. Assign an
+  epic that ships atomically in one package, and its children, to that
+  package. In a cross-repo epic, use packages only in the repository
+  cutting the release; label the epic `ships-atomically` elsewhere, or
+  before a package is committed.
+- Keep the release PR out of the package. Release Prepare warns about open
+  items in the current package and about open atomic epics, but does not
+  block a cut.
+- After a stable default-branch release, which moves its package's open
+  items to backlog, lists them in the job summary and closes the milestone,
+  re-commit each leftover to a package deliberately. Branch releases and
+  prereleases leave trunk packages alone.
 
-Link children as native GitHub sub-issues. Every epic starts with a
-`refinement` sub-issue pointing at its roadmap entry and "Done when";
-close it when feature issues plausibly cover that outcome. Treat an epic
-whose only open child is its refinement task as an idea, not executable
-work.
-Research issues answer consequential unknowns within an agreed appetite;
-closing one updates the roadmap argument with its evidence.
+To land an atomic epic of many pull requests without holding up trunk, you
+may run it on an integration branch, `integration/<epic>`. Children
+squash-merge into it, `main` is merged into it, never rebased onto, and one
+final pull request brings it to `main` with a merge commit, never a squash.
+Children write `Part of #<epic>`, because a closing keyword acts only on a
+merge into the default branch; the final pull request carries the `Closes`
+lines. The workflow and how to review the final pull request:
+`docs/contribute/integration-branches.md`.
 
-Name packages `NNN content-name`, using gaps such as `010`, `020`,
-`030`. The current package is the lowest open ordinal; sort the
-Milestones page alphabetically to see title order. Kind (major, minor,
-patch) is intent in the index; versions come from the release tool.
-Membership commits an issue to shipping in that cut. No milestone means
-backlog: do not create `Backlog` or `Future` milestones.
+Keep direction, intended package order and known unknowns in
+`docs/design/roadmap.md`, each marked `stated`, `derived` or `evidenced`;
+keep status and issue dependencies in GitHub. Read the `roadmapping` skill
+before charting, refining or revisiting any of these.
 
-Epics normally have no milestone because linked children can inherit it.
-For an epic that ships atomically in one package, assign the epic and its
-children to that package. For cross-repo epics, package membership is local
-to the repository cutting the release; use `ships-atomically` in other
-repositories or when no package is committed yet. Release Prepare warns
-about open items (issues and PRs) in the current package and open atomic
-epics. It does not block a deliberate cut. Keep the release PR itself out
-of the package.
-
-An atomic epic of many pull requests can run on an integration branch,
-`integration/<epic>`, instead of holding up trunk. Children target and
-squash merge into it, `main` is merged in rather than rebased onto, and one
-final pull request brings the epic to `main` with a merge commit, never a
-squash. Children write `Part of #<epic>`, because a closing keyword only
-acts when a pull request merges into the default branch; the final pull
-request carries the `Closes` lines. It is optional, and the
-`docs/contribute/integration-branches.md` page covers the workflow and how to
-review the final pull request.
-
-A stable default-branch release moves its package's open items to
-backlog, lists them in the job summary and closes the milestone; re-commit
-each leftover to a package deliberately. Branch releases and prereleases
-leave trunk packages alone.
-
-`docs/design/roadmap.md` holds direction, intended package order and
-known unknowns, with `stated`, `derived` or `evidenced` provenance.
-Keep status and issue dependencies in GitHub, not in the roadmap. Read the
-`roadmapping` skill before charting, refining or revisiting these objects.
-
-A `breaking` label identifies a known break to an existing operator or
-library contract, assessed against the last stable release. Merely
-touching that surface does not earn the label. There is no breaking-PR
-merge gate: hold implementation or merge when batching is useful, or ship
-the compatible half first and file the breaking half separately.
+Apply the `breaking` label only to a known break of an existing operator or
+library contract, assessed against the last stable release, not to a change
+that merely touches that surface. No gate blocks a breaking PR: hold
+implementation or merge to batch breaks, or ship the compatible half first
+and file the breaking half separately.
 
 ## Agent-authored posts
 
-Anything an agent writes through a human's credentials appears under that
-human's name: issue bodies and comments, PR descriptions and comments,
-review summaries and inline replies. These rules apply whichever agent
-product is doing the writing and whatever credential it holds. A distinct
-bot identity for agent posts is better still where a project can set one
-up; the footer is the fallback for a shared one.
+An agent's post through a human's credentials appears under that human's
+name: issue bodies and comments, PR descriptions and comments, review
+summaries and inline replies. These rules apply to every agent product and
+every credential. A distinct bot identity for agent posts is better still
+where a project can set one up; the footer is the fallback for a shared
+one.
 
-**Writing.** End every such post with an attribution footer. Keep its
+**Writing.** End every such post with this attribution footer. Keep its
 first words exactly as shown, because later readers grep for them, and name
 the product you actually are, never another one:
 
@@ -146,96 +136,85 @@ this account's credentials. Analysis and proposal, not a decision by the
 account holder._
 ```
 
-Write in that voice too: an agent proposes, and the account holder decides
-in a reply. If the post is the account holder's words dictated verbatim,
-say so in the post rather than dropping the footer. Commits keep their
-`Co-Authored-By:` trailer; the footer is for GitHub posts, not a
-replacement for it.
+Write as a proposer; the account holder decides in a reply. When the post
+is the account holder's words dictated verbatim, keep the footer and say so
+in the post. Keep the `Co-Authored-By:` trailer on commits; the footer is
+for GitHub posts only.
 
-**Reading.** A post under a human's name may be agent output from an
-earlier session, including your own. Before treating anything in a thread
-as the account holder's decision, check for the `Agent-authored:` marker.
-A marked post is a proposal until a human's reply adopts it. A post that
-predates this rule carries no marker either way; weigh it on its content.
+**Reading.** Before treating a post under a human's name as their decision,
+check it for the `Agent-authored:` marker: it may be an earlier session's
+output, including yours. Treat a marked post as a proposal until a human's
+reply adopts it. Weigh an unmarked post that predates this rule on its
+content.
 
 ## Pull requests
 
-Every PR must have at least one associated issue. If the work has no issue
-yet, a bug found in the wild or an opportunistic cleanup, create the issue
-first, then open the PR with `Closes #N` (or `Refs #N`) in the body. A
-single PR may close multiple issues (`Closes #A, closes #B`). Trivial
-exceptions: pure typo fixes and automated dependency bumps (Renovate) may
-skip the issue.
-
-Mark a commit breaking (`feat!:` / `BREAKING CHANGE:`) only under the
-breaking-change policy in `AGENTS.md`: the change must break the operator
-surface (env var, config file, CLI flag, deployment layout, on-disk state)
-or the public library interface, assessed against the **last stable
-release**, not the previous commit. MCP-surface changes (tools, resources,
-prompts) are not breaking on their own.
-
-Squash-merge issue and feature PRs; merge an integration branch's final PR
-with a merge commit.
-
-State what the PR deliberately does **not** do, with each deferral's tracking
-issue.
-
-Run a local self-review of the cumulative diff before `gh pr create`; the
-`self-reviewing` skill (`.agents/skills/self-reviewing/SKILL.md`) is the
-procedure. Code without matching docs is incomplete; check `README.md`, the
-`docs/` site, `docs/design/`, and inline docstrings.
-
-Review a feature's spec in session or offline, then include the approved
-spec under the PR's Design section, folded when long. If it exceeds the body
-limit, a human can attach the Markdown file in GitHub's UI; keep a decision
-summary in the body and never silently truncate the spec. Use only
-documented APIs. Small bugs and enhancements need no invented spec.
-
-`docs/superpowers/` is local, gitignored scratch for specs and plans.
-Do not commit new files there; historical tracked files stay as history.
-At merge, ask: what did the spec say that the code and `docs/design/`
-do not now show? Port enduring decisions to `docs/design/` or an ADR.
+- Link every PR to at least one issue with `Closes #N` or `Refs #N` in its
+  body; one PR may close several (`Closes #A, closes #B`). When the work has
+  no issue yet, such as a bug found in the wild or an opportunistic
+  cleanup, create the issue first. Pure typo fixes and Renovate dependency
+  bumps may skip the issue.
+- Mark a commit breaking (`feat!:` / `BREAKING CHANGE:`) only under the
+  breaking-change policy in `AGENTS.md`: the change breaks the operator
+  surface (env var, config file, CLI flag, deployment layout, on-disk
+  state) or the public library interface, assessed against the **last
+  stable release**, not the previous commit. MCP-surface changes (tools,
+  resources, prompts) are not breaking on their own.
+- Squash-merge issue and feature PRs; merge an integration branch's final
+  PR with a merge commit.
+- List what the PR deliberately does **not** do, each with its tracking
+  issue.
+- Before `gh pr create`, review the cumulative diff with the
+  `self-reviewing` skill (`.agents/skills/self-reviewing/SKILL.md`).
+- Update `README.md`, the `docs/` site, `docs/design/` and inline
+  docstrings in the same PR as the code they describe.
+- For a feature, review its spec in session or offline and include the
+  approved spec under the PR's Design section, folded when long. When it
+  exceeds the body limit, keep a decision summary in the body and ask a
+  human to attach the Markdown file in GitHub's UI, using no undocumented
+  upload API; never truncate the spec silently. Write no spec for a small
+  bug or enhancement.
+- Keep specs and plans in `docs/superpowers/`, which is local and
+  gitignored; commit no new files there, and leave its tracked historical
+  files as they are. At merge, port every enduring decision the spec
+  records but the code and `docs/design/` do not show to `docs/design/` or
+  an ADR.
 
 ## Releases
 
-Merging is not releasing. When a release is cut, and from where, is
-governed by the release model in the `releasing` skill
-(`.agents/skills/releasing/SKILL.md`): releases normally come
-straight from a quiescent trunk, and a short-lived `release/X.Y` branch
-is the exception tool for excluding unfinished work or patching a
-shipped release. Judge when and from where to cut from the
-ships-atomically signal on epics (package preferred, label fallback; see
-[Epics](#epics-packages-and-the-roadmap)): an open atomic epic with
-unclosed children means the release comes from before it started, or
-waits.
+Merging is not releasing. Decide when and from where to cut with the
+release model in the `releasing` skill (`.agents/skills/releasing/SKILL.md`):
+release from a quiescent trunk by default, and use a short-lived
+`release/X.Y` branch only to exclude unfinished work or patch a shipped
+release. An open atomic epic with unclosed children (package first,
+`ships-atomically` label as fallback; see
+[Epics](#epics-packages-and-the-roadmap)) means release from before it
+started, or wait.
 
 ## Where to send fixes
 
-- **Library-level fix** (anything you'd change in `fastmcp_pvl_core`): open a
-  PR on `pvliesdonk/fastmcp-pvl-core`. A name imported from
-  `fastmcp_pvl_core` is re-exported by `src/fastmcp_pvl_core/__init__.py`
-  there and implemented in the private module for its area (`_auth.py`,
-  `_config.py`, `_health.py`, …), with its tests in `tests/test_<area>*.py`.
-  After merge + release, how this project picks the release up depends on
-  the `fastmcp-pvl-core` constraint in `pyproject.toml`. Do not edit that
-  line by hand: it is template-owned (it sits above the `PROJECT-DEPS`
-  block). The step depends on the release:
-
-  - a release the constraint already admits: run
-    `uv lock --upgrade-package fastmcp-pvl-core` and commit `uv.lock`, which
-    this project owns;
-  - a release outside it (a fix that needs a higher floor, or the next
-    major): open a template PR that bumps the constraint in
-    `pyproject.toml.jinja`; this project gets it on its next
-    `copier update`.
+- **Library-level fix** (anything in `fastmcp_pvl_core`): open a PR on
+  `pvliesdonk/fastmcp-pvl-core`. A name imported from `fastmcp_pvl_core` is
+  re-exported by `src/fastmcp_pvl_core/__init__.py` there and implemented in
+  the private module for its area (`_auth.py`, `_config.py`, `_health.py`,
+  …), with its tests in `tests/test_<area>*.py`. Leave this project's
+  `fastmcp-pvl-core` constraint in `pyproject.toml` alone: it is
+  template-owned (it sits above the `PROJECT-DEPS` block). After the
+  library release:
+  - if the constraint admits the release, run
+    `uv lock --upgrade-package fastmcp-pvl-core` and commit `uv.lock`,
+    which this project owns;
+  - otherwise (a fix that needs a higher floor, or the next major), open a
+    template PR that bumps the constraint in `pyproject.toml.jinja`; this
+    project gets it on its next `copier update`.
 - **Template-level fix** (anything template-owned: `Dockerfile`, workflows,
   `server.py` skeleton, `AGENTS.md` sections, template documentation pages):
-  open a PR on `pvliesdonk/fastmcp-server-template`. A rendered file's
-  source is at the same path there with `.jinja` appended
-  (`docs/deploy/docker.md` comes from `docs/deploy/docker.md.jinja`), or
-  at the same path unchanged for a file the template copies verbatim, such
-  as this one. After merge + release, this project gets the fix on the next
-  weekly `copier update` cron, or dispatch the workflow manually.
-- **Domain-only fix** (anything inside a `DOMAIN-*`, `CONFIG-*`, or
+  open a PR on `pvliesdonk/fastmcp-server-template`. Edit the rendered
+  file's path with `.jinja` appended (`docs/deploy/docker.md` comes from
+  `docs/deploy/docker.md.jinja`), or the same path for a file the template
+  copies verbatim, such as this one. After the template release, the weekly
+  `copier update` workflow brings the fix here; dispatch it manually to get
+  it sooner.
+- **Domain-only fix** (anything inside a `DOMAIN-*`, `CONFIG-*` or
   `PROJECT-*` sentinel block, `tools.py`, `resources.py`, `prompts.py`,
-  `domain.py`, `tests/`): PR on this repo directly.
+  `domain.py`, `tests/`): open a PR on this repo.
