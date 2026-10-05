@@ -5,9 +5,12 @@ This guide is for maintainers updating a generated project with
 Copier cannot do: preserving project-owned files, migrating removed extension
 points, changing repository settings, and checking operational behavior.
 
-Contributors: record migration steps under `## Unreleased` at the end of this
-file, never under a version heading; see "Writing UPGRADING.md" in
-`CLAUDE.md`.
+Contributors (when a note is needed: "Writing UPGRADING.md" in `CLAUDE.md`):
+write the note under `## Unreleased`, the last section, replacing the
+`_Nothing yet._` placeholder, and title it `## Unreleased - <short title>`.
+Never write under a version heading or into `upgrading/`;
+`scripts/promote_upgrading.py` moves the section at release time. Run
+`python3 scripts/promote_upgrading.py --check` before pushing.
 
 This file is the index: each released minor's section below is a one-line
 pointer to that minor's file under [`upgrading/`](upgrading/), which holds

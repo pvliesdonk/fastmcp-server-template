@@ -1,5 +1,8 @@
 name: template-release
 
+# After a release whose downstream steps need a human, reference their
+# UPGRADING.md section (upgrading/vX.Y.md) from the GitHub release notes.
+
 on:
   workflow_dispatch:
     inputs:
