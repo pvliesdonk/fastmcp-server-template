@@ -82,9 +82,8 @@ def record(report: str) -> int:
     sha = _resolve("HEAD")
     path = record_path(sha)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # S8707 traces stdin to this write, but the report is the file's content;
-    # the path is record_dir() plus a validated object name.
-    path.write_text(report, encoding="utf-8")  # NOSONAR
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(report)
     print(f"self-review: recorded the review of {sha[:12]}")
     return 0
 
