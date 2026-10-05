@@ -5,21 +5,21 @@ This guide is for maintainers updating a generated project with
 Copier cannot do: preserving project-owned files, migrating removed extension
 points, changing repository settings, and checking operational behavior.
 
-Contributors: record migration steps under `## Unreleased` at the end of this
-file, never under a version heading — the version is chosen at release time,
-and `scripts/promote_upgrading.py` moves the section into its minor's file
-then. See "Writing UPGRADING.md" in `CLAUDE.md`.
+Contributors (when a note is needed: "Writing UPGRADING.md" in `CLAUDE.md`):
+write the note under `## Unreleased`, the last section, replacing the
+`_Nothing yet._` placeholder, and title it `## Unreleased - <short title>`.
+Never write under a version heading or into `upgrading/`;
+`scripts/promote_upgrading.py` moves the section at release time. Run
+`python3 scripts/promote_upgrading.py --check` before pushing.
 
 This file is the index: each released minor's section below is a one-line
-pointer, and the full migration steps live in that minor's own file under
-[`upgrading/`](upgrading/). Read the files whole — each one is complete for
-its minor, and a partial read (a grep, a tail) of a combined document is how
-migration steps get missed. Read the current minor's file when your target
-includes a newer patch in that line, then every later minor's file through
-the target. This matters for a project on v1.2.0: v1.2.1 and v1.2.2 contain
-migration work recorded in the v1.2 file. Unless you need to diagnose an
-intermediate change, update straight to the newest patch of the newest minor
-rather than stopping on an early patch.
+pointer to that minor's file under [`upgrading/`](upgrading/), which holds
+its full steps. Read each applicable file whole, not by grep or tail. Start
+with your current minor's file when your target includes a newer patch in
+that line (a project on v1.2.0 needs the v1.2 file for v1.2.1 and v1.2.2),
+then read every later minor's file through the target. Update straight to
+the newest patch of the newest minor unless you are diagnosing an
+intermediate change.
 
 ## Before every upgrade
 
@@ -64,17 +64,16 @@ rather than stopping on an early patch.
    `python scripts/vendor_spa.py --check`. Run the Vale and browser checks when
    the relevant sections below introduce them.
 
-Files in `_skip_if_exists` need special attention. Copier seeds them once and
-then leaves them under project ownership. Later template corrections do not
-reach an existing copy. Some newer config files are both skip-listed and
+Copier seeds the files in `_skip_if_exists` once and never updates an
+existing copy, so a later template correction to one reaches your project
+only by hand. Some newer config files are both skip-listed and
 generator-owned; the generator, not Copier, rewrites those files.
 
-Nothing surfaces that gap for you. A skip-listed file never appears in a
-`copier update` diff, and the update pull request lists it among the regions
-to leave alone, so a template improvement to one can sit unadopted for
-releases without anything saying so. Check for it deliberately, by rendering
-the target with your own answers and comparing the files Copier will not
-touch:
+For a target of v6.0.0 or later, the update writes
+`.copier-seeded-changes.md` with the template's changes to every
+skip-listed file; read it. For an earlier target, or when that report says
+it could not be computed, render the target with your own answers and
+compare the files Copier will not touch:
 
 ```bash
 uv run --no-project --with copier copier copy --trust --defaults \
@@ -89,11 +88,10 @@ diff -r /tmp/target-render/.claude-plugin .claude-plugin
 Then adopt what the template authored and keep what you wrote; this is a read
 and a decision, not a wholesale copy.
 
-`_skip_if_exists` in the template's `copier.yml` is the full list. Most of it
-is yours by construction and will differ every time, which is why a blanket
-diff of all of it is noise: `tools.py`, `resources.py`, `prompts.py`,
-`domain.py`, the seeded tests, `CHANGELOG.md`, `docs/releases/`, `LICENSE`.
-The entries worth reading a diff of are the ones the template still authors
+`_skip_if_exists` in the template's `copier.yml` is the full list. Skip the
+entries that are yours by construction (`tools.py`, `resources.py`,
+`prompts.py`, `domain.py`, the seeded tests, `CHANGELOG.md`,
+`docs/releases/`, `LICENSE`). Diff the ones the template still authors
 content for, where a change is a correction rather than your own work:
 
 - `.vale/styles/config/vocabularies/Base/accept.txt` — for targets before
@@ -104,11 +102,6 @@ content for, where a change is a correction rather than your own work:
 - `packaging/mcpb/` — `manifest.json.in`, `pyproject.toml.in`, `build.sh` and
   the entry shim, which track the mcpb CLI and manifest version;
 - `.gitignore`, `.vale.ini`, `config-presentation.domain.yml`.
-
-How much this matters depends on how far behind you are, and it is worth
-knowing that it is often nothing. Between v5.0.0 and v5.6.1 no skip-listed
-file changed at all; from v4.0.0 the set is two files. A v3.x jump is the one
-that carries real content.
 
 ## v1.0 - Copier foundation and initial packaging
 
@@ -306,6 +299,13 @@ Steps: [upgrading/v11.0.md](upgrading/v11.0.md).
 
 Steps: [upgrading/v11.1.md](upgrading/v11.1.md).
 
-## Unreleased
+## Unreleased - Pushes require a recorded self-review
 
-_Nothing yet._
+A new `self-review` pre-push hook fails a push whose commit has no review
+recorded by the `self-reviewing` skill. Agents clear it by running the skill,
+which records the review as its last step.
+
+- Tell everyone who pushes to the project by hand, without an agent, to push
+  with `SKIP=self-review git push`; their pushes fail otherwise.
+- In a clone with no `.git/hooks/pre-push`, run `uv run pre-commit install`
+  once; the hook does not run otherwise.
