@@ -299,6 +299,13 @@ Steps: [upgrading/v11.0.md](upgrading/v11.0.md).
 
 Steps: [upgrading/v11.1.md](upgrading/v11.1.md).
 
-## Unreleased
+## Unreleased - Pushes require a recorded self-review
 
-_Nothing yet._
+A new `self-review` pre-push hook fails a push whose commit has no review
+recorded by the `self-reviewing` skill. Agents clear it by running the skill,
+which records the review as its last step.
+
+- Tell everyone who pushes to the project by hand, without an agent, to push
+  with `SKIP=self-review git push`; their pushes fail otherwise.
+- In a clone with no `.git/hooks/pre-push`, run `uv run pre-commit install`
+  once; the hook does not run otherwise.

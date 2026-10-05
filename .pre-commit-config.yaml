@@ -1,6 +1,18 @@
+default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: local
     hooks:
+      # Self-review: fails a push whose commit has no review recorded by the
+      # self-reviewing skill (scripts/check_self_review.py --record).  A
+      # person pushing without an agent: SKIP=self-review git push.
+      - id: self-review
+        name: self-review recorded for the pushed commit
+        entry: python3 scripts/check_self_review.py --hook
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       # Both ruff hooks read the root ruff.toml, the same rule set
       # template-ci's lint and format steps apply (#568); a hook failure
       # therefore means the change violates something the project enforces,

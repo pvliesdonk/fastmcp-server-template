@@ -15,9 +15,9 @@ description: >-
 This skill is the local self-review a change gets before its diff becomes
 someone else's problem: before a reviewer reads it, before a hosted bot
 spends the maintainer's tokens on it, before a fix costs a public push.
-It produces a **findings report** — it is not a gate. It never grants or
-withholds permission to push, and no ruleset requires it; deterministic CI
-remains the only merge gate. What it asks instead is honest convergence:
+It produces a **findings report**, not a verdict. The `self-review`
+pre-push hook requires only that a review of the pushed commit is recorded,
+not that it found nothing; deterministic CI remains the only merge gate. What it asks instead is honest convergence:
 every finding you report gets fixed or explicitly justified, in writing,
 before the push.
 
@@ -88,7 +88,8 @@ sees — never "since my last push".
   of a shell command, a sequential pass in place of a subagent fan-out);
   if none exists, skip that step or charter, name the gap in the report's
   coverage line, and move on — never retry the same denied call.
-- **Read-only.** The review changes nothing: no checkouts, no stashes, no
+- **Read-only.** The review changes nothing except the record it writes
+  under the git directory when it converges: no checkouts, no stashes, no
   fixing-while-reviewing. Unrelated working-tree changes stay untouched.
   Read committed content at its revision (`git show <rev>:<path>`), not
   from the working tree.
@@ -262,7 +263,11 @@ reader knows what this review is not.
 2. Re-verify what you fixed, narrowly: the check that confirmed the
    finding now confirms the fix. Re-walk affected charters in full only if
    the fixes reshaped the diff.
-3. If a second fix round still surfaces new blockers or importants, stop
+3. Commit the fixes, then record the review of the commit you will push by
+   piping the report into `python3 scripts/check_self_review.py --record`.
+   The pre-push hook refuses a push of any other commit, so record again
+   after every later commit.
+4. If a second fix round still surfaces new blockers or importants, stop
    reviewing and hand the remainder to the human: the findings so far,
    what you fixed, what still surfaces, and your best reading of why.
    That handoff is this skill working as designed — the human decides

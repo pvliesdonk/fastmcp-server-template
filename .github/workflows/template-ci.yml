@@ -2021,7 +2021,7 @@ jobs:
         # downstream CI on the next copier-update.
         run: |
           uv run --no-sync --no-build ruff check \
-            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/repo_about.py scripts/tests/
+            scripts/copier_update_notes.py scripts/check_render_hygiene.py scripts/check_update_regression.py scripts/gen_config_surface.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/promote_release_notes.py scripts/promote_upgrading.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/check_pr_title.py scripts/repo_about.py scripts/tests/ scripts/check_self_review.py scripts/check_self_review.py
 
       - name: Type-check scripts (mypy)
         # The pre-commit hook's mypy, from the same locked tooling env, so
@@ -2068,7 +2068,7 @@ jobs:
         run: |
           uv run --no-sync --no-build ruff check \
             --select C901,PLR0911,PLR0912,PLR0913,PLR0915,S \
-            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310,scripts/report_seeded_changes.py:S603,scripts/report_seeded_changes.py:S606,scripts/report_seeded_changes.py:S607,scripts/check_template_conformance.py:S603,scripts/check_template_conformance.py:S607,scripts/package_milestones.py:S603,scripts/package_milestones.py:S607,scripts/migrate_agent_instructions.py:S603,scripts/migrate_agent_instructions.py:S607,scripts/migrate_docs_nav.py:S603,scripts/migrate_docs_nav.py:S607,scripts/migrate_docs_pages.py:S603,scripts/migrate_docs_pages.py:S607" \
+            --per-file-ignores "scripts/gen_config_surface.py:S606,scripts/promote_release_notes.py:S603,scripts/promote_release_notes.py:S607,scripts/check_pins.py:S310,scripts/report_seeded_changes.py:S603,scripts/report_seeded_changes.py:S606,scripts/report_seeded_changes.py:S607,scripts/check_template_conformance.py:S603,scripts/check_template_conformance.py:S607,scripts/package_milestones.py:S603,scripts/package_milestones.py:S607,scripts/migrate_agent_instructions.py:S603,scripts/migrate_agent_instructions.py:S607,scripts/migrate_docs_nav.py:S603,scripts/migrate_docs_nav.py:S607,scripts/migrate_docs_pages.py:S603,scripts/migrate_docs_pages.py:S607,scripts/check_self_review.py:S603,scripts/check_self_review.py:S607" \
             --config "lint.mccabe.max-complexity=10" \
             --config "lint.pylint.max-args=5" \
             --config "lint.pylint.max-branches=12" \
@@ -2076,7 +2076,7 @@ jobs:
             --config "lint.pylint.max-statements=50" \
             --line-length 88 \
             --target-version py311 \
-            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/migrate_docs_nav.py scripts/llmstxt_sections_hook.py scripts/check_docs_structure.py scripts/gen_reference.py scripts/migrate_docs_pages.py scripts/published_examples.py scripts/check_pr_title.py scripts/repo_about.py
+            scripts/gen_config_surface.py scripts/copier_update_notes.py scripts/promote_release_notes.py scripts/check_pins.py scripts/check_references.py scripts/report_seeded_changes.py scripts/check_template_conformance.py scripts/package_milestones.py scripts/migrate_agent_instructions.py scripts/migrate_docs_nav.py scripts/llmstxt_sections_hook.py scripts/check_docs_structure.py scripts/gen_reference.py scripts/migrate_docs_pages.py scripts/published_examples.py scripts/check_pr_title.py scripts/repo_about.py scripts/check_self_review.py
 
   sonar:
     # CI-based SonarQube Cloud analysis of this repository, with the coverage
