@@ -1,130 +1,71 @@
 # fastmcp-server-template
 
-Copier template repository.  This file is for claude-code agents
-working on the **template itself** — NOT the generated projects.
-Generated projects get their own `AGENTS.md` rendered from
-`AGENTS.md.jinja` (plus a stub `CLAUDE.md` that imports it).
-
-## Purpose
-
 This repo is a [copier](https://copier.readthedocs.io/) template that
-scaffolds FastMCP servers on top of `fastmcp-pvl-core`.  Users run
-`copier copy gh:pvliesdonk/fastmcp-server-template my-service` to
-create new projects.
+scaffolds FastMCP servers on top of `fastmcp-pvl-core`; users run
+`copier copy gh:pvliesdonk/fastmcp-server-template my-service`.  This file
+guides work on the template itself.  Guidance for agents in a generated
+project goes in `AGENTS.md.jinja`, which renders to that project's
+`AGENTS.md`; `CLAUDE.md.jinja` stays the three-line `@AGENTS.md` stub that
+`tests/test_agent_instructions.py` checks.
 
-## Layout
+## What renders where
 
-- `copier.yml` — variables, `_skip_if_exists`, `_exclude`.
-- `tests/fixtures/smoke-answers.yml` — fixed answers for CI self-test.
-- `.github/workflows/template-ci.yml` — renders the template with
-  smoke-answers and runs the generated project's gate.
-- `.github/workflows/template-release.yml` — manual `workflow_dispatch`
-  bump for the template's own git tags; no PSR.
-- `.github/workflows/*.yml.jinja` — generated project's workflows.
-- `src/{{python_module}}/*.jinja` — generated project's Python module.
-- `pyproject.toml.jinja`, `Dockerfile.jinja`, etc. — generated project's
-  other files.
-- `AGENTS.md.jinja` — the generated project's single always-loaded
-  instruction file; `CLAUDE.md.jinja` is a three-line `@AGENTS.md` stub
-  next to it. `tests/test_agent_instructions.py` (copied verbatim, see
-  below) guards that shape in the *rendered* project — this repo's own
-  `CLAUDE.md` is deliberately the maintainer guide you are reading, not
-  the stub.
-- `.github/ISSUE_TEMPLATE/*.yml`, `CONTRIBUTING.md`, and every template-owned
-  skill's `.agents/skills/*/SKILL.md(.jinja)` (with its relative
-  `.claude/skills/<name>` symlink — carried into a render as a symlink,
-  rather than a copy of its target, by copier's `_preserve_symlinks: true`)
-  are copied verbatim into generated projects and re-rendered on
-  `copier update`.
-- `scripts/check_references.py` — shipped to every project; enforces the
-  OKF v0.2 frontmatter, source-id, test-pin and bundle contract of the
-  external-behaviour references under `docs/design/reference/` that the
-  `researching-references` skill writes. `tests/test_reference_docs.py`
-  (copied verbatim) runs it in a downstream's CI;
-  `scripts/tests/test_check_references.py` unit-tests it here.
-- `scripts/check_template_conformance.py` — shipped to every project;
-  renders the template with the project's answers and lists every
-  re-rendered file that differs from the render outside its sentinel
-  blocks. `report_seeded_changes.py` (the last after-stage migration) runs
-  it against `HEAD` and the previous ref to write
-  `.copier-template-drift.md`, the drift an update carries forward without
-  a conflict marker; the `applying-template-updates` skill works from that
-  report. Its `--since BASE` mode reports only the drift a range adds,
-  each commit judged against the template version it pinned; the
-  `self-reviewing` skill runs it, and `REVIEW.md` asks hosted reviewers to
-  report the same drift by reading.
-  `scripts/tests/test_check_template_conformance.py` unit-tests it
-  and `check_update_regression.py` asserts it end to end.
-- `pyproject.toml` + `uv.lock` — this repo's own tooling environment
-  (copier, ruff, pytest, pvl-core, …), not a package and never rendered
-  (`pyproject.toml.jinja` takes precedence; `uv.lock` is in `_exclude`).
-  `template-ci` runs `uv sync --locked --no-build` once per job and every
-  tool through `uv run --no-sync`; run tools locally with `uv run --locked`.
-  Its pvl-core pin must equal `pyproject.toml.jinja`'s, which
-  `scripts/tests/test_tooling_env.py` enforces — bump both, then `uv lock`.
-- `sonar-project.properties` — this repo's own SonarQube Cloud settings,
-  read by template-ci's `sonar` job, which scans with the script tests'
-  coverage (`[tool.coverage.run]` in `pyproject.toml`). The project's
-  Automatic Analysis is off, so that job is the template's only analysis.
-  Never rendered: generated projects get `sonar-project.properties.jinja`
-  (copier's `.jinja` precedence), with their own `sonar` job in `ci.yml`.
-- `ruff.toml` — lint configuration for this repo's own Python under
-  `scripts/`, read by the pre-commit hooks and `template-ci`'s lint and
-  format steps alike; excluded from renders (a generated project carries
-  its own `[tool.ruff]` block, which this file mirrors and
-  `scripts/tests/test_ruff_config_mirror.py` keeps equal).
-- `scripts/migrate_agent_instructions.py` — the `copier update` migration
-  that splices a downstream's `CLAUDE.md` DOMAIN blocks into `AGENTS.md` and
-  rewrites `CLAUDE.md` as the stub; it is copier's after-stage `_migrations`
-  entry. `copier.yml`'s before-stage shell guard runs earlier in the same
-  update and removes any real `.claude/skills/<name>` directory it finds
-  (for every template skill name) so the render can lay the symlink
-  down in its place — so by the time the after-stage migration's own
-  symlink reconciliation runs there is normally nothing left for it to
-  remove (the branch stays as belt-and-braces).
+- Edit `X.jinja` to change the generated project's `X`.  A plain file beside
+  a `.jinja` of the same name (`CLAUDE.md`, `SECURITY.md`, `pyproject.toml`,
+  `sonar-project.properties`) is this repo's own and never renders.
+- Every other plain file outside `copier.yml`'s `_exclude` and
+  `_skip_if_exists` ships verbatim and is re-rendered on `copier update`,
+  including `CONTRIBUTING.md`, `.github/ISSUE_TEMPLATE/*.yml`, the skills
+  under `.agents/skills/`, the shipped `scripts/` and
+  `tests/test_agent_instructions.py`.  Write those for the downstream
+  reader, not for this repo.  A `_skip_if_exists` file is seeded once and
+  never reaches an existing project again.
+- Run this repo's tools with `uv run --locked`.  Bump the
+  `fastmcp-pvl-core` pin in `pyproject.toml` and `pyproject.toml.jinja`
+  together, then run `uv lock`.
+- `ruff.toml` lints `scripts/`; change it together with the `[tool.ruff]`
+  block in `pyproject.toml.jinja` (`scripts/tests/test_ruff_config_mirror.py`).
+- When you add, rename or remove a template skill, update `TEMPLATE_SKILLS`
+  in `scripts/migrate_agent_instructions.py`, the same tuple in
+  `scripts/tests/test_shared_skill_paths.py` and in
+  `tests/test_agent_instructions.py`, and the directory list in `copier.yml`'s
+  before-stage guard, and add the relative symlink
+  `.claude/skills/<name>` → `../../.agents/skills/<name>`.
+  `scripts/tests/test_shared_skill_paths.py` checks all five.
 
 ## Making changes
 
 1. Edit the relevant `.jinja` file(s).
-2. Commit (copier reads from the git index — uncommitted changes are
-   silently ignored without `--vcs-ref=HEAD`).
+2. Commit.  Copier renders from the git index, so it ignores uncommitted
+   changes.
 3. Render locally:
    ```bash
    rm -rf /tmp/smoke
    uv run --locked copier copy --trust --defaults \
      --vcs-ref=HEAD --data-file tests/fixtures/smoke-answers.yml . /tmp/smoke
    ```
-   `--vcs-ref=HEAD` tells copier to use the latest commit instead of the
-   latest git tag (the default).  Without it, your edits render only
-   after a release.  If you need to iterate, amend the commit or make
-   follow-up commits — rendering from the working tree is not supported.
-4. Check the render is hygiene-clean, **before anything writes into the
-   tree**.  This is why it comes before steps 5 and 6 rather than after:
-   both `vale sync` and `uv sync` leave files behind, and the guard
-   reports those as violations the change never caused.  `template-ci`
-   runs it in this same position, ahead of its own `uv sync`.
+   Keep `--vcs-ref=HEAD`; without it copier renders the latest tag.  To
+   iterate, amend the commit or add commits; copier cannot render the
+   working tree.
+4. Check render hygiene before anything writes into the tree, because the
+   guard reports files that `vale sync`, `uv sync` or any other command
+   leaves behind:
    ```bash
    python3 scripts/check_render_hygiene.py /tmp/smoke
    ```
-   If you have already run step 5 or 6 in `/tmp/smoke`, re-render into a
-   fresh directory and check that instead — do not "clean up" the tree.
-5. Check the rendered prose is Vale-clean.  `template-ci` gates on this,
-   and it is the only pre-push path: the template's own sources are
-   `.md.jinja`, which Vale cannot usefully lint.
+   If you already ran step 5 or 6 in `/tmp/smoke`, re-render into a fresh
+   directory and check that; do not delete files from the tree.
+5. Check the rendered prose with the Vale version pinned in the rendered
+   `.github/workflows/ci.yml`:
    ```bash
    cd /tmp/smoke
    vale sync    # writes style packs into the tree — after step 4, never before
    vale --glob='!docs/{superpowers,design,decisions}/**' docs README.md
    ```
-   Match the Vale version pinned in the rendered `.github/workflows/ci.yml`;
-   a different local binary can report differently.  The file set and glob
-   above are a convenience copy — `template-ci` extracts the version, file
-   set and glob from that rendered `ci.yml` rather than restating them, so
-   those three cannot drift from what a downstream runs.  One divergence is
-   deliberate: a downstream's `ci.yml` sets `filter_mode: added`, failing
-   only on findings on lines its PR touched, while this gate lints the whole
-   set — the template owns this prose, so all of it must stay clean.
-6. Verify the generated project's own gate passes:
+   Fix every finding in that set, not only those on lines you touched:
+   `template-ci` lints the whole set, unlike a downstream's
+   `filter_mode: added`.
+6. Run the generated project's gate:
    ```bash
    cd /tmp/smoke
    uv sync --all-extras --all-groups
@@ -132,174 +73,107 @@ create new projects.
    uv run mypy src/ tests/ && uv run pytest -x -q
    ```
 7. Commit any fixes, push, open a PR.
-8. `template-ci.yml` runs the gate on Python 3.11–3.14.  The Vale step
-   runs on 3.11 alone: its result does not depend on the interpreter, and
-   syncing style packs is a network fetch.
 
 ### Render hygiene
 
-The template ships the `trailing-whitespace` and `end-of-file-fixer`
-pre-commit hooks, and both *rewrite* files.  Anything they would touch in
-a pristine render becomes a latent `copier update` conflict: the
-downstream commits the fixed-up form, so copier's 3-way merge sees `ours`
-differ from `base` in that region, and the first template version that
-also changes that region conflicts for **every** downstream.
+Leave a pristine render with nothing for the shipped `trailing-whitespace`,
+`end-of-file-fixer` and `ruff format` hooks to rewrite: a downstream commits
+the rewritten form, and the next template change to that region conflicts
+for every downstream.
 
-The classic trap (issue #251) is a Jinja block tag at EOF — Jinja has no
-`trim_blocks` here, so the newline after `{% endif %}` survives and the
-render ends with a blank line.  Use `{%- endif %}` or put real content
-after it.  `scripts/check_render_hygiene.py` is the guard; in
-`render-and-gate` it covers six renders — default, gate-off,
-authorization-off, automatic-review-on, the clean-tree opt-out render, and
-the long-identifiers render.  A variant is
-only covered if it is rendered *above* the hygiene step and named in its
-argument list, so a new render step belongs in both places.  The
-idempotence render (`/tmp/smoke2`) is deliberately excluded: it is already
-asserted byte-identical to the default render.
-
-The same latent-conflict mechanism applies to `ruff format`, which is
-also a shipped hook.  A Python line that holds `{{ project_name }}`,
-`{{ python_module }}`, `{{ env_prefix }}` or `{{ domain_description }}`
-inline gets longer with the answer.  The smoke answers use 9-character
-names and a 49-character blurb, so such a line can pass every gate here
-and still be rewrapped downstream (#649, #704).  Write any call or import
-whose length depends on an answer either with the value hoisted into a
-variable, or exploded one argument per line with a trailing comma, which
-ruff keeps as it is at any length.  The long-identifiers render (all four
-names at 32 characters and the blurb at the validator's 100, checked with
-the smoke project's locked ruff) is the guard.
+- Do not end a `.jinja` file on a block tag.  Jinja keeps the newline after
+  `{% endif %}` here, so the render ends with a blank line; write
+  `{%- endif %}` or put content after the tag.
+- Write any Python call or import whose length depends on
+  `{{ project_name }}`, `{{ python_module }}`, `{{ env_prefix }}` or
+  `{{ domain_description }}` with the value hoisted into a variable, or one
+  argument per line with a trailing comma.  The smoke answers are too short
+  to show the rewrap; template-ci's long-identifiers render catches it.
+- To add a render variant to template-ci's `render-and-gate`, render it
+  above the `check_render_hygiene.py` step and add its directory to that
+  step's arguments.  Leave the idempotence render `/tmp/smoke2` out; it is
+  asserted byte-identical to the default render.
 
 ### Always-loaded budget
 
-`AGENTS.md` is the one file every AAIF-aware agent loads on every turn, so
-its template-owned prose is budgeted separately from a downstream's own
-content. `template-ci` fails when the smoke render's `AGENTS.md` exceeds
-24 000 characters of template-owned prose (the DOMAIN blocks hold only
-their placeholder text in that render). `tests/test_agent_instructions.py`
-— copied verbatim into every generated project, not a `.jinja` file —
-separately asserts a *rendered* project's whole `AGENTS.md` stays
-≤ 40 000 characters, the budget that also covers a downstream's own
-DOMAIN content. When new guidance is task-shaped rather than
-always-needed, put it in a skill under `.agents/skills/` instead of
-growing `AGENTS.md.jinja` — that is the lever both budgets expect you to
-pull. The template-skill names must stay
-identical across four places — `TEMPLATE_SKILLS` in
-`scripts/migrate_agent_instructions.py`, the same tuple in
-`scripts/tests/test_shared_skill_paths.py` and in the verbatim-shipped
-`tests/test_agent_instructions.py`, and the before-stage shell guard's
-directory list in `copier.yml` — and the first test file is the guard
-against drift.
+`template-ci` fails when the smoke render's `AGENTS.md` exceeds 24 000
+characters of template-owned prose, and `tests/test_agent_instructions.py`
+fails a rendered project whose whole `AGENTS.md` exceeds 40 000.  Put
+guidance that only some tasks need in a skill under `.agents/skills/`, not
+in `AGENTS.md.jinja`.
 
 ## Breaking changes
 
-The canonical breaking-change policy ships in the generated project's
-`AGENTS.md` — see "Breaking Changes and the `!` Marker" in
-`AGENTS.md.jinja`.  In short: a change is breaking only if it breaks
-the operator surface (env var, config file, CLI flag, deployment
-layout, on-disk state) or the public library interface, assessed
-against the last stable release; MCP-surface changes (tools, resources,
-prompts) are not breaking on their own.
+The breaking-change policy is "Breaking Changes and the `!` Marker" in
+`AGENTS.md.jinja`: a change is breaking only if it breaks the operator
+surface (env var, config file, CLI flag, deployment layout, on-disk state)
+or the public library interface, assessed against the last stable release.
+MCP-surface changes (tools, resources, prompts) are not breaking on their
+own.  In this repo, "the breaking-change policy in `AGENTS.md`" in
+`CONTRIBUTING.md` and `.github/PULL_REQUEST_TEMPLATE.md` means this section.
 
-The same test governs this repo, one level up: a template change is
-breaking when it breaks a surface that generated projects' *users*
-hold — renaming an env var in the config skeleton, moving a state
-directory the Dockerfile ships, dropping a sentinel block projects
-extend.  This repo's releases are cut manually via
-`template-release.yml`'s `bump` input; apply the same test when
-deciding whether that input must be `major`.  `CONTRIBUTING.md` and
-`.github/PULL_REQUEST_TEMPLATE.md` point at "the breaking-change
-policy in `AGENTS.md`" — in this repo that is this section; in a
-generated project it is the rendered section from `AGENTS.md.jinja`.
+A template change is breaking when it breaks a surface that generated
+projects' *users* hold: renaming an env var in the config skeleton, moving
+a state directory the Dockerfile ships, dropping a sentinel block projects
+extend.  Recommend `major` for `template-release.yml`'s `bump` input when a
+release carries one.
 
 ## Repository protection
 
 `.github/rulesets/*` ship to generated projects, where the rendered
-`bootstrap.yml` applies them (posture documented in
-`docs/contribute/repository-protection.md.jinja`).  The `main` and
-`release/*` rulesets are `.json.jinja`: they require the generated `ci.yml`'s aggregate
-`CI Success` check plus whatever the project listed in the
-`extra_required_checks` answer, the seam that lets a domain check outside
-`ci.yml` be merge-blocking without forking a template-owned file (#454).
-`scripts/tests/test_ruleset_required_checks.py` guards both halves — an
-empty answer must render the single-context form every existing downstream
-already has, and a non-empty one must still render valid JSON.  The tag
-ruleset has no status checks and stays plain JSON, and so does
-`protect-integration-branches.json`: it requires `CI Success` alone,
-because a domain check's own workflow may not run on `integration/*` and a
-required check that never reports blocks every child PR (#454's trap).
-All three branch rulesets are non-strict — a PR need not be up to date
-with its base — and the same test file pins that.
-`bootstrap.yml.jinja`'s `security` job also enables private vulnerability
-reporting, Dependabot alerts and push protection; `SECURITY.md.jinja` is the
-policy generated projects get, and the plain `SECURITY.md` beside it is this
-repo's own (kept out of renders by copier's `.jinja` precedence, like
-`CLAUDE.md`). `scripts/tests/test_bootstrap_security.py` guards both, and
-`docs/design/reference/github-repository-security-settings.md` records the
-GitHub behaviour they rely on.
+`bootstrap.yml` applies them; the posture is in
+`docs/contribute/repository-protection.md.jinja`.
 
-This template repo itself does NOT run bootstrap and has no aggregate
-check — `template-ci.yml` exposes per-job contexts instead — so its own
-protection is managed by hand: reuse the ruleset files as a starting point,
-but swap the required check contexts for the template-ci job names.
+- Keep an empty `extra_required_checks` answer rendering the `main` and
+  `release/*` rulesets with the single `CI Success` context, and a
+  non-empty one rendering valid JSON.
+- Keep the tag ruleset and `protect-integration-branches.json` plain JSON;
+  the latter requires `CI Success` alone, because a domain check may not
+  run on `integration/*` and a required check that never reports blocks
+  every child PR.
+- Keep all three branch rulesets non-strict.
+  `scripts/tests/test_ruleset_required_checks.py` checks these three rules.
+- Before changing `bootstrap.yml.jinja`'s `security` job or
+  `SECURITY.md.jinja`, read
+  `docs/design/reference/github-repository-security-settings.md`;
+  `scripts/tests/test_bootstrap_security.py` checks both.
+
+This repo runs no bootstrap and has no aggregate check.  Manage its own
+protection by hand from the ruleset files, with the required contexts
+swapped for `template-ci.yml`'s job names.
 
 ## Release
 
-Run `template-release.yml` via `workflow_dispatch` with `bump` input
-(patch/minor/major).  It tags a new `vX.Y.Z`, updates CHANGELOG.md,
-and creates a GitHub release.
+Releases are cut by running `template-release.yml` via `workflow_dispatch`
+with the `bump` input (patch/minor/major); it tags `vX.Y.Z`, updates
+`CHANGELOG.md` and creates the GitHub release.  When a release carries
+manual downstream steps, reference their `UPGRADING.md` section from the
+release notes.
 
-`UPGRADING.md` (template-repo only, excluded from renders) carries the
-one-time manual steps a `copier update` jump needs in generated projects
-— reference the relevant section from the release notes when such a
-release ships.
+In this repo, `CONTRIBUTING.md`'s "release model in the `releasing` skill"
+means this manual dispatch; the trunk-first model in
+`.agents/skills/releasing/SKILL.md.jinja` applies without release branches.
 
 ### Writing UPGRADING.md
 
 **Any change that a downstream cannot absorb by running `copier update`
 alone gets a note in `UPGRADING.md`, in the same PR that makes the
-change.** The test is whether a human must *do* something: rename an env
-var, move or delete a file the template no longer owns, rescue content
-from a removed sentinel, add a secret, change a repository setting, or
-re-run a generator. A change a downstream picks up silently needs no
-note; a change that will fail, or quietly do the wrong thing, until
-someone acts does. Write it as instructions to that person, not as a
-description of the diff.
+change.**  A note is needed when a human must act: rename an env var, move
+or delete a file the template no longer owns, rescue content from a removed
+sentinel, add a secret, change a repository setting, or re-run a generator.
+A change a downstream picks up silently needs none.  Write the note as
+instructions to that person, not as a description of the diff.
 
-**Write it under `## Unreleased`, at the end of `UPGRADING.md`, and
-never under a version heading.** The version is not knowable while the
-change is being made — it is chosen later, by the `bump` input of the
-release dispatch — so a hand-written `## v5.2` is a guess that is simply
-wrong if the next release turns out to be a patch. Add a
-`## Unreleased - <short title>` heading if the file has none; the title
-carries through to the released heading.
-
-`UPGRADING.md` is an *index*: its released `## vX.Y` sections are
-one-line pointers, and each minor's full steps live in
-`upgrading/vX.Y.md` (the split exists because a single 1400-line file
-made a grep or a tail look complete while missing whole minors). Never
-write released content into the index — `scripts/promote_upgrading.py`,
-which `template-release.yml` runs, moves the Unreleased section into the
-right per-minor file at release time (creating file and pointer on a
-minor or major, appending on a patch) and leaves a fresh empty
-`## Unreleased` behind. `scripts/copier_update_notes.py` (rendered into
-every project) assembles a jump's notes from those per-minor files for
-the copier-update PR body.
-
-`template-ci` asserts the invariants — at most one `## Unreleased` and it
-is last, every index section is a pointer whose per-minor file exists,
-every per-minor file is indexed — and that the release workflow still
-both runs the promotion and stages the result (`upgrading/` included).
-Run `python3 scripts/promote_upgrading.py --check` locally to see what
-it sees.
-
-The release *model* that generated projects follow — trunk releases from
-a quiescent commit by default, short-lived `release/X.Y` branches as the
-exception, the three channels — ships in
-`.agents/skills/releasing/SKILL.md.jinja`'s "Release model" section.
-`CONTRIBUTING.md` points at "the release model in the `releasing` skill":
-in a generated project that resolves to that rendered skill; in this
-repo, releases are the manual dispatch above and the same trunk-first
-spirit applies, without the branch machinery.
+- Write it under `## Unreleased`, the last section of `UPGRADING.md`,
+  replacing the `_Nothing yet._` placeholder.  Never write it under a
+  version heading: the release dispatch chooses the version later.
+- Title the heading `## Unreleased - <short title>`; the title carries into
+  the released heading.
+- Leave the released `## vX.Y` index sections as one-line pointers and add
+  no steps to `upgrading/vX.Y.md` by hand; `scripts/promote_upgrading.py`
+  moves the Unreleased section there at release time.
+- Run `python3 scripts/promote_upgrading.py --check` before pushing;
+  `template-ci` runs the same check.
 
 ## Spec
 

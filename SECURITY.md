@@ -1,9 +1,5 @@
 # Security policy
 
-This file is the template repository's own policy. `SECURITY.md.jinja` next
-to it is the one generated projects get; copier's `.jinja` precedence keeps
-this file out of renders.
-
 ## Reporting a vulnerability
 
 Report it privately through GitHub: open **Security → Report a

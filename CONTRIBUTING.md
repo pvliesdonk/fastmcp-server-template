@@ -23,14 +23,13 @@ rather than opening a duplicate.
 
 The `authoring-issues-prs` skill (`.agents/skills/authoring-issues-prs/`)
 walks this guide's routing and filing procedure and performs the follow-up
-steps issue forms cannot (sub-issue links, milestones). It points back at
-this file; this file stays the single source of the rules.
+steps issue forms cannot (sub-issue links, milestones). Where the skill and
+this file disagree, this file wins.
 
 ### Observation, not work order
 
 An issue records what was **observed**. It does not diagnose, design, or
-prescribe a fix. An issue that reads like a work order misleads the
-implementer into treating imagination as researched fact.
+prescribe a fix.
 
 - Describe what you saw: the concrete behaviour, exact error text or trace,
   where it occurred, the version/commit you checked.
@@ -47,8 +46,6 @@ Every cause statement must be marked:
 When you have not verified the cause, this sentence is required:
 
 > I have not verified the cause.
-
-The implementer must inherit your doubt, not a false floor of confidence.
 
 ### One issue, one observed problem
 
@@ -81,8 +78,9 @@ for the user" is a separate, editable release-notes highlight.
 
 Link children as native GitHub sub-issues. Every epic starts with a
 `refinement` sub-issue pointing at its roadmap entry and "Done when";
-close it when feature issues plausibly cover that outcome. An epic whose
-only open child is its refinement task is an idea, not executable work.
+close it when feature issues plausibly cover that outcome. Treat an epic
+whose only open child is its refinement task as an idea, not executable
+work.
 Research issues answer consequential unknowns within an agreed appetite;
 closing one updates the roadmap argument with its evidence.
 
@@ -112,17 +110,15 @@ request carries the `Closes` lines. It is optional, and the
 `docs/contribute/integration-branches.md` page covers the workflow and how to
 review the final pull request.
 
-After a stable default-branch release, the workflow records the computed
-version in the package title, removes open items to backlog with a job
-summary, then closes the milestone. Failures warn and leave it open for
-retry. Re-commit leftovers deliberately. Branch releases and prereleases
+A stable default-branch release moves its package's open items to
+backlog, lists them in the job summary and closes the milestone; re-commit
+each leftover to a package deliberately. Branch releases and prereleases
 leave trunk packages alone.
 
 `docs/design/roadmap.md` holds direction, intended package order and
 known unknowns, with `stated`, `derived` or `evidenced` provenance.
-GitHub holds status and native issue dependencies. Read the
+Keep status and issue dependencies in GitHub, not in the roadmap. Read the
 `roadmapping` skill before charting, refining or revisiting these objects.
-It describes the evidence rule and the ready-feature handoff.
 
 A `breaking` label identifies a known break to an existing operator or
 library contract, assessed against the last stable release. Merely
@@ -134,15 +130,14 @@ the compatible half first and file the breaking half separately.
 
 Anything an agent writes through a human's credentials appears under that
 human's name: issue bodies and comments, PR descriptions and comments,
-review summaries and inline replies. Two rules keep authorship honest.
-They apply whichever agent product is doing the writing and whatever
-credential it holds; a distinct bot identity for agent posts is better
-still where a project can set one up, and the footer is the fallback for
-a shared one.
+review summaries and inline replies. These rules apply whichever agent
+product is doing the writing and whatever credential it holds. A distinct
+bot identity for agent posts is better still where a project can set one
+up; the footer is the fallback for a shared one.
 
-**Writing.** End every such post with an attribution footer. The first
-words are fixed so a later reader can grep for them; the agent names the
-product it actually is, never another one:
+**Writing.** End every such post with an attribution footer. Keep its
+first words exactly as shown, because later readers grep for them, and name
+the product you actually are, never another one:
 
 ```markdown
 ---
@@ -167,10 +162,10 @@ predates this rule carries no marker either way; weigh it on its content.
 
 Every PR must have at least one associated issue. If the work has no issue
 yet, a bug found in the wild or an opportunistic cleanup, create the issue
-first, then open the PR with `Closes #N` (or `Refs #N`) in the body. A single
-PR may close multiple issues (`Closes #A, closes #B`); the rule is "no orphan
-PRs", not "one PR per issue". Trivial exceptions: pure typo fixes and
-automated dependency bumps (Renovate) may skip the issue.
+first, then open the PR with `Closes #N` (or `Refs #N`) in the body. A
+single PR may close multiple issues (`Closes #A, closes #B`). Trivial
+exceptions: pure typo fixes and automated dependency bumps (Renovate) may
+skip the issue.
 
 Mark a commit breaking (`feat!:` / `BREAKING CHANGE:`) only under the
 breaking-change policy in `AGENTS.md`: the change must break the operator
@@ -180,33 +175,26 @@ release**, not the previous commit. MCP-surface changes (tools, resources,
 prompts) are not breaking on their own.
 
 Squash-merge issue and feature PRs; merge an integration branch's final PR
-with a merge commit. Either way, roughly every issue and PR maps to one
-commit on `main`: the squash commit, or the child's squash commit that the
-merge commit brings in.
+with a merge commit.
 
 State what the PR deliberately does **not** do, with each deferral's tracking
-issue. A change that says what it left out is easier to trust than one that
-appears to have found nothing.
+issue.
 
-Run a local self-review of the cumulative diff before `gh pr create` —
-the `self-reviewing` skill (`.agents/skills/self-reviewing/SKILL.md`) is the
-procedure, and it works with any coding agent. Code without matching docs is
-incomplete; check `README.md`, the `docs/` site, `docs/design/`, and inline
-docstrings.
+Run a local self-review of the cumulative diff before `gh pr create`; the
+`self-reviewing` skill (`.agents/skills/self-reviewing/SKILL.md`) is the
+procedure. Code without matching docs is incomplete; check `README.md`, the
+`docs/` site, `docs/design/`, and inline docstrings.
 
-The issue is the request; the PR is the resolution. Review a feature's
-spec in session or offline, then include the approved spec under the PR's
-Design section, folded when long. If it exceeds the body limit, a human
-can attach the Markdown file in GitHub's UI; keep a decision summary in
-the body and never silently truncate the spec. Use only documented APIs.
-Small bugs and enhancements need no invented spec.
+Review a feature's spec in session or offline, then include the approved
+spec under the PR's Design section, folded when long. If it exceeds the body
+limit, a human can attach the Markdown file in GitHub's UI; keep a decision
+summary in the body and never silently truncate the spec. Use only
+documented APIs. Small bugs and enhancements need no invented spec.
 
 `docs/superpowers/` is local, gitignored scratch for specs and plans.
 Do not commit new files there; historical tracked files stay as history.
 At merge, ask: what did the spec say that the code and `docs/design/`
 do not now show? Port enduring decisions to `docs/design/` or an ADR.
-The merged PR preserves the feature-level intent, reachable from the
-squash commit.
 
 ## Releases
 
@@ -215,31 +203,31 @@ governed by the release model in the `releasing` skill
 (`.agents/skills/releasing/SKILL.md`): releases normally come
 straight from a quiescent trunk, and a short-lived `release/X.Y` branch
 is the exception tool for excluding unfinished work or patching a
-shipped release. The ships-atomically signal recorded on epics
-(package preferred, label fallback; see [Epics](#epics-packages-and-the-roadmap)) is the input
-that judgement consumes: an open atomic epic with unclosed children
-means the release comes from before it started, or waits.
+shipped release. Judge when and from where to cut from the
+ships-atomically signal on epics (package preferred, label fallback; see
+[Epics](#epics-packages-and-the-roadmap)): an open atomic epic with
+unclosed children means the release comes from before it started, or
+waits.
 
 ## Where to send fixes
 
 - **Library-level fix** (anything you'd change in `fastmcp_pvl_core`): open a
-  PR on `pvliesdonk/fastmcp-pvl-core`. The package lives under
-  `src/fastmcp_pvl_core/` there: a name imported from `fastmcp_pvl_core` is
-  re-exported by its `__init__.py` and implemented in a private module named
-  for its area (`_auth.py`, `_config.py`, `_health.py`, …), with its tests
-  in `tests/test_<area>*.py`. After merge + release, how this project picks
-  the release up depends on the `fastmcp-pvl-core` constraint in
-  `pyproject.toml`. That line is template-owned (it sits above the
-  `PROJECT-DEPS` block), so a hand edit there is drift: the conformance
-  report flags it, and the next template change to the line conflicts with
-  it. The step depends on the release:
+  PR on `pvliesdonk/fastmcp-pvl-core`. A name imported from
+  `fastmcp_pvl_core` is re-exported by `src/fastmcp_pvl_core/__init__.py`
+  there and implemented in the private module for its area (`_auth.py`,
+  `_config.py`, `_health.py`, …), with its tests in `tests/test_<area>*.py`.
+  After merge + release, how this project picks the release up depends on
+  the `fastmcp-pvl-core` constraint in `pyproject.toml`. Do not edit that
+  line by hand: it is template-owned (it sits above the `PROJECT-DEPS`
+  block). The step depends on the release:
 
   - a release the constraint already admits: run
     `uv lock --upgrade-package fastmcp-pvl-core` and commit `uv.lock`, which
     this project owns;
   - a release outside it (a fix that needs a higher floor, or the next
-    major): the template's constraint in `pyproject.toml.jinja` is bumped
-    by a template PR, and this project gets it on its next `copier update`.
+    major): open a template PR that bumps the constraint in
+    `pyproject.toml.jinja`; this project gets it on its next
+    `copier update`.
 - **Template-level fix** (anything template-owned: `Dockerfile`, workflows,
   `server.py` skeleton, `AGENTS.md` sections, template documentation pages):
   open a PR on `pvliesdonk/fastmcp-server-template`. A rendered file's

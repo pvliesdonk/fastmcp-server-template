@@ -1241,11 +1241,10 @@ jobs:
           echo "gating on vale $VER over ${FILES[*]} with ${VALE_FLAGS[*]}"
 
           # CLAUDE.md's "Making changes" routine spells the same invocation out
-          # for a human to paste, and calls itself a convenience copy — which
-          # made it a restatement nothing checked, in the one file that also
-          # calls itself "the only pre-push path". A stale copy there is the
-          # #143 failure exactly: the maintainer's local run lints a narrower
-          # set than this gate, so prose passes locally and fails here.
+          # for a human to paste, and it is the only pre-push Vale path. A
+          # stale copy there is the #143 failure exactly: the maintainer's
+          # local run lints a narrower set than this gate, so prose passes
+          # locally and fails here.
           # Single quotes are the shell quoting a human needs when pasting and
           # are not part of the value, so strip them before comparing.
           CLAUDE_CMD=$(grep -F 'vale --glob=' CLAUDE.md | head -1 \
