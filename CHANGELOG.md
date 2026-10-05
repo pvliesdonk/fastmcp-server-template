@@ -1,5 +1,10 @@
 # Changelog
 
+## v11.2.0 (2026-10-05)
+
+- #780 feat: require a recorded self-review before every push; rewrite maintainer and contributor instructions
+
+
 ## v11.1.4 (2026-10-04)
 
 - #777 docs: fix round-2 persona review findings on deploy and contribute pages
