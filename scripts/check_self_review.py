@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Require a recorded self-review of every commit a push sends.
 
-The ``self-reviewing`` skill ends by recording its findings report for the
-commit it reviewed (``--record``, report on stdin).  The ``self-review``
+The ``self-reviewing`` skill ends by recording its findings report for
+``HEAD``, the commit it reviewed (``--record``, report on stdin).  The ``self-review``
 pre-push hook (``--hook``) then refuses a push whose commit has no record.
 A record holds the report, so the check cannot be satisfied by an empty
 file, and it is keyed by commit, so any commit after the review needs a new
@@ -17,12 +17,16 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 REPORT_HEADING = "## Self-review"
 SKIP_HINT = "SKIP=self-review git push"
+# What pre-commit exports: a full object name, or a fully qualified branch.
+_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_BRANCH = re.compile(r"refs/heads/[\w./-]+")
 
 
 def _git(*args: str) -> str:
@@ -37,7 +41,16 @@ def record_dir() -> Path:
 
 
 def record_path(sha: str) -> Path:
+    if not _SHA.fullmatch(sha):
+        raise ValueError(f"not a commit object name: {sha!r}")
     return record_dir() / f"{sha}.md"
+
+
+def _resolve(ref: str) -> str:
+    sha = _git("rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}")
+    if not _SHA.fullmatch(sha):
+        raise ValueError(f"git resolved {ref!r} to {sha!r}, not an object name")
+    return sha
 
 
 def pushed_commit(environ: dict[str, str]) -> str | None:
@@ -48,15 +61,16 @@ def pushed_commit(environ: dict[str, str]) -> str | None:
     """
     if environ.get("PRE_COMMIT_REMOTE_BRANCH", "").startswith("refs/tags/"):
         return None
-    ref = (
-        environ.get("PRE_COMMIT_TO_REF")
-        or environ.get("PRE_COMMIT_LOCAL_BRANCH")
-        or "HEAD"
-    )
-    return _git("rev-parse", "--verify", f"{ref}^{{commit}}")
+    to_ref = environ.get("PRE_COMMIT_TO_REF", "")
+    branch = environ.get("PRE_COMMIT_LOCAL_BRANCH", "")
+    if _SHA.fullmatch(to_ref):
+        return _resolve(to_ref)
+    if _BRANCH.fullmatch(branch) and ".." not in branch:
+        return _resolve(branch)
+    return _resolve("HEAD")
 
 
-def record(report: str, rev: str) -> int:
+def record(report: str) -> int:
     if REPORT_HEADING not in report:
         print(
             f"self-review: the report on stdin has no '{REPORT_HEADING}' "
@@ -65,7 +79,7 @@ def record(report: str, rev: str) -> int:
             file=sys.stderr,
         )
         return 1
-    sha = _git("rev-parse", "--verify", f"{rev}^{{commit}}")
+    sha = _resolve("HEAD")
     path = record_path(sha)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(report, encoding="utf-8")
@@ -98,12 +112,11 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument(
         "--record",
         action="store_true",
-        help="record the findings report on stdin for --rev",
+        help="record the findings report on stdin for HEAD",
     )
-    parser.add_argument("--rev", default="HEAD", help="commit to record (HEAD)")
     args = parser.parse_args(argv)
     if args.record:
-        return record(sys.stdin.read(), args.rev)
+        return record(sys.stdin.read())
     return check(dict(os.environ))
 
 

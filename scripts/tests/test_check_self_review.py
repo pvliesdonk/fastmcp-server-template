@@ -89,6 +89,20 @@ def test_root_push_falls_back_to_the_local_branch(
     assert csr.check({"PRE_COMMIT_LOCAL_BRANCH": "refs/heads/main"}) == 0
 
 
+def test_malformed_refs_from_the_environment_never_reach_git(repo: Path) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+    env = {"PRE_COMMIT_TO_REF": "--output=x", "PRE_COMMIT_LOCAL_BRANCH": "-p"}
+    assert csr.pushed_commit(env) == head
+    env = {"PRE_COMMIT_LOCAL_BRANCH": "refs/heads/../../etc"}
+    assert csr.pushed_commit(env) == head
+
+
+@pytest.mark.usefixtures("repo")
+def test_a_record_path_takes_only_an_object_name() -> None:
+    with pytest.raises(ValueError, match="not a commit object name"):
+        csr.record_path("../../escape")
+
+
 def test_tag_pushes_pass(repo: Path) -> None:
     sha = _git(repo, "rev-parse", "HEAD")
     env = {"PRE_COMMIT_TO_REF": sha, "PRE_COMMIT_REMOTE_BRANCH": "refs/tags/v1.0.0"}
