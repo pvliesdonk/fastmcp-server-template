@@ -76,12 +76,11 @@ human's reply adopts it.
 
 ## Pull requests
 
-Link every PR to at least one issue with `Closes #N` or `Refs #N`; create
-the issue first when none exists. Pure typo fixes and Renovate dependency
-bumps may skip it. Fill every section of `.github/PULL_REQUEST_TEMPLATE.md`,
-and mark a commit breaking only under the breaking-change policy in
-`AGENTS.md`. Squash-merge issue and feature PRs; merge an integration
-branch's final PR with a merge commit.
+Follow `AGENTS.md` for issue linking ("PR Discipline"), the gates and
+self-review before every push ("Hard PR Acceptance Gates"), and the
+breaking-change policy, and fill every section of
+`.github/PULL_REQUEST_TEMPLATE.md`. Squash-merge issue and feature PRs;
+merge an integration branch's final PR with a merge commit.
 
 ## Releases
 

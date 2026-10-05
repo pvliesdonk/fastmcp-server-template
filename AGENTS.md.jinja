@@ -57,7 +57,7 @@ Assess against the last stable release, not the previous commit: a change to a s
 
 ## Hard PR Acceptance Gates
 
-Run every gate locally and open or push a PR only when all of them pass:
+Before you open a PR, and before every later push to its branch, pass every gate below locally, then run the `self-reviewing` skill on the cumulative diff and fix or justify each finding it reports:
 
 1. Tests: `uv run pytest -x -q`.
 2. Lint: `uv run ruff check --fix .`, then `uv run ruff format .`, then `uv run ruff format --check .`, in that order.

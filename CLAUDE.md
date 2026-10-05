@@ -60,7 +60,9 @@ and keep `CLAUDE.md.jinja` the three-line `@AGENTS.md` stub.
    uv run ruff check . && uv run ruff format --check .
    uv run mypy src/ tests/ && uv run pytest -x -q
    ```
-7. Commit any fixes, push, open a PR.
+7. Commit any fixes, run the `self-reviewing` skill on the cumulative diff,
+   and fix or justify each finding; then push and open a PR.  Run it again
+   before every later push to the branch.
 
 ### Render hygiene
 
