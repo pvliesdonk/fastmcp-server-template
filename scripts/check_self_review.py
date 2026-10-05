@@ -41,9 +41,14 @@ def record_dir() -> Path:
 
 
 def record_path(sha: str) -> Path:
+    """The record file for *sha*, canonicalised and confined to record_dir()."""
     if not _SHA.fullmatch(sha):
         raise ValueError(f"not a commit object name: {sha!r}")
-    return record_dir() / f"{sha}.md"
+    base = os.path.realpath(record_dir())
+    target = os.path.realpath(Path(base) / f"{sha}.md")
+    if not target.startswith(base + os.sep):
+        raise ValueError(f"record path {target!r} escapes {base!r}")
+    return Path(target)
 
 
 def _resolve(ref: str) -> str:
