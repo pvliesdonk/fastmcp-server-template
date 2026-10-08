@@ -1,4 +1,4 @@
-"""The `_preset_contract_env` helper is repeated verbatim in five tests.
+"""The `_preset_contract_env` helper is repeated verbatim in six tests.
 
 It cannot be one shared module: a sibling import resolves only when a
 project's `tests/` is not a package, and several downstreams make it one.
@@ -16,6 +16,7 @@ CARRIERS = (
     "tests/test_config_contract.py.jinja",
     "tests/test_health.py.jinja",
     "tests/test_model_facing_text.py.jinja",
+    "tests/test_serve_logging.py.jinja",
     "tests/test_task_backend.py.jinja",
     "tests/test_tool_outcomes.py.jinja",
 )
