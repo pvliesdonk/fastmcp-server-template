@@ -121,6 +121,11 @@ sentinel, add a secret, change a repository setting, or re-run a generator.
 Write it as instructions to that person; where it goes is in
 `UPGRADING.md`'s Contributors paragraph.
 
+A patch release carries no upgrade instructions.  Write no note for an
+action an earlier release's notes already require.  A change that needs a
+new note is not a patch: type its PR `feat`, not `fix`, and recommend
+`minor` for the release that carries it.
+
 ## Spec
 
 Full design: [`docs/superpowers/specs/2026-04-20-fastmcp-copier-scaffold-design.md`](https://github.com/pvliesdonk/markdown-vault-mcp/blob/main/docs/superpowers/specs/2026-04-20-fastmcp-copier-scaffold-design.md) (in the markdown-vault-mcp repo).
