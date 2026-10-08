@@ -9,9 +9,10 @@ name: Renovate
 on:
   schedule:
     # Every 4 hours, 7 minutes past to sidestep GitHub's top-of-hour delay.
-    # Renovate's own schedules gate what a run may do (hour granularity, UTC);
-    # the 00:07 Monday run lands inside lockFileMaintenance's declared
-    # "before 4am on monday" window, which a single 06:00 cron never hit
+    # Renovate's own schedules gate what a run may do (hour granularity, UTC).
+    # GitHub starts scheduled runs hours late or drops them, up to ~12 h
+    # apart (#784), so lockFileMaintenance's window is all of Monday rather
+    # than a few hours this cron nominally hits
     # (scripts/tests/test_renovate_downstream_config.py keeps the two aligned).
     - cron: "7 */4 * * *"
   workflow_dispatch:
