@@ -704,3 +704,20 @@ def test_hook_mode_fails_on_added_drift_and_says_how_to_skip(
     out = capsys.readouterr().out
     assert "## `docs/index.md`" in out
     assert "SKIP=template-conformance git push" in out
+
+
+def test_output_writes_the_report_to_the_named_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--output`` sends the report through the confined write (#783)."""
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".copier-answers.yml").write_text("_commit: v1\n_src_path: gh:x/t\n")
+    monkeypatch.chdir(project)
+    monkeypatch.setattr(c, "copier_missing", lambda: False)
+    monkeypatch.setattr(c, "drift_at", lambda *_a: [])
+    assert c.main(["--output", "drift.md"]) == 0
+    assert capsys.readouterr().out == ""
+    assert (project / "drift.md").read_text(encoding="utf-8").startswith("# ")
