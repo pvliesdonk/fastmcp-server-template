@@ -478,6 +478,14 @@ def test_bundle_marker_and_log_headings(tmp_path: Path) -> None:
     assert cr.bundle_findings(root) == []  # no pages, no bundle expected
 
 
+def test_log_heading_date_ignores_trailing_whitespace(tmp_path: Path) -> None:
+    # The pattern captures the rest of the line and the date is stripped
+    # where it is read (S8786, #785); trailing blanks stay accepted.
+    _, root = _repo(tmp_path)
+    (root / "log.md").write_text("# Log\n\n## 2026-09-06   \t\n\n- added\n")
+    assert cr.bundle_findings(root) == []
+
+
 def test_discover_skips_reserved_files_and_missing_root(tmp_path: Path) -> None:
     assert cr.discover(tmp_path / "absent") == []
     _, root = _repo(tmp_path)

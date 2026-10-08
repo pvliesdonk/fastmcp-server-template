@@ -27,7 +27,7 @@ echo "=== {{ project_name }} .deb install test ==="
 
 # Find the .deb
 DEB=$(find dist/ -name '{{ project_name }}*.deb' -print -quit 2>/dev/null || true)
-if [ -z "$DEB" ]; then
+if [[ -z "$DEB" ]]; then
     echo "ERROR: No .deb found in dist/. Build one first:"
     echo "  VERSION=0.0.0-test nfpm package --packager deb --target dist/"
     exit 1
@@ -60,12 +60,12 @@ else
 fi
 
 # 3. State directory exists with correct ownership and permissions
-if [ -d /var/lib/{{ project_name }} ]; then
+if [[ -d /var/lib/{{ project_name }} ]]; then
     OWNER=$(stat -c '%U:%G' /var/lib/{{ project_name }})
     MODE=$(stat -c '%a' /var/lib/{{ project_name }})
-    if [ "$OWNER" = "{{ project_name }}:{{ project_name }}" ] && [ "$MODE" = "750" ]; then
+    if [[ "$OWNER" = "{{ project_name }}:{{ project_name }}" ]] && [[ "$MODE" = "750" ]]; then
         pass "State directory owned by {{ project_name }} with mode 0750"
-    elif [ "$OWNER" != "{{ project_name }}:{{ project_name }}" ]; then
+    elif [[ "$OWNER" != "{{ project_name }}:{{ project_name }}" ]]; then
         fail "State directory owned by $OWNER (expected {{ project_name }}:{{ project_name }})"
     else
         fail "State directory mode $MODE (expected 750)"
@@ -75,21 +75,21 @@ else
 fi
 
 # 4. Install directory exists
-if [ -d /opt/{{ project_name }} ]; then
+if [[ -d /opt/{{ project_name }} ]]; then
     pass "Install directory /opt/{{ project_name }} exists"
 else
     fail "Install directory /opt/{{ project_name }} does not exist"
 fi
 
 # 4b. Venv installed by postinstall
-if [ -x /opt/{{ project_name }}/venv/bin/python3 ]; then
+if [[ -x /opt/{{ project_name }}/venv/bin/python3 ]]; then
     pass "venv installed at /opt/{{ project_name }}/venv"
 else
     fail "venv not found at /opt/{{ project_name }}/venv (postinstall may have failed)"
 fi
 
 # 5. Unit file exists
-if [ -f /usr/lib/systemd/system/{{ project_name }}.service ]; then
+if [[ -f /usr/lib/systemd/system/{{ project_name }}.service ]]; then
     pass "systemd unit file installed"
 else
     fail "systemd unit file not found"
@@ -109,7 +109,7 @@ else
 fi
 
 # 7. Environment example exists
-if [ -f /etc/{{ project_name }}/env.example ]; then
+if [[ -f /etc/{{ project_name }}/env.example ]]; then
     pass "Environment example file installed"
 else
     fail "Environment example file not found"
@@ -121,14 +121,14 @@ echo "--- Removing package ---"
 dpkg -r {{ project_name }}
 
 # 8. Install directory removed
-if [ ! -d /opt/{{ project_name }} ]; then
+if [[ ! -d /opt/{{ project_name }} ]]; then
     pass "Install directory removed after uninstall"
 else
     fail "Install directory still exists after uninstall"
 fi
 
 # 9. State directory preserved (intentional)
-if [ -d /var/lib/{{ project_name }} ]; then
+if [[ -d /var/lib/{{ project_name }} ]]; then
     pass "State directory preserved after uninstall (expected)"
 else
     fail "State directory removed after uninstall (should be preserved)"
@@ -163,6 +163,6 @@ fi
 # --- Summary ---
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
-if [ "$FAIL" -gt 0 ]; then
+if [[ "$FAIL" -gt 0 ]]; then
     exit 1
 fi

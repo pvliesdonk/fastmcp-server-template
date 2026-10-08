@@ -117,3 +117,14 @@ def test_skip_removes_a_stale_report(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / ".copier-seeded-changes.md").write_text("stale")
     assert r._skip("nothing to do") == 0
     assert not (tmp_path / ".copier-seeded-changes.md").exists()
+
+
+def test_answers_fallback_without_pyyaml(monkeypatch) -> None:
+    # The plain-line parser used when PyYAML is absent (S8786 rewrite, #785).
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    text = "_commit:  'v11.2.0'  \n_src_path: gh:org/tpl\n_commit_extra: x\n"
+    assert r._read_simple_answers(text) == {
+        "_commit": "v11.2.0",
+        "_src_path": "gh:org/tpl",
+    }
+    assert r._read_simple_answers("_commit:   \n") == {}

@@ -3426,6 +3426,11 @@ class TestCleanHelpForMarkdownTable:
         assert " — " not in text
         assert "unset; it then backs" in text
 
+    def test_trailing_dash_leaves_no_stranded_separator(self):
+        # Stripped with rstrip, not a `[;,\s]+$` search (S8786, #785).
+        text = g._clean_help_for_markdown_table("Value continues —")
+        assert text == "Value continues"
+
     def test_eg_clause_becomes_a_parenthetical(self):
         """Deliberately not 'for example,': that phrasing satisfies
         Google.Latin but trips ai-tells.FormalTransitions for this shape of
