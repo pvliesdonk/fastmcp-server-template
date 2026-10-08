@@ -4,6 +4,7 @@ Importing the module must be side-effect free."""
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 import sys
@@ -293,6 +294,22 @@ def test_output_is_written_inside_the_working_directory_only(
     assert c._parse_args(["--output", "drift.md"]).output == here / "drift.md"
     with pytest.raises(SystemExit):
         c._parse_args(["--output", str(tmp_path / "elsewhere.md")])
+
+
+def test_report_write_confines_the_path_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The write re-checks the path, so a symlink planted after parsing that
+    points outside the working directory is refused (#783)."""
+    here = tmp_path / "repo"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    c._write_report(here / "drift.md", "# report\n")
+    assert (here / "drift.md").read_text(encoding="utf-8") == "# report\n"
+    (here / "late.md").symlink_to(tmp_path / "elsewhere.md")
+    with pytest.raises(argparse.ArgumentTypeError):
+        c._write_report(here / "late.md", "# report\n")
+    assert not (tmp_path / "elsewhere.md").exists()
 
 
 @pytest.mark.parametrize(
@@ -687,3 +704,20 @@ def test_hook_mode_fails_on_added_drift_and_says_how_to_skip(
     out = capsys.readouterr().out
     assert "## `docs/index.md`" in out
     assert "SKIP=template-conformance git push" in out
+
+
+def test_output_writes_the_report_to_the_named_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--output`` sends the report through the confined write (#783)."""
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".copier-answers.yml").write_text("_commit: v1\n_src_path: gh:x/t\n")
+    monkeypatch.chdir(project)
+    monkeypatch.setattr(c, "copier_missing", lambda: False)
+    monkeypatch.setattr(c, "drift_at", lambda *_a: [])
+    assert c.main(["--output", "drift.md"]) == 0
+    assert capsys.readouterr().out == ""
+    assert (project / "drift.md").read_text(encoding="utf-8").startswith("# ")
