@@ -1,5 +1,19 @@
 # Changelog
 
+## v11.2.1 (2026-10-08)
+
+- #794 fix(conformance): confine --output again at the write (S8707)
+- #792 fix: clear the SonarCloud reliability findings in shipped scripts
+- #791 fix(copier): leave generated reference pages to the project on update
+- #790 fix(cli): configure logging once under serve so -v survives
+- #789 fix(renovate): give lock-file maintenance all of Monday
+- #788 fix(skills): name the PARA guide without a path that can go stale
+- #787 chore(deps): update actions/upload-artifact digest to cf430e0
+- #786 chore(deps): update actions/download-artifact digest to 9000827
+- #782 chore(deps): update anthropics/claude-code-action digest to 6fed3ca
+- #779 chore(deps): update dependency renovatebot/github-action to v46.3.7
+
+
 ## v11.2.0 (2026-10-05)
 
 - #780 feat: require a recorded self-review before every push; rewrite maintainer and contributor instructions
