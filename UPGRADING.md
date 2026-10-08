@@ -303,6 +303,16 @@ Steps: [upgrading/v11.1.md](upgrading/v11.1.md).
 
 Steps: [upgrading/v11.2.md](upgrading/v11.2.md).
 
-## Unreleased
+## Unreleased - copier update leaves the generated reference pages alone
 
-_Nothing yet._
+`copier update` no longer writes any page under `docs/reference/` that
+`scripts/gen_reference.py` owns: the tool pages, `resources.md`,
+`prompts.md` and `cli.md`.
+
+- A project that removed the scaffold's `docs/reference/tools/tools.md` or
+  `server_apps.md` after an earlier update has nothing to do; the update
+  stops adding them back.
+- A project updating from before v11.1 gets no reference pages from the
+  update. Run `uv run python scripts/gen_reference.py` and commit
+  `docs/reference/` and `mkdocs.yml`, as v11.1's steps say. The docs
+  build fails until you do.

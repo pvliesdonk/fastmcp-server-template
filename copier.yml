@@ -139,11 +139,11 @@ _migrations:
 # one-time creation on first weekly cron; `_skip_if_exists` preserves
 # thereafter.
 _skip_if_exists:
-  # Generated reference pages (#716): rendered once so a fresh project's
-  # docs build, then written by scripts/gen_reference.py from the project's
-  # own server; a later render of the scaffold's pages must never land on
-  # them. The configuration pages are not listed: gen_config_surface.py
-  # splices regions into template-owned pages.
+  # Generated reference pages (#716): also excluded on update (see
+  # `_exclude`), which is what keeps an update from writing them (#778).
+  # Listed here as well because check_template_conformance.py renders as a
+  # copy and counts every file outside this list as template-owned; without
+  # it, every project's generated pages would read as drift.
   - "docs/reference/tools/*.md"
   - "docs/reference/resources.md"
   - "docs/reference/prompts.md"
@@ -382,6 +382,17 @@ _exclude:
   # this repo as maintainer-facing reference content.
   - "tests/test_tools.py"
   - "docs/design/index.md"
+  # Generated reference pages (#716): rendered by `copier copy` so a fresh
+  # project's docs build, then written by scripts/gen_reference.py from the
+  # project's own server, which also deletes any page it no longer writes.
+  # Excluded on update because `_skip_if_exists` alone writes every scaffold
+  # page the project's generator does not, such as the scaffold's own
+  # tool-group pages (#778). The configuration pages are not listed:
+  # gen_config_surface.py splices regions into template-owned pages.
+  - "{% if _copier_operation == 'update' %}docs/reference/tools/*.md{% endif %}"
+  - "{% if _copier_operation == 'update' %}docs/reference/resources.md{% endif %}"
+  - "{% if _copier_operation == 'update' %}docs/reference/prompts.md{% endif %}"
+  - "{% if _copier_operation == 'update' %}docs/reference/cli.md{% endif %}"
 
 # --- Variables ---
 

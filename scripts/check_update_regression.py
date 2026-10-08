@@ -22,6 +22,9 @@ end-to-end with a real ``copier update``:
 5. Assert the drift report (#653) names the line planted outside every
    sentinel in ``docs/index.md`` and does not name ``config.py``, whose
    only edits sit inside its ``CONFIG-*`` blocks.
+6. Assert the update wrote none of the scaffold's generated reference
+   pages and left a planted project-owned one byte-identical (#778): those
+   pages belong to the project's ``gen_reference.py`` once it exists.
 
 Runs copier from the repository's locked tooling environment
 (``pyproject.toml`` + ``uv.lock`` at the root, as template-ci and the local
@@ -53,6 +56,8 @@ _FIELD = (
 _READ = '            vault_path=env(_ENV_PREFIX, "VAULT_PATH", "/data/vault"),\n'
 _VAR = "SMOKE_MCP_VAULT_PATH"
 _DRIFT = "Project prose written outside every sentinel block."
+_OWN_PAGE = "docs/reference/tools/vault.md"
+_OWN_PAGE_TEXT = "# Vault\n\nWritten by this project's gen_reference.py.\n"
 
 
 def _run(args: list[str], cwd: Path) -> None:
@@ -120,6 +125,34 @@ def _assert_drift_report(project: Path) -> None:
     ]
     if problems:
         raise SystemExit(f"ERROR: drift report {'; '.join(problems)}:\n{text[:4000]}")
+
+
+def _plant_reference_page(project: Path) -> None:
+    page = project / _OWN_PAGE
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(_OWN_PAGE_TEXT, encoding="utf-8")
+
+
+def _assert_reference_pages_untouched(project: Path) -> None:
+    """The generated reference pages are excluded on update (#778): a
+    seeded scaffold page would sit beside the project's own until removed
+    by hand, every update."""
+    reference = project / "docs" / "reference"
+    pages = [
+        *reference.glob("tools/*.md"),
+        *(reference / name for name in ("resources.md", "prompts.md", "cli.md")),
+    ]
+    written = sorted(
+        str(page.relative_to(project))
+        for page in pages
+        if page.exists() and page != project / _OWN_PAGE
+    )
+    if written:
+        raise SystemExit(
+            f"ERROR: copier update wrote scaffold reference pages: {written}"
+        )
+    if (project / _OWN_PAGE).read_text(encoding="utf-8") != _OWN_PAGE_TEXT:
+        raise SystemExit(f"ERROR: copier update changed the project's {_OWN_PAGE}")
 
 
 def _assert_skill_links_resolve(project: Path) -> None:
@@ -226,6 +259,7 @@ def main() -> int:
 
             _inject_domain_var(project)
             _plant_drift(project)
+            _plant_reference_page(project)
             _run([sys.executable, "scripts/gen_config_surface.py"], project)
             _assert_var(project, ".env.example", expected=True)
 
@@ -241,6 +275,7 @@ def main() -> int:
             _assert_seeded_report(project)
             _assert_drift_report(project)
             _assert_skill_links_resolve(project)
+            _assert_reference_pages_untouched(project)
 
             _assert_var(project, ".env.example", expected=True)
             _assert_var(
