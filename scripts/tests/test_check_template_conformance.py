@@ -4,6 +4,7 @@ Importing the module must be side-effect free."""
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 import sys
@@ -293,6 +294,22 @@ def test_output_is_written_inside_the_working_directory_only(
     assert c._parse_args(["--output", "drift.md"]).output == here / "drift.md"
     with pytest.raises(SystemExit):
         c._parse_args(["--output", str(tmp_path / "elsewhere.md")])
+
+
+def test_report_write_confines_the_path_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The write re-checks the path, so a symlink planted after parsing that
+    points outside the working directory is refused (#783)."""
+    here = tmp_path / "repo"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    c._write_report(here / "drift.md", "# report\n")
+    assert (here / "drift.md").read_text(encoding="utf-8") == "# report\n"
+    (here / "late.md").symlink_to(tmp_path / "elsewhere.md")
+    with pytest.raises(argparse.ArgumentTypeError):
+        c._write_report(here / "late.md", "# report\n")
+    assert not (tmp_path / "elsewhere.md").exists()
 
 
 @pytest.mark.parametrize(
