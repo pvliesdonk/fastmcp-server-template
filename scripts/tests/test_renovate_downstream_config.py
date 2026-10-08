@@ -6,6 +6,11 @@ Two facts from the Renovate docs drive it: `rebaseWhen: auto` becomes
 open branch — grouping non-major updates into one PR is the documented
 lever; and `schedule` windows have hour granularity in UTC, so the runner
 cron must land inside `lockFileMaintenance`'s window or it never fires.
+
+A third fact is observed, not documented: GitHub starts scheduled runs hours
+late or drops them, so the runs that actually start can be ~12 h apart
+(#784). A window the cron nominally hits can still be missed every week; the
+lock-file window therefore spans a whole day.
 """
 
 from __future__ import annotations
@@ -20,7 +25,6 @@ REPO = Path(__file__).resolve().parents[2]
 DOWNSTREAM_CONFIG = REPO / "renovate.json.jinja"
 DOWNSTREAM_RUNNER = REPO / ".github" / "workflows" / "renovate.yml.jinja"
 TEMPLATE_RUNNER = REPO / ".github" / "workflows" / "template-renovate.yml"
-DAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
 
 
 def _config() -> dict:
@@ -62,10 +66,14 @@ def _cron_fires(cron: str) -> set[tuple[int, int]]:
 
 
 def _window(schedule: str) -> set[tuple[int, int]]:
-    """Renovate 'before Nam on <day>' → (weekday, hour) pairs, hour granularity."""
-    m = re.fullmatch(r"before (\d+)am on (\w+)", schedule)
+    """Renovate cron schedule `* * * * D` → (weekday, hour) pairs: all of day D.
+
+    Renovate deprecated its later.js text schedules ("before 4am on monday")
+    in favour of cron syntax; this repo uses the whole-day form only.
+    """
+    m = re.fullmatch(r"\* \* \* \* ([0-6])", schedule)
     assert m, f"unsupported schedule shape {schedule!r}"
-    return {(DAYS.index(m.group(2)), h) for h in range(int(m.group(1)))}
+    return {(int(m.group(1)), h) for h in range(24)}
 
 
 def test_non_major_updates_are_grouped() -> None:
@@ -92,6 +100,13 @@ def test_downstream_cron_hits_the_declared_lockfile_window() -> None:
     (schedule,) = lfm["schedule"]
     hit = _cron_fires(_cron(DOWNSTREAM_RUNNER)) & _window(schedule)
     assert hit, f"cron {_cron(DOWNSTREAM_RUNNER)!r} never runs inside {schedule!r}"
+
+
+def test_lockfile_window_outlasts_late_scheduled_runs() -> None:
+    # Observed gaps between started runs reach ~12 h (#784); a 4-hour window
+    # was missed on consecutive Mondays although the cron nominally hit it.
+    (schedule,) = _config()["lockFileMaintenance"]["schedule"]
+    assert len(_window(schedule)) == 24, f"{schedule!r} is not a whole day"
 
 
 def test_runners_are_at_most_four_hourly() -> None:
