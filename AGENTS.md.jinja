@@ -35,7 +35,7 @@ Skills live under `.agents/skills/`; Claude Code reads them through the `.claude
 - `writing-documentation` — before adding, moving or substantially changing a page in `docs/` or `README.md`: whether the knowledge is this project's or the template's, and where it goes.
 - `designing-tool-outcomes` — before writing or changing a tool that can fail, refuse, find nothing or hit a conflict: what it returns, raises and logs in each case.
 - `repository-protection` — before changing rulesets, required checks, or the bootstrap workflow.
-- `authoring-issues-prs` — when filing an issue or opening a PR.
+- `authoring-issues-prs` — when filing an issue, sizing a change before coding, or opening a PR.
 - `self-reviewing` — before opening a PR, marking one ready, or pushing further commits to a branch with an open PR: self-review the cumulative diff.
 - `applying-template-updates` — when working through the weekly template update PR (`copier/update` branch) or after running `copier update`.
 - `writing-release-notes` — when drafting a `docs/releases/` page.
@@ -102,6 +102,8 @@ Before you open a PR, and before every later push to its branch, pass every gate
 ## PR Discipline
 
 Every PR closes or references at least one issue: create the issue first when none exists, then put `Closes #N` (or `Refs #N`) in the PR body. One PR may close several issues (`Closes #A, closes #B`). Pure typo fixes and automated dependency bumps (Renovate) need no issue.
+
+Size a PR from its plan before coding: one behaviour, named in the title without `and`, in at most three source files (tests, docs and generated files uncounted; one mechanical edit repeated across files counts as one). Larger work is split into child issues, one PR each, or run as an epic on an integration branch; a diff past 400 changed lines is re-planned and reimplemented, never carved. Procedure: the `authoring-issues-prs` skill, "Size the change before coding"; evidence: `docs/design/reference/pull-request-size.md`.
 
 <!-- TEMPLATE-TRACKING-START -->
 Request Claude on a pull request or issue with an explicit `@claude` mention.

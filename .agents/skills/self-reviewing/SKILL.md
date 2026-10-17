@@ -76,6 +76,12 @@ sees — never "since my last push".
    or pull-request-files call is usually an already-granted equivalent —
    see the tool-denial rule below before falling back to "stop and say so".
 
+   The stat is also the size backstop (`AGENTS.md`, "PR Discipline"): past
+   400 changed lines, generated files and lockfiles excluded, report a
+   `blocker/verified` finding on the range itself. Its fix is the re-plan
+   that section names, not a review of the whole; the one justification is
+   a mechanical edit repeated across files.
+
    If either value is empty, or the stat output does not look like the
    change you are reviewing, stop and say so. A review of the wrong range
    that reports "clean" is worse than no review — never let a failed step

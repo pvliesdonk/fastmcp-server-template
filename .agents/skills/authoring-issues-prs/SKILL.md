@@ -3,10 +3,11 @@ name: authoring-issues-prs
 description: >-
   Use when filing a bug, opening or creating a GitHub issue, drafting an
   epic or ticket, writing up a finding or review observation worth
-  tracking, or opening a pull request for this repository. Routes the
-  change to the right repo first (library / template / domain), picks the
-  right issue form, links epic children as native sub-issues, and applies
-  CONTRIBUTING.md before anything is posted.
+  tracking, sizing a change before coding, or opening a pull request for
+  this repository. Routes the change to the right repo first (library /
+  template / domain), picks the right issue form, sizes the change to one
+  PR, links epic children as native sub-issues, and applies CONTRIBUTING.md
+  before anything is posted.
 ---
 
 <!-- ===== TEMPLATE-OWNED — re-rendered on copier update. Project-specific
@@ -16,8 +17,9 @@ description: >-
 
 `CONTRIBUTING.md` holds the issue rules, the agent-post footer and the
 three-tier routing; `AGENTS.md` and `.github/PULL_REQUEST_TEMPLATE.md` hold
-the PR rules. This skill adds the order of operations and the API steps
-issue forms cannot perform; it states none of those rules itself.
+the PR rules. This skill adds the order of operations, the sizing
+procedure behind the limits `AGENTS.md` sets, and the API steps issue forms
+cannot perform; it states none of the other rules itself.
 
 ## Procedure
 
@@ -34,7 +36,7 @@ even if you believe you remember it:
   and the merge style.
 - "Where to send fixes" — the routing walked in step 2.
 - "Agent-authored posts" — the footer every post ends with, and how to
-  read earlier posts under the account holder's name (step 7).
+  read earlier posts under the account holder's name (step 8).
 
 Where this skill and `CONTRIBUTING.md` disagree, the file wins.
 
@@ -79,7 +81,37 @@ last stable release. Apply `breaking` only for a known compatibility
 break to an existing operator or library contract; an additive change
 that merely touches the surface is not breaking. Keep uncertainty visible.
 
-### 5. For epics: finish what the form cannot do
+### 5. Size the change before coding
+
+Estimate the pull request from the plan, before the first edit; a line
+count arrives only after the author's focus has been spent, and a diff
+split after the fact keeps the defects that grew in it. The limits are
+`AGENTS.md`'s ("PR Discipline"); this step is how to apply them.
+
+- **One behaviour.** Write the PR title now, as a conventional commit. If
+  it needs `and`, or a refactoring rides with a behaviour change, that is
+  two PRs; a local rename inside the change may stay. A new tool and its
+  registration are one behaviour.
+- **At most three source files.** Count the files the plan changes, leaving
+  out tests, docs, generated pages and lockfiles. One mechanical edit
+  repeated at every site (a rename, a signature update at each caller)
+  counts as one file. A fourth file for one behaviour means the behaviour
+  is bigger than one PR.
+- **Past either limit**, file the work as an epic (step 6) whose children
+  each pass both tests, stacked when one depends on another. When the
+  children must ship together, run the epic on `integration/<epic>`
+  (`docs/contribute/integration-branches.md`) so trunk stays releasable.
+- **One PR at a time.** Push and self-review the current PR before starting
+  the next; a stacked child branches from the pushed one.
+- **The line count is the backstop.** When the diff passes 400 changed lines
+  (generated files and lockfiles excluded), stop: re-plan the issue into
+  children that pass the tests above and implement each on a fresh branch
+  in a fresh session. Carving the existing diff into pieces keeps the
+  problems that grew in it.
+
+The numbers and their sources: `docs/design/reference/pull-request-size.md`.
+
+### 6. For epics: finish what the form cannot do
 
 Issue forms cannot create sub-issue links or assign milestones. After the
 epic is filed, perform these steps — this is the mechanical half of the
@@ -122,7 +154,7 @@ An epic spanning packages carries no milestone: children can inherit their
 parent's milestone. Assign packages to the child issues individually.
 The `roadmapping` skill defines package ordering and membership.
 
-### 6. Pull requests
+### 7. Pull requests
 
 Open the PR in the same repo as its issue (step 2), then follow
 `CONTRIBUTING.md`'s "Pull requests" section: pass the gates and run the
@@ -136,7 +168,7 @@ does nothing on a non-default base. The final `integration/<epic>` →
 `main` PR carries every `Closes` line and is merged with a merge commit;
 `docs/contribute/integration-branches.md` has the whole workflow.
 
-### 7. Identify yourself on every post
+### 8. Identify yourself on every post
 
 `CONTRIBUTING.md`'s "Agent-authored posts" section is the rule; apply it
 to every post this skill produces, not only bodies: the issue or PR body,
