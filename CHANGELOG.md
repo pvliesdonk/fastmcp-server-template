@@ -1,5 +1,21 @@
 # Changelog
 
+## v11.3.0 (2026-10-17)
+
+- #809 feat(agents): size a pull request before coding
+- #808 docs(reference): record what review data and agent benchmarks say about PR size
+- #806 chore(deps): update github/codeql-action digest to 6f2ac81
+- #805 chore(deps): update python docker tag to v3.15
+- #804 chore(deps): update dependency renovatebot/github-action to v46.3.8
+- #803 chore(deps): update ghcr.io/astral-sh/uv docker tag to v0.13
+- #802 chore(deps): update dependency astral-sh/uv to 0.13
+- #801 chore(deps): update dependency astral-sh/setup-uv to v10.3.0
+- #800 chore(deps): update anthropics/claude-code-action digest to f27be6b
+- #797 chore(deps): update anthropics/claude-code-action digest to 2dca132
+- #796 chore(deps): update github/codeql-action digest to 24c5418
+- #795 docs: a patch release carries no upgrade instructions
+
+
 ## v11.2.1 (2026-10-08)
 
 - #794 fix(conformance): confine --output again at the write (S8707)
