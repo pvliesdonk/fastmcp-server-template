@@ -36,6 +36,8 @@ against tags to order the update.
 
 from __future__ import annotations
 
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -72,6 +74,60 @@ _TOOLING = Path(__file__).resolve().parent.parent
 def _copier(args: list[str], cwd: Path) -> None:
     project = ["--project", str(_TOOLING)]
     _run(["uv", "run", "--locked", *project, "copier", *args], cwd)
+
+
+# Copier failing to remove one of its own temporary checkouts as an update
+# ends (#798): the error names the directory under copier's own prefix.
+_CLEANUP_RACE = re.compile(
+    r"Directory not empty: '[^']*/copier\._main\.(?:old|new)_copy\."
+)
+
+
+def _update(project: Path) -> None:
+    """``copier update`` *project* to ``HEAD``, retried once on #798's race.
+
+    Copier occasionally fails to remove its ``new_copy`` temporary
+    repository after the update has run (cause unverified).  That failure
+    says nothing about the update under test, so the project is restored
+    from a snapshot taken beforehand and updated once more.  Any other
+    failure, or the same race twice, still fails the check.
+    """
+    args = [
+        "uv",
+        "run",
+        "--locked",
+        "--project",
+        str(_TOOLING),
+        "copier",
+        "update",
+        "--trust",
+        "--defaults",
+        "--vcs-ref=HEAD",
+    ]
+
+    def attempt() -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            args, cwd=project, check=False, capture_output=True, text=True
+        )
+        sys.stdout.write(result.stdout)
+        sys.stderr.write(result.stderr)
+        return result
+
+    with tempfile.TemporaryDirectory(prefix="update-regression-snapshot-") as tmp:
+        snapshot = Path(tmp) / "project"
+        shutil.copytree(project, snapshot, symlinks=True)
+        result = attempt()
+        if result.returncode != 0 and _CLEANUP_RACE.search(result.stderr):
+            print(
+                "copier update hit its temp-dir cleanup race (#798); "
+                "restoring the project and retrying once",
+                file=sys.stderr,
+            )
+            shutil.rmtree(project)
+            shutil.copytree(snapshot, project, symlinks=True)
+            result = attempt()
+    if result.returncode != 0:
+        raise SystemExit(f"ERROR: {' '.join(args)} exited {result.returncode}")
 
 
 def _git(args: list[str], cwd: Path) -> None:
@@ -270,7 +326,7 @@ def main() -> int:
                 project,
             )
 
-            _copier(["update", "--trust", "--defaults", "--vcs-ref=HEAD"], project)
+            _update(project)
             _assert_review_workflows(project, enabled=enabled)
             _assert_seeded_report(project)
             _assert_drift_report(project)
