@@ -309,7 +309,7 @@ The line count is the lagging backstop, counted over the same files as the
 file cap. SmartBear's 200-400 lines per session, LinearB's "Needs focus"
 above 228 changes and Google's "1000 is too large" bracket the region. Past
 400 counted lines the author states why the change is still one behaviour;
-past 1,000, Google's "usually too large", the rule forces the re-plan.
+past 1,000 (Google: "usually too large") the rule forces the re-plan.
 Because only source files count, a reference page never does: it is checked
 claim by claim against its sources (the `researching-references` skill's
 own process), not read as a diff, and two of the six pages already in this
@@ -331,9 +331,9 @@ none were found after those in the 400 to 1,000 band (693, 689, 737,
 observations on two repositories, not a study.
 
 Where this project departs from the subject: SWE-Bench Pro's three-file
-cliff is not the cap, because the benchmark's agent must first find the
-change from the issue text, the step SWE-bench names as where models
-struggle, while the rule applies to a plan that already names its files.
+cliff is not the cap. The benchmark's agent has to locate the change from
+the issue text alone, which SWE-bench finds models struggle with; the rule
+applies to a plan that already names its files.
 Google's "include a usage of the API in the same CL" and the kernel's "API
 update and new driver are two patches" disagree; the rule follows Google
 for a tool and its registration (both must land for the tool to exist) and
