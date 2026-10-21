@@ -290,12 +290,17 @@ jobs:
         # only runtime + user-defined extras land in the audit input — avoids
         # spurious CVE reports against tooling (pip-audit's own `pip` dep, etc.)
         # that does not run in production.
-        run: uv export --all-extras --no-default-groups --frozen --no-emit-project --no-hashes -o {% raw %}${{ runner.temp }}{% endraw %}/requirements.txt
+        run: uv export --all-extras --no-default-groups --frozen --no-emit-project -o {% raw %}${{ runner.temp }}{% endraw %}/requirements.txt
 
       - name: Run pip-audit
         run: |
-          uvx pip-audit --strict --progress-spinner off \
+          uvx pip-audit --strict --progress-spinner off --require-hashes --disable-pip \
             -r {% raw %}${{ runner.temp }}{% endraw %}/requirements.txt
+          # --require-hashes --disable-pip audits the closure uv.lock pins as
+          # exported, instead of re-resolving it with pip: pip cannot see
+          # [tool.uv] override-dependencies and fails ResolutionImpossible on
+          # any override that contradicts a dependency's own cap
+          # (pvliesdonk/fastmcp-server-template#813).
           # No standing --ignore-vuln: a suppression outlives the advisory it
           # was added for and then hides the next one in the same package
           # (#604). Add one only with its removal condition in this comment.
