@@ -1,5 +1,17 @@
 # Changelog
 
+## v11.4.0 (2026-10-21)
+
+- #819 feat(agents): size PRs by source files, with a two-tier line backstop
+- #817 ci: stop background git maintenance racing copier's temp-clone cleanup
+- #816 fix(ci): make the dependency audit report instead of gate
+- #815 ci: read the publisher's twine pin from a hash-pinned runtime.txt
+- #814 fix(ci): audit the locked closure instead of re-resolving it with pip
+- #812 chore(deps): update dependency pypa/gh-action-pypi-publish to v1.14.3
+- #811 chore(deps): update dependency renovatebot/github-action to v46.3.9
+- #810 chore(deps): update anthropics/claude-code-action digest to a5a423f
+
+
 ## v11.3.0 (2026-10-17)
 
 - #809 feat(agents): size a pull request before coding
