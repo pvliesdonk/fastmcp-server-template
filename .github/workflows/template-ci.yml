@@ -1939,6 +1939,17 @@ jobs:
         # injects a domain var, commits, `copier update`s to HEAD, and
         # asserts the var survived in the generated artifacts (the
         # pre-#302 task ordering silently stripped it).
+        #
+        # No automatic git maintenance: copier's git calls each start a
+        # detached `git maintenance run --auto`, which can still be writing
+        # into a temporary clone's .git/objects when copier deletes that
+        # clone, failing the job with `Directory not empty`.
+        env:
+          GIT_CONFIG_COUNT: "2"
+          GIT_CONFIG_KEY_0: maintenance.auto
+          GIT_CONFIG_VALUE_0: "false"
+          GIT_CONFIG_KEY_1: gc.auto
+          GIT_CONFIG_VALUE_1: "0"
         run: python3 scripts/check_update_regression.py
 
   scripts-and-invariants:
