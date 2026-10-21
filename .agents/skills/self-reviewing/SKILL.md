@@ -102,9 +102,10 @@ sees — never "since my last push".
   Read committed content at its revision (`git show <rev>:<path>`), not
   from the working tree.
 - **Don't reproduce CI.** CI already gates lint, formatting, types, the
-  test matrix, dependency audit, secret scan, prose, and — when enabled —
-  the structural gate. Report nothing those checks gate and re-run none of
-  them; read their results instead.
+  test matrix, secret scan, prose, and — when enabled — the structural
+  gate, and runs a dependency audit that reports without gating. Report
+  nothing those checks cover and re-run none of them; read their results
+  instead.
 - **Diff-introduced only.** Pre-existing problems on lines the diff did
   not touch are not findings. Decay worth tracking gets a Decay issue
   (see `AGENTS.md`), not a review comment.

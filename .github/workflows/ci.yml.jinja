@@ -268,6 +268,12 @@ jobs:
 
   audit:
     name: Dependency Audit
+    # Outside CI Success on purpose: it reports, it does not gate.  An
+    # advisory whose fix sits past another dependency's cap (pillow 13 behind
+    # fastembed's pillow<13, #813) has no remedy but waiting for that
+    # dependency, and as a required check it blocked every pull request
+    # meanwhile, Renovate's lock maintenance included.  A red run here still
+    # shows on the pull request; act on what that pull request introduced.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -501,7 +507,6 @@ jobs:
       - typecheck
       - test
       - sonar
-      - audit
       - secrets
       - vale
       - pr-title
