@@ -78,7 +78,8 @@ sees — never "since my last push".
 
    The stat is also the size backstop (`AGENTS.md`, "PR Discipline").
    Count the changed lines in source files only: tests, docs pages,
-   `docs/design/reference/` pages, generated files and lockfiles stay out.
+   `docs/design/reference/` pages, generated files, lockfiles and
+   pointer-only edits stay out.
    Past 400, report an `important/verified` finding on the range itself;
    its justification says why the change is still one behaviour. Past
    1,000, report a `blocker/verified` finding instead. Its fix is the

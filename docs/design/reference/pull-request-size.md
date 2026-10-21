@@ -321,7 +321,7 @@ to one feature of pvliesdonk/markdown-vault-mcp (issue 1497), it blocked
 the pull request the maintainer closed as too much to review well (1798:
 four concerns, 9 logic files, about 1,620 logic lines), and it blocked
 equally the three the work was then split into and the package's next
-pull request, all merged (1803 to 1806: 1 to 5 logic files, about 210 to
+pull request, all merged (1803 to 1806: 1 to 6 logic files, about 210 to
 850 logic lines). Lines did not tell them apart: 1798 changed 2,511 lines
 and 1804, one new module with its tests, 1,944. Concern and file count
 did. In pvliesdonk/fastmcp-server-template, the pull requests above about
