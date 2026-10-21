@@ -76,12 +76,15 @@ sees — never "since my last push".
    or pull-request-files call is usually an already-granted equivalent —
    see the tool-denial rule below before falling back to "stop and say so".
 
-   The stat is also the size backstop (`AGENTS.md`, "PR Discipline"): past
-   400 changed lines, generated files, lockfiles and `docs/design/reference/`
-   pages excluded, report a
-   `blocker/verified` finding on the range itself. Its fix is the re-plan
-   that section names, not a review of the whole; the one justification is
-   a mechanical edit repeated across files.
+   The stat is also the size backstop (`AGENTS.md`, "PR Discipline").
+   Count the changed lines in source files only: tests, docs pages,
+   `docs/design/reference/` pages, generated files, lockfiles and
+   pointer-only edits stay out.
+   Past 400, report an `important/verified` finding on the range itself;
+   its justification says why the change is still one behaviour. Past
+   1,000, report a `blocker/verified` finding instead. Its fix is the
+   re-plan that section names, not a review of the whole; the one
+   justification is a mechanical edit repeated across files.
 
    If either value is empty, or the stat output does not look like the
    change you are reviewing, stop and say so. A review of the wrong range

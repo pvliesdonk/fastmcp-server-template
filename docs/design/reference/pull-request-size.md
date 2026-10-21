@@ -297,29 +297,49 @@ budget has been spent. Two leading measures come straight from the sources:
   and puts a refactoring in its own pull request.
 - **File count.** Google weighs it, Bosu measures review usefulness falling
   with it, and all three agent benchmarks show success falling with it, with
-  SWE-Bench Pro placing the cliff beyond three files. The rule therefore
-  counts the files whose logic a plan changes (code, scripts, workflows,
-  config and instruction files) and caps one behaviour at three, with the
-  kernel's grouping rule as the escape hatch: one mechanical change
-  repeated at every site counts as one file. Tests, docs pages, reference
-  pages, generated files, lockfiles and a file that only gains a pointer
-  are left out, since none of them is where the reasoning happens.
+  SWE-Bench Pro placing the cliff beyond three files. The rule counts the
+  files whose logic a plan changes (code, scripts, workflows, config and
+  instruction files) and caps one behaviour at five, with the kernel's
+  grouping rule as the escape hatch: one mechanical change repeated at
+  every site counts as one file. Tests, docs pages, reference pages,
+  generated files, lockfiles and a file that only gains a pointer are left
+  out, since none of them is where the reasoning happens.
 
-The line count is the lagging backstop. SmartBear's 200-400 lines per
-session, LinearB's "Needs focus" above 228 changes and Google's "1000 is
-too large" bracket the same region; the rule stops at 400 changed lines.
-Generated files and lockfiles are excluded because no reviewer reads them,
-and `docs/design/reference/` pages because a reference is checked claim by
-claim against its sources (the `researching-references` skill's own
-process), not read as a diff; two of the six pages already in this
+The line count is the lagging backstop, counted over the same files as the
+file cap. SmartBear's 200-400 lines per session, LinearB's "Needs focus"
+above 228 changes and Google's "1000 is too large" bracket the region. Past
+400 counted lines the author states why the change is still one behaviour;
+past 1,000 (Google: "usually too large") the rule forces the re-plan.
+Because only source files count, a reference page never does: it is checked
+claim by claim against its sources (the `researching-references` skill's
+own process), not read as a diff, and two of the six pages already in this
 directory exceed 400 lines on their own.
 
-Where this project departs from the subject: Google's "include a usage of
-the API in the same CL" and the kernel's "API update and new driver are two
-patches" disagree; the rule follows Google for a tool and its registration
-(both must land for the tool to exist) and the kernel for everything else.
-Graphite's 50-line target is not adopted: the project's docs and test
-discipline put most honest single-behaviour pull requests above it.
+The first version of the rule (2026-10-17) capped files at three and
+stopped every diff past 400 lines, tests and docs pages included. Applied
+to one feature of pvliesdonk/markdown-vault-mcp (issue 1497), it blocked
+the pull request the maintainer closed as too much to review well (1798:
+four concerns, 9 logic files, about 1,620 logic lines), and it blocked
+equally the three the work was then split into and the package's next
+pull request, all merged (1803 to 1806: 1 to 6 logic files, about 210 to
+850 logic lines). Lines did not tell them apart: 1798 changed 2,511 lines
+and 1804, one new module with its tests, 1,944. Concern and file count
+did. In pvliesdonk/fastmcp-server-template, the pull requests above about
+1,000 lines (724, 695, 735, 725) were followed by fix-up pull requests;
+none were found after those in the 400 to 1,000 band (693, 689, 737,
+738). The rule was revised on 2026-10-21 to the limits above. These are
+observations on two repositories, not a study.
+
+Where this project departs from the subject: SWE-Bench Pro's three-file
+cliff is not the cap. The benchmark's agent has to locate the change from
+the issue text alone, which SWE-bench finds models struggle with; the rule
+applies to a plan that already names its files.
+Google's "include a usage of the API in the same CL" and the kernel's "API
+update and new driver are two patches" disagree; the rule follows Google
+for a tool and its registration (both must land for the tool to exist) and
+the kernel for everything else. Graphite's 50-line target is not adopted:
+the project's docs and test discipline put most honest single-behaviour
+pull requests above it.
 
 ## Not covered
 
@@ -331,7 +351,7 @@ discipline put most honest single-behaviour pull requests above it.
   article or Cohen's book is read directly.
 - No source isolates an optimal sub-task size for a coding agent working
   through ordered pieces of one feature; the benchmarks measure whole-issue
-  resolution. The three-file cap is the best available proxy.
+  resolution. Their file counts are the best available proxy.
 - Whether review bots degrade with size the way human reviewers and agent
   authors do is observed in this project's own history, not in a published
   study.
