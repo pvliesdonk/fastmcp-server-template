@@ -880,8 +880,10 @@ jobs:
           curl -fsSL --proto '=https' --tlsv1.2 --retry 3 \
             "https://raw.githubusercontent.com/pypa/gh-action-pypi-publish/${SHA}/requirements/runtime.txt" \
             -o /tmp/publisher-runtime.txt
-          TWINE=$(grep -E '^twine==' /tmp/publisher-runtime.txt || true)
-          PACKAGING=$(grep -E '^packaging==' /tmp/publisher-runtime.txt || true)
+          # -o keeps only the `name==version` token: since v1.14.3 the file is
+          # hash-pinned, so the line goes on with ` \` and `--hash` lines.
+          TWINE=$(grep -oE '^twine==[^[:space:];\\]+' /tmp/publisher-runtime.txt || true)
+          PACKAGING=$(grep -oE '^packaging==[^[:space:];\\]+' /tmp/publisher-runtime.txt || true)
           [ -n "$TWINE" ] \
             || { echo "::error::no twine pin in the publisher's runtime.txt at $SHA"; exit 1; }
           [ -n "$PACKAGING" ] \
