@@ -92,13 +92,13 @@ split after the fact keeps the defects that grew in it. The limits are
   it needs `and`, or a refactoring rides with a behaviour change, that is
   two PRs; a local rename inside the change may stay. A new tool and its
   registration are one behaviour.
-- **At most three source files.** Count the files whose logic the plan
+- **At most five source files.** Count the files whose logic the plan
   changes: code, scripts, workflows, config, and instruction files such as
   `AGENTS.md` and a `SKILL.md`. Leave out tests, docs pages, reference
   pages, generated files, lockfiles, and a file that only gains a pointer
   to the change (a skills-list line, a cross-reference). One mechanical
   edit repeated at every site (a rename, a signature update at each
-  caller) counts as one file. A fourth file for one behaviour means the
+  caller) counts as one file. A sixth file for one behaviour means the
   behaviour is bigger than one PR.
 - **Past either limit**, file the work as an epic (step 6) whose children
   each pass both tests, stacked when one depends on another. When the
@@ -106,13 +106,14 @@ split after the fact keeps the defects that grew in it. The limits are
   (`docs/contribute/integration-branches.md`) so trunk stays releasable.
 - **One PR at a time.** Push and self-review the current PR before starting
   the next; a stacked child branches from the pushed one.
-- **The line count is the backstop.** When the diff passes 400 changed lines
-  (generated files, lockfiles and `docs/design/reference/` pages excluded,
-  since a reference page is checked claim by claim against its sources, not
-  read as a diff), stop: re-plan the issue into
-  children that pass the tests above and implement each on a fresh branch
-  in a fresh session. Carving the existing diff into pieces keeps the
-  problems that grew in it.
+- **The line count is the backstop.** Count the changed lines in the files
+  the file test counts, so tests, docs and reference pages stay out of it.
+  Past 400, check the diff against the one-behaviour test and say in the
+  PR body why it still passes; a single new module with its tests often
+  does. Past 1,000, stop: re-plan the issue into children that pass the
+  tests above and implement each on a fresh branch in a fresh session.
+  Carving the existing diff into pieces keeps the problems that grew in
+  it.
 
 The numbers and their sources: `docs/design/reference/pull-request-size.md`.
 
