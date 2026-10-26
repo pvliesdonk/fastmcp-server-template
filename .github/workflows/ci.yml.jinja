@@ -35,7 +35,7 @@ jobs:
         # resource, prompt or CLI option.
         run: uv run --no-sync --no-build python scripts/gen_reference.py --check
 
-      - name: Verify [tool.uv] pins carry a live exit condition
+      - name: Verify [tool.uv] pins carry an exit condition
         # A pin's `# until:` issue being closed shows here as a warning
         # annotation (lift the pin), not a failure: the upstream state
         # changes outside any pull request.  A pin without one fails.
