@@ -83,8 +83,8 @@ jobs:
             experimental: false
           # The newest CPython runs ahead of the claimed versions: a red leg
           # here does not fail `CI Success`, so a dependency still missing
-          # wheels for it blocks nothing.  Flip it to `false` (and add the
-          # classifier) once it passes; the Docker image stays on 3.14.
+          # wheels for it blocks nothing.  A template release makes it
+          # required, with its classifier; the Docker image stays on 3.14.
           - python-version: "3.15"
             experimental: true
     steps:
