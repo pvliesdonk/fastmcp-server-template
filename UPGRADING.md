@@ -303,6 +303,27 @@ Steps: [upgrading/v11.1.md](upgrading/v11.1.md).
 
 Steps: [upgrading/v11.2.md](upgrading/v11.2.md).
 
-## Unreleased
+## Unreleased - Docker image on uv-managed Python 3.14
 
-_Nothing yet._
+`Dockerfile` no longer starts `FROM python:<version>-slim`. It builds on
+`debian:trixie-slim` and installs CPython 3.14 with `uv python install` into
+`/opt/python`, the version CI's coverage job runs. This takes the image off
+Python 3.15, which reached it in v11.4 ahead of CI, and replaces Debian's
+SQLite 3.46.1, which has the WAL-reset corruption bug, with the newer SQLite
+bundled in uv's CPython.
+
+**Before updating**, if this project changed the `FROM` line by hand (for
+example back to `python:3.14-slim` after v11.4), expect a conflict there:
+take the template's side.
+
+**After updating**, check the `DOCKERFILE-*` blocks for anything that relied
+on the old base. The image no longer has `/usr/local/bin/python` or `pip`.
+Until the `uv sync` step, no Python is on `PATH`. A step that calls
+`python` or `pip` there must run through `uv` instead. Then rebuild the image
+and confirm it starts:
+
+```bash
+docker build -t local-check .
+docker run --rm --entrypoint /app/.venv/bin/python local-check \
+  -c "import sys, sqlite3; print(sys.version, sqlite3.sqlite_version)"
+```

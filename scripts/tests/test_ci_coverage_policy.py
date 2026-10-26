@@ -30,7 +30,9 @@ def test_one_required_interpreter_collects_and_consumes_coverage(
         "3.12",
         "3.13",
         "3.14",
+        "3.15",
     }
+    assert {e["python-version"] for e in entries if e["experimental"]} == {"3.15"}
     assert job["continue-on-error"] == "${{ matrix.experimental || false }}"
     assert job["timeout-minutes"] == 20
     test_steps = [
@@ -44,7 +46,8 @@ def test_one_required_interpreter_collects_and_consumes_coverage(
     covered_step = covered[0]
     condition = covered_step["if"]
     assert condition == "matrix.python-version == '3.14'"
-    assert all(not entry["experimental"] for entry in entries)
+    covered_entry = next(e for e in entries if e["python-version"] == "3.14")
+    assert covered_entry["experimental"] is False
     assert "--cov-report=xml" in shlex.split(covered_step["run"])
     assert "--cov-fail-under" not in covered_step["run"]
     bare_step = next(step for step in test_steps if step is not covered_step)
