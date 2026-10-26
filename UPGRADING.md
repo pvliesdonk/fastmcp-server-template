@@ -308,12 +308,12 @@ Steps: [upgrading/v11.2.md](upgrading/v11.2.md).
 `Dockerfile` no longer starts `FROM python:<version>-slim`. It builds on
 `debian:trixie-slim` and installs CPython 3.14 with `uv python install` into
 `/opt/python`, the version CI's coverage job runs. This takes the image off
-Python 3.15, which reached it in v11.4 ahead of CI, and replaces Debian's
+Python 3.15, which reached it in v11.3 ahead of CI, and replaces Debian's
 SQLite 3.46.1, which has the WAL-reset corruption bug, with the newer SQLite
 bundled in uv's CPython.
 
 **Before updating**, if this project changed the `FROM` line by hand (for
-example back to `python:3.14-slim` after v11.4), expect a conflict there:
+example back to `python:3.14-slim` after v11.3), expect a conflict there:
 take the template's side.
 
 **After updating**, check the `DOCKERFILE-*` blocks for anything that relied
