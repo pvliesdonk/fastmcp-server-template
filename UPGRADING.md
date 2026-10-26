@@ -327,3 +327,5 @@ docker build -t local-check .
 docker run --rm --entrypoint /app/.venv/bin/python local-check \
   -c "import sys, sqlite3; print(sys.version, sqlite3.sqlite_version)"
 ```
+
+It should print a 3.14 version and a SQLite version of 3.51.3 or later.

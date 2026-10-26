@@ -2,8 +2,8 @@
 # Debian's system library, which lacks the WAL-reset corruption fix
 # (template#829), while a uv-managed CPython bundles a current SQLite.  It also
 # keeps the shipped interpreter off Renovate's Docker-tag bumps (template#828):
-# PYTHON_VERSION below is the version ci.yml's coverage lane runs, and the
-# template's own tests keep the two equal.
+# keep PYTHON_VERSION below equal to the Python version whose ci.yml test job
+# collects coverage, so the image runs the interpreter CI measures.
 FROM debian:trixie-slim
 
 # What a `python:*-slim` image carried and a bare Debian lacks: CA roots for
