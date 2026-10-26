@@ -12,13 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates netbase tzdata \
     && rm -rf /var/lib/apt/lists/*
 
+# Here, between the two apt RUNs, so neither merges into the other: the
+# packages above must not depend on what a project keeps in the block below.
+COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /uvx /bin/
+
 # DOCKERFILE-APT-DEPS-START — add domain apt packages below; kept across copier update
 RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs gosu \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs install --system
 # DOCKERFILE-APT-DEPS-END
-
-COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /uvx /bin/
 
 ARG PYTHON_VERSION=3.14
 # The interpreter lives under /opt, not root's home, so the venv's symlinked
