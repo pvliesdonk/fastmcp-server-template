@@ -1,5 +1,18 @@
 # Changelog
 
+## v11.5.0 (2026-10-27)
+
+- #833 fix(deps): relock tooling past six Dependabot advisories
+- #832 fix(pins): warn, not fail, when a pin's until: issue closes
+- #830 feat(docker): ship uv-managed CPython 3.14; add experimental 3.15 CI job
+- #827 chore(deps): update dependency renovatebot/github-action to v46.3.10
+- #826 chore(deps): update anthropics/claude-code-action digest to 8041f1d
+- #824 chore(deps): update docker/login-action digest to 81c6f93
+- #822 chore(deps): update anthropics/claude-code-action digest to 16f9f71
+- #821 chore(deps): update dependency astral-sh/setup-uv to v10.3.2
+- #820 chore(deps): update github/codeql-action digest to 9b32540
+
+
 ## v11.4.0 (2026-10-21)
 
 - #819 feat(agents): size PRs by source files, with a two-tier line backstop
