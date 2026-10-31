@@ -1,5 +1,14 @@
 # Changelog
 
+## v11.5.1 (2026-10-31)
+
+- #841 fix(docker): run tini as PID 1 so detached orphans are reaped
+- #838 chore(deps): update dependency renovatebot/github-action to v46.3.11
+- #837 chore(deps): update dependency astral-sh/setup-uv to v10.3.3
+- #836 chore(deps): update dependency sonarsource/sonarqube-scan-action to v8.4.0
+- #835 chore(deps): update anthropics/claude-code-action digest to d535f51
+
+
 ## v11.5.0 (2026-10-27)
 
 - #833 fix(deps): relock tooling past six Dependabot advisories
