@@ -22,7 +22,10 @@ def _entrypoint() -> list[str]:
     lines = DOCKERFILE_PATH.read_text(encoding="utf-8").splitlines()
     found = [line for line in lines if line.startswith("ENTRYPOINT ")]
     assert found, "the Dockerfile declares no ENTRYPOINT"
-    argv = json.loads(found[-1].removeprefix("ENTRYPOINT "))
+    try:
+        argv = json.loads(found[-1].removeprefix("ENTRYPOINT "))
+    except json.JSONDecodeError:
+        argv = None
     assert isinstance(argv, list), f"ENTRYPOINT is not exec form: {found[-1]!r}"
     return [str(arg) for arg in argv]
 
