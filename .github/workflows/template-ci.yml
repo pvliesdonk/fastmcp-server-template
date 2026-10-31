@@ -1836,6 +1836,30 @@ jobs:
             stat -c "%U" /data/state/fastmcp | grep -qx appuser
           '
 
+      - name: docker run smoke (tini is PID 1 and reaps a detached orphan)
+        # The step above overrides the entrypoint, so it never runs tini.
+        # This one keeps the image's ENTRYPOINT and swaps only the CMD for
+        # Python, which, like the server, waits on its own child and nothing
+        # else; a shell there could reap the orphan itself and pass on an
+        # image without an init.  The `sh -c 'sleep 0.2 &'` child exits at
+        # once, its `sleep` is re-parented to PID 1, and once it finishes no
+        # process may be left a zombie (template#840).
+        run: |
+          docker run --rm smoke-mcp-ci python -I -c '
+          import pathlib, subprocess, time
+          pid1 = pathlib.Path("/proc/1/comm").read_text().strip()
+          assert pid1 == "tini", f"PID 1 is {pid1!r}, not tini"
+          subprocess.run(["sh", "-c", "sleep 0.2 &"], check=True)
+          time.sleep(1)
+          zombies = [
+              p.parent.name
+              for p in pathlib.Path("/proc").glob("[0-9]*/stat")
+              if p.read_text().rsplit(")", 1)[1].split()[0] == "Z"
+          ]
+          assert not zombies, f"unreaped zombies: {zombies}"
+          print("PID 1 is tini; the orphan was reaped")
+          '
+
       - name: docker compose up --wait (the shipped healthcheck passes, and records log one line each)
         # The only place the compose healthcheck is *executed* rather than
         # parsed: tests/test_compose.py asserts the command's shape, and
