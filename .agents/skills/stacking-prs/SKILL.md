@@ -1,14 +1,14 @@
 ---
 name: stacking-prs
 description: >-
-  Use when one issue ships as several dependent pull requests: when asked to build stacked PRs or a stack, or when sizing a change splits it into more than one PR. Sets the plan's shape, the self-review gate between PRs, and the restack after a squash merge, with or without the gh-stack extension.
+  Use when work ships as several dependent pull requests that reach main one by one: when asked to build stacked PRs or a stack, or when sizing a change splits it into more than one PR. Sets the plan's shape, the self-review gate between PRs, and the restack after a squash merge, with or without the gh-stack extension.
 ---
 
 <!-- ===== TEMPLATE-OWNED — re-rendered on template updates. ===== -->
 
 # Stacking pull requests
 
-A stack is one issue shipped as several pull requests, each based on the branch of the one below it. It is not an epic: an epic groups issues. When the PRs must reach `main` together rather than one by one, run them on an integration branch instead (`docs/contribute/integration-branches.md`).
+A stack is a chain of dependent pull requests, each based on the branch of the one below it, that reach `main` one by one. When the PRs must reach `main` together, run them on an integration branch instead (`docs/contribute/integration-branches.md`).
 
 ## 1. Plan the stack before the first edit
 
@@ -21,7 +21,7 @@ A stack is one issue shipped as several pull requests, each based on the branch 
 
 - Create a PR's branch only after the PR below is self-reviewed and pushed, and branch it from that pushed branch.
 - Self-review each PR against its own base. One review over the whole stack is not a review of any PR in it.
-- Write `Stacked on #<PR below>` and `Refs #<issue>` in each PR body; only the top PR carries `Closes #<issue>`.
+- Write `Stacked on #<PR below>` in each PR body. Close each issue from the PR that completes it, and write `Refs #<issue>` in the PRs before that one.
 - When a lower PR needs a change, commit it on that PR's branch, restack (step 3), and run `self-reviewing` again on each PR above before you push it: the `self-review` hook keys its record by commit, and a restack rewrites every commit above.
 - Push one branch per `git push`: the `self-review` hook checks only the first branch of a push that sends several, so `gh stack push`, `sync` and `submit` bypass it for the rest.
 
@@ -29,6 +29,7 @@ A stack is one issue shipped as several pull requests, each based on the branch 
 
 With the `gh-stack` extension (`gh extension list` names it), restack with `gh stack rebase` and follow the `gh-stack` skill's non-interactive rules where your agent has it. Without the extension, run `gh extension install github/gh-stack` if the environment allows installing it; otherwise use git, from the top branch of the stack:
 
+- A lower PR's branch gained commits: `git rebase --update-refs <that branch>`.
 - `main` moved: `git fetch origin main && git rebase --update-refs origin/main`.
 - The bottom PR was squash-merged:
 

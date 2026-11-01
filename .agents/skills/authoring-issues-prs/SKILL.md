@@ -105,8 +105,8 @@ split after the fact keeps the defects that grew in it. The limits are
   children must ship together, run the epic on `integration/<epic>`
   (`docs/contribute/integration-branches.md`) so trunk stays releasable.
 - **One PR at a time.** Push and self-review the current PR before starting
-  the next; a stacked child branches from the pushed one. When one issue
-  ships as several dependent PRs, the `stacking-prs` skill runs the stack.
+  the next; a stacked child branches from the pushed one. The
+  `stacking-prs` skill runs a stack.
 - **The line count is the backstop.** Count the changed lines in the files
   the file test counts, so tests, docs and reference pages stay out of it.
   Past 400, check the diff against the one-behaviour test and say in the
