@@ -70,6 +70,8 @@ Before you open a PR, and before every later push to its branch, pass every gate
 7. Structural quality (diff) passes: new or changed lines add no structural violation (complexity, too-many-*, security); pre-existing code is never blocked. Run `bash scripts/structural_gate.sh` before pushing. It runs `diff-quality --violations=ruff.check --options="--extend-select=C901,PLR0911,PLR0912,PLR0913,PLR0915,S" --fail-under=100` against the nearest of `origin/main`, `origin/release/*` and `origin/integration/*` (override with `STRUCTURAL_GATE_BASE`). For irreducible new code, add `# noqa: C901` (or the rule that fired) with a one-line justification.
 {%- endif %}
 
+A review from another workflow (a plan executor's reviewer, a code-review skill or command) does not replace the `self-reviewing` skill; run the skill as well.
+
 ## Pre-commit Hooks
 
 - Install once per clone with `uv run pre-commit install`; run `uv run pre-commit run --all-files` before pushing.
