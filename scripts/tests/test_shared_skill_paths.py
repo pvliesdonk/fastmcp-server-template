@@ -27,6 +27,7 @@ TEMPLATE_SKILLS = (
     "researching-references",
     "roadmapping",
     "self-reviewing",
+    "stacking-prs",
     "tool-registration",
     "writing-documentation",
     "writing-model-facing-text",
