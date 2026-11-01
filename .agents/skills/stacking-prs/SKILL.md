@@ -1,7 +1,7 @@
 ---
 name: stacking-prs
 description: >-
-  Use when work ships as several dependent pull requests that reach main one by one: when asked to build stacked PRs or a stack, or when sizing a change splits it into more than one PR. Sets the plan's shape, the self-review gate between PRs, and the restack after a squash merge, with or without the gh-stack extension.
+  Use when work ships as several dependent pull requests that reach main one by one: when asked to build stacked PRs or a stack, or when sizing a change splits it into more than one PR. Sets the plan's shape, the self-reviewing skill as the gate between PRs, and the restack after a squash merge, with or without the gh-stack extension.
 ---
 
 <!-- ===== TEMPLATE-OWNED — re-rendered on template updates. ===== -->
@@ -19,8 +19,8 @@ A stack is a chain of dependent pull requests, each based on the branch of the o
 
 ## 2. Build one PR at a time
 
-- Create a PR's branch only after the PR below is self-reviewed and pushed, and branch it from that pushed branch.
-- Self-review each PR against its own base. One review over the whole stack is not a review of any PR in it.
+- Create a PR's branch only after the PR below has passed the `self-reviewing` skill and been pushed, and branch it from that pushed branch.
+- Run the `self-reviewing` skill on each PR against its own base. A plan executor's own review step does not replace it, and one review over the whole stack is not a review of any PR in it.
 - Write `Stacked on #<PR below>` in each PR body. Close each issue from the PR that completes it, and write `Refs #<issue>` in the PRs before that one.
 - When a lower PR needs a change, commit it on that PR's branch, restack (step 3), and run `self-reviewing` again on each PR above before you push it: the `self-review` hook keys its record by commit, and a restack rewrites every commit above.
 - Push one branch per `git push`: the `self-review` hook checks only the first branch of a push that sends several, so `gh stack push`, `sync` and `submit` bypass it for the rest.
@@ -41,7 +41,7 @@ With the `gh-stack` extension (`gh extension list` names it), restack with `gh s
 
   `--update-refs` moves every branch in between along with the top one. After a squash merge, never rebase onto `main` without `--onto`: git replays the merged commits and conflicts with their squash. If `origin/<merged-branch>` is gone or no longer at the merged tip, pass the merged PR's last commit instead: `gh pr view <merged PR> --json headRefOid --jq .headRefOid`.
 
-Then push each restacked branch with `git push --force-with-lease origin <branch>`, bottom first, each after its self-review.
+Then push each restacked branch with `git push --force-with-lease origin <branch>`, bottom first, each after its `self-reviewing` run.
 
 ## 4. Merge
 
