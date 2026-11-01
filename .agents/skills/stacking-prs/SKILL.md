@@ -27,7 +27,7 @@ A stack is a chain of dependent pull requests, each based on the branch of the o
 
 ## 3. Restack
 
-With the `gh-stack` extension (`gh extension list` names it), restack with `gh stack rebase` and follow the `gh-stack` skill's non-interactive rules where your agent has it. Without the extension, run `gh extension install github/gh-stack` if the environment allows installing it; otherwise use git, from the top branch of the stack:
+With the `gh-stack` extension (`gh extension list` names it), restack with `gh stack rebase` and follow the `gh-stack` skill's non-interactive rules where your agent has it. After a squash merge, confirm with `gh stack view --json` that the merged branch left the stack; if it did not, restack with the git commands below. Without the extension, run `gh extension install github/gh-stack` if the environment allows installing it; otherwise use git, from the top branch of the stack:
 
 - A lower PR's branch gained commits: `git rebase --update-refs <that branch>`.
 - `main` moved: `git fetch origin main && git rebase --update-refs origin/main`.
