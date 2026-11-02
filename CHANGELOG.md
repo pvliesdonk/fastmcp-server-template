@@ -1,5 +1,13 @@
 # Changelog
 
+## v11.6.0 (2026-11-02)
+
+- #850 feat(gen_reference): render the sub-commands of a CLI command group
+- #849 chore(deps): update dependency renovatebot/github-action to v46.3.12
+- #848 docs(agents): name the self-reviewing skill wherever a review is asked for
+- #846 feat(skills): add a stacking-prs skill
+
+
 ## v11.5.1 (2026-10-31)
 
 - #841 fix(docker): run tini as PID 1 so detached orphans are reaped
