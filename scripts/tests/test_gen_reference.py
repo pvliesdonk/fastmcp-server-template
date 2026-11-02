@@ -524,3 +524,38 @@ def test_build_documents_tools_registered_for_http_only(
         logging.disable(logging.NOTSET)  # _build silences the server's logs
     tools = [tool.name for group in ref.groups.values() for tool in group]
     assert tools == ["create_download_link"]
+
+
+def test_cli_descends_into_command_groups(tmp_path: Path) -> None:
+    app = _app()
+    embeddings = typer.Typer(help="Manage embeddings.")
+
+    @embeddings.command(name="import")
+    def import_(
+        source: str = typer.Option(..., "--from", help="Where to read from."),
+        dry_run: bool = typer.Option(False, help="Report only."),
+    ) -> None:
+        """Import embeddings."""
+
+    @embeddings.command(hidden=True)
+    def secret() -> None:
+        """Not documented."""
+
+    app.add_typer(embeddings, name="embeddings")
+    cli = collect(_server(), app, "demo").cli
+    assert [c.name for c in cli.commands] == [
+        "serve",
+        "reindex",
+        "embeddings",
+        "embeddings import",
+    ]
+    group, sub = cli.commands[2:]
+    assert group.help == "Manage embeddings."
+    assert (group.arguments, group.options) == ([], [])
+    assert sub.help == "Import embeddings."
+    assert [o.name for o in sub.options] == ["--from", "--dry-run"]
+    page = render(collect(_server(), app, "demo"), tmp_path / "docs")[
+        "reference/cli.md"
+    ]
+    assert "## `demo embeddings import`" in page
+    assert "| `--from` |" in page
