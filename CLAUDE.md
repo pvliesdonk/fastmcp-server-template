@@ -86,6 +86,13 @@ Put guidance that only some tasks need in a skill under `.agents/skills/`,
 not in `AGENTS.md.jinja`; template-ci's size step and
 `tests/test_agent_instructions.py` cap the rendered `AGENTS.md`.
 
+## Roadmap
+
+`docs/design/roadmap.md` is this repo's own index (its `.jinja` twin is a
+generated project's seed) and holds the family dependency map across this
+repo, `fastmcp-pvl-core` and the downstreams.  Read it, and the
+`roadmapping` skill, before planning work that spans pull requests.
+
 ## Breaking changes
 
 The policy is "Breaking Changes and the `!` Marker" in `AGENTS.md.jinja`;
