@@ -140,9 +140,11 @@ package. An issue with no milestone is backlog.
 
 The cross-repository edges are native GitHub dependencies, encoded on 4
 November 2026; the graph is authoritative and this table is the reading
-aid across repositories. Each row names the issue that carries the edge.
-`evidenced` from issue bodies read on 4 November 2026 unless tagged
-otherwise.
+aid across repositories. Each row names the issue that carries the edge;
+where that is a refinement issue, its epic follows in brackets. A
+`derived` tag marks the reason as synthesis; the edge itself is in the
+graph like every other row. `evidenced` from issue bodies read on 4
+November 2026 unless tagged otherwise.
 
 **Encoded as native dependencies:**
 
@@ -150,9 +152,9 @@ otherwise.
 |---|---|---|
 | template #646 (mask error details by default) | pvl-core#355 | the log must keep the real exception under masking |
 | pvl-core#348, #350 | template #645 | the constructor seam decides where both are fixed |
-| pvl-core#557 (refine client auth) | pvl-core#354, #553, #556 | the service case needs machine callers; the client needs the package and the bridge `derived` |
-| pvl-core#553 (refine client package) | template #869 | lockstep is proven in the template's `050` release first `derived` |
-| template #862 (refine HTTP API role) | pvl-core#554 | the role needs pvl-core's composition |
+| pvl-core#557 (refine client auth, epic #551) | pvl-core#354, #553, #556 | the service case needs machine callers; the client needs the package and the bridge `derived` |
+| pvl-core#553 (refine client package, epic #548) | template #869 (offers the roles, closing `050`) | lockstep is proven in the template's `050` release first `derived` |
+| template #862 (refine HTTP API role, epic #858) | pvl-core#554 (refine HTTP composition, epic #549) | the role needs pvl-core's composition |
 | template #868 (client member) | template #851 | a client member's variables must stay out of the server's manifests `derived` |
 | pvliesdonk/markdown-vault-mcp#1942 | template #839 | the template-owned build pin |
 | pvliesdonk/markdown-vault-mcp#1602 | pvl-core#362 | the search tool catalog |
