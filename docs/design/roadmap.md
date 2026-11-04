@@ -181,9 +181,15 @@ GitHub cannot hold.
   conclusion/solution", so its Decision section is unratified. Resolved by
   the account holder. It changes nothing in `030` to `060`. It would change
   where pvl-core#548 is refined, which that epic already notes.
-- Whether the deb/rpm channel stays. A comment on #547 doubts it has
-  users, and #793 and #842 only matter if it stays. Resolved by the account
-  holder; until then both stay in backlog.
+- What a client member's deb/rpm package looks like. `stated` (4
+  November 2026): "Either way, rpm/deb probably comes back for cli/client
+  use", so the channel stays. `evidenced` (the account holder's
+  release-asset counts for markdown-vault-mcp 5.1.0 to 6.1.0, read 4
+  November 2026): deb and rpm assets show 0 to 4 downloads per release,
+  in line with every other release asset, so the counts separate no users
+  from crawlers. Resolved by the client role's refinement (#868). #793
+  (the package install test) matters for that reuse; #842 is about the
+  server unit only.
 - Whether `uv build --all-packages` runs on the uv that `release.yml`
   pins. Resolved by #867.
 - Whether scholar-mcp or image-generation-mcp want the roles. Nothing
@@ -219,5 +225,6 @@ rest".
 - **Triage applied.** Priorities and areas were set, #150 closed, #263
   narrowed to the undocumented `when`, `secret` and `control` hints, and
   #831 and #768 re-scoped.
-- **Not applied.** Whether the deb/rpm channel stays remains a question
-  for the account holder.
+- **Deb/rpm kept.** `stated`: "Either way, rpm/deb probably comes back
+  for cli/client use." The channel stays, and its client form is a known
+  unknown below.
