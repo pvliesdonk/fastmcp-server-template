@@ -56,9 +56,10 @@ Four epics carry it:
 lines wherever no seam exists, and every such line conflicts on update.
 Members today: #645, #646, #618, #529, #623, #727.
 
-"Done when", as frozen on the epic: a downstream keeps its content for these regions
-inside sentinel blocks, so the conformance check reports no drift there and
-`copier update` applies there without conflicts.
+"Done when", as frozen on the epic: "A downstream keeps its project content
+for the regions the child issues name inside sentinel blocks, so the
+template-conformance check reports no drift there and `copier update`
+applies there without conflicts."
 
 Unknown: which `FastMCP()` constructor arguments are domain-owned and which
 template-owned. The answer also decides where pvl-core#348's duplicate-name
@@ -70,9 +71,10 @@ Resolved by #645's design.
 `derived`: The config-surface generator decides alone which channel shows
 a variable and with what value. Members today: #851, #781, #767, #263.
 
-"Done when", as frozen on the epic: a project decides, per variable, which install
-channels show it (registry manifest, packaged manifests, env examples,
-wizard) and with which value, without editing a generated file.
+"Done when", as frozen on the epic: "A project decides, per variable,
+which install channels show it (registry manifest, packaged manifests, env
+examples, wizard) and with which value, without editing a generated
+file."
 
 Unknown: #263 may already be satisfied by the config-contract skill's
 wizard hints. Resolved by checking it during refinement; it is cheap.
@@ -83,8 +85,9 @@ wizard hints. Resolved by checking it during refinement; it is cheap.
 whole family at once, and the image carries a second interpreter. Members
 today: #547, #831, #834.
 
-"Done when", as frozen on the epic: each install channel's Python is documented, and a
-project can move its own floor without the family moving with it.
+"Done when", as frozen on the epic: "Each install channel's Python is
+documented, and a project can move its own floor without the family moving
+with it."
 
 Unknowns:
 
@@ -101,8 +104,9 @@ Unknowns:
 self-review hook and CI do not fully cover. Members today: #844, #845,
 #619.
 
-"Done when", as frozen on the epic: a stack pushed in one go is self-review-gated on
-every branch, and every pull request in it gets CI while under review.
+"Done when", as frozen on the epic: "A stack pushed in one go is
+self-review-gated on every branch, and every pull request in it gets CI
+while under review."
 
 ### Maintenance without an epic
 
