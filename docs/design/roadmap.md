@@ -138,27 +138,42 @@ package. An issue with no milestone is backlog.
 
 ## Family dependency map
 
-`evidenced` from issue bodies read on 4 November 2026 unless tagged
-otherwise; the locator is the issue. None of these edges is a native
-GitHub dependency yet. When they are encoded, this table keeps only what
-GitHub cannot hold.
+The cross-repository edges are native GitHub dependencies, encoded on 4
+November 2026; the graph is authoritative and this table is the reading
+aid across repositories. Each row names the issue that carries the edge;
+where that is a refinement issue, its epic follows in brackets. A
+`derived` tag marks the reason as synthesis; the edge itself is in the
+graph like every other row. `evidenced` from issue bodies read on 4
+November 2026 unless tagged otherwise.
+
+**Encoded as native dependencies:**
+
+| Blocked issue | Blocked by | Why |
+|---|---|---|
+| template #646 (mask error details by default) | pvl-core#355 | the log must keep the real exception under masking |
+| pvl-core#348, #350 | template #645 | the constructor seam decides where both are fixed |
+| pvl-core#557 (refine client auth, epic #551) | pvl-core#354, #553, #556 | the service case needs machine callers; the client needs the package and the bridge `derived` |
+| pvl-core#553 (refine client package, epic #548) | template #869 (offers the roles, closing `050`) | lockstep is proven in the template's `050` release first `derived` |
+| template #862 (refine HTTP API role, epic #858) | pvl-core#554 (refine HTTP composition, epic #549) | the role needs pvl-core's composition |
+| template #868 (client member) | template #851 | a client member's variables must stay out of the server's manifests `derived` |
+| pvliesdonk/markdown-vault-mcp#1942 | template #839 | the template-owned build pin |
+| pvliesdonk/markdown-vault-mcp#1602 | pvl-core#362 | the search tool catalog |
+
+Inside each repository, the feature order of the workspace roles (#864 to
+#869) and the order of refinement issues (template #861 and #863;
+pvl-core#554 after research #555, and #556 after #554) are encoded the
+same way.
+
+**Not encodable here** (outside this session's repositories, or not a
+blocking relation):
 
 | From | Relation | To |
 |---|---|---|
-| pvl-core#355 (masked message in `tool_call_failed`) | must ship before | template #646 (mask error details by default) |
-| template #645 (constructor seam) | decides the fix location of | pvl-core#348 (duplicate pvl-core tool names), pvl-core#350 (shared request-state store) |
-| pvl-core#354 (machine callers under oidc-proxy) | blocks | pvl-core#551 (client auth, service case) |
-| template #856 (workspace roles, `050`) | should release before | pvl-core#548 (client package) `derived` |
 | pvl-core#548 (client package) | later replaces the transport of | template #868 (client member) `derived` |
-| pvl-core#549 (HTTP composition) | blocks | template #858 (HTTP API role) |
 | pvl-core#547 (light import) | removes the import cost behind | pvliesdonk/markdown-vault-mcp#2016 |
-| template #856 (workspace roles) | blocks | pvliesdonk/markdown-vault-mcp#1473 (package `020` there) |
-| template #839 (hatchling pin) | blocks | pvliesdonk/markdown-vault-mcp#1942 |
-| template #781 (fixed env entries) | blocks | pvliesdonk/markdown-vault-mcp#1708 |
-| template #663 (`py.typed`) | is needed by | pvliesdonk/markdown-vault-mcp#1580 |
+| template #856 (workspace roles) | is what package `020` there needs | pvliesdonk/markdown-vault-mcp#1473 (closed research) |
 | template #547 (Python floor answer) | is the `until:` target of | pvliesdonk/markdown-vault-mcp#1217 |
 | pvl-core#349 (elicitation across eras) | blocks | image-generation-mcp#387, #388 |
-| pvl-core#362 (search tool catalog) | blocks | pvliesdonk/markdown-vault-mcp#1602 |
 | pvl-core#352 (nested claims) | changes the docs of | the template's authorization guide `derived` |
 | downstream updates past #713 (scholar, image-generation, openapi, logodev) | unblock | template #723 (retire a migration) |
 | PrefectHQ/fastmcp#5263, #5236, #5237 | block | pvl-core#362, #351, #353 |
@@ -228,3 +243,12 @@ rest".
 - **Deb/rpm kept.** `stated`: "Either way, rpm/deb probably comes back
   for cli/client use." The channel stays, and its client form is a known
   unknown below.
+
+### 4 November 2026: dependencies encoded
+
+`stated` (4 November 2026): "you should be able to use the gh tool to make
+dependencies". Twenty-four edges are now native GitHub dependencies,
+across the three repositories. The map above keeps a reading table and
+the edges GitHub cannot hold here. Two rows left it:
+pvliesdonk/markdown-vault-mcp#1708 and #1580 closed as completed in
+September and October, so template #781 and #663 no longer block them.
