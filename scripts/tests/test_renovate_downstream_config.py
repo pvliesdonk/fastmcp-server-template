@@ -116,3 +116,37 @@ def test_runners_are_at_most_four_hourly() -> None:
         assert len({h for _, h in fires}) >= 6, (
             f"{runner.name}: fewer than 6 runs a day"
         )
+
+
+MCPB_PYPROJECT = REPO / "packaging" / "mcpb" / "pyproject.toml.in.jinja"
+PYPROJECT = REPO / "pyproject.toml.jinja"
+_HATCHLING_PIN = re.compile(r'requires = \["(hatchling[^"]*)"\]')
+
+
+def test_downstream_renovate_leaves_the_build_backend_pin_alone() -> None:
+    # The `[build-system] requires` hatchling bound is template-owned: it moves
+    # only with a template release paired with a publisher check (#479).  The
+    # pep621 manager updates that dep type like any other, and under
+    # group:allNonMajor plus automerge a hatchling minor merged itself in a
+    # downstream, which then drifted from the template (#839).
+    rules = [
+        rule
+        for rule in _config()["packageRules"]
+        if rule.get("matchManagers") == ["pep621"]
+        and rule.get("matchDepTypes") == ["build-system.requires"]
+    ]
+    assert rules, "no packageRule scopes pep621's build-system.requires"
+    assert all(rule.get("enabled") is False for rule in rules)
+
+
+def test_mcpb_build_backend_pin_matches_the_project_pin() -> None:
+    # packaging/mcpb/pyproject.toml.in.jinja says it is bounded "to match the
+    # project's own pyproject.toml"; one bump that forgets it recreates drift.
+    pins = {
+        path.name: _HATCHLING_PIN.search(path.read_text(encoding="utf-8"))
+        for path in (PYPROJECT, MCPB_PYPROJECT)
+    }
+    assert all(pins.values()), pins
+    assert len({m.group(1) for m in pins.values() if m}) == 1, {
+        name: m.group(1) for name, m in pins.items() if m
+    }
