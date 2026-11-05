@@ -87,9 +87,11 @@ neither can be set per tool. So pvl-core#350's values reach the call by the
 (`on_duplicate`) or a check in pvl-core's helpers, still to be decided
 there.
 
-Unknown: whether #727's fix can call a project's `Service` without knowing
-its signature, since `domain.py` is seeded once. Resolved by #727's design;
-the alternative is an `UPGRADING.md` note.
+`evidenced` (`server_lifespan` in `src/{{python_module}}/_server_deps.py.jinja`):
+#727 made the config part of the `Service` contract. The lifespan calls
+`Service(config_for(mcp))`; a project whose `Service` takes no argument adds
+the parameter by the `UPGRADING.md` note, and mypy reports the call until it
+does.
 
 ### Per-channel config surface: [#872](https://github.com/pvliesdonk/fastmcp-server-template/issues/872)
 
@@ -293,3 +295,8 @@ ahead".
   #618 split into #618 and #882; #646 and #623 left the epic. The `030`
   argument is rewritten because the pvl-core dependency it rested on is
   gone.
+
+### 5 November 2026: #727's unknown resolved
+
+- **Service signature.** The unknown on calling a project's `Service` is
+  closed by #727: an `UPGRADING.md` note, not a signature-tolerant call.

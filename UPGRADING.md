@@ -307,7 +307,7 @@ Steps: [upgrading/v11.2.md](upgrading/v11.2.md).
 
 Steps: [upgrading/v11.5.md](upgrading/v11.5.md).
 
-## Unreleased - Project blocks for dev dependencies, pytest markers and mypy overrides
+## Unreleased - Project blocks in pyproject.toml; Service gets the bound config
 
 `pyproject.toml` gains two project-owned blocks: `PROJECT-DEV-DEPS` at the
 end of `[dependency-groups] dev`, and `PROJECT-MARKERS` at the end of
@@ -347,3 +347,22 @@ or names this project's own package or `tests`.
    update cannot merge until the code type-checks without it.
 3. Delete any override for a library that now ships types, such as `fastmcp`.
 4. Run `uv run mypy src/ tests/` and the test suite.
+
+`server_lifespan` in `_server_deps.py` now builds the service as
+`Service(config)`, passing the `ProjectConfig` that `make_server` was given.
+Before, it called `Service()`, so a service that loaded its own settings read
+the environment again and could disagree with a config passed to
+`make_server(config=...)`.  `domain.py` is this project's, so the update does
+not change its `Service`.
+
+**After updating**, make `Service` take the config:
+
+1. If `Service.__init__` takes no argument, add a `config: ProjectConfig`
+   parameter (import `ProjectConfig` from this project's `config` module)
+   and read settings from it.  Until then, `uv run mypy src/ tests/` reports
+   `Too many arguments for "Service"` at the call in `_server_deps.py`.
+2. If it already takes `config: ProjectConfig | None = None` and falls back
+   to `ProjectConfig.from_env()`, it works unchanged; the fallback no longer
+   runs when the server starts.
+3. Pass a config wherever this project's own tests construct `Service()`,
+   then run `uv run mypy src/ tests/` and the test suite.
