@@ -411,6 +411,14 @@ ignore_missing_imports = true
 module = ["jsonschema", "jsonschema.*"]
 ignore_missing_imports = true
 
+# PROJECT-MYPY-OVERRIDES-START — one [[tool.mypy.overrides]] table per untyped
+# third-party library this project imports, setting only
+# ignore_missing_imports = true; kept across copier update.  Prefer a stubs
+# package in PROJECT-DEV-DEPS when one exists.  tests/test_mypy_overrides.py
+# rejects any other setting, and any table that names this project's own
+# package or tests, so neither can loosen `mypy src/ tests/`.
+# PROJECT-MYPY-OVERRIDES-END
+
 [tool.pyright]
 # Point Pyright at the uv-managed venv so editor diagnostics resolve
 # imports the same way as our CLI tools (mypy/ruff/pytest run via uv).
