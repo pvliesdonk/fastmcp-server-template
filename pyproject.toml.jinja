@@ -186,6 +186,10 @@ dev = [
     # PyYAML ships no inline types, so `import yaml` in tests/test_compose.py
     # is an untyped import that fails `mypy src/ tests/` without these stubs.
     "types-PyYAML>=6",
+    # PROJECT-DEV-DEPS-START — this project's test and tooling dependencies
+    # (respx, hypothesis, ...); kept across copier update.  Never published,
+    # unlike an extra in PROJECT-EXTRAS.
+    # PROJECT-DEV-DEPS-END
 ]
 
 docs = [
@@ -367,6 +371,9 @@ addopts = ["--strict-markers", "-ra"]
 asyncio_mode = "auto"
 markers = [
     "browser: end-to-end test that drives a headless browser (requires the 'browser' dependency group + 'playwright install chromium')",
+    # PROJECT-MARKERS-START — this project's pytest markers; kept across
+    # copier update.  --strict-markers rejects any marker not declared here.
+    # PROJECT-MARKERS-END
 ]
 
 [tool.coverage.run]
