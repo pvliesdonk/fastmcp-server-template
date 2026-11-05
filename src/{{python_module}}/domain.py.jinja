@@ -8,11 +8,19 @@ Python, easy to unit-test without a server.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from {{ python_module }}.config import ProjectConfig
+
 
 class Service:
     """Placeholder service.  Replace with real domain logic."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: ProjectConfig) -> None:
+        # The server lifespan passes the config make_server was built with;
+        # read settings from it, not from the environment.
+        self.config = config
         self._ready = False
 
     async def start(self) -> None:
