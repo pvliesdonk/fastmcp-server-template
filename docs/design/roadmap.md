@@ -54,17 +54,42 @@ Four epics carry it:
 
 `derived`: Downstreams still write project content into template-owned
 lines wherever no seam exists, and every such line conflicts on update.
-Members today: #645, #646, #618, #529, #623, #727.
+Members after refinement (#875): #618 and #882 (the two halves of the
+`pyproject.toml` seams) and #727 (the lifespan building the project's
+`Service`).
+
+Refinement found that most of the drift this epic first cited was
+downstream projection, not project content. `stated` (5 November 2026, on
+#645's cited edits): "It was literally projecting a different coding style
+upstream, which we explicitly forbid." `derived`: such lines are drift to
+remove, not content to give a seam. Decided on that basis:
+
+- `stated` (5 November 2026): "Seems it needs closing" (#645, so the
+  constructor gets no seam); "Scholar must migrate" (its extra
+  `exclude_docs` entries, pvliesdonk/scholar-mcp#567, so #529 closed);
+  "Let's split" (#618 into #618 and #882).
+- `derived`: #882's seam accepts third-party import overrides only;
+  relaxations of a project's own code or of `tests.*` stay drift.
+- `derived`: #646 and #623 left the epic. #646 is a template-owned default
+  in a template-owned call, and #623 is guidance on an existing seam.
 
 "Done when", as frozen on the epic: "A downstream keeps its project content
 for the regions the child issues name inside sentinel blocks, so the
 template-conformance check reports no drift there and `copier update`
 applies there without conflicts."
 
-Unknown: which `FastMCP()` constructor arguments are domain-owned and which
-template-owned. The answer also decides where pvl-core#348's duplicate-name
-refusal lives and how pvl-core#350's shared store reaches the constructor.
-Resolved by #645's design.
+`evidenced` (#645's closing comment): the `FastMCP(...)` call is
+template-owned. The downstream edits it cited were pre-builder
+`instructions=`, a `providers=` that `add_provider()` covers, and one
+server icon; no family server passes `cache_ttl` or `list_page_size`, and
+neither can be set per tool. So pvl-core#350's values reach the call by the
+`build_auth` precedent, and pvl-core#348 is either a template default
+(`on_duplicate`) or a check in pvl-core's helpers, still to be decided
+there.
+
+Unknown: whether #727's fix can call a project's `Service` without knowing
+its signature, since `domain.py` is seeded once. Resolved by #727's design;
+the alternative is an `UPGRADING.md` note.
 
 ### Per-channel config surface: [#872](https://github.com/pvliesdonk/fastmcp-server-template/issues/872)
 
@@ -117,6 +142,7 @@ each ships when a package picks it up:
 - workflow robustness: #426, #447, #362;
 - the Vale gate: #570, #532;
 - drift guards: #839, #658;
+- seam guidance: #623;
 - shipped-script debt: #666, #723;
 - plugin channels: #482, #470, #483;
 - observability: #606;
@@ -126,7 +152,7 @@ each ships when a package picks it up:
 
 | Package | Kind | Argument |
 |---|---|---|
-| [`030 project-seams`](https://github.com/pvliesdonk/fastmcp-server-template/milestone/9) | minor | First: its constructor-ownership decision (#645) settles where two pvl-core fixes live. Its #646 needs pvl-core#355 first, so pvl-core's `005 downstream-fixes` patch ships before this cut or #646 leaves it. |
+| [`030 project-seams`](https://github.com/pvliesdonk/fastmcp-server-template/milestone/9) | minor | First, `derived`: its `pyproject.toml.jinja` seams land before `050` adds workspace members to that file, so downstreams move their content into the seams before the larger change arrives. It waits on nothing outside this repository. |
 | [`040 operator-config`](https://github.com/pvliesdonk/fastmcp-server-template/milestone/10) | minor | Before `050`: per-channel exclusion of a variable (#851) is what keeps a client member's variables out of the server's manifests (#868). |
 | [`050 workspace-roles`](https://github.com/pvliesdonk/fastmcp-server-template/milestone/11) | minor | Its first real release proves lockstep through knope and the stamp script, which pvl-core's client package (pvl-core#548) then reuses. |
 | [`060 distribution-guards`](https://github.com/pvliesdonk/fastmcp-server-template/milestone/12) | minor | After `050`, before a second downstream adopts a role: guards need members to exist. |
@@ -150,8 +176,6 @@ November 2026 unless tagged otherwise.
 
 | Blocked issue | Blocked by | Why |
 |---|---|---|
-| template #646 (mask error details by default) | pvl-core#355 | the log must keep the real exception under masking |
-| pvl-core#348, #350 | template #645 | the constructor seam decides where both are fixed |
 | pvl-core#557 (refine client auth, epic #551) | pvl-core#354, #553, #556 | the service case needs machine callers; the client needs the package and the bridge `derived` |
 | pvl-core#553 (refine client package, epic #548) | template #869 (offers the roles, closing `050`) | lockstep is proven in the template's `050` release first `derived` |
 | template #862 (refine HTTP API role, epic #858) | pvl-core#554 (refine HTTP composition, epic #549) | the role needs pvl-core's composition |
@@ -252,3 +276,20 @@ across the three repositories. The map above keeps a reading table and
 the edges GitHub cannot hold here. Two rows left it:
 pvliesdonk/markdown-vault-mcp#1708 and #1580 closed as completed in
 September and October, so template #781 and #663 no longer block them.
+
+### 5 November 2026: #871 refined
+
+`stated` (5 November 2026): "Scholar must migrate", "Let's split", "Go
+ahead".
+
+- **Constructor.** #645 closed: no seam, the call is template-owned. Its
+  two map rows to pvl-core#348 and #350 left, and both issues carry the
+  consequence.
+- **Masking.** pvl-core#355 closed as superseded by `tool_boundary`; a
+  probe on fastmcp 4.1.4 and pvl-core 10.1.0 is on #646, which is narrowed
+  to resources and prompts and no longer waits on pvl-core. Its map row
+  left.
+- **Children.** #529 closed and redirected to pvliesdonk/scholar-mcp#567;
+  #618 split into #618 and #882; #646 and #623 left the epic. The `030`
+  argument is rewritten because the pvl-core dependency it rested on is
+  gone.
