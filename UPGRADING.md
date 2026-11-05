@@ -307,7 +307,7 @@ Steps: [upgrading/v11.2.md](upgrading/v11.2.md).
 
 Steps: [upgrading/v11.5.md](upgrading/v11.5.md).
 
-## Unreleased - Project blocks for dev dependencies and pytest markers
+## Unreleased - Project blocks for dev dependencies, pytest markers and mypy overrides
 
 `pyproject.toml` gains two project-owned blocks: `PROJECT-DEV-DEPS` at the
 end of `[dependency-groups] dev`, and `PROJECT-MARKERS` at the end of
@@ -327,3 +327,23 @@ list outside a block are drift that `check_template_conformance.py` reports.
    `PROJECT-DEV-DEPS` and delete the extra.  Deleting it removes the extra
    from the package metadata, so note it in this project's release notes.
 4. Run `uv lock`, then `uv sync` and the test suite.
+
+`pyproject.toml` also gains `PROJECT-MYPY-OVERRIDES`, after the template's
+two `[[tool.mypy.overrides]]` tables, and `tests/test_mypy_overrides.py`,
+which fails when any override sets more than `ignore_missing_imports = true`
+or names this project's own package or `tests`.
+
+**After updating**, move each override this project added:
+
+1. Move every table that sets only `ignore_missing_imports = true` for a
+   third-party library (for example `lxml` or `requests`) between the
+   `PROJECT-MYPY-OVERRIDES-START` and `-END` lines.  Where the library has a
+   stubs package (`types-requests`, `types-PyYAML`), add that to
+   `PROJECT-DEV-DEPS` and delete the override instead.
+2. Delete every table that relaxes checking (`ignore_errors`,
+   `disable_error_code`) or names this project's package or `tests.*`, then
+   fix the errors `uv run mypy src/ tests/` reports.
+   `tests/test_mypy_overrides.py` fails while such a table remains, so the
+   update cannot merge until the code type-checks without it.
+3. Delete any override for a library that now ships types, such as `fastmcp`.
+4. Run `uv run mypy src/ tests/` and the test suite.
