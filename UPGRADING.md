@@ -307,6 +307,23 @@ Steps: [upgrading/v11.2.md](upgrading/v11.2.md).
 
 Steps: [upgrading/v11.5.md](upgrading/v11.5.md).
 
-## Unreleased
+## Unreleased - Project blocks for dev dependencies and pytest markers
 
-_Nothing yet._
+`pyproject.toml` gains two project-owned blocks: `PROJECT-DEV-DEPS` at the
+end of `[dependency-groups] dev`, and `PROJECT-MARKERS` at the end of
+`[tool.pytest.ini_options] markers`.  Entries this project added to either
+list outside a block are drift that `check_template_conformance.py` reports.
+
+**After updating**, move them in:
+
+1. If the update left a conflict at the end of either list, keep both sides:
+   the template's block markers and this project's entries.
+2. Move every `dev` entry the template does not ship (for example `respx`)
+   between the `PROJECT-DEV-DEPS-START` and `-END` lines, and every marker
+   other than `browser` between the `PROJECT-MARKERS` lines.
+3. If this project published a test-only tool as an optional extra in
+   `PROJECT-EXTRAS` because `dev` had no block (for example
+   `property-tests = ["hypothesis>=6"]`), move the requirement into
+   `PROJECT-DEV-DEPS` and delete the extra.  Deleting it removes the extra
+   from the package metadata, so note it in this project's release notes.
+4. Run `uv lock`, then `uv sync` and the test suite.
