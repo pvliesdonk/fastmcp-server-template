@@ -307,7 +307,7 @@ Steps: [upgrading/v11.2.md](upgrading/v11.2.md).
 
 Steps: [upgrading/v11.5.md](upgrading/v11.5.md).
 
-## Unreleased - Project blocks in pyproject.toml; Service gets the bound config
+## Unreleased - Project blocks in pyproject.toml; Service config; masked resource errors
 
 `pyproject.toml` gains two project-owned blocks: `PROJECT-DEV-DEPS` at the
 end of `[dependency-groups] dev`, and `PROJECT-MARKERS` at the end of
@@ -366,3 +366,13 @@ not change its `Service`.
    runs when the server starts.
 3. Pass a config wherever this project's own tests construct `Service()`,
    then run `uv run mypy src/ tests/` and the test suite.
+
+`make_server` now passes `mask_error_details=True` to `FastMCP`.  A resource
+that raises anything but `ResourceError` sends the client
+`Error reading resource '<uri>'` without the exception's text; the server
+log keeps the traceback.  The setting overrides `FASTMCP_MASK_ERROR_DETAILS`.
+Tools are unaffected: they already end through `tool_boundary`.
+
+**After updating**, raise `ResourceError` from any resource whose exception
+text a client needs, and change any test of this project that asserts on the
+text of an unexpected resource exception.
