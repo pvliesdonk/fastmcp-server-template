@@ -307,72 +307,10 @@ Steps: [upgrading/v11.2.md](upgrading/v11.2.md).
 
 Steps: [upgrading/v11.5.md](upgrading/v11.5.md).
 
-## Unreleased - Project blocks in pyproject.toml; Service config; masked resource errors
+## v11.7 - Project blocks in pyproject.toml; Service config; masked resource errors
 
-`pyproject.toml` gains two project-owned blocks: `PROJECT-DEV-DEPS` at the
-end of `[dependency-groups] dev`, and `PROJECT-MARKERS` at the end of
-`[tool.pytest.ini_options] markers`.  Entries this project added to either
-list outside a block are drift that `check_template_conformance.py` reports.
+Steps: [upgrading/v11.7.md](upgrading/v11.7.md).
 
-**After updating**, move them in:
+## Unreleased
 
-1. If the update left a conflict at the end of either list, keep both sides:
-   the template's block markers and this project's entries.
-2. Move every `dev` entry the template does not ship (for example `respx`)
-   between the `PROJECT-DEV-DEPS-START` and `-END` lines, and every marker
-   other than `browser` between the `PROJECT-MARKERS` lines.
-3. If this project published a test-only tool as an optional extra in
-   `PROJECT-EXTRAS` because `dev` had no block (for example
-   `property-tests = ["hypothesis>=6"]`), move the requirement into
-   `PROJECT-DEV-DEPS` and delete the extra.  Deleting it removes the extra
-   from the package metadata, so note it in this project's release notes.
-4. Run `uv lock`, then `uv sync` and the test suite.
-
-`pyproject.toml` also gains `PROJECT-MYPY-OVERRIDES`, after the template's
-two `[[tool.mypy.overrides]]` tables, and `tests/test_mypy_overrides.py`,
-which fails when any override sets more than `ignore_missing_imports = true`
-or names this project's own package or `tests`.
-
-**After updating**, move each override this project added:
-
-1. Move every table that sets only `ignore_missing_imports = true` for a
-   third-party library (for example `lxml` or `requests`) between the
-   `PROJECT-MYPY-OVERRIDES-START` and `-END` lines.  Where the library has a
-   stubs package (`types-requests`, `types-PyYAML`), add that to
-   `PROJECT-DEV-DEPS` and delete the override instead.
-2. Delete every table that relaxes checking (`ignore_errors`,
-   `disable_error_code`) or names this project's package or `tests.*`, then
-   fix the errors `uv run mypy src/ tests/` reports.
-   `tests/test_mypy_overrides.py` fails while such a table remains, so the
-   update cannot merge until the code type-checks without it.
-3. Delete any override for a library that now ships types, such as `fastmcp`.
-4. Run `uv run mypy src/ tests/` and the test suite.
-
-`server_lifespan` in `_server_deps.py` now builds the service as
-`Service(config)`, passing the `ProjectConfig` that `make_server` was given.
-Before, it called `Service()`, so a service that loaded its own settings read
-the environment again and could disagree with a config passed to
-`make_server(config=...)`.  `domain.py` is this project's, so the update does
-not change its `Service`.
-
-**After updating**, make `Service` take the config:
-
-1. If `Service.__init__` takes no argument, add a `config: ProjectConfig`
-   parameter (import `ProjectConfig` from this project's `config` module)
-   and read settings from it.  Until then, `uv run mypy src/ tests/` reports
-   `Too many arguments for "Service"` at the call in `_server_deps.py`.
-2. If it already takes `config: ProjectConfig | None = None` and falls back
-   to `ProjectConfig.from_env()`, it works unchanged; the fallback no longer
-   runs when the server starts.
-3. Pass a config wherever this project's own tests construct `Service()`,
-   then run `uv run mypy src/ tests/` and the test suite.
-
-`make_server` now passes `mask_error_details=True` to `FastMCP`.  A resource
-that raises anything but `ResourceError` sends the client
-`Error reading resource '<uri>'` without the exception's text; the server
-log keeps the traceback.  The setting overrides `FASTMCP_MASK_ERROR_DETAILS`.
-Tools are unaffected: they already end through `tool_boundary`.
-
-**After updating**, raise `ResourceError` from any resource whose exception
-text a client needs, and change any test of this project that asserts on the
-text of an unexpected resource exception.
+_Nothing yet._

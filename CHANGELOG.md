@@ -1,5 +1,19 @@
 # Changelog
 
+## v11.7.0 (2026-11-06)
+
+- #890 feat(package): ship a py.typed marker
+- #888 feat(server): mask unexpected resource error details from clients
+- #887 feat(server): build Service from the config make_server was given
+- #886 feat(pyproject): add a project block for third-party mypy import overrides
+- #884 feat(pyproject): add project blocks for dev dependencies and pytest markers
+- #883 docs(roadmap): record the refinement of the project-seams epic
+- #881 fix(renovate): keep the hatchling build pin out of downstream Renovate
+- #880 docs(roadmap): point the dependency map at the native edges
+- #879 docs(roadmap): record the filed epics and the applied triage
+- #870 docs(roadmap): chart the template roadmap and the family dependency map
+
+
 ## v11.6.0 (2026-11-02)
 
 - #850 feat(gen_reference): render the sub-commands of a CLI command group
