@@ -311,6 +311,29 @@ Steps: [upgrading/v11.5.md](upgrading/v11.5.md).
 
 Steps: [upgrading/v11.7.md](upgrading/v11.7.md).
 
-## Unreleased
+## Unreleased - Weekly cleanup of superseded container images
 
-_Nothing yet._
+The new `.github/workflows/container-cleanup.yml` runs every Monday at 05:23
+UTC and deletes container images that the newest stable release has
+superseded: untagged images built before that release, which are mostly
+earlier `edge` builds, and the `vX.Y.Z-rc.N` tags whose `X.Y.Z` is that
+version or lower. Stable tags, `edge`, `latest`, `rc`, and everything built
+after the newest stable stay. A project with no stable release yet is left
+alone.
+
+1. **Before the first Monday after updating**, check that the workflow can
+   delete versions. Open the package on GitHub (**Packages**, then the
+   image, then **Package settings**) and look under **Manage Actions
+   access**: the project repository must have the **Admin** role. A package
+   first pushed by this repository's own workflows usually has it already.
+   Without it the run fails with a permission error and deletes nothing.
+2. **Dispatch a dry run.** Run **Container cleanup** from the Actions tab
+   with **List what would be deleted without deleting it** left ticked, and
+   read the list in the log. The first real run clears the whole backlog at once, which can be
+   hundreds of versions.
+3. If anyone pulls an rc tag or an old `edge` digest from before your
+   newest stable release, move them to a stable tag first: those are the
+   images this deletes.
+
+To opt out, disable the workflow in the Actions tab. Deleting the file only
+lasts until the next `copier update` brings it back.

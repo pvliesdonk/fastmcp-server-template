@@ -158,7 +158,8 @@ nothing, and `/etc/{{ project_name }}/env` carries the choice.
 | Tag | Contents | Updated by |
 |-----|----------|------------|
 | `latest` | Newest stable release | Each stable release that is newest across all series |
-| `vX.Y.Z` | That exact release (pre-releases included, as `vX.Y.Z-rc.N`) | Never (immutable) |
+| `vX.Y.Z` | That exact stable release | Never (immutable) |
+| `vX.Y.Z-rc.N` | That exact release candidate | Never changed; deleted once a stable release at `vX.Y.Z` or above ships |
 | `vX.Y`, `vX` | Newest stable release in that series | Each stable release that is newest in its series |
 | `rc` | Newest release candidate | Each pre-release still ahead of `latest` |
 | `edge` | Newest commit on `main` | Every merge to `main` |
@@ -171,6 +172,10 @@ The three rolling tags answer different questions. Use `latest` to run released 
 docker inspect --format {% raw %}'{{ index .Config.Labels "org.opencontainers.image.revision" }}'{% endraw %} \
   {{ docker_registry }}/{{ project_name }}:edge
 ```
+
+### Superseded images
+
+A weekly **Container cleanup** workflow deletes what the newest stable release has superseded: the `vX.Y.Z-rc.N` tags of that version and older, and the untagged images that earlier `edge` builds left behind before that release. Everything built after the newest stable stays, so you can still pull any `edge` build since then by its digest. Pin a stable tag or its digest for anything you need to keep.
 
 ## Environment variables
 
