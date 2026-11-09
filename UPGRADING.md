@@ -328,8 +328,8 @@ alone.
    first pushed by this repository's own workflows usually has it already.
    Without it the run fails with a permission error and deletes nothing.
 2. **Dispatch a dry run.** Run **Container cleanup** from the Actions tab
-   with **List what would be deleted without deleting it** left ticked, and read the list in the
-   log. The first real run clears the whole backlog at once, which can be
+   with **List what would be deleted without deleting it** left ticked, and
+   read the list in the log. The first real run clears the whole backlog at once, which can be
    hundreds of versions.
 3. If anyone pulls an rc tag or an old `edge` digest from before your
    newest stable release, move them to a stable tag first: those are the

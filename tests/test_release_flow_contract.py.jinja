@@ -2567,11 +2567,15 @@ _DAY = 86400
 
 
 def _cleanup_workflow() -> dict[str, Any]:
-    return yaml.safe_load(CLEANUP_WORKFLOW.read_text(encoding="utf-8"))
+    workflow: dict[str, Any] = yaml.safe_load(
+        CLEANUP_WORKFLOW.read_text(encoding="utf-8")
+    )
+    return workflow
 
 
 def _cleanup_steps() -> list[dict[str, Any]]:
-    return _cleanup_workflow()["jobs"]["cleanup"]["steps"]
+    steps: list[dict[str, Any]] = _cleanup_workflow()["jobs"]["cleanup"]["steps"]
+    return steps
 
 
 def _run_cutoff_step(
@@ -2684,9 +2688,9 @@ def test_cleanup_wires_the_cutoff_into_the_action() -> None:
         for s in _cleanup_steps()
         if str(s.get("uses", "")).startswith("dataaxiom/ghcr-cleanup-action@")
     )
-    assert re.fullmatch(
-        r"dataaxiom/ghcr-cleanup-action@[0-9a-f]{40}", step["uses"]
-    ), "pin the cleanup action by commit SHA"
+    assert re.fullmatch(r"dataaxiom/ghcr-cleanup-action@[0-9a-f]{40}", step["uses"]), (
+        "pin the cleanup action by commit SHA"
+    )
     assert step["if"] == "steps.cutoff.outputs.run == 'true'"
     with_ = step["with"]
     assert with_["older-than"] == "{% raw %}${{ steps.cutoff.outputs.older-than }}{% endraw %}"
