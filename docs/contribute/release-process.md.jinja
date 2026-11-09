@@ -93,6 +93,14 @@ even when two releases overlap: each rolling channel checks the tag
 ordering again inside its own publish job. See
 [Image tags](../deploy/docker.md#image-tags) for the Docker tag list.
 
+The **Container cleanup** workflow prunes the registry every Monday. The
+newest stable tag by version is its cut-off: it deletes the untagged images
+built before that release, which are mostly earlier `edge` builds, and the
+`vX.Y.Z-rc.N` tags whose `X.Y.Z` is that version or lower. Stable tags, the
+rolling tags, and anything built after the cut-off stay. Dispatch it by hand
+to see the list first: a dispatched run is a dry run unless you clear its
+box.
+
 ## Testing a candidate's Claude Code plugin
 
 Every release attaches `{{ project_name }}-plugin-<version>.zip`, and every

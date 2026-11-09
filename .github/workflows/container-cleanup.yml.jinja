@@ -1,0 +1,111 @@
+# Prunes container image versions that the newest stable release has
+# superseded.  Every merge to `main` moves the rolling `edge` tag
+# (unstable.yml) and leaves the previous image behind as untagged versions,
+# and every rc leaves its immutable `vX.Y.Z-rc.N` tag behind; GHCR keeps both
+# forever.  The newest stable release is the cut-off for both:
+#
+#   - untagged versions created before that release are deleted; those
+#     created after it are newer code than any stable and stay;
+#   - `vX.Y.Z-rc.N` tags whose X.Y.Z is at or below that release are deleted;
+#     an rc for a version still ahead of it stays, however old it is.
+#
+# Stable tags and the rolling `edge`, `latest` and `rc` tags are never
+# touched.  An rc tag that shares its image with `rc` is unlinked, and the
+# image stays.  With no stable release yet, nothing is superseded and the
+# job does nothing.
+name: Container cleanup
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"  # Monday 05:23 UTC
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "List what would be deleted without deleting it"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# The cleanup action is not safe to run twice at once against one package.
+concurrency:
+  group: container-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          # Tags only matter here: the cut-off is the newest stable tag, and
+          # its commit time is when that release's image was built.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Find what the newest stable release supersedes
+        id: cutoff
+        run: |
+          tags=$(git tag --list)
+          stable=$(printf '%s\n' "$tags" \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+          if [ -z "$stable" ]; then
+            echo "::notice::no stable release yet, so nothing is superseded"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          released=$(git log -1 --format=%ct "$stable")
+          age=$(( $(date +%s) - released ))
+          # The action reads an `older-than` of zero as "no age limit", which
+          # would delete every untagged image, edge leftovers made after the
+          # release included.  A release under an hour old has superseded
+          # next to nothing, so wait for next week's run.
+          if [ "$age" -lt 3600 ]; then
+            echo "::notice::$stable is under an hour old; skipping this run"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # `sort -V` orders v4.0.0 BEFORE v4.0.0-rc.1, so compare each rc's
+          # BASE version with the stable, as release.yml does: an rc is
+          # superseded when its base is the stable or sorts below it.
+          superseded=""
+          for rc in $(printf '%s\n' "$tags" \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' || true); do
+            base="${rc%-rc.*}"
+            if [ "$(printf '%s\n%s\n' "$base" "$stable" | sort -V | tail -1)" = "$stable" ]; then
+              superseded="${superseded:+$superseded,}$rc"
+            fi
+          done
+          echo "::notice::cut-off is $stable, released ${age}s ago"
+          {
+            echo "run=true"
+            echo "older-than=${age} seconds"
+            echo "rc-tags=$superseded"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Delete superseded images
+        if: steps.cutoff.outputs.run == 'true'
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f  # v1.2.2
+        with:
+          # Applies to every rule below, so nothing built after the newest
+          # stable release is deleted, rc tags included.
+          older-than: {% raw %}${{ steps.cutoff.outputs.older-than }}{% endraw %}
+          delete-untagged: true
+          # Exact tag names from the step above, never a pattern; empty
+          # means no rc tag is superseded.
+          delete-tags: {% raw %}${{ steps.cutoff.outputs.rc-tags }}{% endraw %}
+          # Defence in depth: the rolling tags belong to unstable.yml and
+          # release.yml, and no rule here may remove them.
+          exclude-tags: edge,latest,rc
+          # Attestation tags (`sha256-<digest>`) whose image is gone.
+          delete-orphaned-images: true
+          # A scheduled run has no inputs, so it deletes; a dispatch lists
+          # unless its box is cleared.
+          dry-run: {% raw %}${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}{% endraw %}
