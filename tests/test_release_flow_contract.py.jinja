@@ -2601,6 +2601,9 @@ def _run_cutoff_step(
     git("init", "-q")
     git("config", "user.email", "cleanup@test")
     git("config", "user.name", "cleanup")
+    # Hermetic against a developer's global signing config.
+    git("config", "commit.gpgsign", "false")
+    git("config", "tag.gpgsign", "false")
     for tag, days in sorted(tags.items(), key=lambda item: -item[1]):
         stamp = f"@{int(time.time()) - days * _DAY} +0000"
         git(

@@ -45,8 +45,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
-          # Tags only matter here: the cut-off is the newest stable tag, and
-          # its commit time is when that release's image was built.
+          # Tags only matter here: the cut-off is the newest stable tag's
+          # commit time.  That is a little before its image was built, so the
+          # cut-off errs towards keeping images, never towards deleting them.
           fetch-depth: 0
           fetch-tags: true
 
